@@ -56,6 +56,60 @@ describe('AnnotationPage image upload', () => {
   afterEach(() => {
     // @ts-expect-error - test-only cleanup of a property we defined
     delete navigator.clipboard;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('resizes and re-encodes a large pasted image before uploading', async () => {
+    const uploadSpy = vi.spyOn(questionsApi, 'uploadQuestionImage').mockResolvedValue({
+      id: 1,
+      question_id: 5,
+      image_url: '/uploads/x.png',
+      annotations: [],
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(quizWithNoImage);
+
+    const fakeBitmap = { width: 4000, height: 3000, close: vi.fn() } as unknown as ImageBitmap;
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(fakeBitmap));
+    const fakeBlob = new Blob(['resized'], { type: 'image/jpeg' });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => callback(fakeBlob));
+
+    renderPage();
+    await screen.findByText('Add a film still');
+
+    const largeFile = new File([new Uint8Array(6 * 1024 * 1024)], 'huge.png', { type: 'image/png' });
+    dispatchPasteWithFile(largeFile);
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledTimes(1));
+    const [, , uploadedFile] = uploadSpy.mock.calls[0];
+    expect(uploadedFile.name).toBe('huge.jpg');
+    expect(uploadedFile.type).toBe('image/jpeg');
+  });
+
+  it('uploads a small pasted image unchanged, without resizing', async () => {
+    const uploadSpy = vi.spyOn(questionsApi, 'uploadQuestionImage').mockResolvedValue({
+      id: 1,
+      question_id: 5,
+      image_url: '/uploads/x.png',
+      annotations: [],
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(quizWithNoImage);
+    const createBitmapSpy = vi.fn();
+    vi.stubGlobal('createImageBitmap', createBitmapSpy);
+
+    renderPage();
+    await screen.findByText('Add a film still');
+
+    const smallFile = new File(['tiny'], 'small.png', { type: 'image/png' });
+    dispatchPasteWithFile(smallFile);
+
+    await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, 5, smallFile));
+    expect(createBitmapSpy).not.toHaveBeenCalled();
   });
 
   it('uploads a screenshot pasted with Ctrl+V', async () => {

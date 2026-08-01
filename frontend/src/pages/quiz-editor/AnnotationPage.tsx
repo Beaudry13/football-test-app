@@ -8,6 +8,40 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from '../../components/annotation/AnnotationCanvas';
 import styles from './AnnotationPage.module.css';
 
+const MAX_UPLOAD_DIMENSION = 1920;
+const SKIP_RESIZE_UNDER_BYTES = 5 * 1024 * 1024;
+
+/** Downscales/re-encodes large images client-side before upload - a raw
+ * clipboard screenshot (especially from a high-DPI display) can exceed the
+ * backend's 10MB limit despite looking like an ordinary screen snip to the
+ * person pasting it, and the annotation canvas never displays wider than
+ * ~900px anyway, so there's no reason to ship it at native resolution. */
+async function resizeImageForUpload(file: File): Promise<File> {
+  if (file.size <= SKIP_RESIZE_UNDER_BYTES) return file;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return file; // let the server validate/reject it rather than fail the upload here
+  }
+
+  const scale = Math.min(1, MAX_UPLOAD_DIMENSION / Math.max(bitmap.width, bitmap.height));
+  const width = Math.round(bitmap.width * scale);
+  const height = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+  if (!blob) return file;
+
+  const baseName = file.name.replace(/\.[^./\\]+$/, '') || 'image';
+  return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+}
+
 export function AnnotationPage() {
   const { quizId, questionId } = useParams<{ quizId: string; questionId: string }>();
   const [question, setQuestion] = useState<Question | null>(null);
@@ -50,7 +84,8 @@ export function AnnotationPage() {
       setError(null);
       setIsUploading(true);
       try {
-        await uploadQuestionImage(Number(quizId), Number(questionId), file);
+        const uploadable = await resizeImageForUpload(file);
+        await uploadQuestionImage(Number(quizId), Number(questionId), uploadable);
         await load();
       } catch (err) {
         setError(getErrorMessage(err));
