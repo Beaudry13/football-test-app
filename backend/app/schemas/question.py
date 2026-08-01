@@ -38,6 +38,7 @@ class QuestionReorderSchema(Schema):
 
 class AnnotationsUpdateSchema(Schema):
     annotations = fields.List(fields.Dict(), required=True)
+    canvas_width = fields.Int(required=False, allow_none=True, load_default=None)
 
 
 def validate_options_for_type(question_type: str, options: list[dict]) -> None:

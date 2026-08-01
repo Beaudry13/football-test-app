@@ -155,7 +155,8 @@ export function AnnotationPage() {
     setIsSaving(true);
     try {
       const annotations = canvasRef.current.getAnnotations();
-      await saveAnnotations(Number(quizId), Number(questionId), annotations);
+      const canvasWidth = canvasRef.current.getCanvasWidth();
+      await saveAnnotations(Number(quizId), Number(questionId), annotations, canvasWidth);
       setSavedAt(new Date());
     } catch (err) {
       setError(getErrorMessage(err));
@@ -199,6 +200,7 @@ export function AnnotationPage() {
           ref={canvasRef}
           imageUrl={resolveMediaUrl(question.image.image_url)}
           initialAnnotations={question.image.annotations}
+          savedCanvasWidth={question.image.canvas_width}
           onReady={() => setIsCanvasReady(true)}
         />
       ) : (

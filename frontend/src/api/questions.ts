@@ -47,9 +47,11 @@ export function saveAnnotations(
   quizId: number,
   questionId: number,
   annotations: AnnotationLayer[],
+  canvasWidth: number,
 ): Promise<QuestionImage> {
   return api.put<QuestionImage>(`/quizzes/${quizId}/questions/${questionId}/image/annotations`, {
     annotations,
+    canvas_width: canvasWidth,
   });
 }
 

@@ -18,6 +18,13 @@ class QuestionImage(db.Model):
     )
     image_url = db.Column(db.String(1024), nullable=False)
     annotations = db.Column(db.JSON, nullable=False, default=list)
+    # The canvas pixel width the annotation tool used when `annotations` was
+    # last saved. NULL means "predates this column" - the frontend treats
+    # that as the original 900px cap. Pinning this per-image (rather than
+    # deriving it at render time) means a later change to the tool's default
+    # canvas size can never shift where an already-saved shape's coordinates
+    # land.
+    canvas_width = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
     updated_at = db.Column(
         db.DateTime(timezone=True), server_default=db.func.now(), onupdate=db.func.now()
@@ -31,5 +38,6 @@ class QuestionImage(db.Model):
             "question_id": self.question_id,
             "image_url": self.image_url,
             "annotations": self.annotations,
+            "canvas_width": self.canvas_width,
             "updated_at": self.updated_at.isoformat(),
         }

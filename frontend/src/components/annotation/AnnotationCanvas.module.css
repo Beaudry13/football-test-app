@@ -12,7 +12,22 @@
 .canvasWrap {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   line-height: 0;
   background: repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%) 50% / 20px 20px;
+  max-width: 100%;
+}
+
+/* Fabric wraps the <canvas> in its own .canvas-container div and sets
+   inline pixel width/height on both it and the canvas elements themselves,
+   re-asserting them on every render - a plain max-width rule here doesn't
+   reach that inline style, hence the !important overrides. Fabric resolves
+   pointer coordinates via getBoundingClientRect() vs. the canvas's actual
+   width/height attributes, so scaling the *display* size like this doesn't
+   affect drawing/selection accuracy. */
+.canvasWrap :global(.canvas-container),
+.canvasWrap :global(.canvas-container) canvas {
+  max-width: 100% !important;
+  height: auto !important;
 }

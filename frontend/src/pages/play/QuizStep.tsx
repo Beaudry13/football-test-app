@@ -53,7 +53,7 @@ export function QuizStep({
     const isLast = currentIndex === questions.length - 1;
 
     return (
-      <div className={styles.panel}>
+      <div className={styles.quizPanel}>
         <div className={styles.progress}>
           Question {currentIndex + 1} of {questions.length}
         </div>
@@ -87,7 +87,7 @@ export function QuizStep({
   }
 
   return (
-    <div className={styles.panel}>
+    <div className={styles.quizPanel}>
       <ErrorBanner message={error} />
       {questions.map((question, index) => (
         <QuestionInput

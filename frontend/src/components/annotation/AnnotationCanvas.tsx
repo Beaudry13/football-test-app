@@ -24,10 +24,9 @@ import {
   makeId,
   styleFromObject,
 } from './shapeFactories';
+import { resolveCanvasWidth } from './canvasSizing';
 import { DEFAULT_STYLE, type AnnotationStyle, type AnnotationTool } from './types';
 import styles from './AnnotationCanvas.module.css';
-
-const MAX_CANVAS_WIDTH = 900;
 
 function loadImageElement(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -41,18 +40,25 @@ function loadImageElement(url: string): Promise<HTMLImageElement> {
 
 export interface AnnotationCanvasHandle {
   getAnnotations: () => AnnotationLayer[];
+  getCanvasWidth: () => number;
 }
 
 interface AnnotationCanvasProps {
   imageUrl: string;
   initialAnnotations: AnnotationLayer[];
+  /** Pinned from a prior save (`QuestionImage.canvas_width`); null for an
+   * image that predates this field or has never been saved. */
+  savedCanvasWidth: number | null;
   onReady?: () => void;
 }
 
 export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCanvasProps>(
-  function AnnotationCanvas({ imageUrl, initialAnnotations, onReady }, ref) {
+  function AnnotationCanvas({ imageUrl, initialAnnotations, savedCanvasWidth, onReady }, ref) {
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const canvasRef = useRef<Canvas | null>(null);
+    const canvasWidthRef = useRef(
+      resolveCanvasWidth(savedCanvasWidth, initialAnnotations.length > 0),
+    );
     const [tool, setTool] = useState<AnnotationTool>('select');
     const toolRef = useRef(tool);
     toolRef.current = tool;
@@ -129,6 +135,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           'segRefTop',
         ]).objects as AnnotationLayer[];
       },
+      getCanvasWidth: () => canvasWidthRef.current,
     }));
 
     // While something is selected, the toolbar edits *that* shape's real
@@ -181,9 +188,10 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           const rawImage = await loadImageElement(imageUrl);
           if (cancelled) return;
 
-          const naturalWidth = rawImage.naturalWidth || MAX_CANVAS_WIDTH;
+          const capWidth = canvasWidthRef.current;
+          const naturalWidth = rawImage.naturalWidth || capWidth;
           const naturalHeight = rawImage.naturalHeight || naturalWidth;
-          const scale = Math.min(1, MAX_CANVAS_WIDTH / naturalWidth);
+          const scale = Math.min(1, capWidth / naturalWidth);
           const width = Math.round(naturalWidth * scale);
           const height = Math.round(naturalHeight * scale);
 

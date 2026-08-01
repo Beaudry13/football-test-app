@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
+import { ImageLightbox } from '../../components/ImageLightbox';
 import styles from './PlayPage.module.css';
 
 export interface PlayerAnswer {
@@ -18,14 +20,33 @@ export function QuestionInput({
   answer: PlayerAnswer | undefined;
   onChange: (answer: PlayerAnswer) => void;
 }) {
+  const [isZoomed, setIsZoomed] = useState(false);
+
   return (
     <div className={`card ${styles.questionCard}`}>
       {question.image && (
-        <img
-          src={resolveMediaUrl(question.image.image_url)}
-          alt="Film still"
-          style={{ maxWidth: '100%', borderRadius: 'var(--radius-sm)', marginBottom: '0.75em' }}
-        />
+        <>
+          <img
+            src={resolveMediaUrl(question.image.image_url)}
+            alt="Film still"
+            onClick={() => setIsZoomed(true)}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '70vh',
+              objectFit: 'contain',
+              cursor: 'zoom-in',
+              borderRadius: 'var(--radius-sm)',
+              marginBottom: '0.75em',
+            }}
+          />
+          {isZoomed && (
+            <ImageLightbox
+              src={resolveMediaUrl(question.image.image_url)}
+              alt="Film still, enlarged"
+              onClose={() => setIsZoomed(false)}
+            />
+          )}
+        </>
       )}
       <strong>
         {index + 1}. {question.question_text}

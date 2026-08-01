@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+﻿import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,7 @@ const quizWithNoImage: Quiz = {
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: false,
+  folder_id: null,
   question_count: 1,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -66,6 +67,7 @@ describe('AnnotationPage image upload', () => {
       question_id: 5,
       image_url: '/uploads/x.png',
       annotations: [],
+      canvas_width: null,
       updated_at: '2026-01-01T00:00:00Z',
     });
     vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(quizWithNoImage);
@@ -96,6 +98,7 @@ describe('AnnotationPage image upload', () => {
       question_id: 5,
       image_url: '/uploads/x.png',
       annotations: [],
+      canvas_width: null,
       updated_at: '2026-01-01T00:00:00Z',
     });
     vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(quizWithNoImage);
@@ -118,6 +121,7 @@ describe('AnnotationPage image upload', () => {
       question_id: 5,
       image_url: '/uploads/x.png',
       annotations: [],
+      canvas_width: null,
       updated_at: '2026-01-01T00:00:00Z',
     });
     renderPage();
@@ -147,6 +151,7 @@ describe('AnnotationPage image upload', () => {
       question_id: 5,
       image_url: '/uploads/x.png',
       annotations: [],
+      canvas_width: null,
       updated_at: '2026-01-01T00:00:00Z',
     });
     Object.defineProperty(navigator, 'clipboard', {
@@ -193,6 +198,7 @@ describe('AnnotationPage image upload', () => {
       question_id: 5,
       image_url: '/uploads/x.png',
       annotations: [],
+      canvas_width: null,
       updated_at: '2026-01-01T00:00:00Z',
     });
     renderPage();

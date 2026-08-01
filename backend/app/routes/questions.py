@@ -157,6 +157,11 @@ def update_question_image_annotations(quiz_id: int, question_id: int):
 
     data = load_json_body(AnnotationsUpdateSchema())
     question.image.annotations = data["annotations"]
+    # Only overwrite when the caller actually sent a value - an older
+    # frontend bundle mid-rollout that omits this field shouldn't wipe out
+    # a width already pinned by a previous save.
+    if data["canvas_width"] is not None:
+        question.image.canvas_width = data["canvas_width"]
     db.session.commit()
     return jsonify(question.image.to_dict())
 

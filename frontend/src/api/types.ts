@@ -14,10 +14,20 @@ export interface Quiz {
   title: string;
   description: string | null;
   one_question_at_a_time: boolean;
+  folder_id: number | null;
   question_count: number;
   created_at: string;
   updated_at: string;
   questions?: Question[];
+}
+
+export interface Folder {
+  id: number;
+  coach_id: number;
+  name: string;
+  quiz_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface QuestionOption {
@@ -46,6 +56,7 @@ export interface QuestionImage {
   question_id: number;
   image_url: string;
   annotations: AnnotationLayer[];
+  canvas_width: number | null;
   updated_at: string;
 }
 
@@ -71,6 +82,15 @@ export interface Roster {
   players: RosterPlayer[];
 }
 
+export interface Group {
+  id: number;
+  coach_id: number;
+  name: string;
+  players: RosterPlayer[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AccessCode {
   id: number;
   quiz_id: number;
@@ -79,6 +99,7 @@ export interface AccessCode {
   expires_at: string;
   is_active: boolean;
   is_valid: boolean;
+  groups: { id: number; name: string }[];
 }
 
 export interface Answer {

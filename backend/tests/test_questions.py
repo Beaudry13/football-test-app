@@ -158,6 +158,44 @@ def test_upload_and_delete_question_image(client, coach_headers):
     assert delete_response.status_code == 204
 
 
+def test_annotation_update_persists_canvas_width(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={"question_text": "Circle the mike backer", "question_type": "written", "options": []},
+        headers=coach_headers,
+    ).get_json()
+
+    file_obj, filename = make_image_file()
+    upload_response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image",
+        data={"image": (file_obj, filename)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+    image = upload_response.get_json()
+    assert image["canvas_width"] is None
+
+    annotate_response = client.put(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image/annotations",
+        json={"annotations": [], "canvas_width": 1400},
+        headers=coach_headers,
+    )
+    assert annotate_response.status_code == 200
+    assert annotate_response.get_json()["canvas_width"] == 1400
+
+    # Omitting canvas_width on a later save (an older frontend bundle, or a
+    # request that only touches annotations) must not wipe out a width
+    # that's already pinned.
+    second_response = client.put(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image/annotations",
+        json={"annotations": []},
+        headers=coach_headers,
+    )
+    assert second_response.status_code == 200
+    assert second_response.get_json()["canvas_width"] == 1400
+
+
 def test_oversized_image_upload_is_rejected_with_friendly_message(client, coach_headers):
     quiz = create_quiz(client, coach_headers)
     question = client.post(
