@@ -236,6 +236,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           const path = createSmoothPath(curvePoints, styleRef.current);
           path.set('id', makeId());
           canvas!.add(path);
+          setTool('select');
         }
         if (curvePreview) canvas!.remove(curvePreview);
         curvePreview = null;
@@ -253,6 +254,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           canvas!.add(textbox);
           canvas!.setActiveObject(textbox);
           textbox.enterEditing();
+          setTool('select');
           return;
         }
 
@@ -322,6 +324,11 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           history.isRestoring.current = false;
           refreshLayers();
           history.pushSnapshot();
+          // Switch back to Select once the shape is placed - otherwise the
+          // very next click-and-drag (naturally read by the user as "move
+          // this shape") is instead interpreted as "draw another one",
+          // stamping out duplicates along the drag path.
+          setTool('select');
         }
         shape = null;
         startPoint = null;
