@@ -6,6 +6,7 @@ import {
   createLine,
   createRectangle,
   createTextbox,
+  currentSegment,
   styleFromObject,
 } from './shapeFactories';
 import { DEFAULT_STYLE, type AnnotationStyle } from './types';
@@ -32,6 +33,31 @@ describe('segment tracking for endpoint dragging', () => {
   it('does not tag circles or rectangles as having editable endpoints', () => {
     const circle = createCircle(redSolid);
     expect(circle.get('hasEditableEndpoints')).toBeFalsy();
+  });
+
+  it('hides the default resize/rotate handles on lines and arrows', () => {
+    const line = createLine({ x: 0, y: 0 }, { x: 10, y: 10 }, redSolid);
+    const arrow = createArrow({ x: 0, y: 0 }, { x: 10, y: 10 }, redSolid);
+    expect(line.hasControls).toBe(false);
+    expect(line.hasBorders).toBe(false);
+    expect(arrow.hasControls).toBe(false);
+    expect(arrow.hasBorders).toBe(false);
+  });
+});
+
+describe('currentSegment', () => {
+  it('returns the original endpoints when the object has not moved', () => {
+    const line = createLine({ x: 10, y: 20 }, { x: 100, y: 200 }, redSolid);
+    expect(currentSegment(line)).toEqual({ start: { x: 10, y: 20 }, end: { x: 100, y: 200 } });
+  });
+
+  it('shifts the endpoints by however far the object has moved as a whole', () => {
+    const line = createLine({ x: 10, y: 20 }, { x: 100, y: 200 }, redSolid);
+    const originalLeft = line.left!;
+    const originalTop = line.top!;
+    // Simulate a whole-body drag: only left/top change, nothing else.
+    line.set({ left: originalLeft + 30, top: originalTop - 5 });
+    expect(currentSegment(line)).toEqual({ start: { x: 40, y: 15 }, end: { x: 130, y: 195 } });
   });
 });
 

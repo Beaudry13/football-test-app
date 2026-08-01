@@ -20,6 +20,7 @@ import {
   createRectangle,
   createSmoothPath,
   createTextbox,
+  currentSegment,
   makeId,
   styleFromObject,
 } from './shapeFactories';
@@ -62,11 +63,48 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
     const [loadError, setLoadError] = useState<string | null>(null);
     const [objects, setObjects] = useState<FabricObject[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const selectedIdRef = useRef(selectedId);
+    selectedIdRef.current = selectedId;
 
     const refreshLayers = useCallback(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       setObjects([...canvas.getObjects()].reverse());
+    }, []);
+
+    // Small circles shown at a selected line/arrow's endpoints, in place of
+    // the (now hidden, see createLine/createArrow) default resize/rotate
+    // box - purely visual, kept in sync from both the selection effect
+    // (show on select, hide on deselect, follow whole-body moves) and the
+    // mouse-handling effect (follow an active endpoint drag).
+    const endpointMarkersRef = useRef<[FabricObject, FabricObject] | null>(null);
+
+    const removeEndpointMarkers = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (canvas && endpointMarkersRef.current) {
+        canvas.remove(...endpointMarkersRef.current);
+        canvas.requestRenderAll();
+      }
+      endpointMarkersRef.current = null;
+    }, []);
+
+    const showEndpointMarkersAt = useCallback((start: XY, end: XY) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      if (endpointMarkersRef.current) canvas.remove(...endpointMarkersRef.current);
+      const m1 = createEndpointMarker(start);
+      const m2 = createEndpointMarker(end);
+      canvas.add(m1, m2);
+      endpointMarkersRef.current = [m1, m2];
+    }, []);
+
+    const repositionEndpointMarkers = useCallback((start: XY, end: XY) => {
+      const markers = endpointMarkersRef.current;
+      if (!markers) return;
+      markers[0].set({ left: start.x, top: start.y });
+      markers[1].set({ left: end.x, top: end.y });
+      markers[0].setCoords();
+      markers[1].setCoords();
     }, []);
 
     const handleRestored = useCallback(() => {
@@ -80,8 +118,16 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       getAnnotations: () => {
         const canvas = canvasRef.current;
         if (!canvas) return [];
-        return canvas.toObject(['id', 'annotationFillOpacity', 'hasEditableEndpoints', 'isArrow', 'segStart', 'segEnd'])
-          .objects as AnnotationLayer[];
+        return canvas.toObject([
+          'id',
+          'annotationFillOpacity',
+          'hasEditableEndpoints',
+          'isArrow',
+          'segStart',
+          'segEnd',
+          'segRefLeft',
+          'segRefTop',
+        ]).objects as AnnotationLayer[];
       },
     }));
 
@@ -205,13 +251,30 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       function onSelection() {
         const active = canvas!.getActiveObject();
         setSelectedId((active?.get('id') as string) ?? null);
+        if (active && active.get('hasEditableEndpoints')) {
+          const { start, end } = currentSegment(active);
+          showEndpointMarkersAt(start, end);
+        } else {
+          removeEndpointMarkers();
+        }
       }
       function onCleared() {
         setSelectedId(null);
+        removeEndpointMarkers();
       }
       function onChanged() {
         refreshLayers();
         history.pushSnapshot();
+      }
+      function onObjectMoving(opt: { target: FabricObject }) {
+        // Keep the endpoint markers glued to a selected line/arrow while
+        // it's dragged as a whole (not via an endpoint) - segStart/segEnd
+        // are recomputed live from the object's current left/top.
+        const target = opt.target;
+        if (target?.get('hasEditableEndpoints') && target.get('id') === selectedIdRef.current) {
+          const { start, end } = currentSegment(target);
+          repositionEndpointMarkers(start, end);
+        }
       }
 
       canvas.on('selection:created', onSelection);
@@ -220,6 +283,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       canvas.on('object:added', onChanged);
       canvas.on('object:removed', onChanged);
       canvas.on('object:modified', onChanged);
+      canvas.on('object:moving', onObjectMoving);
       canvas.on('path:created', onChanged);
 
       return () => {
@@ -229,10 +293,11 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         canvas.off('object:added', onChanged);
         canvas.off('object:removed', onChanged);
         canvas.off('object:modified', onChanged);
+        canvas.off('object:moving', onObjectMoving);
         canvas.off('path:created', onChanged);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isReady, refreshLayers]);
+    }, [isReady, refreshLayers, showEndpointMarkersAt, removeEndpointMarkers, repositionEndpointMarkers]);
 
     // --- Freehand brush follows style/tool changes -------------------------
     useEffect(() => {
@@ -277,32 +342,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         isArrowType: boolean;
         style: AnnotationStyle;
       } | null = null;
-      let endpointMarkers: [FabricObject, FabricObject] | null = null;
-
       const ENDPOINT_HIT_RADIUS = 14;
-
-      function removeEndpointMarkers() {
-        if (endpointMarkers) {
-          canvas!.remove(...endpointMarkers);
-          endpointMarkers = null;
-        }
-      }
-
-      function showEndpointMarkers(start: XY, end: XY) {
-        removeEndpointMarkers();
-        const m1 = createEndpointMarker(start);
-        const m2 = createEndpointMarker(end);
-        canvas!.add(m1, m2);
-        endpointMarkers = [m1, m2];
-      }
-
-      function repositionEndpointMarkers(start: XY, end: XY) {
-        if (!endpointMarkers) return;
-        endpointMarkers[0].set({ left: start.x, top: start.y });
-        endpointMarkers[1].set({ left: end.x, top: end.y });
-        endpointMarkers[0].setCoords();
-        endpointMarkers[1].setCoords();
-      }
 
       function finalizeCurve() {
         if (curvePoints.length >= 2) {
@@ -324,8 +364,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         if (currentTool === 'select') {
           const active = canvas!.getActiveObject();
           if (active && active.get('hasEditableEndpoints')) {
-            const segStart = active.get('segStart') as XY;
-            const segEnd = active.get('segEnd') as XY;
+            const { start: segStart, end: segEnd } = currentSegment(active);
             const distToStart = Math.hypot(point.x - segStart.x, point.y - segStart.y);
             const distToEnd = Math.hypot(point.x - segEnd.x, point.y - segEnd.y);
             if (distToStart <= ENDPOINT_HIT_RADIUS || distToEnd <= ENDPOINT_HIT_RADIUS) {
@@ -342,7 +381,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
               };
               history.isRestoring.current = true;
               canvas!.remove(active);
-              showEndpointMarkers(segStart, segEnd);
+              showEndpointMarkersAt(segStart, segEnd);
               canvas!.requestRenderAll();
               return;
             }

@@ -18,19 +18,52 @@ export function makeId(): string {
   return crypto.randomUUID();
 }
 
+/** Tags an object as having draggable endpoints, recording where they are
+ * *and* the object's left/top at that moment - a plain whole-body move
+ * (dragging the shape, not an endpoint) only ever translates it (no rotate/
+ * scale control is offered on these), so segStart/segEnd plus the left/top
+ * delta since tagging is enough to recover the *current* absolute endpoints
+ * without touching the object's own transform math. See currentSegment(). */
+function tagSegment(obj: FabricObject, start: XY, end: XY): void {
+  obj.set({
+    hasEditableEndpoints: true,
+    segStart: { x: start.x, y: start.y },
+    segEnd: { x: end.x, y: end.y },
+    segRefLeft: obj.left,
+    segRefTop: obj.top,
+  });
+}
+
+/** The current absolute start/end of a tagged object, compensating for any
+ * whole-body move since it was last tagged (see tagSegment). */
+export function currentSegment(obj: FabricObject): { start: XY; end: XY } {
+  const segStart = obj.get('segStart') as XY;
+  const segEnd = obj.get('segEnd') as XY;
+  const refLeft = (obj.get('segRefLeft') as number) ?? obj.left ?? 0;
+  const refTop = (obj.get('segRefTop') as number) ?? obj.top ?? 0;
+  const dx = (obj.left ?? refLeft) - refLeft;
+  const dy = (obj.top ?? refTop) - refTop;
+  return {
+    start: { x: segStart.x + dx, y: segStart.y + dy },
+    end: { x: segEnd.x + dx, y: segEnd.y + dy },
+  };
+}
+
 export function createLine(start: XY, end: XY, style: AnnotationStyle): Line {
-  return new Line([start.x, start.y, end.x, end.y], {
+  const line = new Line([start.x, start.y, end.x, end.y], {
     stroke: style.color,
     strokeWidth: style.strokeWidth,
     strokeDashArray: strokeDashArray(style),
     strokeLineCap: 'round',
-    // Read by the endpoint-drag hit-test in AnnotationCanvas.tsx - lets a
-    // placed line be reshaped by dragging either end, instead of only via
-    // the default resize/rotate bounding-box handles.
-    hasEditableEndpoints: true,
-    segStart: { x: start.x, y: start.y },
-    segEnd: { x: end.x, y: end.y },
+    // hasControls/hasBorders: false - a line is reshaped by dragging either
+    // endpoint (see AnnotationCanvas.tsx's endpoint-drag hit-test), not by
+    // the default resize/rotate bounding-box handles, which don't make
+    // sense for "stretch one end of a line" and were confusing in practice.
+    hasControls: false,
+    hasBorders: false,
   });
+  tagSegment(line, start, end);
+  return line;
 }
 
 /** An arrow is a line grouped with a triangular head pointing from start to end. */
@@ -57,12 +90,8 @@ export function createArrow(start: XY, end: XY, style: AnnotationStyle): Group {
   });
 
   const group = new Group([shaft, head]);
-  group.set({
-    isArrow: true,
-    hasEditableEndpoints: true,
-    segStart: { x: start.x, y: start.y },
-    segEnd: { x: end.x, y: end.y },
-  });
+  group.set({ isArrow: true, hasControls: false, hasBorders: false });
+  tagSegment(group, start, end);
   return group;
 }
 
