@@ -13,6 +13,28 @@ import { DEFAULT_STYLE, type AnnotationStyle } from './types';
 const redSolid: AnnotationStyle = { color: '#e63946', strokeWidth: 3, dashed: false, fillOpacity: 0.25 };
 const bluedashed: AnnotationStyle = { color: '#264653', strokeWidth: 8, dashed: true, fillOpacity: 0.6 };
 
+describe('segment tracking for endpoint dragging', () => {
+  it('tags a line with its endpoints for the drag hit-test', () => {
+    const line = createLine({ x: 10, y: 20 }, { x: 100, y: 200 }, redSolid);
+    expect(line.get('hasEditableEndpoints')).toBe(true);
+    expect(line.get('segStart')).toEqual({ x: 10, y: 20 });
+    expect(line.get('segEnd')).toEqual({ x: 100, y: 200 });
+  });
+
+  it('tags an arrow with its endpoints and an isArrow marker', () => {
+    const arrow = createArrow({ x: 0, y: 0 }, { x: 50, y: 50 }, redSolid);
+    expect(arrow.get('hasEditableEndpoints')).toBe(true);
+    expect(arrow.get('isArrow')).toBe(true);
+    expect(arrow.get('segStart')).toEqual({ x: 0, y: 0 });
+    expect(arrow.get('segEnd')).toEqual({ x: 50, y: 50 });
+  });
+
+  it('does not tag circles or rectangles as having editable endpoints', () => {
+    const circle = createCircle(redSolid);
+    expect(circle.get('hasEditableEndpoints')).toBeFalsy();
+  });
+});
+
 describe('styleFromObject', () => {
   it('reads a rectangle’s color, width, dash, and fill opacity back out', () => {
     const rect = createRectangle(redSolid);

@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Canvas, FabricImage, PencilBrush, Point, Polyline, type FabricObject, type TPointerEventInfo } from 'fabric';
+import { Canvas, FabricImage, PencilBrush, Point, Polyline, type FabricObject, type TPointerEventInfo, type XY } from 'fabric';
 import type { AnnotationLayer } from '../../api/types';
 import { useAnnotationHistory } from './useAnnotationHistory';
 import { AnnotationToolbar } from './AnnotationToolbar';
@@ -15,6 +15,7 @@ import {
   applyStyleToObject,
   createArrow,
   createCircle,
+  createEndpointMarker,
   createLine,
   createRectangle,
   createSmoothPath,
@@ -79,7 +80,8 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       getAnnotations: () => {
         const canvas = canvasRef.current;
         if (!canvas) return [];
-        return canvas.toObject(['id', 'annotationFillOpacity']).objects as AnnotationLayer[];
+        return canvas.toObject(['id', 'annotationFillOpacity', 'hasEditableEndpoints', 'isArrow', 'segStart', 'segEnd'])
+          .objects as AnnotationLayer[];
       },
     }));
 
@@ -260,6 +262,44 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       let curvePoints: Point[] = [];
       let curvePreview: Polyline | null = null;
 
+      // Dragging one end of an already-placed line/arrow to reshape it,
+      // rather than the default resize/rotate bounding-box handles - see
+      // handleMouseDown's hit-test below.
+      let draggingEndpoint: {
+        object: FabricObject | null;
+        id: string;
+        which: 'start' | 'end';
+        fixed: XY;
+        isArrowType: boolean;
+        style: AnnotationStyle;
+      } | null = null;
+      let endpointMarkers: [FabricObject, FabricObject] | null = null;
+
+      const ENDPOINT_HIT_RADIUS = 14;
+
+      function removeEndpointMarkers() {
+        if (endpointMarkers) {
+          canvas!.remove(...endpointMarkers);
+          endpointMarkers = null;
+        }
+      }
+
+      function showEndpointMarkers(start: XY, end: XY) {
+        removeEndpointMarkers();
+        const m1 = createEndpointMarker(start);
+        const m2 = createEndpointMarker(end);
+        canvas!.add(m1, m2);
+        endpointMarkers = [m1, m2];
+      }
+
+      function repositionEndpointMarkers(start: XY, end: XY) {
+        if (!endpointMarkers) return;
+        endpointMarkers[0].set({ left: start.x, top: start.y });
+        endpointMarkers[1].set({ left: end.x, top: end.y });
+        endpointMarkers[0].setCoords();
+        endpointMarkers[1].setCoords();
+      }
+
       function finalizeCurve() {
         if (curvePoints.length >= 2) {
           const path = createSmoothPath(curvePoints, styleRef.current);
@@ -276,6 +316,33 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       function handleMouseDown(opt: TPointerEventInfo) {
         const currentTool = toolRef.current;
         const point = opt.scenePoint;
+
+        if (currentTool === 'select') {
+          const active = canvas!.getActiveObject();
+          if (active && active.get('hasEditableEndpoints')) {
+            const segStart = active.get('segStart') as XY;
+            const segEnd = active.get('segEnd') as XY;
+            const distToStart = Math.hypot(point.x - segStart.x, point.y - segStart.y);
+            const distToEnd = Math.hypot(point.x - segEnd.x, point.y - segEnd.y);
+            if (distToStart <= ENDPOINT_HIT_RADIUS || distToEnd <= ENDPOINT_HIT_RADIUS) {
+              const which = distToStart <= distToEnd ? 'start' : 'end';
+              const fixed = which === 'start' ? segEnd : segStart;
+              draggingEndpoint = {
+                object: null,
+                id: active.get('id') as string,
+                which,
+                fixed,
+                isArrowType: active.get('isArrow') === true,
+                style: styleFromObject(active),
+              };
+              history.isRestoring.current = true;
+              canvas!.remove(active);
+              showEndpointMarkers(segStart, segEnd);
+              canvas!.requestRenderAll();
+              return;
+            }
+          }
+        }
 
         if (currentTool === 'text') {
           const textbox = createTextbox(point, styleRef.current);
@@ -318,6 +385,24 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       }
 
       function handleMouseMove(opt: TPointerEventInfo) {
+        if (draggingEndpoint) {
+          const point = opt.scenePoint;
+          const newStart = draggingEndpoint.which === 'start' ? point : draggingEndpoint.fixed;
+          const newEnd = draggingEndpoint.which === 'end' ? point : draggingEndpoint.fixed;
+
+          if (draggingEndpoint.object) canvas!.remove(draggingEndpoint.object);
+          const rebuilt = draggingEndpoint.isArrowType
+            ? createArrow(newStart, newEnd, draggingEndpoint.style)
+            : createLine(newStart, newEnd, draggingEndpoint.style);
+          rebuilt.set('id', draggingEndpoint.id);
+          canvas!.add(rebuilt);
+          draggingEndpoint.object = rebuilt;
+
+          repositionEndpointMarkers(newStart, newEnd);
+          canvas!.requestRenderAll();
+          return;
+        }
+
         if (!shape || !startPoint) return;
         const point = opt.scenePoint;
         const currentTool = toolRef.current;
@@ -348,6 +433,20 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       }
 
       function handleMouseUp() {
+        if (draggingEndpoint) {
+          removeEndpointMarkers();
+          if (draggingEndpoint.object) {
+            draggingEndpoint.object.setCoords();
+            canvas!.setActiveObject(draggingEndpoint.object);
+          }
+          history.isRestoring.current = false;
+          refreshLayers();
+          history.pushSnapshot();
+          draggingEndpoint = null;
+          canvas!.requestRenderAll();
+          return;
+        }
+
         if (shape) {
           shape.setCoords();
           history.isRestoring.current = false;

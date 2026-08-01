@@ -1,4 +1,4 @@
-import { Ellipse, Group, Line, Path, Rect, Textbox, Triangle, type FabricObject, type XY } from 'fabric';
+import { Circle, Ellipse, Group, Line, Path, Rect, Textbox, Triangle, type FabricObject, type XY } from 'fabric';
 import { pointsToSmoothPathData } from './curveUtils';
 import { DEFAULT_STYLE, type AnnotationStyle } from './types';
 
@@ -24,6 +24,12 @@ export function createLine(start: XY, end: XY, style: AnnotationStyle): Line {
     strokeWidth: style.strokeWidth,
     strokeDashArray: strokeDashArray(style),
     strokeLineCap: 'round',
+    // Read by the endpoint-drag hit-test in AnnotationCanvas.tsx - lets a
+    // placed line be reshaped by dragging either end, instead of only via
+    // the default resize/rotate bounding-box handles.
+    hasEditableEndpoints: true,
+    segStart: { x: start.x, y: start.y },
+    segEnd: { x: end.x, y: end.y },
   });
 }
 
@@ -50,7 +56,33 @@ export function createArrow(start: XY, end: XY, style: AnnotationStyle): Group {
     angle: angleDeg + 90,
   });
 
-  return new Group([shaft, head]);
+  const group = new Group([shaft, head]);
+  group.set({
+    isArrow: true,
+    hasEditableEndpoints: true,
+    segStart: { x: start.x, y: start.y },
+    segEnd: { x: end.x, y: end.y },
+  });
+  return group;
+}
+
+/** Small circle shown at a line/arrow's endpoint while it's being dragged -
+ * purely a visual cue, not itself interactive (hit-testing for the drag is
+ * proximity-based, handled directly in AnnotationCanvas.tsx). */
+export function createEndpointMarker(point: XY): Circle {
+  return new Circle({
+    left: point.x,
+    top: point.y,
+    originX: 'center',
+    originY: 'center',
+    radius: 6,
+    fill: '#ffffff',
+    stroke: '#1d4ed8',
+    strokeWidth: 2,
+    selectable: false,
+    evented: false,
+    excludeFromExport: true,
+  });
 }
 
 export function createRectangle(style: AnnotationStyle): Rect {
