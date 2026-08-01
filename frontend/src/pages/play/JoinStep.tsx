@@ -1,0 +1,54 @@
+import { useState, type FormEvent } from 'react';
+import { validateCode } from '../../api/play';
+import { getErrorMessage } from '../../api/client';
+import type { ValidateCodeResponse } from '../../api/types';
+import { ErrorBanner } from '../../components/ErrorBanner';
+import styles from './PlayPage.module.css';
+
+export function JoinStep({
+  initialCode,
+  onJoined,
+}: {
+  initialCode: string;
+  onJoined: (result: ValidateCodeResponse) => void;
+}) {
+  const [code, setCode] = useState(initialCode);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!code.trim()) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const result = await validateCode(code.trim());
+      onJoined(result);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className={`card ${styles.panel}`} onSubmit={handleSubmit}>
+      <h2>Join a quiz</h2>
+      <p>Enter the code your coach shared with you.</p>
+      <ErrorBanner message={error} />
+      <div className="field">
+        <input
+          className={styles.codeInput}
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          maxLength={16}
+          placeholder="CODE"
+          autoFocus
+        />
+      </div>
+      <button type="submit" className="btn btn-primary" disabled={isSubmitting || !code.trim()} style={{ width: '100%' }}>
+        {isSubmitting ? 'Checking…' : 'Continue'}
+      </button>
+    </form>
+  );
+}

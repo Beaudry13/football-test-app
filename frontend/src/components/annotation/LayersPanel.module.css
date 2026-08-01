@@ -1,0 +1,45 @@
+.panel {
+  width: 220px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  padding: 0.75em;
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+.panel h4 {
+  margin: 0 0 0.5em;
+  font-size: 0.9em;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4em 0.5em;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.row:hover {
+  background: var(--color-bg);
+}
+
+.rowActive {
+  background: var(--color-success-bg);
+}
+
+.deleteBtn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.empty {
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+}

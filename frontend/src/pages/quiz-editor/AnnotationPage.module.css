@@ -1,0 +1,22 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1em;
+}
+
+.backLink {
+  font-size: 0.9em;
+  text-decoration: none;
+}
+
+.uploadCard {
+  max-width: 480px;
+  text-align: center;
+  padding: 2.5em;
+}
+
+.savedNote {
+  font-size: 0.85em;
+  color: var(--color-success);
+}

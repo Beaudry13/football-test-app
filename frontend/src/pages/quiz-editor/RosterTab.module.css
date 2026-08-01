@@ -1,0 +1,40 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5em;
+}
+
+@media (max-width: 720px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.playerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.playerList li {
+  padding: 0.4em 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.playerList li:last-child {
+  border-bottom: none;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 0.6em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+
+.hint {
+  font-size: 0.85em;
+  margin-top: 0.5em;
+}

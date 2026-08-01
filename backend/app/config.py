@@ -3,14 +3,30 @@
 import os
 import tempfile
 from datetime import timedelta
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# backend/ - the directory this config lives under, independent of the
+# process's cwd or Flask's app.root_path (which is backend/app/, not backend/).
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 
 def _split_origins(raw: str) -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def _resolve_upload_folder(raw: str) -> str:
+    """Relative paths are resolved against BASE_DIR, not cwd or Flask's root_path.
+
+    Without this, `FileStorage.save()` (relative to cwd) and Flask's
+    `send_from_directory()` (relative to app.root_path) would silently
+    disagree on where "uploads" actually is.
+    """
+    path = Path(raw)
+    return str(path if path.is_absolute() else BASE_DIR / path)
 
 
 class BaseConfig:
@@ -26,7 +42,7 @@ class BaseConfig:
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "uploads")
+    UPLOAD_FOLDER = _resolve_upload_folder(os.environ.get("UPLOAD_FOLDER", "uploads"))
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "10")) * 1024 * 1024
     ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 

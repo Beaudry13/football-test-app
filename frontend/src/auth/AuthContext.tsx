@@ -1,0 +1,67 @@
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { login as apiLogin, register as apiRegister, me as apiMe } from '../api/auth';
+import { clearToken, getToken, setToken } from '../api/client';
+import type { Coach } from '../api/types';
+
+interface AuthContextValue {
+  coach: Coach | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (input: {
+    username: string;
+    email: string;
+    password: string;
+    organization: string;
+  }) => Promise<void>;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [coach, setCoach] = useState<Coach | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (!getToken()) {
+      setIsLoading(false);
+      return;
+    }
+    apiMe()
+      .then(setCoach)
+      .catch(() => clearToken())
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const result = await apiLogin({ email, password });
+    setToken(result.access_token);
+    setCoach(result.coach);
+  }, []);
+
+  const register = useCallback(
+    async (input: { username: string; email: string; password: string; organization: string }) => {
+      const result = await apiRegister(input);
+      setToken(result.access_token);
+      setCoach(result.coach);
+    },
+    [],
+  );
+
+  const logout = useCallback(() => {
+    clearToken();
+    setCoach(null);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ coach, isLoading, login, register, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
+  return context;
+}

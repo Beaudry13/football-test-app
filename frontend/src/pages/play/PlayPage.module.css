@@ -1,0 +1,82 @@
+.wrapper {
+  display: flex;
+  justify-content: center;
+  padding-top: 1.5em;
+}
+
+.panel {
+  width: 100%;
+  max-width: 560px;
+}
+
+.codeInput {
+  font-size: 1.6em;
+  text-align: center;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.nameGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5em;
+  margin: 1em 0;
+}
+
+.nameButton {
+  padding: 0.7em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.nameButtonActive {
+  border-color: var(--color-primary);
+  background: var(--color-success-bg);
+  color: var(--color-primary);
+}
+
+.progress {
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75em;
+}
+
+.questionCard {
+  margin-bottom: 1em;
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  margin-top: 0.75em;
+}
+
+.optionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.6em 0.75em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.optionRowActive {
+  border-color: var(--color-primary);
+  background: var(--color-success-bg);
+}
+
+.navRow {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5em;
+}
+
+.summaryStat {
+  text-align: center;
+  padding: 1.5em;
+}

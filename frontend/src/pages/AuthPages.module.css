@@ -1,0 +1,16 @@
+.wrapper {
+  display: flex;
+  justify-content: center;
+  padding-top: 2em;
+}
+
+.form {
+  width: 100%;
+  max-width: 380px;
+}
+
+.footer {
+  margin-top: 1em;
+  font-size: 0.9em;
+  text-align: center;
+}
