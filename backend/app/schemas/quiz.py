@@ -13,3 +13,5 @@ class QuizUpdateSchema(Schema):
     title = fields.Str(required=False, validate=validate.Length(min=1, max=255))
     description = fields.Str(required=False, allow_none=True)
     one_question_at_a_time = fields.Bool(required=False)
+    # null moves the quiz to "Uncategorized"
+    folder_id = fields.Int(required=False, allow_none=True)

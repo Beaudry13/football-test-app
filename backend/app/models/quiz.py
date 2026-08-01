@@ -12,8 +12,12 @@ class Quiz(TimestampMixin, db.Model):
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
     one_question_at_a_time = db.Column(db.Boolean, nullable=False, default=True)
+    folder_id = db.Column(
+        db.Integer, db.ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     coach = db.relationship("Coach", back_populates="quizzes")
+    folder = db.relationship("Folder", back_populates="quizzes")
     questions = db.relationship(
         "Question",
         back_populates="quiz",
@@ -40,6 +44,7 @@ class Quiz(TimestampMixin, db.Model):
             "title": self.title,
             "description": self.description,
             "one_question_at_a_time": self.one_question_at_a_time,
+            "folder_id": self.folder_id,
             "question_count": len(self.questions),
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),

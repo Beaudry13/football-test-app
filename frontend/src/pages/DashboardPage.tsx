@@ -1,15 +1,22 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes } from '../api/quizzes';
+import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
+import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
 import { getErrorMessage } from '../api/client';
-import type { Quiz } from '../api/types';
+import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import styles from './DashboardPage.module.css';
 
 export function DashboardPage() {
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
+  const [folders, setFolders] = useState<Folder[] | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,7 +25,9 @@ export function DashboardPage() {
 
   async function refresh() {
     try {
-      setQuizzes(await listQuizzes());
+      const [quizList, folderList] = await Promise.all([listQuizzes(), listFolders()]);
+      setQuizzes(quizList);
+      setFolders(folderList);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -61,6 +70,106 @@ export function DashboardPage() {
     }
   }
 
+  async function handleMoveToFolder(quizId: number, folderId: number | null) {
+    setError(null);
+    try {
+      await updateQuiz(quizId, { folder_id: folderId });
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleCreateFolder(event: FormEvent) {
+    event.preventDefault();
+    if (!newFolderName.trim()) return;
+    setIsCreatingFolder(true);
+    setError(null);
+    try {
+      await createFolder({ name: newFolderName.trim() });
+      setNewFolderName('');
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  }
+
+  async function handleRenameFolder(folderId: number) {
+    if (!renameValue.trim()) return;
+    setError(null);
+    try {
+      await renameFolder(folderId, { name: renameValue.trim() });
+      setRenamingFolderId(null);
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleDeleteFolder(folderId: number, name: string) {
+    if (!window.confirm(`Delete folder "${name}"? Its quizzes move to Uncategorized, they are not deleted.`)) {
+      return;
+    }
+    setError(null);
+    try {
+      await deleteFolder(folderId);
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  function toggleFolder(folderId: number) {
+    setCollapsedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  }
+
+  function renderQuizCard(quiz: Quiz) {
+    return (
+      <div key={quiz.id} className={`card ${styles.quizCard}`}>
+        <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
+          <h3>{quiz.title}</h3>
+          <div className={styles.quizMeta}>
+            {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
+            {new Date(quiz.updated_at).toLocaleDateString()}
+          </div>
+        </Link>
+        <div className={styles.actions}>
+          {folders && folders.length > 0 && (
+            <select
+              className={styles.folderSelect}
+              value={quiz.folder_id ?? ''}
+              onChange={(e) => handleMoveToFolder(quiz.id, e.target.value ? Number(e.target.value) : null)}
+              aria-label={`Move "${quiz.title}" to folder`}
+            >
+              <option value="">Uncategorized</option>
+              {folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(quiz.id)}>
+            Duplicate
+          </button>
+          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(quiz.id, quiz.title)}>
+            Delete
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const hasFolders = (folders?.length ?? 0) > 0;
+  const uncategorized = quizzes?.filter((q) => q.folder_id === null) ?? [];
+
   return (
     <div>
       <div className={styles.header}>
@@ -81,31 +190,106 @@ export function DashboardPage() {
         </button>
       </form>
 
+      <form className={styles.newFolderForm} onSubmit={handleCreateFolder}>
+        <input
+          type="text"
+          placeholder="New folder, e.g. Fall Camp"
+          value={newFolderName}
+          onChange={(e) => setNewFolderName(e.target.value)}
+        />
+        <button
+          type="submit"
+          className="btn btn-secondary"
+          disabled={isCreatingFolder || !newFolderName.trim()}
+        >
+          {isCreatingFolder ? 'Creating…' : 'New folder'}
+        </button>
+      </form>
+
       {quizzes === null ? (
         <p>Loading…</p>
       ) : quizzes.length === 0 ? (
         <div className={`card ${styles.empty}`}>No quizzes yet. Create your first one above.</div>
+      ) : !hasFolders ? (
+        <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
       ) : (
-        <div className={styles.list}>
-          {quizzes.map((quiz) => (
-            <div key={quiz.id} className={`card ${styles.quizCard}`}>
-              <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
-                <h3>{quiz.title}</h3>
-                <div className={styles.quizMeta}>
-                  {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
-                  {new Date(quiz.updated_at).toLocaleDateString()}
+        <div className={styles.folderSections}>
+          {folders!.map((folder) => {
+            const folderQuizzes = quizzes.filter((q) => q.folder_id === folder.id);
+            const isCollapsed = collapsedFolderIds.has(folder.id);
+            return (
+              <div key={folder.id} className={styles.folderSection}>
+                <div className={styles.folderHeader}>
+                  <button className={styles.folderToggle} onClick={() => toggleFolder(folder.id)}>
+                    <span className={styles.folderCollapseIcon}>{isCollapsed ? '▸' : '▾'}</span>
+                    {folder.name} <span className={styles.folderCount}>({folderQuizzes.length})</span>
+                  </button>
+                  <div className={styles.folderActions}>
+                    {renamingFolderId === folder.id ? (
+                      <>
+                        <input
+                          autoFocus
+                          className={styles.folderRenameInput}
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleRenameFolder(folder.id)}
+                          aria-label={`Rename folder "${folder.name}"`}
+                        />
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleRenameFolder(folder.id)}
+                        >
+                          Save
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setRenamingFolderId(null)}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setRenamingFolderId(folder.id);
+                          setRenameValue(folder.name);
+                        }}
+                      >
+                        Rename
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => handleDeleteFolder(folder.id, folder.name)}
+                    >
+                      Delete folder
+                    </button>
+                  </div>
                 </div>
-              </Link>
-              <div className={styles.actions}>
-                <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(quiz.id)}>
-                  Duplicate
-                </button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(quiz.id, quiz.title)}>
-                  Delete
-                </button>
+                {!isCollapsed && (
+                  <div className={styles.list}>
+                    {folderQuizzes.length === 0 ? (
+                      <div className={styles.emptyFolder}>No quizzes in this folder yet.</div>
+                    ) : (
+                      folderQuizzes.map(renderQuizCard)
+                    )}
+                  </div>
+                )}
               </div>
+            );
+          })}
+
+          {uncategorized.length > 0 && (
+            <div className={styles.folderSection}>
+              <div className={styles.folderHeader}>
+                <span className={styles.folderTitle}>
+                  Uncategorized <span className={styles.folderCount}>({uncategorized.length})</span>
+                </span>
+              </div>
+              <div className={styles.list}>{uncategorized.map(renderQuizCard)}</div>
             </div>
-          ))}
+          )}
         </div>
       )}
     </div>

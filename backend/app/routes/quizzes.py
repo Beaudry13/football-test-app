@@ -10,7 +10,7 @@ from app.extensions import db
 from app.models import Question, QuestionImage, QuestionOption, Quiz
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.file_storage import get_file_storage
-from app.utils.auth import current_coach, get_owned_quiz
+from app.utils.auth import current_coach, get_owned_folder, get_owned_quiz
 from app.utils.validation import load_json_body
 
 quizzes_bp = Blueprint("quizzes", __name__)
@@ -65,6 +65,12 @@ def update_quiz(quiz_id: int):
         if field in data:
             setattr(quiz, field, data[field])
 
+    if "folder_id" in data:
+        if data["folder_id"] is None:
+            quiz.folder_id = None
+        else:
+            quiz.folder_id = get_owned_folder(data["folder_id"]).id
+
     db.session.commit()
     return jsonify(quiz.to_dict())
 
@@ -94,6 +100,7 @@ def duplicate_quiz(quiz_id: int):
         title=f"{original.title} (Copy)",
         description=original.description,
         one_question_at_a_time=original.one_question_at_a_time,
+        folder_id=original.folder_id,
     )
     db.session.add(copy_quiz)
     db.session.flush()  # assign copy_quiz.id without committing

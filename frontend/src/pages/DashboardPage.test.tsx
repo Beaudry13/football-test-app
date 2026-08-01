@@ -4,7 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPage } from './DashboardPage';
 import * as quizzesApi from '../api/quizzes';
-import type { Quiz } from '../api/types';
+import * as foldersApi from '../api/folders';
+import type { Folder, Quiz } from '../api/types';
 
 const sampleQuiz: Quiz = {
   id: 1,
@@ -12,9 +13,19 @@ const sampleQuiz: Quiz = {
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: true,
+  folder_id: null,
   question_count: 3,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-02T00:00:00Z',
+};
+
+const sampleFolder: Folder = {
+  id: 10,
+  coach_id: 1,
+  name: 'Fall Camp',
+  quiz_count: 1,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
 };
 
 function renderDashboard() {
@@ -28,6 +39,7 @@ function renderDashboard() {
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue([]);
   });
 
   it('shows the empty state when there are no quizzes', async () => {
@@ -109,5 +121,67 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(1));
+  });
+
+  it('renders a flat list with no folder sections when the coach has no folders', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.queryByText('Uncategorized')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Move ".*" to folder/)).not.toBeInTheDocument();
+  });
+
+  it('groups quizzes into folder sections, with unfoldered quizzes under Uncategorized', async () => {
+    const foldered: Quiz = { ...sampleQuiz, id: 2, title: 'Defense Install', folder_id: 10 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz, foldered]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
+    renderDashboard();
+
+    await screen.findByText('Defense Install');
+    expect(screen.getByRole('button', { name: /Fall Camp/ })).toBeInTheDocument();
+    expect(screen.getAllByText(/Uncategorized/).length).toBeGreaterThan(0);
+  });
+
+  it('creates a folder from the inline form', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    const createFolderSpy = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(sampleFolder);
+    renderDashboard();
+    await screen.findByText('No quizzes yet. Create your first one above.');
+
+    await user.type(screen.getByPlaceholderText('New folder, e.g. Fall Camp'), 'Fall Camp');
+    await user.click(screen.getByRole('button', { name: 'New folder' }));
+
+    await waitFor(() => expect(createFolderSpy).toHaveBeenCalledWith({ name: 'Fall Camp' }));
+  });
+
+  it('moves a quiz to a different folder via the per-card select', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
+    const updateSpy = vi.spyOn(quizzesApi, 'updateQuiz').mockResolvedValue(sampleQuiz);
+    renderDashboard();
+    await screen.findByText('Week 1 Prep');
+
+    const select = screen.getByLabelText('Move "Week 1 Prep" to folder');
+    await user.selectOptions(select, 'Fall Camp');
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { folder_id: 10 }));
+  });
+
+  it('deletes a folder without deleting its quizzes', async () => {
+    const user = userEvent.setup();
+    const foldered: Quiz = { ...sampleQuiz, folder_id: 10 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([foldered]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
+    const deleteFolderSpy = vi.spyOn(foldersApi, 'deleteFolder').mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderDashboard();
+    await screen.findByText('Week 1 Prep');
+
+    await user.click(screen.getByRole('button', { name: 'Delete folder' }));
+
+    await waitFor(() => expect(deleteFolderSpy).toHaveBeenCalledWith(10));
   });
 });
