@@ -266,6 +266,10 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       // rather than the default resize/rotate bounding-box handles - see
       // handleMouseDown's hit-test below.
       let draggingEndpoint: {
+        // Untouched original, kept in case mouseup arrives with no mousemove
+        // in between (a plain click, not a drag) - restored as-is instead of
+        // being left removed with nothing rebuilt to replace it.
+        originalObject: FabricObject;
         object: FabricObject | null;
         id: string;
         which: 'start' | 'end';
@@ -328,6 +332,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
               const which = distToStart <= distToEnd ? 'start' : 'end';
               const fixed = which === 'start' ? segEnd : segStart;
               draggingEndpoint = {
+                originalObject: active,
                 object: null,
                 id: active.get('id') as string,
                 which,
@@ -435,13 +440,20 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       function handleMouseUp() {
         if (draggingEndpoint) {
           removeEndpointMarkers();
+          history.isRestoring.current = false;
           if (draggingEndpoint.object) {
+            // A real drag happened - the rebuilt shape is already on the canvas.
             draggingEndpoint.object.setCoords();
             canvas!.setActiveObject(draggingEndpoint.object);
+            refreshLayers();
+            history.pushSnapshot();
+          } else {
+            // mouseup arrived with no mousemove in between - just a click,
+            // not a drag. Nothing was ever rebuilt, so put the original
+            // back exactly as it was rather than leaving it deleted.
+            canvas!.add(draggingEndpoint.originalObject);
+            canvas!.setActiveObject(draggingEndpoint.originalObject);
           }
-          history.isRestoring.current = false;
-          refreshLayers();
-          history.pushSnapshot();
           draggingEndpoint = null;
           canvas!.requestRenderAll();
           return;
