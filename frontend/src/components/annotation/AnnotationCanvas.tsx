@@ -98,7 +98,14 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
           canvas.setDimensions({ width, height });
           image.scale(scale);
-          image.set({ selectable: false, evented: false });
+          // objectCaching: false - Fabric's object cache is sized off the
+          // image's *native* resolution, not its displayed (scaled-down)
+          // size. A large film-still photo (e.g. 2048x1152) blows past
+          // Fabric's default cache pixel-count limit, and the cache it
+          // builds instead only covers a corner of the image - the rest
+          // renders blank. Skipping the cache avoids that entirely; there's
+          // no downside since this is a static, non-interactive background.
+          image.set({ selectable: false, evented: false, objectCaching: false });
           canvas.backgroundImage = image;
 
           if (initialAnnotations.length > 0) {
