@@ -28,9 +28,16 @@ export interface QuestionOption {
   is_correct_answer?: boolean;
 }
 
+/**
+ * One Fabric.js object as serialized by `canvas.toObject(['id'])` - the
+ * annotation tool's own native format (see AnnotationCanvas), not a
+ * hand-rolled schema. `type` values are Fabric's own class names, not our
+ * tool names: an "arrow" is a `group` (line + triangle), a "circle" is an
+ * `ellipse`, a "rectangle" is a `rect`, and "text" is a `textbox`.
+ */
 export interface AnnotationLayer {
   id: string;
-  type: 'line' | 'arrow' | 'circle' | 'rectangle' | 'text' | 'path';
+  type: 'line' | 'group' | 'ellipse' | 'rect' | 'path' | 'textbox' | 'polyline';
   [key: string]: unknown;
 }
 

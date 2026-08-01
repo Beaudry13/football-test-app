@@ -15,6 +15,7 @@ export function AnnotationPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [isCanvasReady, setIsCanvasReady] = useState(false);
   const canvasRef = useRef<AnnotationCanvasHandle>(null);
 
   const load = useCallback(async () => {
@@ -36,6 +37,13 @@ export function AnnotationPage() {
     load();
   }, [load]);
 
+  // AnnotationCanvas remounts (via its `key`) whenever the image changes, but
+  // this component's own isCanvasReady flag doesn't reset on a child remount -
+  // without this it would stay stuck "ready" from the previous image.
+  useEffect(() => {
+    setIsCanvasReady(false);
+  }, [question?.image?.id]);
+
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !quizId || !questionId) return;
@@ -52,7 +60,7 @@ export function AnnotationPage() {
   }
 
   async function handleSave() {
-    if (!quizId || !questionId || !canvasRef.current) return;
+    if (!quizId || !questionId || !canvasRef.current || !isCanvasReady) return;
     setError(null);
     setIsSaving(true);
     try {
@@ -84,7 +92,7 @@ export function AnnotationPage() {
         {question.image && (
           <div>
             {savedAt && <span className={styles.savedNote}>Saved {savedAt.toLocaleTimeString()} · </span>}
-            <button className="btn btn-primary" onClick={handleSave} disabled={isSaving}>
+            <button className="btn btn-primary" onClick={handleSave} disabled={isSaving || !isCanvasReady}>
               {isSaving ? 'Saving…' : 'Save annotations'}
             </button>
           </div>
@@ -101,6 +109,7 @@ export function AnnotationPage() {
           ref={canvasRef}
           imageUrl={resolveMediaUrl(question.image.image_url)}
           initialAnnotations={question.image.annotations}
+          onReady={() => setIsCanvasReady(true)}
         />
       ) : (
         <div className={`card ${styles.uploadCard}`}>

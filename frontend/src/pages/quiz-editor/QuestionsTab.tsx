@@ -7,7 +7,7 @@ import {
   updateQuestion,
   type QuestionInput,
 } from '../../api/questions';
-import { getErrorMessage } from '../../api/client';
+import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionEditor } from './QuestionEditor';
@@ -89,7 +89,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
           ) : (
             <div key={question.id} className={`card ${styles.questionCard}`}>
               {question.image && (
-                <img className={styles.thumb} src={question.image.image_url} alt="Question film" />
+                <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
               )}
               <div className={styles.questionBody}>
                 <div className={styles.questionMeta}>

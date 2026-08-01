@@ -32,10 +32,11 @@ export interface AnnotationCanvasHandle {
 interface AnnotationCanvasProps {
   imageUrl: string;
   initialAnnotations: AnnotationLayer[];
+  onReady?: () => void;
 }
 
 export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCanvasProps>(
-  function AnnotationCanvas({ imageUrl, initialAnnotations }, ref) {
+  function AnnotationCanvas({ imageUrl, initialAnnotations, onReady }, ref) {
     const canvasElRef = useRef<HTMLCanvasElement>(null);
     const canvasRef = useRef<Canvas | null>(null);
     const [tool, setTool] = useState<AnnotationTool>('select');
@@ -45,6 +46,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
     const styleRef = useRef(style);
     styleRef.current = style;
     const [isReady, setIsReady] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [objects, setObjects] = useState<FabricObject[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -77,34 +79,41 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
       let cancelled = false;
 
-      // No crossOrigin flag: we only render the image, never read its pixels back
-      // (no toDataURL/getImageData), so a CORS-mode load isn't needed and would
-      // otherwise require the /uploads route to send CORS headers it doesn't.
-      FabricImage.fromURL(imageUrl).then((image) => {
-        if (cancelled) return;
-        const naturalWidth = image.width ?? MAX_CANVAS_WIDTH;
-        const scale = Math.min(1, MAX_CANVAS_WIDTH / naturalWidth);
-        const width = naturalWidth * scale;
-        const height = (image.height ?? naturalWidth) * scale;
+      async function setup() {
+        try {
+          // No crossOrigin flag: we only render the image, never read its pixels
+          // back (no toDataURL/getImageData), so a CORS-mode load isn't needed
+          // and would otherwise require the /uploads route to send CORS headers
+          // it doesn't.
+          const image = await FabricImage.fromURL(imageUrl);
+          if (cancelled) return;
 
-        canvas.setDimensions({ width, height });
-        image.scale(scale);
-        image.set({ selectable: false, evented: false });
-        canvas.backgroundImage = image;
-        canvas.requestRenderAll();
+          const naturalWidth = image.width ?? MAX_CANVAS_WIDTH;
+          const scale = Math.min(1, MAX_CANVAS_WIDTH / naturalWidth);
+          const width = naturalWidth * scale;
+          const height = (image.height ?? naturalWidth) * scale;
 
-        if (initialAnnotations.length > 0) {
-          canvas.loadFromJSON({ objects: initialAnnotations }).then(() => {
-            canvas.requestRenderAll();
-            history.reset();
-            refreshLayers();
-            setIsReady(true);
-          });
-        } else {
+          canvas.setDimensions({ width, height });
+          image.scale(scale);
+          image.set({ selectable: false, evented: false });
+          canvas.backgroundImage = image;
+
+          if (initialAnnotations.length > 0) {
+            await canvas.loadFromJSON({ objects: initialAnnotations });
+            if (cancelled) return;
+          }
+
+          canvas.requestRenderAll();
           history.reset();
+          refreshLayers();
           setIsReady(true);
+          onReady?.();
+        } catch {
+          if (!cancelled) setLoadError('Could not load this image. Try re-uploading it.');
         }
-      });
+      }
+
+      setup();
 
       return () => {
         cancelled = true;
@@ -324,22 +333,36 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
     return (
       <div className={styles.layout}>
-        <AnnotationToolbar
-          tool={tool}
-          onToolChange={setTool}
-          style={style}
-          onStyleChange={setStyle}
-          canUndo={history.canUndo}
-          canRedo={history.canRedo}
-          onUndo={history.undo}
-          onRedo={history.redo}
-          onDeleteSelected={handleDeleteSelected}
-          hasSelection={selectedId !== null}
-        />
-        <div className={styles.canvasWrap}>
-          <canvas ref={canvasElRef} />
-        </div>
-        <LayersPanel objects={objects} selectedId={selectedId} onSelect={handleSelectLayer} onDelete={handleDeleteLayer} />
+        {loadError ? (
+          <div className="error-banner">{loadError}</div>
+        ) : (
+          !isReady && <div className="card">Loading image…</div>
+        )}
+        {!loadError && (
+          <>
+            <AnnotationToolbar
+              tool={tool}
+              onToolChange={setTool}
+              style={style}
+              onStyleChange={setStyle}
+              canUndo={history.canUndo}
+              canRedo={history.canRedo}
+              onUndo={history.undo}
+              onRedo={history.redo}
+              onDeleteSelected={handleDeleteSelected}
+              hasSelection={selectedId !== null}
+            />
+            <div className={styles.canvasWrap} style={isReady ? undefined : { display: 'none' }}>
+              <canvas ref={canvasElRef} />
+            </div>
+            <LayersPanel
+              objects={objects}
+              selectedId={selectedId}
+              onSelect={handleSelectLayer}
+              onDelete={handleDeleteLayer}
+            />
+          </>
+        )}
       </div>
     );
   },
