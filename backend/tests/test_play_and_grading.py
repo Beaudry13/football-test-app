@@ -111,6 +111,24 @@ def test_submit_rejects_duplicate_submission(client, coach_headers):
     assert second.status_code == 409
 
 
+def test_submit_rejects_duplicate_question_id_within_one_submission(client, coach_headers):
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+
+    response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [
+                {"question_id": tf_question["id"]},
+                {"question_id": tf_question["id"]},
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_coach_can_grade_written_answer_and_leave_feedback(client, coach_headers):
     _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
     submit_response = client.post(

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
+from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
@@ -38,6 +39,7 @@ def list_responses(quiz_id: int):
     quiz = get_owned_quiz(quiz_id)
     responses = (
         PlayerResponse.query.filter_by(quiz_id=quiz.id)
+        .options(selectinload(PlayerResponse.answers))
         .order_by(PlayerResponse.submitted_at.desc())
         .all()
     )
@@ -48,7 +50,11 @@ def list_responses(quiz_id: int):
 @jwt_required()
 def get_response(quiz_id: int, response_id: int):
     quiz = get_owned_quiz(quiz_id)
-    response = PlayerResponse.query.filter_by(id=response_id, quiz_id=quiz.id).first()
+    response = (
+        PlayerResponse.query.filter_by(id=response_id, quiz_id=quiz.id)
+        .options(selectinload(PlayerResponse.answers))
+        .first()
+    )
     if response is None:
         raise ApiError("Response not found", status_code=404)
     return jsonify(response.to_dict(include_answers=True))
@@ -75,7 +81,11 @@ def quiz_dashboard(quiz_id: int):
     quiz = get_owned_quiz(quiz_id)
 
     roster_size = len(quiz.roster.players) if quiz.roster else 0
-    responses = PlayerResponse.query.filter_by(quiz_id=quiz.id).all()
+    responses = (
+        PlayerResponse.query.filter_by(quiz_id=quiz.id)
+        .options(selectinload(PlayerResponse.answers))
+        .all()
+    )
     response_count = len(responses)
     response_rate = (response_count / roster_size) if roster_size else 0.0
 
@@ -120,6 +130,9 @@ def player_history():
     responses = (
         PlayerResponse.query.join(Quiz)
         .filter(Quiz.coach_id == coach.id, PlayerResponse.player_name == player_name)
+        # contains_eager reuses the join above for response.quiz.title instead of
+        # a separate lazy-load per response; selectinload batches .answers in one query.
+        .options(contains_eager(PlayerResponse.quiz), selectinload(PlayerResponse.answers))
         .order_by(PlayerResponse.submitted_at.desc())
         .all()
     )

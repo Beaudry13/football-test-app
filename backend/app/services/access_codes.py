@@ -6,7 +6,6 @@ Codes are short, uppercase, and avoid visually ambiguous characters
 
 import random
 import string
-from datetime import datetime, timezone
 
 from app.models import AccessCode
 
@@ -27,14 +26,3 @@ def find_valid_access_code(code: str) -> AccessCode | None:
     if access_code is None or not access_code.is_valid():
         return None
     return access_code
-
-
-def expire_stale_codes(quiz_id: int) -> None:
-    """Mark any access codes for this quiz as inactive once they've passed expiry."""
-    now = datetime.now(timezone.utc)
-    stale = AccessCode.query.filter(
-        AccessCode.quiz_id == quiz_id,
-        AccessCode.is_active.is_(True),
-        AccessCode.expires_at <= now,
-    )
-    stale.update({"is_active": False}, synchronize_session=False)

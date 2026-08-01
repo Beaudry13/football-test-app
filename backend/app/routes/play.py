@@ -57,6 +57,12 @@ def submit_quiz():
     if existing is not None:
         raise ApiError("This player has already submitted this quiz", status_code=409)
 
+    submitted_question_ids = [a["question_id"] for a in data["answers"]]
+    if len(submitted_question_ids) != len(set(submitted_question_ids)):
+        # Caught here, not left to the DB's unique constraint, so this doesn't get
+        # misreported as "already submitted" by the IntegrityError handler below.
+        raise ApiError("Each question can only be answered once per submission", status_code=422)
+
     quiz_question_ids = {q.id for q in quiz.questions}
     questions_by_id = {q.id: q for q in quiz.questions}
 

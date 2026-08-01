@@ -13,9 +13,7 @@ class Coach(TimestampMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     organization = db.Column(db.String(255), nullable=False)
 
-    quizzes = db.relationship(
-        "Quiz", back_populates="coach", cascade="all, delete-orphan", lazy="dynamic"
-    )
+    quizzes = db.relationship("Quiz", back_populates="coach", cascade="all, delete-orphan")
 
     def set_password(self, raw_password: str) -> None:
         self.password_hash = bcrypt.generate_password_hash(raw_password).decode("utf-8")

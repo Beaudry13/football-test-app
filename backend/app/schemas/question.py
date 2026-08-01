@@ -41,16 +41,19 @@ class AnnotationsUpdateSchema(Schema):
 
 
 def validate_options_for_type(question_type: str, options: list[dict]) -> None:
+    """Raises ApiError(422) - same status as marshmallow validation failures,
+    since this is the same class of error (semantically invalid payload),
+    just enforced in Python because it's a cross-field business rule."""
     if question_type == QuestionType.WRITTEN.value:
         return
 
     if question_type == QuestionType.TRUE_FALSE.value:
         if len(options) != 2:
-            raise ApiError("True/false questions must have exactly 2 options")
+            raise ApiError("True/false questions must have exactly 2 options", status_code=422)
     elif question_type == QuestionType.MULTIPLE_CHOICE.value:
         if len(options) < 2:
-            raise ApiError("Multiple choice questions need at least 2 options")
+            raise ApiError("Multiple choice questions need at least 2 options", status_code=422)
 
     correct_count = sum(1 for option in options if option.get("is_correct_answer"))
     if correct_count != 1:
-        raise ApiError("Exactly one option must be marked as the correct answer")
+        raise ApiError("Exactly one option must be marked as the correct answer", status_code=422)

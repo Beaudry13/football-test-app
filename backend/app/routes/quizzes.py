@@ -4,6 +4,7 @@ import copy
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models import Question, QuestionImage, QuestionOption, Quiz
@@ -18,7 +19,14 @@ quizzes_bp = Blueprint("quizzes", __name__)
 @jwt_required()
 def list_quizzes():
     coach = current_coach()
-    quizzes = Quiz.query.filter_by(coach_id=coach.id).order_by(Quiz.updated_at.desc()).all()
+    # selectinload: to_dict() reads len(quiz.questions) for question_count, so
+    # without this each quiz would trigger its own lazy-load query (N+1).
+    quizzes = (
+        Quiz.query.filter_by(coach_id=coach.id)
+        .options(selectinload(Quiz.questions))
+        .order_by(Quiz.updated_at.desc())
+        .all()
+    )
     return jsonify([q.to_dict() for q in quizzes])
 
 

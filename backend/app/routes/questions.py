@@ -109,12 +109,18 @@ def reorder_questions(quiz_id: int):
     quiz = get_owned_quiz(quiz_id)
     data = load_json_body(QuestionReorderSchema())
 
+    question_ids = data["question_ids"]
     quiz_question_ids = {q.id for q in quiz.questions}
-    if set(data["question_ids"]) != quiz_question_ids:
-        raise ApiError("question_ids must include every question in the quiz exactly once")
+    # Length check catches duplicate ids too: set() would dedupe them, letting a
+    # payload like [1, 1, 2] slip past a set-only comparison against {1, 2}.
+    if len(question_ids) != len(quiz_question_ids) or set(question_ids) != quiz_question_ids:
+        raise ApiError(
+            "question_ids must include every question in the quiz exactly once",
+            status_code=422,
+        )
 
     questions_by_id = {q.id: q for q in quiz.questions}
-    for position, question_id in enumerate(data["question_ids"]):
+    for position, question_id in enumerate(question_ids):
         questions_by_id[question_id].position = position
 
     db.session.commit()

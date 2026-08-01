@@ -43,7 +43,7 @@ def test_true_false_question_requires_exactly_two_options(client, coach_headers)
         headers=coach_headers,
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_question_requires_exactly_one_correct_option(client, coach_headers):
@@ -63,7 +63,7 @@ def test_question_requires_exactly_one_correct_option(client, coach_headers):
         headers=coach_headers,
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_written_question_needs_no_options(client, coach_headers):
@@ -100,6 +100,26 @@ def test_reorder_questions(client, coach_headers):
     assert response.status_code == 200
     ordered = response.get_json()
     assert [q["id"] for q in ordered] == reversed_ids
+
+
+def test_reorder_rejects_duplicate_question_ids(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    ids = []
+    for text in ("Q1", "Q2"):
+        response = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={"question_text": text, "question_type": "written", "options": []},
+            headers=coach_headers,
+        )
+        ids.append(response.get_json()["id"])
+
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions/reorder",
+        json={"question_ids": [ids[0], ids[0]]},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 422
 
 
 def test_upload_and_delete_question_image(client, coach_headers):
