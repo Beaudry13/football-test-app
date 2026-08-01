@@ -25,6 +25,16 @@ import styles from './AnnotationCanvas.module.css';
 
 const MAX_CANVAS_WIDTH = 900;
 
+function loadImageElement(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+    img.src = url;
+  });
+}
+
 export interface AnnotationCanvasHandle {
   getAnnotations: () => AnnotationLayer[];
 }
@@ -81,30 +91,39 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
       async function setup() {
         try {
-          // crossOrigin: 'anonymous' is required, not optional, once images can
-          // come from a different origin (R2) - Fabric caches objects to an
-          // internal canvas for performance, and *any* cross-origin image drawn
-          // without an explicit CORS-mode load taints that canvas, silently
-          // breaking the render (no thrown error - it just paints nothing).
-          // The image host must send matching CORS headers back (see R2 bucket
-          // CORS policy / backend CORS config for local uploads).
-          const image = await FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' });
+          // Load the raw element ourselves (not via FabricImage.fromURL) and
+          // pre-render it to its exact display size on a plain canvas before
+          // handing it to Fabric. Fabric's own image-drawing path has a bug
+          // where a large source image (e.g. a 2048x1152 or 1242x2208 photo)
+          // only renders a portion of itself once scaled down - traced to its
+          // internal filter-scaling/crop math, not to caching or CORS (both
+          // independently verified fine: a manual drawImage() at the same
+          // target size always renders correctly, regardless of source
+          // resolution). Handing Fabric an already-correctly-sized source
+          // sidesteps that internal path entirely.
+          //
+          // crossOrigin: 'anonymous' is still required for the raw load once
+          // images can come from a different origin (R2) - without it the
+          // browser taints the canvas the moment we draw a cross-origin image
+          // onto it, so getContext('2d').drawImage() below would silently
+          // fail. The image host must send matching CORS headers back (see R2
+          // bucket CORS policy / backend CORS config for local uploads).
+          const rawImage = await loadImageElement(imageUrl);
           if (cancelled) return;
 
-          const naturalWidth = image.width ?? MAX_CANVAS_WIDTH;
+          const naturalWidth = rawImage.naturalWidth || MAX_CANVAS_WIDTH;
+          const naturalHeight = rawImage.naturalHeight || naturalWidth;
           const scale = Math.min(1, MAX_CANVAS_WIDTH / naturalWidth);
-          const width = naturalWidth * scale;
-          const height = (image.height ?? naturalWidth) * scale;
+          const width = Math.round(naturalWidth * scale);
+          const height = Math.round(naturalHeight * scale);
 
+          const prescaled = document.createElement('canvas');
+          prescaled.width = width;
+          prescaled.height = height;
+          prescaled.getContext('2d')!.drawImage(rawImage, 0, 0, width, height);
+
+          const image = new FabricImage(prescaled);
           canvas.setDimensions({ width, height });
-          image.scale(scale);
-          // objectCaching: false - Fabric's object cache is sized off the
-          // image's *native* resolution, not its displayed (scaled-down)
-          // size. A large film-still photo (e.g. 2048x1152) blows past
-          // Fabric's default cache pixel-count limit, and the cache it
-          // builds instead only covers a corner of the image - the rest
-          // renders blank. Skipping the cache avoids that entirely; there's
-          // no downside since this is a static, non-interactive background.
           image.set({ selectable: false, evented: false, objectCaching: false });
           canvas.backgroundImage = image;
 
