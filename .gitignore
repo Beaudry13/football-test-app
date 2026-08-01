@@ -22,3 +22,4 @@ backend/uploads/*
 .pytest_cache/
 htmlcov/
 .coverage
+pytest_output.txt

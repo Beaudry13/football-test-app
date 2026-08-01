@@ -7,11 +7,20 @@ context per call, which doesn't reliably share a hand-bound session/
 connection with fixture code, silently committing straight to the real
 database instead of the intended nested transaction. Truncate-after-test
 sidesteps that entirely at a small speed cost.
+
+Note: we deliberately never drop_all() at session end. That's a DDL
+statement requiring an exclusive table lock, and if any earlier test
+leaked a connection that's still "idle in transaction" (a Flask app/
+request-context edge case, not something this fixture file controls),
+drop_all() hangs waiting on that lock instead of failing fast. Since the
+schema is idempotent (create_all() is a no-op on existing tables) there's
+nothing to gain from dropping it, so we just leave it in place between runs.
 """
 
 import io
 
 import pytest
+from sqlalchemy import text
 
 from app import create_app
 from app.extensions import db as _db
@@ -26,9 +35,20 @@ def app():
 @pytest.fixture(scope="session", autouse=True)
 def _database_schema(app):
     with app.app_context():
+        _terminate_other_connections()
         _db.create_all()
         yield
-        _db.drop_all()
+
+
+def _terminate_other_connections() -> None:
+    """Best-effort cleanup of connections leaked by a previous interrupted run."""
+    _db.session.execute(
+        text(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            "WHERE datname = current_database() AND pid <> pg_backend_pid()"
+        )
+    )
+    _db.session.commit()
 
 
 @pytest.fixture(autouse=True)

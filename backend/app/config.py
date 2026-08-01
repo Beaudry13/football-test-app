@@ -16,8 +16,11 @@ def _split_origins(raw: str) -> list[str]:
 class BaseConfig:
     """Shared configuration for all environments."""
 
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-key")
+    # Defaults are only for local dev convenience — real deployments must set
+    # SECRET_KEY/JWT_SECRET_KEY explicitly. 32+ bytes to satisfy PyJWT's
+    # minimum recommended HMAC-SHA256 key length.
+    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-not-for-production-use-32b")
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-key-not-for-production-32b")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=12)
 
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
