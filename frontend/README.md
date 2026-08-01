@@ -51,8 +51,29 @@ which is far more reliable than reimplementing serialization ourselves.
 The backend only validates that it's a list of objects; it never
 interprets the contents.
 
+## Testing
+
+Vitest + React Testing Library + jsdom. Tests live next to the code they
+cover (`Foo.tsx` / `Foo.test.tsx`).
+
+```bash
+npm run test        # run once
+npm run test:watch  # watch mode
+```
+
+Coverage focus is the core flows and logic most likely to break silently:
+the API client's request/error handling, `AuthContext` (including a
+regression test for treating a network failure differently from a
+rejected token — see the backend/frontend history around that bug), the
+question builder's validation rules, the annotation tool's undo/redo state
+machine and curve math, and the login/dashboard/player-join page flows.
+The annotation *canvas* itself (real Fabric.js rendering) isn't covered
+here — jsdom has no real `<canvas>` — the undo/redo and curve-math tests
+mock or isolate the Fabric dependency instead.
+
 ## Scripts
 
 - `npm run dev` — dev server with HMR
 - `npm run build` — type-check (`tsc -b`) and production build
 - `npm run lint` — oxlint
+- `npm run test` / `npm run test:watch` — Vitest
