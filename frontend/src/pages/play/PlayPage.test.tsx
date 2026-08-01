@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayPage } from './PlayPage';
 import * as playApi from '../../api/play';
-import type { PlayerResponse, ValidateCodeResponse } from '../../api/types';
+import type { PlayerResultsResponse, ValidateCodeResponse } from '../../api/types';
 
 const joinedResponse: ValidateCodeResponse = {
   access_code_id: 42,
@@ -36,18 +36,26 @@ const joinedResponse: ValidateCodeResponse = {
   },
 };
 
-const submittedResponse: PlayerResponse = {
+const submittedResponse = {
   id: 1,
   quiz_id: 5,
   access_code_id: 42,
   player_name: 'Jordan Smith',
   submitted_at: '2026-01-01T00:05:00Z',
+  answers: [],
+};
+
+const playerResults: PlayerResultsResponse = {
+  quiz_title: 'Week 1 Prep',
+  player_name: 'Jordan Smith',
+  submitted_at: '2026-01-01T00:05:00Z',
   answers: [
     {
-      id: 1,
       question_id: 10,
-      answer_text: null,
-      selected_option_id: 100,
+      question_text: 'Is this cover 2?',
+      question_type: 'true_false',
+      your_answer: 'True',
+      correct_answer: 'True',
       is_correct: true,
       coach_feedback: null,
       graded_at: null,
@@ -81,6 +89,7 @@ describe('PlayPage', () => {
     const user = userEvent.setup();
     vi.spyOn(playApi, 'validateCode').mockResolvedValue(joinedResponse);
     const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue(submittedResponse);
+    const resultsSpy = vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue(playerResults);
     renderPlayPage();
 
     await user.type(screen.getByPlaceholderText('CODE'), 'abc123');
@@ -105,8 +114,14 @@ describe('PlayPage', () => {
         answers: [{ question_id: 10, selected_option_id: 100, answer_text: null }],
       }),
     );
-    expect(await screen.findByText('Nice work, Jordan Smith!')).toBeInTheDocument();
-    expect(screen.getByText('1 / 1', { exact: false })).toBeInTheDocument();
+    await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith'));
+    expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
+    expect(screen.getByText('Is this cover 2?')).toBeInTheDocument();
+    expect(screen.getByText('Correct')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'this link' })).toHaveAttribute(
+      'href',
+      '/results/ABC123/Jordan%20Smith',
+    );
   });
 
   it('shows the server error and lets the player retry when the code is invalid', async () => {

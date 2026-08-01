@@ -100,6 +100,24 @@ export interface PlayerResponse {
   answers?: Answer[];
 }
 
+export interface PlayerResultAnswer {
+  question_id: number;
+  question_text: string;
+  question_type: QuestionType;
+  your_answer: string | null;
+  correct_answer: string | null;
+  is_correct: boolean | null;
+  coach_feedback: string | null;
+  graded_at: string | null;
+}
+
+export interface PlayerResultsResponse {
+  quiz_title: string;
+  player_name: string;
+  submitted_at: string;
+  answers: PlayerResultAnswer[];
+}
+
 export interface QuestionBreakdown {
   question_id: number;
   question_text: string;

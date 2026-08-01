@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { PlayPage } from './pages/play/PlayPage';
+import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
 
 function App() {
   return (
@@ -18,6 +19,8 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/play" element={<PlayPage />} />
           <Route path="/play/:code" element={<PlayPage />} />
+          <Route path="/results" element={<ResultsCheckPage />} />
+          <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>

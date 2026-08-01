@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { submitQuiz } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
-import type { PlayerResponse, Quiz } from '../../api/types';
+import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import styles from './PlayPage.module.css';
@@ -15,7 +15,7 @@ export function QuizStep({
   quiz: Quiz;
   accessCodeId: number;
   playerName: string;
-  onSubmitted: (response: PlayerResponse) => void;
+  onSubmitted: () => void;
 }) {
   const questions = quiz.questions ?? [];
   const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>({});
@@ -31,7 +31,7 @@ export function QuizStep({
     setError(null);
     setIsSubmitting(true);
     try {
-      const response = await submitQuiz({
+      await submitQuiz({
         access_code_id: accessCodeId,
         player_name: playerName,
         answers: questions.map((q) => ({
@@ -40,7 +40,7 @@ export function QuizStep({
           answer_text: answers[q.id]?.answer_text ?? null,
         })),
       });
-      onSubmitted(response);
+      onSubmitted();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

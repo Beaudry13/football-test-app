@@ -6,15 +6,27 @@ the coach-uploaded roster), which is exactly what every route here checks.
 
 from flask import Blueprint, jsonify
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 
 from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import AccessCode, Answer, PlayerResponse, Question
-from app.schemas.play import SubmitQuizSchema, ValidateCodeSchema
-from app.services.access_codes import find_valid_access_code
+from app.schemas.play import PlayerResultsSchema, SubmitQuizSchema, ValidateCodeSchema
+from app.services.access_codes import find_access_code_by_code, find_valid_access_code
 from app.utils.validation import load_json_body
 
 play_bp = Blueprint("play", __name__)
+
+NO_RESULTS_FOUND = "No results found for that code and name"
+
+
+def _resolve_answer_text(question: Question, answer: Answer | None) -> str | None:
+    if answer is None:
+        return None
+    if question.question_type.value == "written":
+        return answer.answer_text
+    option = next((o for o in question.options if o.id == answer.selected_option_id), None)
+    return option.option_text if option else None
 
 
 @play_bp.post("/validate-code")
@@ -125,3 +137,56 @@ def submit_quiz():
         raise ApiError("This player has already submitted this quiz", status_code=409) from exc
 
     return jsonify(response.to_dict(include_answers=True)), 201
+
+
+@play_bp.post("/results")
+@limiter.limit("20 per minute")
+def player_results():
+    """A player's own graded results - revisitable after the code expires,
+    since grading (especially of written answers) can happen well after."""
+    data = load_json_body(PlayerResultsSchema())
+
+    access_code = find_access_code_by_code(data["code"])
+    if access_code is None:
+        raise ApiError(NO_RESULTS_FOUND, status_code=404)
+
+    response = (
+        PlayerResponse.query.filter(
+            PlayerResponse.access_code_id == access_code.id,
+            db.func.lower(PlayerResponse.player_name) == data["player_name"].strip().lower(),
+        )
+        .options(selectinload(PlayerResponse.answers))
+        .first()
+    )
+    if response is None:
+        raise ApiError(NO_RESULTS_FOUND, status_code=404)
+
+    quiz = access_code.quiz
+    answers_by_question = {a.question_id: a for a in response.answers}
+
+    answer_details = []
+    for question in sorted(quiz.questions, key=lambda q: q.position):
+        answer = answers_by_question.get(question.id)
+        correct_option = next((o for o in question.options if o.is_correct_answer), None)
+
+        answer_details.append(
+            {
+                "question_id": question.id,
+                "question_text": question.question_text,
+                "question_type": question.question_type.value,
+                "your_answer": _resolve_answer_text(question, answer),
+                "correct_answer": correct_option.option_text if correct_option else None,
+                "is_correct": answer.is_correct if answer else None,
+                "coach_feedback": answer.coach_feedback if answer else None,
+                "graded_at": answer.graded_at.isoformat() if answer and answer.graded_at else None,
+            }
+        )
+
+    return jsonify(
+        {
+            "quiz_title": quiz.title,
+            "player_name": response.player_name,
+            "submitted_at": response.submitted_at.isoformat(),
+            "answers": answer_details,
+        }
+    )

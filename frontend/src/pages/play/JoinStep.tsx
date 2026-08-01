@@ -10,7 +10,7 @@ export function JoinStep({
   onJoined,
 }: {
   initialCode: string;
-  onJoined: (result: ValidateCodeResponse) => void;
+  onJoined: (code: string, result: ValidateCodeResponse) => void;
 }) {
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
@@ -22,8 +22,9 @@ export function JoinStep({
     setError(null);
     setIsSubmitting(true);
     try {
-      const result = await validateCode(code.trim());
-      onJoined(result);
+      const trimmedCode = code.trim();
+      const result = await validateCode(trimmedCode);
+      onJoined(trimmedCode, result);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

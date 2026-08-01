@@ -359,3 +359,139 @@ def test_player_history_across_quizzes(client, coach_headers):
     body = response.get_json()
     assert len(body["history"]) == 1
     assert body["history"][0]["quiz_title"] == "Week 1 Prep"
+
+
+def test_player_can_view_their_own_results_after_submitting(client, coach_headers):
+    _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    correct_option_id = next(
+        o["id"]
+        for o in client.get(f"/api/quizzes/{tf_question['quiz_id']}", headers=coach_headers).get_json()[
+            "questions"
+        ][0]["options"]
+        if o["is_correct_answer"]
+    )
+    client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [
+                {"question_id": tf_question["id"], "selected_option_id": correct_option_id},
+                {"question_id": written_question["id"], "answer_text": "I set the edge."},
+            ],
+        },
+    )
+
+    response = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "Jordan Smith"}
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["quiz_title"] == "Week 1 Prep"
+    assert body["player_name"] == "Jordan Smith"
+    by_id = {a["question_id"]: a for a in body["answers"]}
+    assert by_id[tf_question["id"]]["your_answer"] == "True"
+    assert by_id[tf_question["id"]]["correct_answer"] == "True"
+    assert by_id[tf_question["id"]]["is_correct"] is True
+    assert by_id[written_question["id"]]["your_answer"] == "I set the edge."
+    assert by_id[written_question["id"]]["correct_answer"] is None
+    assert by_id[written_question["id"]]["is_correct"] is None
+
+
+def test_player_results_name_match_is_case_insensitive(client, coach_headers):
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [{"question_id": tf_question["id"]}],
+        },
+    )
+
+    response = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "jordan smith"}
+    )
+
+    assert response.status_code == 200
+
+
+def test_player_results_404_for_unknown_code(client):
+    response = client.post("/api/play/results", json={"code": "ZZZZZZ", "player_name": "Jordan Smith"})
+    assert response.status_code == 404
+
+
+def test_player_results_404_for_a_name_that_never_submitted(client, coach_headers):
+    _, _, _, access_code = build_ready_quiz(client, coach_headers)
+
+    response = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "Alex Lee"}
+    )
+
+    assert response.status_code == 404
+
+
+def test_player_results_still_works_after_the_access_code_has_expired(app, client, coach_headers):
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [{"question_id": tf_question["id"]}],
+        },
+    )
+
+    with app.app_context():
+        code_row = db.session.get(AccessCode, access_code["id"])
+        code_row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+
+    # The join/submit gate should still reject the now-expired code...
+    validate_response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
+    assert validate_response.status_code == 404
+
+    # ...but an already-submitted player's results should still be reviewable.
+    results_response = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "Jordan Smith"}
+    )
+    assert results_response.status_code == 200
+
+
+def test_player_results_reflect_grading_done_after_submission(client, coach_headers):
+    _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    submit_response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [
+                {"question_id": tf_question["id"]},
+                {"question_id": written_question["id"], "answer_text": "I set the edge."},
+            ],
+        },
+    ).get_json()
+    written_answer_id = next(
+        a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]
+    )
+
+    before = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "Jordan Smith"}
+    ).get_json()
+    before_written = next(a for a in before["answers"] if a["question_id"] == written_question["id"])
+    assert before_written["graded_at"] is None
+
+    client.patch(
+        f"/api/answers/{written_answer_id}/grade",
+        json={"is_correct": True, "coach_feedback": "Nice job identifying the assignment."},
+        headers=coach_headers,
+    )
+
+    after = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "Jordan Smith"}
+    ).get_json()
+    after_written = next(a for a in after["answers"] if a["question_id"] == written_question["id"])
+    assert after_written["is_correct"] is True
+    assert after_written["coach_feedback"] == "Nice job identifying the assignment."
+    assert after_written["graded_at"] is not None

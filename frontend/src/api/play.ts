@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { PlayerResponse, ValidateCodeResponse } from './types';
+import type { PlayerResponse, PlayerResultsResponse, ValidateCodeResponse } from './types';
 
 export function validateCode(code: string): Promise<ValidateCodeResponse> {
   return api.post<ValidateCodeResponse>('/play/validate-code', { code }, { auth: false });
@@ -17,4 +17,12 @@ export function submitQuiz(input: {
   answers: AnswerSubmission[];
 }): Promise<PlayerResponse> {
   return api.post<PlayerResponse>('/play/submit', input, { auth: false });
+}
+
+export function getPlayerResults(code: string, playerName: string): Promise<PlayerResultsResponse> {
+  return api.post<PlayerResultsResponse>(
+    '/play/results',
+    { code, player_name: playerName },
+    { auth: false },
+  );
 }

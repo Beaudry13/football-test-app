@@ -1,25 +1,33 @@
-import type { PlayerResponse } from '../../api/types';
+import { useEffect, useState } from 'react';
+import { getPlayerResults } from '../../api/play';
+import { getErrorMessage } from '../../api/client';
+import type { PlayerResultsResponse } from '../../api/types';
+import { ErrorBanner } from '../../components/ErrorBanner';
+import { ResultsView } from './ResultsView';
 import styles from './PlayPage.module.css';
 
-export function SubmittedStep({ response }: { response: PlayerResponse }) {
-  const answers = response.answers ?? [];
-  const graded = answers.filter((a) => a.is_correct !== null);
-  const correct = graded.filter((a) => a.is_correct).length;
-  const pending = answers.length - graded.length;
+export function SubmittedStep({ code, playerName }: { code: string; playerName: string }) {
+  const [results, setResults] = useState<PlayerResultsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getPlayerResults(code, playerName)
+      .then(setResults)
+      .catch((err) => setError(getErrorMessage(err)));
+  }, [code, playerName]);
+
+  if (error) return <ErrorBanner message={error} />;
+  if (!results) return <p>Loading your results…</p>;
+
+  const resultsUrl = `/results/${encodeURIComponent(code)}/${encodeURIComponent(playerName)}`;
 
   return (
-    <div className={`card ${styles.panel} ${styles.summaryStat}`}>
-      <h2>Nice work, {response.player_name}!</h2>
-      <p>Your answers have been submitted.</p>
-      {graded.length > 0 && (
-        <p>
-          <strong>
-            {correct} / {graded.length}
-          </strong>{' '}
-          correct on auto-graded questions.
-        </p>
-      )}
-      {pending > 0 && <p>{pending} question(s) are awaiting your coach's review.</p>}
+    <div>
+      <ResultsView results={results} />
+      <p className={styles.bookmarkNote}>
+        Written answers may still be waiting on your coach's review. Bookmark{' '}
+        <a href={resultsUrl}>this link</a> to check back later once they're graded.
+      </p>
     </div>
   );
 }

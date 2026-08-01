@@ -282,6 +282,47 @@ level, not just a pre-check, so this can't be bypassed by concurrent
 requests. `404` if the code is invalid/expired.
 **Response `201`:** the created response with all answers.
 
+### `POST /api/play/results`
+
+Rate limit: 20 requests/minute per IP.
+
+A player's own graded results — the per-question review shown right after
+submitting, and what a bookmarked `/results/:code/:playerName` link on the
+frontend re-fetches later. Unlike `validate-code` and `submit`, this does
+**not** require the access code to still be valid: a written answer might
+not get graded until after the code's normal expiry, so results stay
+reviewable past that point.
+
+**Request:** `{ "code": "7F9K2R", "player_name": "Jordan Smith" }`
+(player name match is case-insensitive)
+
+**Response `200`**
+```json
+{
+  "quiz_title": "Week 3 Prep",
+  "player_name": "Jordan Smith",
+  "submitted_at": "...",
+  "answers": [
+    {
+      "question_id": 10,
+      "question_text": "Is this cover 2?",
+      "question_type": "true_false",
+      "your_answer": "False",
+      "correct_answer": "True",
+      "is_correct": false,
+      "coach_feedback": null,
+      "graded_at": null
+    }
+  ]
+}
+```
+`correct_answer` is only populated for `true_false`/`multiple_choice`
+(`null` for `written` — nothing single "correct" answer to reveal).
+
+`404` with a generic message if the code doesn't exist or this player
+never submitted under it — deliberately the same message either way, so
+the response can't be used to enumerate valid codes or roster names.
+
 ---
 
 ## Grading & dashboards 🔒

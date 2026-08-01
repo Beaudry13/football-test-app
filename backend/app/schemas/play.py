@@ -19,3 +19,8 @@ class SubmitQuizSchema(Schema):
     answers = fields.List(
         fields.Nested(AnswerSubmissionSchema), required=True, validate=validate.Length(min=1)
     )
+
+
+class PlayerResultsSchema(Schema):
+    code = fields.Str(required=True, validate=validate.Length(min=1, max=16))
+    player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))

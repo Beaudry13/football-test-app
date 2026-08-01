@@ -28,3 +28,14 @@ def find_valid_access_code(code: str) -> AccessCode | None:
     if access_code is None or not access_code.is_valid():
         return None
     return access_code
+
+
+def find_access_code_by_code(code: str) -> AccessCode | None:
+    """Like `find_valid_access_code`, but doesn't gate on expiry/deactivation.
+
+    For looking up a player's already-submitted results after the code has
+    expired - the join/submit flow should still reject an expired code, but
+    a response that was already recorded under it should stay reviewable.
+    """
+    normalized = code.strip().upper()
+    return AccessCode.query.filter_by(code=normalized).first()
