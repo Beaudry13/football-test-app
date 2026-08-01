@@ -13,4 +13,9 @@ COPY . .
 
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "wsgi:app"]
+# Shell form (not exec-array form) so $PORT actually expands - Render injects
+# its own PORT env var (not 5000) and health-checks whatever port the app
+# actually binds to. Falls back to 5000 when PORT isn't set (e.g. local
+# `docker build && docker run` outside docker-compose, which overrides this
+# CMD with its own --port=5000 anyway).
+CMD gunicorn --bind 0.0.0.0:${PORT:-5000} wsgi:app
