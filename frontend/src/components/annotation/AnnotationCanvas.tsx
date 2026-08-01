@@ -12,6 +12,7 @@ import { useAnnotationHistory } from './useAnnotationHistory';
 import { AnnotationToolbar } from './AnnotationToolbar';
 import { LayersPanel } from './LayersPanel';
 import {
+  applyStyleToObject,
   createArrow,
   createCircle,
   createLine,
@@ -19,6 +20,7 @@ import {
   createSmoothPath,
   createTextbox,
   makeId,
+  styleFromObject,
 } from './shapeFactories';
 import { DEFAULT_STYLE, type AnnotationStyle, type AnnotationTool } from './types';
 import styles from './AnnotationCanvas.module.css';
@@ -77,9 +79,29 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       getAnnotations: () => {
         const canvas = canvasRef.current;
         if (!canvas) return [];
-        return canvas.toObject(['id']).objects as AnnotationLayer[];
+        return canvas.toObject(['id', 'annotationFillOpacity']).objects as AnnotationLayer[];
       },
     }));
+
+    // While something is selected, the toolbar edits *that* shape's real
+    // style instead of the "next new shape" default - selecting a red dashed
+    // circle should show red/dashed in the toolbar, not whatever was last
+    // used to draw something else.
+    const activeObject = selectedId ? (objects.find((o) => o.get('id') === selectedId) ?? null) : null;
+    const displayedStyle = activeObject ? styleFromObject(activeObject) : style;
+    const showFillOpacity = activeObject
+      ? activeObject.type === 'rect' || activeObject.type === 'ellipse'
+      : tool === 'circle' || tool === 'rectangle';
+
+    function handleStyleChange(newStyle: AnnotationStyle) {
+      setStyle(newStyle);
+      if (activeObject) {
+        applyStyleToObject(activeObject, newStyle);
+        canvasRef.current?.requestRenderAll();
+        refreshLayers();
+        history.pushSnapshot();
+      }
+    }
 
     // --- Canvas + background image setup ---------------------------------
     useEffect(() => {
@@ -393,8 +415,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
             <AnnotationToolbar
               tool={tool}
               onToolChange={setTool}
-              style={style}
-              onStyleChange={setStyle}
+              style={displayedStyle}
+              onStyleChange={handleStyleChange}
+              showFillOpacity={showFillOpacity}
               canUndo={history.canUndo}
               canRedo={history.canRedo}
               onUndo={history.undo}

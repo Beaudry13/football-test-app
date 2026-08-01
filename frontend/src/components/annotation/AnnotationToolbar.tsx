@@ -17,6 +17,7 @@ interface AnnotationToolbarProps {
   onToolChange: (tool: AnnotationTool) => void;
   style: AnnotationStyle;
   onStyleChange: (style: AnnotationStyle) => void;
+  showFillOpacity: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -30,6 +31,7 @@ export function AnnotationToolbar({
   onToolChange,
   style,
   onStyleChange,
+  showFillOpacity,
   canUndo,
   canRedo,
   onUndo,
@@ -37,8 +39,6 @@ export function AnnotationToolbar({
   onDeleteSelected,
   hasSelection,
 }: AnnotationToolbarProps) {
-  const showFillOpacity = tool === 'circle' || tool === 'rectangle';
-
   return (
     <div className={styles.toolbar}>
       <div className={styles.toolGroup}>
