@@ -44,18 +44,73 @@ export function AnnotationPage() {
     setIsCanvasReady(false);
   }, [question?.image?.id]);
 
-  async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
+  const uploadFile = useCallback(
+    async (file: File) => {
+      if (!quizId || !questionId) return;
+      setError(null);
+      setIsUploading(true);
+      try {
+        await uploadQuestionImage(Number(quizId), Number(questionId), file);
+        await load();
+      } catch (err) {
+        setError(getErrorMessage(err));
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [quizId, questionId, load],
+  );
+
+  function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file || !quizId || !questionId) return;
+    if (file) uploadFile(file);
+  }
+
+  // Lets a coach paste a screenshot (e.g. Windows Snipping Tool, Cmd+Shift+4)
+  // straight in with Ctrl+V, without saving it to disk first - the workflow
+  // coaches actually use when clipping frames from film-review software.
+  useEffect(() => {
+    if (question?.image || isUploading) return;
+
+    function handlePaste(event: ClipboardEvent) {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault();
+            uploadFile(file);
+          }
+          return;
+        }
+      }
+    }
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [question?.image, isUploading, uploadFile]);
+
+  async function handlePasteButtonClick() {
+    if (!navigator.clipboard?.read) {
+      setError('Your browser doesn’t support the paste button - use Ctrl+V instead.');
+      return;
+    }
     setError(null);
-    setIsUploading(true);
     try {
-      await uploadQuestionImage(Number(quizId), Number(questionId), file);
-      await load();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsUploading(false);
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((type) => type.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const extension = imageType.split('/')[1] ?? 'png';
+          await uploadFile(new File([blob], `pasted.${extension}`, { type: imageType }));
+          return;
+        }
+      }
+      setError('No image found on the clipboard. Copy a screenshot first, then try again.');
+    } catch {
+      setError('Could not read the clipboard - use Ctrl+V instead.');
     }
   }
 
@@ -114,11 +169,26 @@ export function AnnotationPage() {
       ) : (
         <div className={`card ${styles.uploadCard}`}>
           <h3>Add a film still</h3>
-          <p>Upload a screenshot to draw routes, circle players, and add callouts.</p>
-          <label className="btn btn-primary" style={{ cursor: 'pointer' }}>
-            {isUploading ? 'Uploading…' : 'Choose image'}
-            <input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={handleUpload} disabled={isUploading} />
-          </label>
+          <p>Draw routes, circle players, and add callouts on a screenshot.</p>
+          <p className={styles.pasteHint}>
+            Copy a screenshot (e.g. Windows Snipping Tool or Cmd+Shift+4), then paste it anywhere on this
+            page with <strong>Ctrl+V</strong> - or click below.
+          </p>
+          <div className={styles.uploadActions}>
+            <button className="btn btn-primary" onClick={handlePasteButtonClick} disabled={isUploading}>
+              {isUploading ? 'Uploading…' : 'Paste image'}
+            </button>
+            <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+              Choose image
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                onChange={handleFileInputChange}
+                disabled={isUploading}
+              />
+            </label>
+          </div>
         </div>
       )}
     </div>
