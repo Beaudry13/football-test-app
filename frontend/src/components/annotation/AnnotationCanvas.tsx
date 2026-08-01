@@ -164,8 +164,15 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           canvas.backgroundImage = image;
 
           if (initialAnnotations.length > 0) {
+            // loadFromJSON treats the given JSON as the *entire* canvas
+            // state - since { objects: ... } has no backgroundImage key,
+            // Fabric clears the one we just set above as part of loading.
+            // Re-apply it afterward, or a question with saved annotations
+            // shows the drawn shapes over a blank canvas on reload, with
+            // the actual photo missing entirely.
             await canvas.loadFromJSON({ objects: initialAnnotations });
             if (cancelled) return;
+            canvas.backgroundImage = image;
           }
 
           canvas.requestRenderAll();
