@@ -124,7 +124,21 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
           const image = new FabricImage(prescaled);
           canvas.setDimensions({ width, height });
-          image.set({ selectable: false, evented: false, objectCaching: false });
+          // originX/Y: Fabric objects default to *center* origin, not
+          // top-left - left:0, top:0 (also both defaults, never set here)
+          // then places the image's *center* at canvas (0,0), not its
+          // corner. Only the bottom-right quadrant of the image ends up
+          // inside the visible canvas; the rest renders off-canvas at
+          // negative coordinates. This, not caching or CORS, was the actual
+          // cause of images only partially showing - confirmed against
+          // Fabric's own source defaults (originX/originY: 'center').
+          image.set({
+            selectable: false,
+            evented: false,
+            objectCaching: false,
+            originX: 'left',
+            originY: 'top',
+          });
           canvas.backgroundImage = image;
 
           if (initialAnnotations.length > 0) {
