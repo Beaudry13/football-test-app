@@ -37,3 +37,13 @@ def test_login_is_rate_limited(monkeypatch):
     statuses = [r.status_code for r in responses]
     assert statuses.count(401) == 10  # the configured "10 per minute" limit
     assert statuses[-1] == 429
+
+
+def test_rate_limit_response_has_a_readable_message_not_the_raw_limit_string(monkeypatch):
+    client = make_rate_limited_client(monkeypatch)
+    payload = {"email": "nobody@example.com", "password": "wrong-password"}
+
+    responses = [client.post("/api/auth/login", json=payload) for _ in range(11)]
+
+    body = responses[-1].get_json()
+    assert body["error"] == "Too many requests. Please wait a moment and try again."

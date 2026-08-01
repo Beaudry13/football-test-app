@@ -10,7 +10,8 @@ tool, and the public player flow) that talks to it.
 
 ## Stack
 
-- **Backend:** Python + Flask, JWT auth, RESTful API
+- **Backend:** Python + Flask, JWT auth, RESTful API, Flask-Limiter for
+  per-IP rate limiting on public endpoints
 - **Frontend:** React + TypeScript (Vite), Fabric.js for the annotation canvas
 - **Database:** PostgreSQL, migrations via Flask-Migrate/Alembic
 - **File storage:** local disk in dev, behind a swappable interface for
@@ -51,8 +52,14 @@ docker-compose.yml  Postgres + backend for local development
 ### Option A: Docker Compose
 
 ```bash
+cp backend/.env.example backend/.env   # docker-compose.yml reads this via env_file
 docker compose up --build
 ```
+
+`DATABASE_URL`/`TEST_DATABASE_URL` in that file get overridden by
+`docker-compose.yml` to point at the `postgres` service automatically —
+you don't need to edit those two — but the file still needs to exist for
+the other settings (`SECRET_KEY`, `CORS_ORIGINS`, etc.).
 
 This starts Postgres and the Flask backend. On first run, apply migrations:
 
@@ -107,6 +114,15 @@ flask db upgrade  # against the DATABASE_URL configured for tests, if needed
 pytest
 ```
 
+Frontend tests (Vitest + React Testing Library, no backend or database
+needed — API calls are mocked) — see [`frontend/README.md`](frontend/README.md#testing)
+for what's covered:
+
+```bash
+cd frontend
+npm run test
+```
+
 ## Deployment notes
 
 The backend has no vendor lock-in: it's a standard Flask app that runs
@@ -121,3 +137,12 @@ server dependency beyond `VITE_API_URL`, so it deploys cleanly to Netlify,
 Vercel, or any static host — set `VITE_API_URL` to the deployed backend's
 URL at build time and add the frontend's deployed origin to the backend's
 `CORS_ORIGINS`.
+
+**Rate limiting caveat:** Flask-Limiter is configured with its default
+in-memory storage (see `app/extensions.py`), which tracks limits per
+process. That's fine for a single gunicorn worker, but if you scale the
+backend to multiple workers or instances, each one enforces the limit
+independently instead of sharing counts — a real attacker could get
+roughly (limit × worker count) requests through instead of just the
+limit. For a multi-worker production deployment, point Flask-Limiter at
+a shared store (e.g. Redis) via its `storage_uri` option.

@@ -30,8 +30,8 @@ src/
 
 ## Running locally
 
-1. Make sure the backend is running (see `../backend/README.md`) and copy
-   `.env.example` to `.env`, pointing `VITE_API_URL` at it.
+1. Make sure the backend is running (see the root [`README.md`](../README.md))
+   and copy `.env.example` to `.env`, pointing `VITE_API_URL` at it.
 2. The backend's `CORS_ORIGINS` must include this app's origin — both
    `http://localhost:5173` and `http://127.0.0.1:5173`, since browsers
    treat them as different origins.

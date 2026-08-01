@@ -6,6 +6,7 @@ handlers below and turned into a consistent JSON error shape.
 """
 
 from flask import Flask, current_app, jsonify
+from flask_limiter.errors import RateLimitExceeded
 from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 
@@ -34,6 +35,13 @@ def register_error_handlers(app: Flask) -> None:
     def handle_too_large(error: RequestEntityTooLarge):
         max_mb = current_app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
         return jsonify({"error": f"File is too large. Maximum size is {max_mb}MB."}), 413
+
+    @app.errorhandler(RateLimitExceeded)
+    def handle_rate_limit_exceeded(error: RateLimitExceeded):
+        # Without this, the default description is Flask-Limiter's internal
+        # limit string (e.g. "10 per 1 minute"), not something a user should
+        # have to parse to understand what happened.
+        return jsonify({"error": "Too many requests. Please wait a moment and try again."}), 429
 
     @app.errorhandler(HTTPException)
     def handle_http_exception(error: HTTPException):

@@ -15,13 +15,17 @@ Errors follow a consistent shape:
 { "error": "Human-readable message", "details": { "field": ["reason"] } }
 ```
 
-`details` is only present for validation failures (HTTP 422).
+`details` is only present for validation failures (HTTP 422). This shape
+is consistent across every error status the API returns, including
+infrastructure-level ones like `413` (file too large) and `429` (rate
+limited) — those aren't left as raw Flask/Werkzeug text either.
 
 A handful of public, unauthenticated endpoints are rate-limited per IP
 (register, login, access-code validation, quiz submission) to make
 credential stuffing and access-code brute-forcing impractical. Exceeding
-the limit returns `429 Too Many Requests`. See each endpoint below for its
-specific limit.
+the limit returns `429` with
+`{ "error": "Too many requests. Please wait a moment and try again." }`.
+See each endpoint below for its specific limit.
 
 ---
 
@@ -111,7 +115,7 @@ Roster and access codes are **not** copied. Returns the new quiz, `201`.
 Nested under a quiz. `question_type` is one of `true_false`,
 `multiple_choice`, `written`.
 
-Option rules (enforced server-side, `400` if violated):
+Option rules (enforced server-side, `422` if violated):
 - `true_false` — exactly 2 options
 - `multiple_choice` — at least 2 options
 - both — exactly one option must have `is_correct_answer: true`
@@ -145,15 +149,20 @@ Partial update of `question_text`, `question_type`, and/or `options`
 ### `POST /api/quizzes/{quiz_id}/questions/reorder`
 
 **Request:** `{ "question_ids": [3, 1, 2] }` — must contain every question
-in the quiz exactly once. Response: the questions in their new order.
+in the quiz exactly once (`422` if any id is missing, foreign, or
+repeated). Response: the questions in their new order.
 
 ### `POST /api/quizzes/{quiz_id}/questions/{question_id}/image`
 
-`multipart/form-data` with an `image` field (png/jpg/jpeg/webp, ≤10MB by
-default). Replaces any existing image. **Response `201`:**
+`multipart/form-data` with an `image` field. Extension must be one of
+png/jpg/jpeg/webp (`400` otherwise — checked by extension only, not file
+content). Replaces any existing image. **Response `201`:**
 ```json
 { "id": 1, "question_id": 5, "image_url": "/uploads/<uuid>.png", "annotations": [], "updated_at": "..." }
 ```
+
+`413` if the file exceeds `MAX_UPLOAD_SIZE_MB` (10MB by default):
+`{ "error": "File is too large. Maximum size is 10MB." }`.
 
 ### `PUT /api/quizzes/{quiz_id}/questions/{question_id}/image/annotations`
 
@@ -172,6 +181,13 @@ Removes the image (file + record). `204`.
 One roster per quiz; players are picked by name at play time instead of
 free-typed, so there's always exactly one canonical spelling per roster.
 
+Both endpoints below share the same validation: names are trimmed of
+whitespace server-side, blank names are dropped, and a duplicate name
+(case-insensitive) is rejected with `422` rather than silently deduped —
+two roster entries for the same name would otherwise let a player
+validate but then collide with the one-response-per-player constraint at
+submit time.
+
 ### `GET /api/quizzes/{quiz_id}/roster`
 
 Returns `{ "id": null, "quiz_id": ..., "players": [] }` if none exists yet.
@@ -179,13 +195,16 @@ Returns `{ "id": null, "quiz_id": ..., "players": [] }` if none exists yet.
 ### `PUT /api/quizzes/{quiz_id}/roster`
 
 Manual entry. **Request:** `{ "players": ["Jordan Smith", "Alex Lee"] }`
-— replaces the full roster.
+— replaces the full roster. `422` if the list is empty (after trimming)
+or contains a duplicate name.
 
 ### `POST /api/quizzes/{quiz_id}/roster/csv`
 
 `multipart/form-data` with a `file` field. Accepts a CSV with a `name` /
 `player_name` / `player` header (case-insensitive), or a single unlabeled
-name column. Replaces the full roster.
+name column. Replaces the full roster. Same duplicate/blank-name rules as
+the manual-entry endpoint above; `400` if the file isn't valid UTF-8 CSV
+or no names are found.
 
 ---
 
@@ -254,9 +273,13 @@ True/false and multiple-choice answers are auto-graded immediately
 (`is_correct` set from the selected option). Written answers are left
 ungraded (`is_correct: null`) pending manual review.
 
-`422` if the player name isn't on the roster or an answer references a
-question/option outside the quiz. `409` if this player already submitted
-under this access code. `404` if the code is invalid/expired.
+`422` if the player name isn't on the roster, an answer references a
+question/option outside the quiz, or `answers` includes the same
+`question_id` more than once. `409` if this player already submitted
+under this access code — including the case where two submissions for
+the same player race each other; the check is enforced at the database
+level, not just a pre-check, so this can't be bypassed by concurrent
+requests. `404` if the code is invalid/expired.
 **Response `201`:** the created response with all answers.
 
 ---
