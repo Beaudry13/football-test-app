@@ -81,11 +81,14 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
       async function setup() {
         try {
-          // No crossOrigin flag: we only render the image, never read its pixels
-          // back (no toDataURL/getImageData), so a CORS-mode load isn't needed
-          // and would otherwise require the /uploads route to send CORS headers
-          // it doesn't.
-          const image = await FabricImage.fromURL(imageUrl);
+          // crossOrigin: 'anonymous' is required, not optional, once images can
+          // come from a different origin (R2) - Fabric caches objects to an
+          // internal canvas for performance, and *any* cross-origin image drawn
+          // without an explicit CORS-mode load taints that canvas, silently
+          // breaking the render (no thrown error - it just paints nothing).
+          // The image host must send matching CORS headers back (see R2 bucket
+          // CORS policy / backend CORS config for local uploads).
+          const image = await FabricImage.fromURL(imageUrl, { crossOrigin: 'anonymous' });
           if (cancelled) return;
 
           const naturalWidth = image.width ?? MAX_CANVAS_WIDTH;

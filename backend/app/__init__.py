@@ -53,7 +53,17 @@ def _init_extensions(app: Flask) -> None:
     migrate.init_app(app, db)
     bcrypt.init_app(app)
     jwt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
+    # /uploads/* needs CORS too, not just /api/* - the annotation canvas loads
+    # question images cross-origin and requires a CORS-mode fetch (see
+    # AnnotationCanvas.tsx's crossOrigin: 'anonymous') or the browser taints
+    # the canvas and silently fails to render the image.
+    cors.init_app(
+        app,
+        resources={
+            r"/api/*": {"origins": app.config["CORS_ORIGINS"]},
+            r"/uploads/*": {"origins": app.config["CORS_ORIGINS"]},
+        },
+    )
     limiter.init_app(app)
 
     # Import models so Flask-Migrate can see them for autogeneration.
