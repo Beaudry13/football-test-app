@@ -1,0 +1,59 @@
+# Render Blueprint - https://render.com/docs/blueprint-spec
+#
+# Deploys the Flask backend (from backend/Dockerfile) and a managed
+# Postgres instance. In the Render dashboard: New > Blueprint > select this
+# repo. See docs/DEPLOYMENT.md for the full walkthrough, including the
+# variables marked `sync: false` below, which you set once by hand after
+# the first deploy (secrets and values Render can't know on its own).
+#
+# Starter plan (not free) for the web service: Render's free tier spins
+# down after 15 minutes of inactivity, so the first request after a gap -
+# very plausibly a player mid-quiz - would stall for 30-50 seconds waiting
+# for a cold start. Not acceptable once real players are on the clock.
+
+services:
+  - type: web
+    name: football-quiz-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: starter
+    healthCheckPath: /api/health
+    preDeployCommand: flask db upgrade
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: football-quiz-db
+          property: connectionString
+      # The Netlify site URL - not known until the frontend's first deploy,
+      # so set this by hand afterward (see docs/DEPLOYMENT.md).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: STORAGE_BACKEND
+        value: s3
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: R2_PUBLIC_URL_BASE
+        sync: false
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
+      - key: ACCESS_CODE_TTL_HOURS
+        value: "24"
+
+databases:
+  - name: football-quiz-db
+    plan: free
+    databaseName: football_quiz
+    user: football_quiz

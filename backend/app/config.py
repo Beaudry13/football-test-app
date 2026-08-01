@@ -46,6 +46,16 @@ class BaseConfig:
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "10")) * 1024 * 1024
     ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
 
+    # "local" (default, disk-backed) or "s3" (R2/S3-compatible bucket, see
+    # app/services/file_storage.py) - most PaaS hosts wipe local disk on
+    # every redeploy, so a production deployment should set this to "s3".
+    STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")
+    R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
+    R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
+    R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
+    R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME")
+    R2_PUBLIC_URL_BASE = os.environ.get("R2_PUBLIC_URL_BASE")
+
     CORS_ORIGINS = _split_origins(os.environ.get("CORS_ORIGINS", "http://localhost:5173"))
 
     ACCESS_CODE_TTL_HOURS = int(os.environ.get("ACCESS_CODE_TTL_HOURS", "24"))

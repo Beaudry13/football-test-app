@@ -15,8 +15,9 @@ tool, and the public player flow) that talks to it.
   exports
 - **Frontend:** React + TypeScript (Vite), Fabric.js for the annotation canvas
 - **Database:** PostgreSQL, migrations via Flask-Migrate/Alembic
-- **File storage:** local disk in dev, behind a swappable interface for
-  cloud storage in production
+- **File storage:** local disk in dev; an S3-compatible bucket (built
+  against Cloudflare R2, via boto3) in production, since most hosts wipe
+  local disk on every redeploy - see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 
 See [`docs/API.md`](docs/API.md) for the full endpoint reference and
 [`frontend/README.md`](frontend/README.md) for frontend-specific details.
@@ -126,12 +127,19 @@ npm run test
 
 ## Deployment notes
 
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for a concrete, step-by-step
+walkthrough (Cloudflare R2 → Render → Netlify) with a `render.yaml` and
+`netlify.toml` already in the repo to drive it. The rest of this section is
+the general shape of why it deploys the way it does.
+
 The backend has no vendor lock-in: it's a standard Flask app that runs
 behind gunicorn (see `backend/Dockerfile`) and talks to any PostgreSQL
 instance via `DATABASE_URL`. It's designed to deploy cleanly to Railway,
 Render, Fly.io, or similar. File storage is behind a `FileStorage`
-interface (`app/services/file_storage.py`) so local disk can be swapped for
-S3-compatible storage without touching route code.
+interface (`app/services/file_storage.py`) with two implementations: local
+disk for dev, and an S3-compatible bucket (`STORAGE_BACKEND=s3`, built
+against Cloudflare R2) for production — most PaaS hosts wipe local disk on
+every redeploy, so production must use the S3 backend.
 
 The frontend is a static build (`npm run build` in `frontend/`) with no
 server dependency beyond `VITE_API_URL`, so it deploys cleanly to Netlify,

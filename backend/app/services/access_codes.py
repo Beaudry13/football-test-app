@@ -4,7 +4,7 @@ Codes are short, uppercase, and avoid visually ambiguous characters
 (0/O, 1/I/L) since players type them in by hand from a screen or sideline card.
 """
 
-import random
+import secrets
 import string
 
 from app.models import AccessCode
@@ -15,7 +15,9 @@ CODE_LENGTH = 6
 
 def generate_unique_code() -> str:
     while True:
-        candidate = "".join(random.choices(CODE_ALPHABET, k=CODE_LENGTH))
+        # secrets, not random: random's Mersenne Twister is predictable given
+        # enough observed output, which matters for a code that gates quiz access.
+        candidate = "".join(secrets.choice(CODE_ALPHABET) for _ in range(CODE_LENGTH))
         if AccessCode.query.filter_by(code=candidate).first() is None:
             return candidate
 

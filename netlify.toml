@@ -1,0 +1,13 @@
+# Netlify build config for the frontend (this is a monorepo - the frontend
+# lives in frontend/, not the repo root). See docs/DEPLOYMENT.md.
+#
+# VITE_API_URL isn't set here - it's the deployed Render backend's URL,
+# which doesn't exist until that's deployed first, so it's set once as a
+# Netlify site environment variable instead (Site configuration >
+# Environment variables). SPA client-side routing is handled by
+# frontend/public/_redirects, which Vite copies into the build output.
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"
