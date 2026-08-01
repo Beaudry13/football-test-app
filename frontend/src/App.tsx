@@ -5,6 +5,8 @@ import { Layout } from './components/Layout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { GroupsPage } from './pages/GroupsPage';
+import { GroupDetailPage } from './pages/GroupDetailPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { PlayPage } from './pages/play/PlayPage';
@@ -25,6 +27,8 @@ function App() {
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
+              <Route path="/groups" element={<GroupsPage />} />
+              <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />
               <Route
                 path="/quizzes/:quizId/questions/:questionId/annotate"

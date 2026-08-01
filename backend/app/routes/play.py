@@ -12,7 +12,11 @@ from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import AccessCode, Answer, PlayerResponse, Question
 from app.schemas.play import PlayerResultsSchema, SubmitQuizSchema, ValidateCodeSchema
-from app.services.access_codes import find_access_code_by_code, find_valid_access_code
+from app.services.access_codes import (
+    effective_roster_names,
+    find_access_code_by_code,
+    find_valid_access_code,
+)
 from app.utils.validation import load_json_body
 
 play_bp = Blueprint("play", __name__)
@@ -43,14 +47,13 @@ def validate_code():
         raise ApiError("Invalid or expired access code", status_code=404)
 
     quiz = access_code.quiz
-    roster_players = quiz.roster.players if quiz.roster is not None else []
 
     return jsonify(
         {
             "access_code_id": access_code.id,
             "expires_at": access_code.expires_at.isoformat(),
             "quiz": quiz.to_dict(include_questions=True, include_correct_answers=False),
-            "roster_players": [p.player_name for p in roster_players],
+            "roster_players": effective_roster_names(access_code),
         }
     )
 
@@ -65,7 +68,7 @@ def submit_quiz():
         raise ApiError("Invalid or expired access code", status_code=404)
 
     quiz = access_code.quiz
-    roster_names = {p.player_name for p in (quiz.roster.players if quiz.roster else [])}
+    roster_names = set(effective_roster_names(access_code))
     if data["player_name"] not in roster_names:
         raise ApiError("Player name is not on this quiz's roster", status_code=422)
 

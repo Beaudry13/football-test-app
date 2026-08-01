@@ -97,7 +97,9 @@ previewing before activation.
 
 ### `PATCH /api/quizzes/{quiz_id}`
 
-Partial update. Accepts any of `title`, `description`, `one_question_at_a_time`.
+Partial update. Accepts any of `title`, `description`, `one_question_at_a_time`,
+`folder_id`. Pass `"folder_id": null` to move the quiz back to
+"Uncategorized"; `404` if the folder belongs to another coach.
 
 ### `DELETE /api/quizzes/{quiz_id}`
 
@@ -107,6 +109,73 @@ Partial update. Accepts any of `title`, `description`, `one_question_at_a_time`.
 
 Deep-copies the quiz: questions, options, and any question images/annotations.
 Roster and access codes are **not** copied. Returns the new quiz, `201`.
+
+---
+
+## Folders 🔒
+
+Dashboard organization only — a folder groups a coach's quizzes and has no
+effect on play. A quiz's `folder_id` is `null` when it's uncategorized.
+
+### `GET /api/folders`
+
+The coach's folders, ordered by name, each with a `quiz_count`.
+
+### `POST /api/folders`
+
+**Request:** `{ "name": "Fall Camp" }` → the created folder, `201`.
+
+### `PATCH /api/folders/{folder_id}`
+
+**Request:** `{ "name": "..." }` — rename.
+
+### `DELETE /api/folders/{folder_id}`
+
+`204`. **Quizzes in the folder are not deleted** — their `folder_id` is set
+to `null` (back to "Uncategorized") by the FK's `ON DELETE SET NULL`.
+
+---
+
+## Groups 🔒
+
+Reusable, coach-scoped player lists (e.g. "Varsity", "Defense"), built once
+and attached to whichever quiz activations need them — see
+`POST /api/quizzes/{quiz_id}/access-codes`. Distinct from a quiz's own
+roster, which stays one-per-quiz.
+
+Player-name rules are identical to rosters: trimmed, blanks dropped,
+case-insensitive duplicates rejected with `422`.
+
+### `GET /api/groups`
+
+The coach's groups, ordered by name, each with its full `players` list.
+
+### `POST /api/groups`
+
+**Request:** `{ "name": "Defense" }` → the created (empty) group, `201`.
+
+### `GET /api/groups/{group_id}`
+
+A single group with its players. `404` if it belongs to another coach.
+
+### `PATCH /api/groups/{group_id}`
+
+**Request:** `{ "name": "..." }` — rename.
+
+### `PUT /api/groups/{group_id}/players`
+
+**Request:** `{ "players": ["Jordan Smith", "Alex Lee"] }` — replaces the
+full member list.
+
+### `POST /api/groups/{group_id}/players/csv`
+
+`multipart/form-data` with a `file` field, same CSV format as the roster
+upload. Replaces the full member list.
+
+### `DELETE /api/groups/{group_id}`
+
+`204`. Also unlinks the group from any access codes that referenced it;
+those codes then fall back to their quiz's own roster.
 
 ---
 
@@ -166,9 +235,16 @@ content). Replaces any existing image. **Response `201`:**
 
 ### `PUT /api/quizzes/{quiz_id}/questions/{question_id}/image/annotations`
 
-**Request:** `{ "annotations": [ { ...layer objects, shape owned by the frontend drawing tool... } ] }`
+**Request:** `{ "annotations": [ { ...layer objects, shape owned by the frontend drawing tool... } ], "canvas_width": 1400 }`
 Replaces the full annotation layer list for the image. `404` if the
 question has no image yet.
+
+`canvas_width` is optional and records the canvas pixel width the drawing
+tool used, since every saved shape's coordinates are relative to it. Once
+set it pins that image's coordinate space, so a later change to the tool's
+default canvas size can't shift already-saved shapes. Omitting the field
+leaves any previously stored value untouched; `null` on an image means it
+predates this field (the frontend then assumes the original 900px).
 
 ### `DELETE /api/quizzes/{quiz_id}/questions/{question_id}/image`
 
@@ -218,12 +294,20 @@ Activation history for the quiz, newest first.
 
 "Activates" the quiz: generates a new 6-character code valid for
 `ACCESS_CODE_TTL_HOURS` (default 24). Retires any previously active code
-for this quiz. Requires the quiz to have at least one question and a
-non-empty roster (`422` otherwise).
+for this quiz. Requires the quiz to have at least one question, and either
+a non-empty roster or at least one selected group with members (`422`
+otherwise).
+
+**Request (optional body):** `{ "group_ids": [3, 7] }` — restricts this
+activation to the named saved groups. `404` if any group belongs to another
+coach. When groups are linked, they **replace** the quiz's own roster as the
+set of players who can join: a name on the quiz roster but not in any linked
+group won't appear at join time and is rejected at submit. With no groups
+linked, behavior is exactly as before (the quiz's roster is used).
 
 **Response `201`**
 ```json
-{ "id": 1, "quiz_id": 5, "code": "7F9K2R", "activated_at": "...", "expires_at": "...", "is_active": true, "is_valid": true }
+{ "id": 1, "quiz_id": 5, "code": "7F9K2R", "activated_at": "...", "expires_at": "...", "is_active": true, "is_valid": true, "groups": [{ "id": 3, "name": "Varsity" }] }
 ```
 
 ### `POST /api/quizzes/{quiz_id}/access-codes/{access_code_id}/deactivate`

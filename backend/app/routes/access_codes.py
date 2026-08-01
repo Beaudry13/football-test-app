@@ -11,9 +11,11 @@ from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import AccessCode
+from app.models import AccessCode, Group
+from app.schemas.access_code import ActivateQuizSchema
 from app.services.access_codes import generate_unique_code
-from app.utils.auth import get_owned_quiz
+from app.utils.auth import current_coach, get_owned_quiz
+from app.utils.validation import load_optional_json_body
 
 access_codes_bp = Blueprint("access_codes", __name__)
 
@@ -29,11 +31,26 @@ def list_access_codes(quiz_id: int):
 @jwt_required()
 def activate_quiz(quiz_id: int):
     quiz = get_owned_quiz(quiz_id)
+    data = load_optional_json_body(ActivateQuizSchema())
+
+    groups: list[Group] = []
+    if data["group_ids"]:
+        coach = current_coach()
+        groups = Group.query.filter(
+            Group.id.in_(data["group_ids"]), Group.coach_id == coach.id
+        ).all()
+        if len(groups) != len(set(data["group_ids"])):
+            raise ApiError("One or more selected groups were not found", status_code=404)
 
     if not quiz.questions:
         raise ApiError("Cannot activate a quiz with no questions", status_code=422)
-    if quiz.roster is None or not quiz.roster.players:
-        raise ApiError("Cannot activate a quiz with no roster", status_code=422)
+
+    has_roster_players = quiz.roster is not None and bool(quiz.roster.players)
+    has_group_players = any(g.players for g in groups)
+    if not has_roster_players and not has_group_players:
+        raise ApiError(
+            "Cannot activate a quiz with no roster and no group selected", status_code=422
+        )
 
     # Only one code should be usable to join at a time; retire any still-active ones.
     for existing_code in quiz.access_codes:
@@ -47,6 +64,7 @@ def activate_quiz(quiz_id: int):
         activated_at=datetime.now(timezone.utc),
         expires_at=AccessCode.default_expiry(ttl_hours),
         is_active=True,
+        groups=groups,
     )
     db.session.add(access_code)
     db.session.commit()

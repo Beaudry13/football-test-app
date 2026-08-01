@@ -4,6 +4,23 @@ from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 
+# Which saved group(s), if any, have access under a given activation. Plain
+# association table (no extra columns) - a code with no linked groups falls
+# back to its quiz's own Roster (see app.services.access_codes.effective_roster_names).
+access_code_groups = db.Table(
+    "access_code_groups",
+    db.metadata,
+    db.Column(
+        "access_code_id",
+        db.Integer,
+        db.ForeignKey("access_codes.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "group_id", db.Integer, db.ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True
+    ),
+)
+
 
 class AccessCode(db.Model):
     __tablename__ = "access_codes"
@@ -17,6 +34,7 @@ class AccessCode(db.Model):
 
     quiz = db.relationship("Quiz", back_populates="access_codes")
     responses = db.relationship("PlayerResponse", back_populates="access_code")
+    groups = db.relationship("Group", secondary=access_code_groups)
 
     def is_valid(self) -> bool:
         if not self.is_active:
@@ -36,4 +54,5 @@ class AccessCode(db.Model):
             "expires_at": self.expires_at.isoformat(),
             "is_active": self.is_active,
             "is_valid": self.is_valid(),
+            "groups": [{"id": g.id, "name": g.name} for g in self.groups],
         }

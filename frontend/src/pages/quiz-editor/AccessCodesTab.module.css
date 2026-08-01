@@ -45,3 +45,22 @@
   border-bottom: 1px solid var(--color-border);
   font-size: 0.9em;
 }
+
+.groupPicker {
+  text-align: left;
+  margin: 1em 0;
+}
+
+.groupCheckboxList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin-top: 0.4em;
+}
+
+.groupCheckboxItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: 400;
+}

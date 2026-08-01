@@ -59,6 +59,68 @@ def test_validate_invalid_code_returns_404(client):
     assert response.status_code == 404
 
 
+def _activate_with_group(client, headers, quiz, group_players):
+    group = client.post("/api/groups", json={"name": "Defense"}, headers=headers).get_json()
+    client.put(
+        f"/api/groups/{group['id']}/players", json={"players": group_players}, headers=headers
+    )
+    return client.post(
+        f"/api/quizzes/{quiz['id']}/access-codes",
+        json={"group_ids": [group["id"]]},
+        headers=headers,
+    ).get_json()
+
+
+def test_group_linked_access_code_replaces_the_quizs_own_roster_at_join_time(client, coach_headers):
+    # build_ready_quiz's roster is ["Jordan Smith", "Alex Lee"] - a group
+    # linked to a *new* activation must completely override that, not add to it.
+    quiz, _, _, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera"])
+
+    response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
+
+    assert response.status_code == 200
+    assert response.get_json()["roster_players"] == ["Sam Rivera"]
+
+
+def test_submit_rejects_a_quiz_roster_name_that_is_not_in_the_linked_group(client, coach_headers):
+    quiz, tf_question, written_question, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera"])
+
+    # "Jordan Smith" is on the quiz's own roster but not in the linked group -
+    # the group must win even though the name would be valid without it.
+    response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [
+                {"question_id": tf_question["id"]},
+                {"question_id": written_question["id"], "answer_text": "x"},
+            ],
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_submit_succeeds_for_a_name_that_is_in_the_linked_group(client, coach_headers):
+    quiz, tf_question, written_question, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera"])
+
+    response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Sam Rivera",
+            "answers": [
+                {"question_id": tf_question["id"]},
+                {"question_id": written_question["id"], "answer_text": "x"},
+            ],
+        },
+    )
+    assert response.status_code == 201
+
+
 def test_expired_code_is_rejected_at_validate_and_submit(app, client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
 

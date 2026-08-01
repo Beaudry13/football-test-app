@@ -19,7 +19,12 @@ export function createQuiz(input: {
 
 export function updateQuiz(
   quizId: number,
-  input: Partial<{ title: string; description: string | null; one_question_at_a_time: boolean }>,
+  input: Partial<{
+    title: string;
+    description: string | null;
+    one_question_at_a_time: boolean;
+    folder_id: number | null;
+  }>,
 ): Promise<Quiz> {
   return api.patch<Quiz>(`/quizzes/${quizId}`, input);
 }

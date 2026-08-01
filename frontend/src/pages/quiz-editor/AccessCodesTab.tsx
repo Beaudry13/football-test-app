@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { activateQuiz, deactivateAccessCode, listAccessCodes } from '../../api/accessCodes';
+import { listGroups } from '../../api/groups';
 import { getErrorMessage } from '../../api/client';
-import type { AccessCode, Quiz } from '../../api/types';
+import type { AccessCode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import styles from './AccessCodesTab.module.css';
 
@@ -11,6 +12,8 @@ function playLink(code: string): string {
 
 export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [codes, setCodes] = useState<AccessCode[] | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isActivating, setIsActivating] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -27,11 +30,23 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     load();
   }, [load]);
 
+  useEffect(() => {
+    listGroups()
+      .then(setGroups)
+      .catch((err) => setError(getErrorMessage(err)));
+  }, []);
+
+  function toggleGroup(groupId: number) {
+    setSelectedGroupIds((prev) =>
+      prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
+    );
+  }
+
   async function handleActivate() {
     setError(null);
     setIsActivating(true);
     try {
-      await activateQuiz(quiz.id);
+      await activateQuiz(quiz.id, selectedGroupIds);
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -67,6 +82,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
           <>
             <p>Share this code and link with players</p>
             <div className={styles.codeDisplay}>{activeCode.code}</div>
+            {activeCode.groups.length > 0 && (
+              <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
+            )}
             <div className={styles.linkRow}>
               <input readOnly value={playLink(activeCode.code)} onFocus={(e) => e.target.select()} />
               <button className="btn btn-secondary btn-sm" onClick={() => handleCopyLink(activeCode.code)}>
@@ -88,11 +106,31 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
         ) : (
           <>
             <p>This quiz has no active access code.</p>
+
+            {groups.length > 0 && (
+              <div className={styles.groupPicker}>
+                <strong>Restrict to saved group(s) (optional)</strong>
+                <div className={styles.groupCheckboxList}>
+                  {groups.map((group) => (
+                    <label key={group.id} className={styles.groupCheckboxItem}>
+                      <input
+                        type="checkbox"
+                        checked={selectedGroupIds.includes(group.id)}
+                        onChange={() => toggleGroup(group.id)}
+                      />
+                      {group.name} ({group.players.length})
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <button className="btn btn-primary" onClick={handleActivate} disabled={isActivating}>
               {isActivating ? 'Activating…' : 'Activate quiz'}
             </button>
             <p style={{ fontSize: '0.85em', marginTop: '0.75em' }}>
-              Requires at least one question and a non-empty roster. The code is valid for 24 hours.
+              Requires at least one question, and either a non-empty roster or a selected group. The
+              code is valid for 24 hours.
             </p>
           </>
         )}
@@ -107,6 +145,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 <th>Code</th>
                 <th>Activated</th>
                 <th>Expires</th>
+                <th>Groups</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -116,6 +155,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                   <td>{code.code}</td>
                   <td>{new Date(code.activated_at).toLocaleString()}</td>
                   <td>{new Date(code.expires_at).toLocaleString()}</td>
+                  <td>{code.groups.length > 0 ? code.groups.map((g) => g.name).join(', ') : '—'}</td>
                   <td>
                     {code.is_active && code.is_valid ? (
                       <span className="badge badge-success">Active</span>

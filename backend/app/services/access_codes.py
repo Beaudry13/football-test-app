@@ -39,3 +39,26 @@ def find_access_code_by_code(code: str) -> AccessCode | None:
     """
     normalized = code.strip().upper()
     return AccessCode.query.filter_by(code=normalized).first()
+
+
+def effective_roster_names(access_code: AccessCode) -> list[str]:
+    """The player names allowed to join/submit under this activation.
+
+    If one or more saved Groups are linked to this code, they're the sole
+    source of truth (a name not in any linked group is invisible at join
+    time and rejected at submit time, even if it's also on the quiz's own
+    Roster) - this is what lets a coach restrict a given activation to e.g.
+    Varsity only. With no linked groups, falls back to the quiz's Roster,
+    exactly like before groups existed.
+    """
+    if access_code.groups:
+        seen: dict[str, str] = {}
+        for group in access_code.groups:
+            for player in group.players:
+                # First-seen casing wins if the same name (case-insensitively)
+                # appears in more than one linked group.
+                seen.setdefault(player.player_name.lower(), player.player_name)
+        return list(seen.values())
+
+    quiz = access_code.quiz
+    return [p.player_name for p in (quiz.roster.players if quiz.roster else [])]
