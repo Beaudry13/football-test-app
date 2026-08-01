@@ -72,3 +72,43 @@ def test_empty_roster_list_is_rejected(client, coach_headers):
     response = client.put(f"/api/quizzes/{quiz['id']}/roster", json={"players": []}, headers=coach_headers)
 
     assert response.status_code == 422
+
+
+def test_whitespace_only_names_are_dropped(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+
+    response = client.put(
+        f"/api/quizzes/{quiz['id']}/roster",
+        json={"players": ["  Jordan Smith  ", "   ", "Alex Lee"]},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 200
+    players = response.get_json()["players"]
+    assert [p["player_name"] for p in players] == ["Jordan Smith", "Alex Lee"]
+
+
+def test_duplicate_names_are_rejected(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+
+    response = client.put(
+        f"/api/quizzes/{quiz['id']}/roster",
+        json={"players": ["Jordan Smith", "jordan smith"]},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_duplicate_names_are_rejected_from_csv(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    csv_content = b"Jordan Smith\nJordan Smith\n"
+
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/roster/csv",
+        data={"file": (io.BytesIO(csv_content), "roster.csv")},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 422

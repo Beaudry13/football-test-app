@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify
 from sqlalchemy.exc import IntegrityError
 
 from app.errors import ApiError
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import AccessCode, Answer, PlayerResponse, Question
 from app.schemas.play import SubmitQuizSchema, ValidateCodeSchema
 from app.services.access_codes import find_valid_access_code
@@ -18,6 +18,11 @@ play_bp = Blueprint("play", __name__)
 
 
 @play_bp.post("/validate-code")
+# Codes are 6 characters from a 31-character alphabet (~887M combinations).
+# Without a limit here, that space is guessable by brute force; at 20/minute
+# per IP it would take on the order of decades, while still leaving room for
+# a player who mistypes a code a few times in a row.
+@limiter.limit("20 per minute")
 def validate_code():
     data = load_json_body(ValidateCodeSchema())
 
@@ -39,6 +44,7 @@ def validate_code():
 
 
 @play_bp.post("/submit")
+@limiter.limit("20 per minute")
 def submit_quiz():
     data = load_json_body(SubmitQuizSchema())
 
@@ -63,14 +69,14 @@ def submit_quiz():
         # misreported as "already submitted" by the IntegrityError handler below.
         raise ApiError("Each question can only be answered once per submission", status_code=422)
 
+    # Validate every answer *before* writing anything. Raising mid-write (after
+    # a flush assigns response.id but before commit) would leave an uncommitted
+    # transaction sitting on the connection for the rest of the request/test -
+    # harmless in isolation, but it can hold locks that block later work on the
+    # same rows until something eventually tears the session down.
     quiz_question_ids = {q.id for q in quiz.questions}
     questions_by_id = {q.id: q for q in quiz.questions}
-
-    response = PlayerResponse(
-        quiz_id=quiz.id, access_code_id=access_code.id, player_name=data["player_name"]
-    )
-    db.session.add(response)
-    db.session.flush()
+    graded_answers = []
 
     for submitted_answer in data["answers"]:
         question_id = submitted_answer["question_id"]
@@ -90,17 +96,29 @@ def submit_quiz():
                 )
             is_correct = option.is_correct_answer
 
-        db.session.add(
-            Answer(
-                player_response_id=response.id,
-                question_id=question_id,
-                answer_text=submitted_answer["answer_text"],
-                selected_option_id=selected_option_id,
-                is_correct=is_correct,
-            )
+        graded_answers.append(
+            {
+                "question_id": question_id,
+                "answer_text": submitted_answer["answer_text"],
+                "selected_option_id": selected_option_id,
+                "is_correct": is_correct,
+            }
         )
 
+    response = PlayerResponse(
+        quiz_id=quiz.id, access_code_id=access_code.id, player_name=data["player_name"]
+    )
+    # Appending through the relationship (rather than setting player_response_id
+    # directly) lets SQLAlchemy assign the FK itself during commit, so there's
+    # no need for an intermediate flush just to learn response.id.
+    for graded_answer in graded_answers:
+        response.answers.append(Answer(**graded_answer))
+    db.session.add(response)
+
     try:
+        # The only way this can still fail is a truly concurrent duplicate
+        # submission: two requests both pass the pre-check above before either
+        # has committed, and only the DB's unique constraint catches that.
         db.session.commit()
     except IntegrityError as exc:
         db.session.rollback()

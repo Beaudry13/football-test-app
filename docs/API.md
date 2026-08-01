@@ -17,11 +17,19 @@ Errors follow a consistent shape:
 
 `details` is only present for validation failures (HTTP 422).
 
+A handful of public, unauthenticated endpoints are rate-limited per IP
+(register, login, access-code validation, quiz submission) to make
+credential stuffing and access-code brute-forcing impractical. Exceeding
+the limit returns `429 Too Many Requests`. See each endpoint below for its
+specific limit.
+
 ---
 
 ## Auth
 
 ### `POST /api/auth/register`
+
+Rate limit: 10 requests/hour per IP.
 
 Create a coach account.
 
@@ -46,6 +54,8 @@ Create a coach account.
 `409` if username or email is already taken. `422` on validation failure.
 
 ### `POST /api/auth/login`
+
+Rate limit: 10 requests/minute per IP.
 
 **Request:** `{ "email": "...", "password": "..." }`
 **Response `200`:** same shape as register. `401` on bad credentials.
@@ -210,6 +220,9 @@ identity is the access code plus a name chosen from the roster.
 
 ### `POST /api/play/validate-code`
 
+Rate limit: 20 requests/minute per IP (codes are 6 characters from a
+31-character alphabet — without a limit here that space is brute-forceable).
+
 **Request:** `{ "code": "7F9K2R" }`
 **Response `200`**
 ```json
@@ -223,6 +236,8 @@ identity is the access code plus a name chosen from the roster.
 `404` if the code is invalid, expired, or deactivated.
 
 ### `POST /api/play/submit`
+
+Rate limit: 20 requests/minute per IP.
 
 **Request**
 ```json

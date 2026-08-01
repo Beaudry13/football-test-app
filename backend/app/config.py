@@ -65,6 +65,11 @@ class TestingConfig(BaseConfig):
     UPLOAD_FOLDER = os.environ.get(
         "TEST_UPLOAD_FOLDER", os.path.join(tempfile.gettempdir(), "football_quiz_test_uploads")
     )
+    # Rate limits exist to slow down abuse (credential stuffing, access-code
+    # brute-forcing), not something the test suite is exercising - many tests
+    # legitimately call register/login/submit more times per minute than a
+    # real abuser would be allowed to.
+    RATELIMIT_ENABLED = False
 
 
 class ProductionConfig(BaseConfig):

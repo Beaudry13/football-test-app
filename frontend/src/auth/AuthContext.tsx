@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { login as apiLogin, register as apiRegister, me as apiMe } from '../api/auth';
-import { clearToken, getToken, setToken } from '../api/client';
+import { ApiError, clearToken, getToken, setToken } from '../api/client';
 import type { Coach } from '../api/types';
 
 interface AuthContextValue {
@@ -29,7 +29,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     apiMe()
       .then(setCoach)
-      .catch(() => clearToken())
+      .catch((err: unknown) => {
+        // Only clear a token the server actually rejected. A network error
+        // (backend unreachable, offline) doesn't mean the session is
+        // invalid - clearing it here would silently log the coach out just
+        // because the server was briefly unreachable, forcing an
+        // unnecessary re-login once it's back.
+        if (err instanceof ApiError && err.status === 401) {
+          clearToken();
+        }
+      })
       .finally(() => setIsLoading(false));
   }, []);
 

@@ -1,5 +1,7 @@
 """Question CRUD, option validation, reordering, and image annotation."""
 
+import io
+
 from tests.conftest import make_image_file
 
 
@@ -154,3 +156,42 @@ def test_upload_and_delete_question_image(client, coach_headers):
         f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image", headers=coach_headers
     )
     assert delete_response.status_code == 204
+
+
+def test_oversized_image_upload_is_rejected_with_friendly_message(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={"question_text": "Circle the mike backer", "question_type": "written", "options": []},
+        headers=coach_headers,
+    ).get_json()
+
+    oversized_file = io.BytesIO(b"0" * (11 * 1024 * 1024))
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image",
+        data={"image": (oversized_file, "huge.png")},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 413
+    assert "too large" in response.get_json()["error"].lower()
+
+
+def test_wrong_file_extension_is_rejected(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={"question_text": "Circle the mike backer", "question_type": "written", "options": []},
+        headers=coach_headers,
+    ).get_json()
+
+    fake_executable = io.BytesIO(b"not actually an image")
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image",
+        data={"image": (fake_executable, "payload.exe")},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400

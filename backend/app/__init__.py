@@ -6,7 +6,7 @@ from flask import Flask, jsonify, send_from_directory
 
 from app.config import get_config
 from app.errors import register_error_handlers
-from app.extensions import bcrypt, cors, db, jwt, migrate
+from app.extensions import bcrypt, cors, db, jwt, limiter, migrate
 
 
 def create_app(env_name: str | None = None) -> Flask:
@@ -39,6 +39,7 @@ def _init_extensions(app: Flask) -> None:
     bcrypt.init_app(app)
     jwt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
+    limiter.init_app(app)
 
     # Import models so Flask-Migrate can see them for autogeneration.
     from app import models  # noqa: F401

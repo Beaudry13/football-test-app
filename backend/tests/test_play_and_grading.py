@@ -1,5 +1,11 @@
 """End-to-end player flow: join with a code, submit answers, coach grades results."""
 
+import threading
+from datetime import datetime, timedelta, timezone
+
+from app.extensions import db
+from app.models import AccessCode
+
 
 def build_ready_quiz(client, headers):
     quiz = client.post("/api/quizzes", json={"title": "Week 1 Prep"}, headers=headers).get_json()
@@ -51,6 +57,50 @@ def test_validate_code_returns_quiz_without_correct_answers(client, coach_header
 def test_validate_invalid_code_returns_404(client):
     response = client.post("/api/play/validate-code", json={"code": "BADCOD"})
     assert response.status_code == 404
+
+
+def test_expired_code_is_rejected_at_validate_and_submit(app, client, coach_headers):
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+
+    with app.app_context():
+        code_row = db.session.get(AccessCode, access_code["id"])
+        code_row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+
+    validate_response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
+    assert validate_response.status_code == 404
+
+    submit_response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [{"question_id": tf_question["id"]}],
+        },
+    )
+    assert submit_response.status_code == 404
+
+
+def test_deactivated_code_is_rejected_even_before_expiry(client, coach_headers):
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    quiz_id = access_code["quiz_id"]
+
+    client.post(
+        f"/api/quizzes/{quiz_id}/access-codes/{access_code['id']}/deactivate", headers=coach_headers
+    )
+
+    validate_response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
+    assert validate_response.status_code == 404
+
+    submit_response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [{"question_id": tf_question["id"]}],
+        },
+    )
+    assert submit_response.status_code == 404
 
 
 def test_submit_quiz_auto_grades_true_false_and_leaves_written_ungraded(client, coach_headers):
@@ -111,6 +161,43 @@ def test_submit_rejects_duplicate_submission(client, coach_headers):
     assert second.status_code == 409
 
 
+def test_submit_rejects_truly_concurrent_duplicate_submissions(app, coach_headers):
+    """Two requests that both pass the pre-check before either commits (a real
+    race, not just two sequential calls) must still only produce one response -
+    the DB's unique constraint is the real guard, not the pre-check query."""
+    with app.test_client() as setup_client:
+        _, tf_question, _, access_code = build_ready_quiz(setup_client, coach_headers)
+
+    payload = {
+        "access_code_id": access_code["id"],
+        "player_name": "Jordan Smith",
+        "answers": [{"question_id": tf_question["id"]}],
+    }
+
+    barrier = threading.Barrier(2)
+    results = []
+
+    def submit():
+        barrier.wait()
+        with app.test_client() as thread_client:
+            response = thread_client.post("/api/play/submit", json=payload)
+            results.append(response.status_code)
+
+    threads = [threading.Thread(target=submit) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert sorted(results) == [201, 409]
+
+    with app.test_client() as verify_client:
+        responses = verify_client.get(
+            f"/api/quizzes/{access_code['quiz_id']}/responses", headers=coach_headers
+        ).get_json()
+    assert len(responses) == 1
+
+
 def test_submit_rejects_duplicate_question_id_within_one_submission(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
 
@@ -123,6 +210,77 @@ def test_submit_rejects_duplicate_question_id_within_one_submission(client, coac
                 {"question_id": tf_question["id"]},
                 {"question_id": tf_question["id"]},
             ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_submit_rejects_answer_for_question_deleted_after_player_loaded_quiz(client, coach_headers):
+    """A player can have the quiz open (from validate-code) while the coach is
+    still editing it. If the coach deletes a question in that window, the
+    player's eventual submission for it must be rejected cleanly, not crash."""
+    quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+
+    client.delete(f"/api/quizzes/{quiz['id']}/questions/{written_question['id']}", headers=coach_headers)
+
+    response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [
+                {"question_id": tf_question["id"]},
+                {"question_id": written_question["id"], "answer_text": "still typing when it vanished"},
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_submit_rejects_after_entire_quiz_deleted_mid_flow(client, coach_headers):
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+
+    client.delete(f"/api/quizzes/{quiz['id']}", headers=coach_headers)
+
+    response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [{"question_id": tf_question["id"]}],
+        },
+    )
+
+    assert response.status_code == 404
+
+
+def test_submit_rejects_option_id_from_before_coach_edited_question(client, coach_headers):
+    """The player's client holds option ids from when they loaded the quiz. If
+    the coach edits the question's options in the meantime (replacing them
+    with new rows/ids), a stale option id must be rejected, not silently
+    misgraded against whatever option happens to now hold that id."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    stale_option_id = tf_question["options"][0]["id"]
+
+    client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{tf_question['id']}",
+        json={
+            "options": [
+                {"option_text": "True", "is_correct_answer": True},
+                {"option_text": "False", "is_correct_answer": False},
+            ]
+        },
+        headers=coach_headers,
+    )
+
+    response = client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "answers": [{"question_id": tf_question["id"], "selected_option_id": stale_option_id}],
         },
     )
 

@@ -5,7 +5,7 @@ from flask_jwt_extended import create_access_token, jwt_required
 from sqlalchemy import or_
 
 from app.errors import ApiError
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import Coach
 from app.schemas.auth import LoginSchema, RegisterSchema
 from app.utils.auth import current_coach
@@ -15,6 +15,7 @@ auth_bp = Blueprint("auth", __name__)
 
 
 @auth_bp.post("/register")
+@limiter.limit("10 per hour")
 def register():
     data = load_json_body(RegisterSchema())
 
@@ -39,6 +40,7 @@ def register():
 
 
 @auth_bp.post("/login")
+@limiter.limit("10 per minute")
 def login():
     data = load_json_body(LoginSchema())
 

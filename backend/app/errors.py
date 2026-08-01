@@ -5,8 +5,8 @@ not found, unauthorized). Anything else is caught by the generic
 handlers below and turned into a consistent JSON error shape.
 """
 
-from flask import Flask, jsonify
-from werkzeug.exceptions import HTTPException
+from flask import Flask, current_app, jsonify
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 
 class ApiError(Exception):
@@ -29,6 +29,11 @@ def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(ApiError)
     def handle_api_error(error: ApiError):
         return jsonify(error.to_dict()), error.status_code
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_too_large(error: RequestEntityTooLarge):
+        max_mb = current_app.config["MAX_CONTENT_LENGTH"] // (1024 * 1024)
+        return jsonify({"error": f"File is too large. Maximum size is {max_mb}MB."}), 413
 
     @app.errorhandler(HTTPException)
     def handle_http_exception(error: HTTPException):

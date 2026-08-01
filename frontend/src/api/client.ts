@@ -59,7 +59,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     requestBody = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: requestBody });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: requestBody });
+  } catch {
+    // fetch() itself rejects (rather than resolving with a non-ok status) for
+    // network-level failures - server unreachable, no connection, CORS block.
+    // Status 0 marks that distinctly from a real HTTP response for any caller
+    // that wants to tell the two apart.
+    throw new ApiError('Could not reach the server. Check your connection and try again.', 0);
+  }
 
   if (response.status === 204) {
     return undefined as T;
