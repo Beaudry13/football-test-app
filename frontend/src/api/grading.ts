@@ -23,3 +23,11 @@ export function getQuizDashboard(quizId: number): Promise<QuizDashboard> {
 export function getPlayerHistory(playerName: string): Promise<{ player_name: string; history: PlayerHistoryEntry[] }> {
   return api.get(`/players/history?name=${encodeURIComponent(playerName)}`);
 }
+
+export function exportResultsCsv(quizId: number): Promise<Blob> {
+  return api.getBlob(`/quizzes/${quizId}/export.csv`);
+}
+
+export function exportResultsPdf(quizId: number): Promise<Blob> {
+  return api.getBlob(`/quizzes/${quizId}/export.pdf`);
+}

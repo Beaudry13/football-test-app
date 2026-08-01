@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getQuizDashboard, listResponses } from '../../api/grading';
+import { exportResultsCsv, exportResultsPdf, getQuizDashboard, listResponses } from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
 import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
 import styles from './ResultsTab.module.css';
+
+function slugify(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'quiz';
+}
 
 export function ResultsTab({ quiz }: { quiz: Quiz }) {
   const [dashboard, setDashboard] = useState<QuizDashboard | null>(null);
   const [responses, setResponses] = useState<PlayerResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -27,6 +33,21 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleExport = useCallback(
+    async (format: 'csv' | 'pdf') => {
+      setExporting(format);
+      try {
+        const blob = format === 'csv' ? await exportResultsCsv(quiz.id) : await exportResultsPdf(quiz.id);
+        downloadBlob(blob, `${slugify(quiz.title)}-results.${format}`);
+      } catch (err) {
+        setError(getErrorMessage(err));
+      } finally {
+        setExporting(null);
+      }
+    },
+    [quiz.id, quiz.title],
+  );
 
   return (
     <div>
@@ -47,6 +68,25 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               <div className={styles.statValue}>{Math.round(dashboard.response_rate * 100)}%</div>
               <div className={styles.statLabel}>Response rate</div>
             </div>
+          </div>
+
+          <div className={styles.exportRow}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleExport('csv')}
+              disabled={exporting !== null}
+            >
+              {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleExport('pdf')}
+              disabled={exporting !== null}
+            >
+              {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+            </button>
           </div>
 
           {dashboard.question_breakdown.length > 0 && (

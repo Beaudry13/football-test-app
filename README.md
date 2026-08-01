@@ -11,7 +11,8 @@ tool, and the public player flow) that talks to it.
 ## Stack
 
 - **Backend:** Python + Flask, JWT auth, RESTful API, Flask-Limiter for
-  per-IP rate limiting on public endpoints
+  per-IP rate limiting on public endpoints, reportlab for PDF results
+  exports
 - **Frontend:** React + TypeScript (Vite), Fabric.js for the annotation canvas
 - **Database:** PostgreSQL, migrations via Flask-Migrate/Alembic
 - **File storage:** local disk in dev, behind a swappable interface for

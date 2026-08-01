@@ -6,7 +6,7 @@ cross-quiz endpoints like per-player history.
 
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import contains_eager, selectinload
 
@@ -14,6 +14,7 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import Answer, PlayerResponse, Quiz
 from app.schemas.grading import GradeAnswerSchema
+from app.services.export import build_results_csv, build_results_pdf, export_filename_slug
 from app.utils.auth import current_coach, get_owned_quiz
 from app.utils.validation import load_json_body
 
@@ -75,17 +76,8 @@ def grade_answer(answer_id: int):
     return jsonify(answer.to_dict())
 
 
-@grading_bp.get("/quizzes/<int:quiz_id>/dashboard")
-@jwt_required()
-def quiz_dashboard(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
-
+def _build_dashboard_data(quiz: Quiz, responses: list[PlayerResponse]) -> dict:
     roster_size = len(quiz.roster.players) if quiz.roster else 0
-    responses = (
-        PlayerResponse.query.filter_by(quiz_id=quiz.id)
-        .options(selectinload(PlayerResponse.answers))
-        .all()
-    )
     response_count = len(responses)
     response_rate = (response_count / roster_size) if roster_size else 0.0
 
@@ -108,14 +100,61 @@ def quiz_dashboard(quiz_id: int):
             }
         )
 
-    return jsonify(
-        {
-            "quiz_id": quiz.id,
-            "roster_size": roster_size,
-            "response_count": response_count,
-            "response_rate": round(response_rate, 4),
-            "question_breakdown": question_breakdown,
-        }
+    return {
+        "quiz_id": quiz.id,
+        "roster_size": roster_size,
+        "response_count": response_count,
+        "response_rate": round(response_rate, 4),
+        "question_breakdown": question_breakdown,
+    }
+
+
+def _load_responses_for_export(quiz: Quiz) -> list[PlayerResponse]:
+    return (
+        PlayerResponse.query.filter_by(quiz_id=quiz.id)
+        .options(selectinload(PlayerResponse.answers).selectinload(Answer.selected_option))
+        .all()
+    )
+
+
+@grading_bp.get("/quizzes/<int:quiz_id>/dashboard")
+@jwt_required()
+def quiz_dashboard(quiz_id: int):
+    quiz = get_owned_quiz(quiz_id)
+    responses = (
+        PlayerResponse.query.filter_by(quiz_id=quiz.id)
+        .options(selectinload(PlayerResponse.answers))
+        .all()
+    )
+    return jsonify(_build_dashboard_data(quiz, responses))
+
+
+@grading_bp.get("/quizzes/<int:quiz_id>/export.csv")
+@jwt_required()
+def export_results_csv(quiz_id: int):
+    quiz = get_owned_quiz(quiz_id)
+    responses = _load_responses_for_export(quiz)
+    csv_text = build_results_csv(quiz, responses)
+    slug = export_filename_slug(quiz.title)
+    return Response(
+        csv_text,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{slug}-results.csv"'},
+    )
+
+
+@grading_bp.get("/quizzes/<int:quiz_id>/export.pdf")
+@jwt_required()
+def export_results_pdf(quiz_id: int):
+    quiz = get_owned_quiz(quiz_id)
+    responses = _load_responses_for_export(quiz)
+    dashboard_data = _build_dashboard_data(quiz, responses)
+    pdf_bytes = build_results_pdf(quiz, dashboard_data, responses)
+    slug = export_filename_slug(quiz.title)
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{slug}-results.pdf"'},
     )
 
 

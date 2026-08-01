@@ -20,6 +20,12 @@
   color: var(--color-text-muted);
 }
 
+.exportRow {
+  display: flex;
+  gap: 0.5em;
+  margin-bottom: 1.5em;
+}
+
 .breakdownTable {
   width: 100%;
   border-collapse: collapse;

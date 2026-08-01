@@ -84,6 +84,31 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return payload as T;
 }
 
+/** Like `request`, but for endpoints that return a binary file instead of JSON. */
+async function requestBlob(path: string, options: RequestOptions = {}): Promise<Blob> {
+  const { method = 'GET', auth = true } = options;
+
+  const headers: Record<string, string> = {};
+  if (auth) {
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { method, headers });
+  } catch {
+    throw new ApiError('Could not reach the server. Check your connection and try again.', 0);
+  }
+
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiError(errorBody?.error ?? 'Request failed', response.status, errorBody?.details);
+  }
+
+  return response.blob();
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.details) {
@@ -109,4 +134,6 @@ export const api = {
     request<T>(path, { ...options, method: 'DELETE' }),
   postForm: <T>(path: string, formData: FormData, options?: Omit<RequestOptions, 'method' | 'formData'>) =>
     request<T>(path, { ...options, method: 'POST', formData }),
+  getBlob: (path: string, options?: Omit<RequestOptions, 'method' | 'body' | 'formData'>) =>
+    requestBlob(path, { ...options, method: 'GET' }),
 };

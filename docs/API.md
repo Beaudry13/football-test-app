@@ -319,6 +319,19 @@ Aggregate stats for the quiz's current results.
 }
 ```
 
+### `GET /api/quizzes/{quiz_id}/export.csv`
+
+Downloads the quiz's results as CSV — one row per player per question
+(`Player, Submitted At, Question #, Question, Type, Answer, Correct, Coach
+Feedback`), sorted by player name. `Content-Disposition: attachment` with a
+filename derived from the quiz title.
+
+### `GET /api/quizzes/{quiz_id}/export.pdf`
+
+Downloads a printable results report as PDF: response-rate summary, the
+same per-question breakdown as the dashboard endpoint, and a per-player
+score table. Same `Content-Disposition` convention as the CSV export.
+
 ### `GET /api/players/history?name=Jordan+Smith`
 
 A player's response history across every quiz belonging to the

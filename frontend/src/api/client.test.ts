@@ -151,4 +151,30 @@ describe('api request wrapper', () => {
       message: 'Could not reach the server. Check your connection and try again.',
     });
   });
+
+  it('getBlob sends an authenticated GET and resolves the raw response body as a Blob', async () => {
+    setToken('my-token');
+    vi.mocked(fetch).mockResolvedValue(
+      new Response('a,b\n1,2', { status: 200, headers: { 'Content-Type': 'text/csv' } }),
+    );
+
+    const result = await api.getBlob('/quizzes/1/export.csv');
+
+    const [url] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:5000/api/quizzes/1/export.csv');
+    expect(lastFetchInit().method).toBe('GET');
+    expect(lastFetchHeaders().Authorization).toBe('Bearer my-token');
+    expect(result.type).toBe('text/csv');
+    expect(await result.text()).toBe('a,b\n1,2');
+  });
+
+  it('getBlob throws a real ApiError (parsed from JSON) on a non-ok response', async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: 'Quiz not found' }, 404));
+
+    await expect(api.getBlob('/quizzes/999/export.csv')).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 404,
+      message: 'Quiz not found',
+    });
+  });
 });
