@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.extensions import db
 from app.models import Question, QuestionImage, QuestionOption, Quiz
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
+from app.services.file_storage import get_file_storage
 from app.utils.auth import current_coach, get_owned_quiz
 from app.utils.validation import load_json_body
 
@@ -72,6 +73,12 @@ def update_quiz(quiz_id: int):
 @jwt_required()
 def delete_quiz(quiz_id: int):
     quiz = get_owned_quiz(quiz_id)
+    # DB-level cascade removes the question_images rows, but not the actual
+    # files - those have to be cleaned up explicitly before the row goes away.
+    storage = get_file_storage()
+    for question in quiz.questions:
+        if question.image:
+            storage.delete_image(question.image.image_url)
     db.session.delete(quiz)
     db.session.commit()
     return "", 204

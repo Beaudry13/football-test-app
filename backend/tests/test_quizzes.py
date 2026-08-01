@@ -1,5 +1,11 @@
 """Quiz CRUD, duplication, and coach data scoping."""
 
+from pathlib import Path
+
+from flask import current_app
+
+from tests.conftest import make_image_file
+
 
 def create_quiz(client, headers, title="Week 1 Prep"):
     response = client.post(
@@ -43,6 +49,31 @@ def test_get_update_delete_quiz(client, coach_headers):
     delete_response = client.delete(f"/api/quizzes/{quiz_id}", headers=coach_headers)
     assert delete_response.status_code == 204
     assert client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).status_code == 404
+
+
+def test_deleting_a_quiz_removes_its_question_images_from_storage(app, client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={"question_text": "Circle the mike backer", "question_type": "written", "options": []},
+        headers=coach_headers,
+    ).get_json()
+
+    file_obj, filename = make_image_file()
+    image_url = client.post(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image",
+        data={"image": (file_obj, filename)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    ).get_json()["image_url"]
+
+    with app.app_context():
+        image_path = Path(current_app.config["UPLOAD_FOLDER"]) / image_url.rsplit("/", 1)[-1]
+    assert image_path.exists()
+
+    delete_response = client.delete(f"/api/quizzes/{quiz['id']}", headers=coach_headers)
+    assert delete_response.status_code == 204
+    assert not image_path.exists()
 
 
 def test_coach_cannot_access_another_coachs_quiz(client, register_coach):
