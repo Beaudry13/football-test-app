@@ -5,23 +5,6 @@ import { AnnotationViewer } from '../../components/annotation/AnnotationViewer';
 import { ImageLightbox } from '../../components/ImageLightbox';
 import styles from './PlayPage.module.css';
 
-const IMAGE_STYLE = {
-  // width (not just maxWidth) so a smaller/cropped screenshot also scales
-  // up to fill the panel - the goal is the image dominating the view, not
-  // merely being capped when large. height:auto lets the browser preserve
-  // aspect ratio, and per the CSS2 replaced-element sizing algorithm,
-  // maxHeight correctly overrides that auto height (recomputing width from
-  // it in turn) if a tall image would otherwise blow past the viewport -
-  // no distortion either way.
-  width: '100%',
-  height: 'auto',
-  maxHeight: '82vh',
-  objectFit: 'contain' as const,
-  cursor: 'zoom-in',
-  borderRadius: 'var(--radius-sm)',
-  marginBottom: '0.75em',
-};
-
 export interface PlayerAnswer {
   selected_option_id?: number;
   answer_text?: string;
@@ -53,14 +36,14 @@ export function QuestionInput({
               canvasWidth={image.canvas_width}
               alt="Film still with coach's annotations"
               onClick={() => setIsZoomed(true)}
-              style={IMAGE_STYLE}
+              className={styles.questionImage}
             />
           ) : (
             <img
               src={resolveMediaUrl(image.image_url)}
               alt="Film still"
               onClick={() => setIsZoomed(true)}
-              style={IMAGE_STYLE}
+              className={styles.questionImage}
             />
           )}
           {isZoomed && (
@@ -80,8 +63,7 @@ export function QuestionInput({
 
       {question.question_type === 'written' ? (
         <textarea
-          className={styles.optionList}
-          style={{ width: '100%', marginTop: '0.75em', padding: '0.6em' }}
+          className={styles.writtenAnswer}
           value={answer?.answer_text ?? ''}
           onChange={(e) => onChange({ answer_text: e.target.value })}
         />

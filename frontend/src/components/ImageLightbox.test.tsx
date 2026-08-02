@@ -26,7 +26,10 @@ describe('ImageLightbox', () => {
   it('closes on backdrop click', () => {
     const onClose = vi.fn();
     render(<ImageLightbox src="/photo.png" alt="Film still" onClose={onClose} />);
-    fireEvent.click(screen.getByAltText('Film still').parentElement!);
+    // Not .parentElement - PinchZoomPan wraps the image in its own surface/content divs, so the
+    // true backdrop is a couple of levels further up than the image's immediate parent.
+    const backdrop = screen.getByAltText('Film still').closest('[class*="backdrop"]');
+    fireEvent.click(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -49,6 +52,17 @@ describe('ImageLightbox', () => {
     render(<ImageLightbox src="/photo.png" alt="Film still" onClose={onClose} />);
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking PinchZoomPan\'s reset-zoom button does not also close the lightbox', () => {
+    const onClose = vi.fn();
+    render(<ImageLightbox src="/photo.png" alt="Film still" onClose={onClose} />);
+    const surface = screen.getByAltText('Film still').closest('[class*="surface"]')!;
+    fireEvent.doubleClick(surface, { clientX: 50, clientY: 50 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset zoom' }));
+
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('renders the annotation viewer instead of a plain image when annotations are given', () => {

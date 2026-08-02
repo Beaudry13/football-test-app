@@ -1,0 +1,32 @@
+.surface {
+  touch-action: none;
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.content {
+  display: inline-block;
+  transform-origin: 0 0;
+}
+
+.resetButton {
+  position: absolute;
+  bottom: 1.25em;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 0.55em 1.1em;
+  border-radius: 999px;
+  border: none;
+  background: rgba(20, 20, 20, 0.75);
+  color: #fff;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resetButton:hover {
+  background: rgba(20, 20, 20, 0.9);
+}

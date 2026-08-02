@@ -7,6 +7,13 @@
 export const MAX_CANVAS_WIDTH_LEGACY = 900;
 export const MAX_CANVAS_WIDTH = 1400;
 
+// Purely a rendering-resolution multiplier for the player-facing read-only viewer - NOT the
+// coordinate space (that stays resolveCanvasWidth()'s output, below, untouched, so existing
+// annotation positions never shift). Bumps how much real photo detail survives into the canvas
+// backing store, so pinch-zooming in AnnotationViewer/ImageLightbox stays crisp instead of
+// upscaling a source that was already shrunk down to the coordinate-space width.
+export const PLAYER_RENDER_SCALE = 2;
+
 /** The canvas width to size this image's coordinate space at. A pinned
  * `savedCanvasWidth` (from a prior save) always wins, so an already-annotated
  * image keeps rendering at the exact width its shapes were authored in. Only

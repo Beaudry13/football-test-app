@@ -36,11 +36,21 @@
 
 .nameButton {
   padding: 0.7em;
+  min-height: 44px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   cursor: pointer;
   font-weight: 600;
+}
+
+/* Player-only touch-target bump - deliberately scoped under .wrapper (this page's shared root)
+   rather than editing the global .btn in index.css, which is also used by desktop coach-facing
+   pages that are explicitly out of scope for mobile sizing. Needs :global() since Vite's CSS
+   Modules would otherwise hash "btn" into a module-local class that never matches the literal
+   className="btn btn-primary" strings used in NameStep/JoinStep/QuizStep/ResultsCheckPage. */
+.wrapper :global(.btn) {
+  min-height: 44px;
 }
 
 .nameButtonActive {
@@ -70,6 +80,40 @@
   margin-bottom: 1em;
 }
 
+/* Image sizing is the top priority for the player-facing view - these images are film stills
+   with real coaching detail (alignment, gaps, routes), and a small image defeats the quiz's
+   purpose regardless of how good anything else is. width (not just maxWidth) so a smaller/
+   cropped screenshot also scales up to fill the panel - the goal is the image dominating the
+   view, not merely being capped when large. Two max-height declarations (not one) - dvh
+   (dynamic viewport height) correctly accounts for a mobile browser's address-bar chrome, vh is
+   the fallback for browsers that don't support dvh; inline React style objects can't express two
+   same-property declarations, which is why this lives in an actual CSS class instead. */
+.questionImage {
+  width: 100%;
+  height: auto;
+  max-height: 82vh;
+  max-height: 82dvh;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.75em;
+}
+
+@media (max-width: 480px) {
+  /* Even less competing content on a narrow phone screen - push the cap higher. */
+  .questionImage {
+    max-height: 88vh;
+    max-height: 88dvh;
+  }
+}
+
+.writtenAnswer {
+  width: 100%;
+  min-height: 6em;
+  margin-top: 0.75em;
+  padding: 0.6em;
+}
+
 .optionList {
   display: flex;
   flex-direction: column;
@@ -82,6 +126,7 @@
   align-items: center;
   gap: 0.6em;
   padding: 0.6em 0.75em;
+  min-height: 44px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
