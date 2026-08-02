@@ -29,14 +29,16 @@ function App() {
           <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
 
           <Route element={<ProtectedRoute />}>
-            {/* Preview is deliberately NOT nested in <Layout> - the whole
-                point is showing exactly what a player sees (no coach nav,
-                no editor's narrower content width), just gated behind
-                login instead of a real access code. */}
+            {/* Preview and the Dashboard are deliberately NOT nested in
+                <Layout> - Preview shows exactly what a player sees (no
+                coach nav), and the Dashboard supplies its own full-page
+                header/background as part of its notebook redesign, which
+                Layout's plain header would visually clash with. Both stay
+                gated behind login via ProtectedRoute directly. */}
             <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
+            <Route path="/" element={<DashboardPage />} />
 
             <Route element={<Layout />}>
-              <Route path="/" element={<DashboardPage />} />
               <Route path="/team" element={<TeamPage />} />
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
