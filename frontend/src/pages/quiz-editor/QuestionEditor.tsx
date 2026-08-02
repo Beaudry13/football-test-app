@@ -3,6 +3,7 @@ import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { getErrorMessage } from '../../api/client';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import nb from '../../styles/notebook.module.css';
 import styles from './QuestionEditor.module.css';
 
 const TRUE_FALSE_OPTIONS: QuestionOptionInput[] = [
@@ -85,23 +86,29 @@ export function QuestionEditor({
   }
 
   return (
-    <form className={`card ${styles.form}`} onSubmit={handleSubmit}>
+    <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit}>
       <ErrorBanner message={error} />
 
-      <div className="field">
-        <label htmlFor="question_text">Question</label>
+      <div className={nb.field}>
+        <label className={nb.fieldLabel} htmlFor="question_text">
+          Question
+        </label>
         <textarea
           id="question_text"
+          className={nb.input}
           required
           value={questionText}
           onChange={(e) => setQuestionText(e.target.value)}
         />
       </div>
 
-      <div className="field">
-        <label htmlFor="question_type">Type</label>
+      <div className={nb.field}>
+        <label className={nb.fieldLabel} htmlFor="question_type">
+          Type
+        </label>
         <select
           id="question_type"
+          className={nb.input}
           value={questionType}
           onChange={(e) => handleTypeChange(e.target.value as QuestionType)}
         >
@@ -112,8 +119,8 @@ export function QuestionEditor({
       </div>
 
       {questionType === 'true_false' && (
-        <div className="field">
-          <label>Correct answer</label>
+        <div className={nb.field}>
+          <span className={nb.fieldLabel}>Correct answer</span>
           {options.map((option, index) => (
             <label key={option.option_text} style={{ display: 'block', fontWeight: 400 }}>
               <input
@@ -129,8 +136,8 @@ export function QuestionEditor({
       )}
 
       {questionType === 'multiple_choice' && (
-        <div className="field">
-          <label>Options (mark the correct one)</label>
+        <div className={nb.field}>
+          <span className={nb.fieldLabel}>Options (mark the correct one)</span>
           {options.map((option, index) => (
             <div className={styles.optionRow} key={index}>
               <input
@@ -141,6 +148,7 @@ export function QuestionEditor({
               />
               <input
                 type="text"
+                className={nb.input}
                 placeholder={`Option ${index + 1}`}
                 value={option.option_text}
                 onChange={(e) => updateOptionText(index, e.target.value)}
@@ -157,17 +165,17 @@ export function QuestionEditor({
               )}
             </div>
           ))}
-          <button type="button" className={`btn btn-secondary btn-sm ${styles.addOption}`} onClick={addOption}>
+          <button type="button" className={`${nb.btnSm} ${styles.addOption}`} onClick={addOption}>
             + Add option
           </button>
         </div>
       )}
 
       <div className={styles.formActions}>
-        <button type="submit" className="btn btn-primary" disabled={isSaving}>
+        <button type="submit" className={nb.btnPrimary} disabled={isSaving}>
           {isSaving ? 'Saving…' : submitLabel}
         </button>
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>
+        <button type="button" className={nb.btnSecondary} onClick={onCancel}>
           Cancel
         </button>
       </div>

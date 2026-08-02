@@ -1,21 +1,18 @@
-import { useEffect, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
 import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
 import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { NotebookPage } from '../components/notebook/NotebookPage';
+import { NotebookHeader } from '../components/notebook/NotebookHeader';
+import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
-/** Not nested in the shared <Layout> (see App.tsx) - the notebook redesign
- * supplies its own header/background, which Layout's plain header would
- * clash with. This means it owns its own nav + logout, duplicating a
- * little of what Layout.tsx does; if/when the redesign extends to other
- * pages, that shared header belongs in one component instead. */
 export function DashboardPage() {
-  const { coach, logout } = useAuth();
-  const navigate = useNavigate();
+  const { coach } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -26,7 +23,6 @@ export function DashboardPage() {
   const [renameValue, setRenameValue] = useState('');
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
-  const [mouse, setMouse] = useState({ x: 50, y: 20 });
 
   useEffect(() => {
     refresh();
@@ -40,19 +36,6 @@ export function DashboardPage() {
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }
-
-  function handleLogout() {
-    logout();
-    navigate('/login');
-  }
-
-  function handleMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setMouse({
-      x: ((event.clientX - rect.left) / rect.width) * 100,
-      y: ((event.clientY - rect.top) / rect.height) * 100,
-    });
   }
 
   async function handleCreate(event: FormEvent) {
@@ -160,8 +143,8 @@ export function DashboardPage() {
     const isTeammates = coach != null && quiz.coach_id !== coach.id;
 
     return (
-      <div key={quiz.id} className={`${styles.card} ${styles.quizCard}`}>
-        <div className={styles.quizCardStripe} />
+      <div key={quiz.id} className={`${nb.card} ${nb.cardHoverable} ${styles.quizCard}`}>
+        <div className={nb.accentStripe} />
         <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
           <h3>{quiz.title}</h3>
           <div className={styles.quizMeta}>
@@ -188,14 +171,11 @@ export function DashboardPage() {
           )}
           {/* Duplicate stays available to everyone: the copy belongs to
               whoever made it, so starting from a teammate's quiz is safe. */}
-          <button className={styles.btnSm} onClick={() => handleDuplicate(quiz.id)}>
+          <button className={nb.btnSm} onClick={() => handleDuplicate(quiz.id)}>
             Duplicate
           </button>
           {canEdit && (
-            <button
-              className={`${styles.btnSm} ${styles.btnDanger}`}
-              onClick={() => handleDelete(quiz.id, quiz.title)}
-            >
+            <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={() => handleDelete(quiz.id, quiz.title)}>
               Delete
             </button>
           )}
@@ -208,51 +188,14 @@ export function DashboardPage() {
   const uncategorized = quizzes?.filter((q) => q.folder_id === null) ?? [];
 
   return (
-    <div className={styles.page} onMouseMove={handleMouseMove}>
-      <div
-        className={styles.spotlight}
-        style={{
-          background: `radial-gradient(600px 400px at ${mouse.x}% ${mouse.y}%, rgba(79,70,229,0.07), transparent 70%)`,
-        }}
-      />
-      <div
-        className={styles.dotGrid}
-        style={{
-          maskImage: `radial-gradient(ellipse 800px 500px at ${mouse.x}% ${mouse.y}%, black, transparent 70%)`,
-          WebkitMaskImage: `radial-gradient(ellipse 800px 500px at ${mouse.x}% ${mouse.y}%, black, transparent 70%)`,
-        }}
-      />
-      <div className={styles.holePunch} style={{ top: 42 }} />
-      <div className={styles.holePunch} style={{ top: '50%' }} />
-      <div className={styles.holePunch} style={{ top: '88%' }} />
+    <NotebookPage>
+      <NotebookHeader />
 
-      <div className={styles.header}>
-        <Link to="/" className={styles.brand}>
-          Football Quiz Platform
-        </Link>
-        <div className={styles.nav}>
-          <Link to="/" className={`${styles.navLink} ${styles.navLinkActive}`}>
-            Quizzes
-          </Link>
-          <Link to="/groups" className={styles.navLink}>
-            Groups
-          </Link>
-          <Link to="/team" className={styles.navLink}>
-            Team
-          </Link>
-          <span className={styles.navDivider} />
-          {coach && <span className={styles.coachName}>{coach.username}</span>}
-          <button className={styles.logoutButton} onClick={handleLogout}>
-            Log out
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.content}>
+      <div className={nb.content}>
         <div className={styles.contentHeader}>
-          <h1>Your quizzes</h1>
+          <h1 className={nb.heading}>Your quizzes</h1>
           {quizzes && (
-            <span className={styles.quizCount}>
+            <span className={nb.countBadge}>
               {quizzes.length} quiz{quizzes.length === 1 ? '' : 'zes'}
             </span>
           )}
@@ -262,28 +205,26 @@ export function DashboardPage() {
 
         <form className={styles.newQuizForm} onSubmit={handleCreate}>
           <input
+            className={nb.input}
             type="text"
             placeholder="New quiz title, e.g. Week 3 Prep"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
           />
-          <button type="submit" className={styles.btnPrimary} disabled={isCreating || !newTitle.trim()}>
+          <button type="submit" className={nb.btnPrimary} disabled={isCreating || !newTitle.trim()}>
             {isCreating ? 'Creating…' : 'New quiz'}
           </button>
         </form>
 
         <form className={styles.newFolderForm} onSubmit={handleCreateFolder}>
           <input
+            className={nb.input}
             type="text"
             placeholder="New folder, e.g. Fall Camp"
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
           />
-          <button
-            type="submit"
-            className={styles.btnSecondary}
-            disabled={isCreatingFolder || !newFolderName.trim()}
-          >
+          <button type="submit" className={nb.btnSecondary} disabled={isCreatingFolder || !newFolderName.trim()}>
             {isCreatingFolder ? 'Creating…' : 'New folder'}
           </button>
         </form>
@@ -291,7 +232,7 @@ export function DashboardPage() {
         {quizzes === null ? (
           <p>Loading…</p>
         ) : quizzes.length === 0 ? (
-          <div className={`${styles.card} ${styles.empty}`}>No quizzes yet. Create your first one above.</div>
+          <div className={`${nb.card} ${nb.empty}`}>No quizzes yet. Create your first one above.</div>
         ) : !hasFolders ? (
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
@@ -311,22 +252,23 @@ export function DashboardPage() {
                         <>
                           <input
                             autoFocus
-                            className={styles.folderRenameInput}
+                            className={nb.input}
+                            style={{ width: 200 }}
                             value={renameValue}
                             onChange={(e) => setRenameValue(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleRenameFolder(folder.id)}
                             aria-label={`Rename folder "${folder.name}"`}
                           />
-                          <button className={styles.btnSm} onClick={() => handleRenameFolder(folder.id)}>
+                          <button className={nb.btnSm} onClick={() => handleRenameFolder(folder.id)}>
                             Save
                           </button>
-                          <button className={styles.btnSm} onClick={() => setRenamingFolderId(null)}>
+                          <button className={nb.btnSm} onClick={() => setRenamingFolderId(null)}>
                             Cancel
                           </button>
                         </>
                       ) : (
                         <button
-                          className={styles.btnSm}
+                          className={nb.btnSm}
                           onClick={() => {
                             setRenamingFolderId(folder.id);
                             setRenameValue(folder.name);
@@ -336,7 +278,7 @@ export function DashboardPage() {
                         </button>
                       )}
                       <button
-                        className={`${styles.btnSm} ${styles.btnDanger}`}
+                        className={`${nb.btnSm} ${nb.btnDanger}`}
                         onClick={() => handleDeleteFolder(folder.id, folder.name)}
                       >
                         Delete folder
@@ -369,6 +311,6 @@ export function DashboardPage() {
           </div>
         )}
       </div>
-    </div>
+    </NotebookPage>
   );
 }

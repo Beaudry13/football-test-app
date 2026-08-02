@@ -31,7 +31,7 @@
   margin: 0;
   padding: 0;
   font-size: 0.9em;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
 }
 
 .optionsList li {
@@ -39,7 +39,7 @@
 }
 
 .correctOption {
-  color: var(--color-success);
+  color: var(--nb-success, #1f8a4c);
   font-weight: 600;
 }
 
@@ -47,16 +47,15 @@
   width: 90px;
   height: 60px;
   object-fit: cover;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  border: 1px solid var(--nb-card-border, #e7e3d8);
   flex-shrink: 0;
 }
 
-.rowActions {
+.formActions {
   display: flex;
-  flex-direction: column;
-  gap: 0.35em;
-  align-items: stretch;
+  gap: 8px;
+  margin-top: 0.75em;
 }
 
 .reorderActions {
@@ -70,7 +69,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
   font-size: 1em;
   line-height: 1;
   padding: 0.2em;
@@ -79,10 +78,4 @@
 .reorderActions button:disabled {
   opacity: 0.3;
   cursor: default;
-}
-
-.empty {
-  text-align: center;
-  padding: 2em;
-  color: var(--color-text-muted);
 }

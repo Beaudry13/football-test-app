@@ -12,6 +12,7 @@ import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Organization, OrganizationInvite } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import nb from '../styles/notebook.module.css';
 import styles from './TeamPage.module.css';
 
 function joinLink(code: string): string {
@@ -135,7 +136,7 @@ export function TeamPage() {
   return (
     <div>
       <div className={styles.header}>
-        <h1>{org.name}</h1>
+        <h1 className={nb.heading}>{org.name}</h1>
       </div>
 
       <ErrorBanner message={error} />
@@ -143,13 +144,14 @@ export function TeamPage() {
       {isAdmin && (
         <form className={styles.renameForm} onSubmit={handleRename}>
           <input
+            className={nb.input}
             value={orgName}
             onChange={(e) => setOrgName(e.target.value)}
             aria-label="Organization name"
           />
           <button
             type="submit"
-            className="btn btn-secondary btn-sm"
+            className={nb.btnSm}
             disabled={isBusy || !orgName.trim() || orgName.trim() === org.name}
           >
             Rename
@@ -157,9 +159,9 @@ export function TeamPage() {
         </form>
       )}
 
-      <div className="card">
-        <h3>Coaches ({org.members.length})</h3>
-        <table className={styles.table}>
+      <div className={`${nb.card} ${styles.card}`}>
+        <h3 className={nb.subheading}>Coaches ({org.members.length})</h3>
+        <table className={nb.table}>
           <thead>
             <tr>
               <th>Coach</th>
@@ -177,7 +179,9 @@ export function TeamPage() {
                 </td>
                 <td>{member.email}</td>
                 <td>
-                  <span className={member.role === 'admin' ? 'badge badge-success' : 'badge badge-neutral'}>
+                  <span
+                    className={`${nb.badge} ${member.role === 'admin' ? nb.badgeSuccess : nb.badgeNeutral}`}
+                  >
                     {member.role}
                   </span>
                 </td>
@@ -185,7 +189,7 @@ export function TeamPage() {
                   <td>
                     <div className={styles.memberActions}>
                       <button
-                        className="btn btn-secondary btn-sm"
+                        className={nb.btnSm}
                         onClick={() =>
                           handleRoleChange(member.id, member.role === 'admin' ? 'member' : 'admin')
                         }
@@ -194,7 +198,7 @@ export function TeamPage() {
                       </button>
                       {member.id !== coach?.id && (
                         <button
-                          className="btn btn-danger btn-sm"
+                          className={`${nb.btnSm} ${nb.btnDanger}`}
                           onClick={() => handleRemove(member.id, member.username)}
                         >
                           Remove
@@ -210,20 +214,25 @@ export function TeamPage() {
       </div>
 
       {isAdmin && (
-        <div className="card">
-          <h3>Invite a coach</h3>
+        <div className={`${nb.card} ${styles.card}`}>
+          <h3 className={nb.subheading}>Invite a coach</h3>
           <p>
             Generate a link and send it however you like. It works once, and expires after 14 days.
           </p>
-          <button className="btn btn-primary" onClick={handleCreateInvite} disabled={isBusy}>
+          <button className={nb.btnPrimary} onClick={handleCreateInvite} disabled={isBusy}>
             {isBusy ? 'Generating…' : 'Create invite link'}
           </button>
 
           {newInviteCode && (
             <>
               <div className={styles.inviteLinkRow}>
-                <input readOnly value={joinLink(newInviteCode)} onFocus={(e) => e.target.select()} />
-                <button className="btn btn-secondary btn-sm" onClick={() => handleCopy(newInviteCode)}>
+                <input
+                  className={nb.input}
+                  readOnly
+                  value={joinLink(newInviteCode)}
+                  onFocus={(e) => e.target.select()}
+                />
+                <button className={nb.btnSm} onClick={() => handleCopy(newInviteCode)}>
                   {copied ? 'Copied!' : 'Copy link'}
                 </button>
               </div>
@@ -235,8 +244,8 @@ export function TeamPage() {
 
           {pendingInvites.length > 0 && (
             <>
-              <h4>Pending invites ({pendingInvites.length})</h4>
-              <table className={styles.table}>
+              <h4 className={styles.subListHeading}>Pending invites ({pendingInvites.length})</h4>
+              <table className={nb.table}>
                 <thead>
                   <tr>
                     <th>Created by</th>
@@ -251,10 +260,7 @@ export function TeamPage() {
                       <td>{new Date(invite.expires_at).toLocaleDateString()}</td>
                       <td>
                         <div className={styles.memberActions}>
-                          <button
-                            className="btn btn-secondary btn-sm"
-                            onClick={() => handleRevoke(invite.id)}
-                          >
+                          <button className={nb.btnSm} onClick={() => handleRevoke(invite.id)}>
                             Revoke
                           </button>
                         </div>

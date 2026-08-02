@@ -5,6 +5,7 @@ import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
+import nb from '../../styles/notebook.module.css';
 import styles from './ResultsTab.module.css';
 
 function slugify(title: string): string {
@@ -56,15 +57,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
       {dashboard && (
         <>
           <div className={styles.statsRow}>
-            <div className="card stat">
+            <div className={`${nb.card} ${styles.stat}`}>
               <div className={styles.statValue}>{dashboard.response_count}</div>
               <div className={styles.statLabel}>Responses</div>
             </div>
-            <div className="card stat">
+            <div className={`${nb.card} ${styles.stat}`}>
               <div className={styles.statValue}>{dashboard.roster_size}</div>
               <div className={styles.statLabel}>Roster size</div>
             </div>
-            <div className="card stat">
+            <div className={`${nb.card} ${styles.stat}`}>
               <div className={styles.statValue}>{Math.round(dashboard.response_rate * 100)}%</div>
               <div className={styles.statLabel}>Response rate</div>
             </div>
@@ -73,7 +74,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           <div className={styles.exportRow}>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className={nb.btnSm}
               onClick={() => handleExport('csv')}
               disabled={exporting !== null}
             >
@@ -81,7 +82,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             </button>
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className={nb.btnSm}
               onClick={() => handleExport('pdf')}
               disabled={exporting !== null}
             >
@@ -90,9 +91,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           </div>
 
           {dashboard.question_breakdown.length > 0 && (
-            <div className="card" style={{ marginBottom: '1.5em' }}>
-              <h3>Per-question breakdown</h3>
-              <table className={styles.breakdownTable}>
+            <div className={`${nb.card} ${styles.breakdownCard}`}>
+              <h3 className={nb.subheading}>Per-question breakdown</h3>
+              <table className={nb.table}>
                 <thead>
                   <tr>
                     <th>Question</th>
@@ -117,11 +118,11 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
         </>
       )}
 
-      <h3>Player responses</h3>
+      <h3 className={nb.subheading}>Player responses</h3>
       {responses === null ? (
         <p>Loading…</p>
       ) : responses.length === 0 ? (
-        <div className="card">No responses yet.</div>
+        <div className={nb.card}>No responses yet.</div>
       ) : (
         <div className={styles.responseList}>
           {responses.map((response) => (

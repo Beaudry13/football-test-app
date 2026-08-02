@@ -1,3 +1,7 @@
+/* Page-specific styles only - shared notebook design system (buttons,
+   cards, inputs, tables, badges) lives in
+   frontend/src/styles/notebook.module.css. */
+
 .header {
   display: flex;
   align-items: center;
@@ -7,43 +11,39 @@
   flex-wrap: wrap;
 }
 
+.card {
+  margin-bottom: 1.5em;
+}
+
 .renameForm {
   display: flex;
-  gap: 0.5em;
+  gap: 12px;
   align-items: center;
   margin-bottom: 1.5em;
 }
 
 .renameForm input {
-  padding: 0.5em 0.7em;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
   flex: 1;
   max-width: 340px;
 }
 
-.table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.table th,
-.table td {
-  text-align: left;
-  padding: 0.6em;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 0.92em;
+.subListHeading {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text, #1c1b1a);
+  margin: 1.5em 0 0.5em;
 }
 
 .memberActions {
   display: flex;
-  gap: 0.5em;
+  gap: 8px;
   justify-content: flex-end;
 }
 
 .inviteLinkRow {
   display: flex;
-  gap: 0.5em;
+  gap: 8px;
   align-items: center;
   margin-top: 0.75em;
   flex-wrap: wrap;
@@ -52,20 +52,17 @@
 .inviteLinkRow input {
   flex: 1;
   min-width: 240px;
-  padding: 0.45em 0.6em;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
   font-family: monospace;
   font-size: 0.85em;
 }
 
 .inviteNote {
   font-size: 0.85em;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
   margin-top: 0.5em;
 }
 
 .you {
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
   font-weight: 400;
 }

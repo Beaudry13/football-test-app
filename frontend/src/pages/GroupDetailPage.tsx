@@ -11,6 +11,7 @@ import { getErrorMessage } from '../api/client';
 import type { Group } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { PlayerListEditor } from '../components/PlayerListEditor';
+import nb from '../styles/notebook.module.css';
 import styles from './GroupDetailPage.module.css';
 
 export function GroupDetailPage() {
@@ -87,16 +88,21 @@ export function GroupDetailPage() {
         <Link to="/groups" className={styles.backLink}>
           ← Back to groups
         </Link>
-        <button className="btn btn-danger btn-sm" onClick={handleDelete}>
+        <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={handleDelete}>
           Delete group
         </button>
       </div>
 
       <form className={styles.renameForm} onSubmit={handleRename}>
-        <input value={nameValue} onChange={(e) => setNameValue(e.target.value)} aria-label="Group name" />
+        <input
+          className={nb.input}
+          value={nameValue}
+          onChange={(e) => setNameValue(e.target.value)}
+          aria-label="Group name"
+        />
         <button
           type="submit"
-          className="btn btn-secondary btn-sm"
+          className={nb.btnSm}
           disabled={isRenaming || !nameValue.trim() || nameValue.trim() === group.name}
         >
           {isRenaming ? 'Saving…' : 'Rename'}

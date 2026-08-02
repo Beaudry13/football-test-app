@@ -11,6 +11,7 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionEditor } from './QuestionEditor';
+import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -69,7 +70,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
 
       <div className={styles.list}>
         {questions.length === 0 && !isAdding && (
-          <div className={`card ${styles.empty}`}>No questions yet. Add your first one below.</div>
+          <div className={`${nb.card} ${nb.empty}`}>No questions yet. Add your first one below.</div>
         )}
 
         {questions.map((question, index) =>
@@ -87,13 +88,13 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               onCancel={() => setEditingId(null)}
             />
           ) : (
-            <div key={question.id} className={`card ${styles.questionCard}`}>
+            <div key={question.id} className={`${nb.card} ${styles.questionCard}`}>
               {question.image && (
                 <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
               )}
               <div className={styles.questionBody}>
                 <div className={styles.questionMeta}>
-                  <span className="badge badge-neutral">{TYPE_LABELS[question.question_type]}</span>
+                  <span className={`${nb.badge} ${nb.badgeNeutral}`}>{TYPE_LABELS[question.question_type]}</span>
                 </div>
                 <div className={styles.questionText}>{question.question_text}</div>
                 {question.options.length > 0 && (
@@ -106,17 +107,17 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     ))}
                   </ul>
                 )}
-                <div className={styles.formActions} style={{ marginTop: '0.75em', display: 'flex', gap: '0.5em' }}>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setEditingId(question.id)}>
+                <div className={styles.formActions}>
+                  <button className={nb.btnSm} onClick={() => setEditingId(question.id)}>
                     Edit
                   </button>
                   <Link
-                    className="btn btn-secondary btn-sm"
+                    className={nb.btnSm}
                     to={`/quizzes/${quiz.id}/questions/${question.id}/annotate`}
                   >
                     {question.image ? 'Edit image' : 'Add image'}
                   </Link>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(question.id)}>
+                  <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={() => handleDelete(question.id)}>
                     Delete
                   </button>
                 </div>
@@ -141,7 +142,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
       {isAdding ? (
         <QuestionEditor submitLabel="Add question" onSave={handleCreate} onCancel={() => setIsAdding(false)} />
       ) : (
-        <button className="btn btn-primary" onClick={() => setIsAdding(true)}>
+        <button className={nb.btnPrimary} onClick={() => setIsAdding(true)}>
           + Add question
         </button>
       )}

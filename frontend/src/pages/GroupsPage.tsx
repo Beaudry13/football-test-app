@@ -4,6 +4,7 @@ import { createGroup, deleteGroup, listGroups } from '../api/groups';
 import { getErrorMessage } from '../api/client';
 import type { Group } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import nb from '../styles/notebook.module.css';
 import styles from './GroupsPage.module.css';
 
 export function GroupsPage() {
@@ -54,10 +55,10 @@ export function GroupsPage() {
   return (
     <div>
       <div className={styles.header}>
-        <h1>Player groups</h1>
+        <h1 className={nb.heading}>Player groups</h1>
       </div>
 
-      <p>
+      <p className={styles.description}>
         Build reusable groups like "Varsity" or "Defense" once, then pick which group(s) can access a
         quiz when you activate it.
       </p>
@@ -66,12 +67,13 @@ export function GroupsPage() {
 
       <form className={styles.newGroupForm} onSubmit={handleCreate}>
         <input
+          className={nb.input}
           type="text"
           placeholder="New group name, e.g. Defense"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
         />
-        <button type="submit" className="btn btn-primary" disabled={isCreating || !newName.trim()}>
+        <button type="submit" className={nb.btnPrimary} disabled={isCreating || !newName.trim()}>
           {isCreating ? 'Creating…' : 'New group'}
         </button>
       </form>
@@ -79,11 +81,12 @@ export function GroupsPage() {
       {groups === null ? (
         <p>Loading…</p>
       ) : groups.length === 0 ? (
-        <div className={`card ${styles.empty}`}>No groups yet. Create your first one above.</div>
+        <div className={`${nb.card} ${nb.empty}`}>No groups yet. Create your first one above.</div>
       ) : (
         <div className={styles.list}>
           {groups.map((group) => (
-            <div key={group.id} className={`card ${styles.groupCard}`}>
+            <div key={group.id} className={`${nb.card} ${nb.cardHoverable} ${styles.groupCard}`}>
+              <div className={nb.accentStripe} />
               <Link to={`/groups/${group.id}`} className={styles.groupInfo} style={{ flex: 1 }}>
                 <h3>{group.name}</h3>
                 <div className={styles.groupMeta}>
@@ -91,7 +94,10 @@ export function GroupsPage() {
                 </div>
               </Link>
               <div className={styles.actions}>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(group.id, group.name)}>
+                <button
+                  className={`${nb.btnSm} ${nb.btnDanger}`}
+                  onClick={() => handleDelete(group.id, group.name)}
+                >
                   Delete
                 </button>
               </div>

@@ -8,6 +8,7 @@ import { QuestionsTab } from './QuestionsTab';
 import { RosterTab } from './RosterTab';
 import { AccessCodesTab } from './AccessCodesTab';
 import { ResultsTab } from './ResultsTab';
+import nb from '../../styles/notebook.module.css';
 import styles from './QuizEditorPage.module.css';
 
 const TABS = [
@@ -88,7 +89,7 @@ export function QuizEditorPage() {
           to={`/quizzes/${quiz.id}/preview`}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn btn-secondary btn-sm"
+          className={nb.btnSm}
           style={{ whiteSpace: 'nowrap' }}
         >
           Preview as player

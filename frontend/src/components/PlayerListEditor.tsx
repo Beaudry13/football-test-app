@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getErrorMessage } from '../api/client';
 import type { RosterPlayer } from '../api/types';
 import { ErrorBanner } from './ErrorBanner';
+import nb from '../styles/notebook.module.css';
 import styles from './PlayerListEditor.module.css';
 
 interface PlayerListLike {
@@ -93,8 +94,8 @@ export function PlayerListEditor({
     <div>
       <ErrorBanner message={error} />
       <div className={styles.layout}>
-        <div className="card">
-          <h3>
+        <div className={nb.card}>
+          <h3 className={nb.subheading}>
             {currentListTitle} ({players.length})
           </h3>
           {players.length === 0 ? (
@@ -108,8 +109,8 @@ export function PlayerListEditor({
           )}
         </div>
 
-        <div className="card">
-          <h3>{editTitle}</h3>
+        <div className={nb.card}>
+          <h3 className={nb.subheading}>{editTitle}</h3>
           <p>One player name per line. Saving replaces the full list.</p>
           <textarea
             className={styles.textarea}
@@ -117,10 +118,10 @@ export function PlayerListEditor({
             onChange={(e) => setNamesText(e.target.value)}
           />
           <div className={styles.hint}>
-            <button className="btn btn-primary btn-sm" onClick={handleSaveManual} disabled={isSaving}>
+            <button className={nb.btnSm} onClick={handleSaveManual} disabled={isSaving}>
               {isSaving ? 'Saving…' : saveButtonLabel}
             </button>{' '}
-            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+            <label className={nb.btnSm} style={{ cursor: 'pointer' }}>
               Upload CSV
               <input
                 ref={fileInputRef}

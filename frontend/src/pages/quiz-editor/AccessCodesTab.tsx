@@ -4,6 +4,7 @@ import { listGroups } from '../../api/groups';
 import { getErrorMessage } from '../../api/client';
 import type { AccessCode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import nb from '../../styles/notebook.module.css';
 import styles from './AccessCodesTab.module.css';
 
 function playLink(code: string): string {
@@ -77,7 +78,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     <div>
       <ErrorBanner message={error} />
 
-      <div className={`card ${styles.activeCard}`}>
+      <div className={`${nb.card} ${styles.activeCard}`}>
         {activeCode ? (
           <>
             <p>Share this code and link with players</p>
@@ -86,19 +87,24 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
             )}
             <div className={styles.linkRow}>
-              <input readOnly value={playLink(activeCode.code)} onFocus={(e) => e.target.select()} />
-              <button className="btn btn-secondary btn-sm" onClick={() => handleCopyLink(activeCode.code)}>
+              <input
+                className={nb.input}
+                readOnly
+                value={playLink(activeCode.code)}
+                onFocus={(e) => e.target.select()}
+              />
+              <button className={nb.btnSm} onClick={() => handleCopyLink(activeCode.code)}>
                 {copied ? 'Copied!' : 'Copy link'}
               </button>
             </div>
             <div className={styles.expiry}>
               Expires {new Date(activeCode.expires_at).toLocaleString()}
             </div>
-            <div style={{ marginTop: '1em', display: 'flex', gap: '0.5em', justifyContent: 'center' }}>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleDeactivate(activeCode.id)}>
+            <div className={styles.historyActions}>
+              <button className={nb.btnSm} onClick={() => handleDeactivate(activeCode.id)}>
                 Deactivate now
               </button>
-              <button className="btn btn-primary btn-sm" onClick={handleActivate} disabled={isActivating}>
+              <button className={nb.btnSm} onClick={handleActivate} disabled={isActivating}>
                 {isActivating ? 'Generating…' : 'Reactivate with new code'}
               </button>
             </div>
@@ -125,10 +131,10 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               </div>
             )}
 
-            <button className="btn btn-primary" onClick={handleActivate} disabled={isActivating}>
+            <button className={nb.btnPrimary} onClick={handleActivate} disabled={isActivating}>
               {isActivating ? 'Activating…' : 'Activate quiz'}
             </button>
-            <p style={{ fontSize: '0.85em', marginTop: '0.75em' }}>
+            <p className={styles.activateHint}>
               Requires at least one question, and either a non-empty roster or a selected group. The
               code is valid for 24 hours.
             </p>
@@ -137,9 +143,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       </div>
 
       {codes && codes.length > 0 && (
-        <div className="card">
-          <h3>Activation history</h3>
-          <table className={styles.historyTable}>
+        <div className={`${nb.card} ${styles.historyCard}`}>
+          <h3 className={nb.subheading}>Activation history</h3>
+          <table className={nb.table}>
             <thead>
               <tr>
                 <th>Code</th>
@@ -158,9 +164,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                   <td>{code.groups.length > 0 ? code.groups.map((g) => g.name).join(', ') : '—'}</td>
                   <td>
                     {code.is_active && code.is_valid ? (
-                      <span className="badge badge-success">Active</span>
+                      <span className={`${nb.badge} ${nb.badgeSuccess}`}>Active</span>
                     ) : (
-                      <span className="badge badge-neutral">Inactive</span>
+                      <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
                     )}
                   </td>
                 </tr>

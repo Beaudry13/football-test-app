@@ -6,6 +6,7 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from '../../components/annotation/AnnotationCanvas';
+import nb from '../../styles/notebook.module.css';
 import styles from './AnnotationPage.module.css';
 
 const MAX_UPLOAD_DIMENSION = 1920;
@@ -183,14 +184,14 @@ export function AnnotationPage() {
         {question.image && (
           <div>
             {savedAt && <span className={styles.savedNote}>Saved {savedAt.toLocaleTimeString()} · </span>}
-            <button className="btn btn-primary" onClick={handleSave} disabled={isSaving || !isCanvasReady}>
+            <button className={nb.btnSm} onClick={handleSave} disabled={isSaving || !isCanvasReady}>
               {isSaving ? 'Saving…' : 'Save annotations'}
             </button>
           </div>
         )}
       </div>
 
-      <h2>{question.question_text}</h2>
+      <h2 className={`${nb.subheading} ${styles.questionHeading}`}>{question.question_text}</h2>
 
       <ErrorBanner message={error} />
 
@@ -204,18 +205,18 @@ export function AnnotationPage() {
           onReady={() => setIsCanvasReady(true)}
         />
       ) : (
-        <div className={`card ${styles.uploadCard}`}>
-          <h3>Add a film still</h3>
+        <div className={`${nb.card} ${styles.uploadCard}`}>
+          <h3 className={nb.subheading}>Add a film still</h3>
           <p>Draw routes, circle players, and add callouts on a screenshot.</p>
           <p className={styles.pasteHint}>
             Copy a screenshot (e.g. Windows Snipping Tool or Cmd+Shift+4), then paste it anywhere on this
             page with <strong>Ctrl+V</strong> - or click below.
           </p>
           <div className={styles.uploadActions}>
-            <button className="btn btn-primary" onClick={handlePasteButtonClick} disabled={isUploading}>
+            <button className={nb.btnPrimary} onClick={handlePasteButtonClick} disabled={isUploading}>
               {isUploading ? 'Uploading…' : 'Paste image'}
             </button>
-            <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+            <label className={nb.btnSecondary} style={{ cursor: 'pointer' }}>
               Choose image
               <input
                 type="file"

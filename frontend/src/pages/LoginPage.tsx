@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { getErrorMessage } from '../api/client';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { NotebookPage } from '../components/notebook/NotebookPage';
+import { NotebookHeader } from '../components/notebook/NotebookHeader';
+import nb from '../styles/notebook.module.css';
 import styles from './AuthPages.module.css';
 
 export function LoginPage() {
@@ -28,37 +31,46 @@ export function LoginPage() {
   }
 
   return (
-    <div className={styles.wrapper}>
-      <form className={`card ${styles.form}`} onSubmit={handleSubmit}>
-        <h2>Coach log in</h2>
-        <ErrorBanner message={error} />
-        <div className="field">
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <button type="submit" className="btn btn-primary" disabled={isSubmitting} style={{ width: '100%' }}>
-          {isSubmitting ? 'Logging in…' : 'Log in'}
-        </button>
-        <p className={styles.footer}>
-          New here? <Link to="/register">Create an account</Link>
-        </p>
-      </form>
-    </div>
+    <NotebookPage>
+      <NotebookHeader />
+      <div className={nb.contentNarrow}>
+        <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit}>
+          <h2 className={nb.subheading}>Coach log in</h2>
+          <ErrorBanner message={error} />
+          <div className={nb.field}>
+            <label className={nb.fieldLabel} htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              className={nb.input}
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div className={nb.field}>
+            <label className={nb.fieldLabel} htmlFor="password">
+              Password
+            </label>
+            <input
+              id="password"
+              className={nb.input}
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <button type="submit" className={nb.btnPrimary} disabled={isSubmitting} style={{ width: '100%' }}>
+            {isSubmitting ? 'Logging in…' : 'Log in'}
+          </button>
+          <p className={styles.footer}>
+            New here? <Link to="/register">Create an account</Link>
+          </p>
+        </form>
+      </div>
+    </NotebookPage>
   );
 }

@@ -1,3 +1,7 @@
+/* Page-specific styles only - shared notebook design system (buttons,
+   cards, inputs, tables, badges) lives in
+   frontend/src/styles/notebook.module.css. */
+
 .activeCard {
   text-align: center;
   padding: 2em;
@@ -5,45 +9,42 @@
 }
 
 .codeDisplay {
-  font-size: 2.4em;
+  font-family: 'Caveat', cursive;
+  font-size: 2.6em;
   font-weight: 700;
-  letter-spacing: 0.12em;
-  margin: 0.3em 0;
-  color: var(--color-primary);
+  letter-spacing: 0.08em;
+  margin: 0.2em 0;
+  color: var(--nb-accent, #4f46e5);
 }
 
 .linkRow {
   display: flex;
-  gap: 0.5em;
+  gap: 8px;
   justify-content: center;
   align-items: center;
   margin-top: 0.75em;
 }
 
 .linkRow input {
-  padding: 0.45em 0.6em;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
   width: 320px;
   max-width: 100%;
 }
 
 .expiry {
   font-size: 0.9em;
+  color: var(--nb-text-muted, #78766e);
   margin-top: 0.5em;
 }
 
-.historyTable {
-  width: 100%;
-  border-collapse: collapse;
+.historyCard {
+  margin-bottom: 1.5em;
 }
 
-.historyTable th,
-.historyTable td {
-  text-align: left;
-  padding: 0.5em 0.6em;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 0.9em;
+.historyActions {
+  margin-top: 1em;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
 }
 
 .groupPicker {
@@ -63,4 +64,10 @@
   align-items: center;
   gap: 0.5em;
   font-weight: 400;
+}
+
+.activateHint {
+  font-size: 0.85em;
+  color: var(--nb-text-muted, #78766e);
+  margin-top: 0.75em;
 }

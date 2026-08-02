@@ -1,3 +1,8 @@
+/* Chrome only (header, back link, save button, upload empty-state) - the
+   AnnotationCanvas mount point and everything it renders internally keep
+   their own existing styling untouched. Shared notebook design system
+   (buttons, cards) lives in frontend/src/styles/notebook.module.css. */
+
 .header {
   display: flex;
   align-items: center;
@@ -6,8 +11,19 @@
 }
 
 .backLink {
-  font-size: 0.9em;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted, #78766e);
   text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--nb-text, #1c1b1a);
+}
+
+.questionHeading {
+  margin-bottom: 0.75em;
 }
 
 .uploadCard {
@@ -18,17 +34,17 @@
 
 .pasteHint {
   font-size: 0.85em;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
   margin-bottom: 1.5em;
 }
 
 .uploadActions {
   display: flex;
   justify-content: center;
-  gap: 0.75em;
+  gap: 12px;
 }
 
 .savedNote {
   font-size: 0.85em;
-  color: var(--color-success);
+  color: var(--nb-success, #1f8a4c);
 }

@@ -1,0 +1,441 @@
+/* Shared "notebook" design system for coach-facing pages, extracted from
+   the Dashboard's original reskin (which copied every value here directly
+   from a provided mockup: Desktop\claude\Quiz Dashboard Redesign -
+   standalone.html). Import this alongside a page's own CSS module rather
+   than redeclaring these values per page.
+
+   The --nb-* custom properties are defined on .page (see NotebookPage.tsx)
+   and cascade to everything below it in the DOM - every class here relies
+   on being rendered inside a .page ancestor.
+
+   Deliberately NOT touching frontend/src/index.css's globals (.btn, .card,
+   .field, .badge, --color-primary, ...): those are still used by the
+   player-facing pages that are staying on the old look, and repainting
+   them would leak this theme there too. */
+
+.page {
+  --nb-bg: #faf9f6;
+  --nb-text: #1c1b1a;
+  --nb-text-muted: #78766e;
+  --nb-text-muted2: #8a8577;
+  --nb-text-faint: #a6a192;
+  --nb-rule: rgba(79, 70, 229, 0.09);
+  --nb-margin-line: rgba(184, 73, 47, 0.25);
+  --nb-margin-solid: #b8492f;
+  --nb-accent: #4f46e5;
+  --nb-accent-hover: #372fbe;
+  --nb-card-border: #e7e3d8;
+  --nb-input-border: #dad5c8;
+  --nb-delete-border: #eac4bc;
+  --nb-delete-bg-hover: #fcefec;
+  --nb-success: #1f8a4c;
+  --nb-success-bg: #e7f5ec;
+  --nb-warning-text: #8a5a00;
+  --nb-warning-bg: #fff6e0;
+
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  color: var(--nb-text);
+  background-color: var(--nb-bg);
+  background-image:
+    repeating-linear-gradient(
+      180deg,
+      transparent,
+      transparent 35px,
+      var(--nb-rule) 35px,
+      var(--nb-rule) 36px
+    ),
+    linear-gradient(
+      90deg,
+      transparent 88px,
+      var(--nb-margin-line) 88px,
+      var(--nb-margin-line) 90px,
+      transparent 90px
+    );
+}
+
+/* Mouse-tracked spotlight + dot-grid overlays. NotebookPage.tsx sets the
+   background/mask inline since they change on every mousemove. */
+.spotlight,
+.dotGrid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dotGrid {
+  opacity: 0.5;
+  background-image: radial-gradient(rgba(120, 116, 108, 0.35) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.holePunch {
+  position: absolute;
+  left: 22px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #edebe5, #d8d5cc 60%, #c4c0b5 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.25),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.5);
+  z-index: 2;
+}
+
+/* --- Header (NotebookHeader.tsx) ------------------------------------- */
+
+.header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  flex-wrap: wrap;
+  padding: 34px 48px 20px;
+  background: var(--nb-bg);
+  border-bottom: 3px solid var(--nb-margin-solid);
+}
+
+.brand {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 34px;
+  letter-spacing: 0.01em;
+  color: var(--nb-text);
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  flex-wrap: wrap;
+}
+
+.navLink {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--nb-text-muted);
+  text-decoration: none;
+}
+
+.navLinkActive {
+  color: var(--nb-text);
+}
+
+.navDivider {
+  width: 1px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.coachName {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted);
+}
+
+.logoutButton {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  background: transparent;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.logoutButton:hover {
+  border-color: var(--nb-text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* --- Content wrapper ---------------------------------------------------- */
+
+.content {
+  position: relative;
+  z-index: 1;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 64px 48px 80px;
+}
+
+/* Narrower variant for single-form pages (Login/Register/Join). */
+.contentNarrow {
+  position: relative;
+  z-index: 1;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 64px 48px 80px;
+}
+
+/* --- Typography ----------------------------------------------------------- */
+
+.heading {
+  font-family: 'Caveat', cursive;
+  font-size: 48px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.01em;
+  color: var(--nb-text);
+}
+
+.subheading {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--nb-text);
+  margin: 0 0 0.5em;
+}
+
+.countBadge {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  color: var(--nb-text-muted2);
+  font-size: 20px;
+}
+
+/* --- Form controls -------------------------------------------------------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+  margin-bottom: 1em;
+}
+
+.fieldLabel {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--nb-text);
+}
+
+.input {
+  padding: 14px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--nb-input-border);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--nb-text);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+
+.input:focus {
+  border-color: var(--nb-accent);
+}
+
+textarea.input {
+  resize: vertical;
+  min-height: 6em;
+  font-family: inherit;
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+
+.btnPrimary {
+  padding: 0 24px;
+  min-height: 48px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(180deg, #6d5ef5 0%, #4f46e5 60%, #4338ca 100%);
+  color: #ffffff;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 4px 12px rgba(79, 70, 229, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 6px 16px rgba(79, 70, 229, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btnPrimary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.15) inset,
+    0 2px 6px rgba(79, 70, 229, 0.35);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btnSecondary {
+  padding: 0 24px;
+  min-height: 48px;
+  border-radius: 6px;
+  border: 1px solid var(--nb-input-border);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--nb-text);
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.btnSecondary:hover:not(:disabled) {
+  border-color: var(--nb-text);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btnSecondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Smaller variant used inline on cards/rows (Duplicate, Delete, Rename...). */
+.btnSm {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 18px;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid var(--nb-input-border);
+  color: var(--nb-text);
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+
+.btnSm:hover:not(:disabled) {
+  border-color: var(--nb-text);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.btnSm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Combine with .btnSm (or use standalone) for destructive actions. */
+.btnDanger {
+  border-color: var(--nb-delete-border);
+  color: var(--nb-margin-solid);
+}
+
+.btnDanger:hover:not(:disabled) {
+  /* Re-assert the reddish border on hover - .btnSm's own hover rule would
+     otherwise win (equal specificity, later property wins) and darken it
+     to text color instead. */
+  border-color: var(--nb-delete-border);
+  background: var(--nb-delete-bg-hover);
+  box-shadow: 0 2px 6px rgba(184, 73, 47, 0.15);
+  transform: translateY(-1px);
+}
+
+/* --- Cards ------------------------------------------------------------ */
+
+.card {
+  position: relative;
+  border-radius: 10px;
+  border: 1px solid var(--nb-card-border);
+  background: #ffffff;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  padding: 1.25em;
+}
+
+/* Combine with .card in JSX: className={`${styles.card} ${styles.cardHoverable}`} */
+.cardHoverable {
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.cardHoverable:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Left accent stripe used on list-row cards (quiz/group cards). Parent
+   needs position:relative (.cardHoverable/.card already set it). */
+.accentStripe {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, #8478f7, #4f46e5);
+}
+
+.empty {
+  text-align: center;
+  padding: 3em 1em;
+  color: var(--nb-text-muted);
+  font-family: 'Caveat', cursive;
+  font-size: 22px;
+}
+
+/* --- Tables ------------------------------------------------------------- */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: 0.6em;
+  border-bottom: 1px solid var(--nb-card-border);
+  font-size: 0.92em;
+  font-family: 'Inter', sans-serif;
+  color: var(--nb-text);
+}
+
+.table th {
+  color: var(--nb-text-muted);
+  font-weight: 600;
+}
+
+/* --- Badges -------------------------------------------------------------- */
+
+.badge {
+  display: inline-block;
+  padding: 0.2em 0.6em;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Combine with .badge in JSX: className={`${styles.badge} ${styles.badgeSuccess}`} */
+.badgeSuccess {
+  background: var(--nb-success-bg);
+  color: var(--nb-success);
+}
+
+.badgeWarning {
+  background: var(--nb-warning-bg);
+  color: var(--nb-warning-text);
+}
+
+.badgeNeutral {
+  background: #f1efe9;
+  color: var(--nb-text-muted);
+}

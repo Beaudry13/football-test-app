@@ -10,40 +10,31 @@
 }
 
 .statValue {
-  font-size: 1.8em;
+  font-family: 'Caveat', cursive;
+  font-size: 2.2em;
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--nb-accent, #4f46e5);
 }
 
 .statLabel {
   font-size: 0.85em;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
 }
 
 .exportRow {
   display: flex;
-  gap: 0.5em;
+  gap: 8px;
   margin-bottom: 1.5em;
 }
 
-.breakdownTable {
-  width: 100%;
-  border-collapse: collapse;
+.breakdownCard {
   margin-bottom: 1.5em;
-}
-
-.breakdownTable th,
-.breakdownTable td {
-  text-align: left;
-  padding: 0.5em 0.6em;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 0.9em;
 }
 
 .responseList {
   display: flex;
   flex-direction: column;
-  gap: 0.75em;
+  gap: 12px;
 }
 
 .responseHeader {
@@ -53,9 +44,21 @@
   cursor: pointer;
 }
 
+.responseMeta {
+  color: var(--nb-text-faint, #a6a192);
+  margin-left: 0.75em;
+  font-size: 0.85em;
+}
+
+.responseActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .answerRow {
   padding: 0.75em 0;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--nb-card-border, #e7e3d8);
 }
 
 .answerQuestion {
@@ -70,14 +73,34 @@
 .gradingRow {
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .gradingRow textarea {
   flex: 1;
   min-width: 200px;
-  padding: 0.4em 0.6em;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  border: 1px solid var(--nb-input-border, #dad5c8);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--nb-text, #1c1b1a);
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  outline: none;
+}
+
+.gradingRow textarea:focus {
+  border-color: var(--nb-accent, #4f46e5);
+}
+
+/* !important because these combine with notebook.module.css's .btnSm in
+   JSX - CSS Module import order isn't guaranteed, so specificity alone
+   can't be relied on to make this file's rule win. */
+.gradeCorrect {
+  border-color: var(--nb-success, #1f8a4c) !important;
+}
+
+.gradeIncorrect {
+  border-color: var(--nb-margin-solid, #b8492f) !important;
 }

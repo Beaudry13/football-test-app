@@ -3,6 +3,7 @@ import { gradeAnswer } from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
 import type { Answer, PlayerResponse, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import nb from '../../styles/notebook.module.css';
 import styles from './ResultsTab.module.css';
 
 function AnswerRow({
@@ -54,25 +55,23 @@ function AnswerRow({
             onChange={(e) => setFeedback(e.target.value)}
           />
           <button
-            className="btn btn-secondary btn-sm"
+            className={`${nb.btnSm} ${answer.is_correct === true ? styles.gradeCorrect : ''}`}
             disabled={isSaving}
             onClick={() => handleGrade(true)}
-            style={answer.is_correct === true ? { borderColor: 'var(--color-success)' } : undefined}
           >
             ✓ Correct
           </button>
           <button
-            className="btn btn-secondary btn-sm"
+            className={`${nb.btnSm} ${answer.is_correct === false ? styles.gradeIncorrect : ''}`}
             disabled={isSaving}
             onClick={() => handleGrade(false)}
-            style={answer.is_correct === false ? { borderColor: 'var(--color-danger)' } : undefined}
           >
             ✕ Incorrect
           </button>
-          {answer.graded_at && <span className="badge badge-neutral">Graded</span>}
+          {answer.graded_at && <span className={`${nb.badge} ${nb.badgeNeutral}`}>Graded</span>}
         </div>
       ) : (
-        <span className={`badge ${answer.is_correct ? 'badge-success' : 'badge-warning'}`}>
+        <span className={`${nb.badge} ${answer.is_correct ? nb.badgeSuccess : nb.badgeWarning}`}>
           {answer.is_correct ? 'Correct' : 'Incorrect'}
         </span>
       )}
@@ -97,17 +96,17 @@ export function ResponseRow({
   ).length;
 
   return (
-    <div className="card">
+    <div className={nb.card}>
       <div className={styles.responseHeader} onClick={() => setIsOpen((v) => !v)}>
         <div>
           <strong>{response.player_name}</strong>
-          <span style={{ color: 'var(--color-text-muted)', marginLeft: '0.75em', fontSize: '0.85em' }}>
-            {new Date(response.submitted_at).toLocaleString()}
-          </span>
+          <span className={styles.responseMeta}>{new Date(response.submitted_at).toLocaleString()}</span>
         </div>
-        <div style={{ display: 'flex', gap: '0.5em', alignItems: 'center' }}>
-          <span className="badge badge-success">{gradedCorrect} correct</span>
-          {pendingGrading > 0 && <span className="badge badge-warning">{pendingGrading} to grade</span>}
+        <div className={styles.responseActions}>
+          <span className={`${nb.badge} ${nb.badgeSuccess}`}>{gradedCorrect} correct</span>
+          {pendingGrading > 0 && (
+            <span className={`${nb.badge} ${nb.badgeWarning}`}>{pendingGrading} to grade</span>
+          )}
           <span>{isOpen ? '▲' : '▼'}</span>
         </div>
       </div>

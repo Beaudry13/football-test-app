@@ -1,8 +1,18 @@
+/* Page-specific styles only - shared notebook design system (buttons,
+   cards, inputs) lives in frontend/src/styles/notebook.module.css. */
+
 .backLink {
   display: inline-block;
   margin-bottom: 1em;
-  font-size: 0.9em;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted, #78766e);
   text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--nb-text, #1c1b1a);
 }
 
 .titleRow {
@@ -10,31 +20,35 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1em;
-  margin-bottom: 1em;
+  margin-bottom: 0.25em;
 }
 
 .titleInput {
-  font-size: 1.4em;
-  font-weight: 600;
+  font-family: 'Caveat', cursive;
+  font-size: 40px;
+  font-weight: 700;
+  color: var(--nb-text, #1c1b1a);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 0.15em 0.3em;
+  border-radius: 6px;
+  padding: 0.1em 0.2em;
   width: 100%;
   background: transparent;
 }
 
 .titleInput:hover,
 .titleInput:focus {
-  border-color: var(--color-border);
-  background: var(--color-surface);
+  border-color: var(--nb-input-border, #dad5c8);
+  background: rgba(255, 255, 255, 0.6);
+  outline: none;
 }
 
 .descriptionInput {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   padding: 0.3em;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
+  font-family: 'Inter', sans-serif;
   resize: vertical;
   min-height: 2.5em;
   background: transparent;
@@ -42,8 +56,9 @@
 
 .descriptionInput:hover,
 .descriptionInput:focus {
-  border-color: var(--color-border);
-  background: var(--color-surface);
+  border-color: var(--nb-input-border, #dad5c8);
+  background: rgba(255, 255, 255, 0.6);
+  outline: none;
 }
 
 .settingsRow {
@@ -51,33 +66,31 @@
   align-items: center;
   gap: 0.5em;
   font-size: 0.9em;
-  color: var(--color-text-muted);
+  color: var(--nb-text-muted, #78766e);
   margin-bottom: 1.5em;
 }
 
 .tabs {
   display: flex;
-  gap: 0.25em;
-  border-bottom: 1px solid var(--color-border);
+  gap: 1.5em;
+  border-bottom: 2px solid var(--nb-card-border, #e7e3d8);
   margin-bottom: 1.5em;
 }
 
 .tab {
-  padding: 0.6em 1em;
+  padding: 0.5em 0.1em;
   border: none;
   background: none;
   cursor: pointer;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  border-bottom: 2px solid transparent;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted, #78766e);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
 }
 
 .tabActive {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-}
-
-.savedIndicator {
-  font-size: 0.8em;
-  color: var(--color-text-muted);
+  color: var(--nb-text, #1c1b1a);
+  border-bottom-color: var(--nb-accent, #4f46e5);
 }

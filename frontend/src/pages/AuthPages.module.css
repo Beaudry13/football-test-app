@@ -1,16 +1,17 @@
-.wrapper {
-  display: flex;
-  justify-content: center;
-  padding-top: 2em;
-}
+/* Sizing/centering now comes from notebook.module.css's .contentNarrow -
+   this file only holds what's specific to the auth card itself. */
 
 .form {
   width: 100%;
-  max-width: 380px;
 }
 
 .footer {
   margin-top: 1em;
   font-size: 0.9em;
   text-align: center;
+  color: var(--nb-text-muted, #78766e);
+}
+
+.footer a {
+  color: var(--nb-accent, #4f46e5);
 }

@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
-import { Layout } from './components/Layout';
+import { NotebookLayout } from './components/notebook/NotebookLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -30,15 +30,15 @@ function App() {
 
           <Route element={<ProtectedRoute />}>
             {/* Preview and the Dashboard are deliberately NOT nested in
-                <Layout> - Preview shows exactly what a player sees (no
-                coach nav), and the Dashboard supplies its own full-page
-                header/background as part of its notebook redesign, which
-                Layout's plain header would visually clash with. Both stay
-                gated behind login via ProtectedRoute directly. */}
+                <NotebookLayout> - Preview shows exactly what a player sees
+                (no coach nav), and the Dashboard manages its own
+                full-bleed content width rather than NotebookLayout's
+                shared max-width column. Both stay gated behind login via
+                ProtectedRoute directly. */}
             <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
             <Route path="/" element={<DashboardPage />} />
 
-            <Route element={<Layout />}>
+            <Route element={<NotebookLayout />}>
               <Route path="/team" element={<TeamPage />} />
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
