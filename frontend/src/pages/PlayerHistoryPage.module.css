@@ -1,0 +1,25 @@
+/* Page-specific styles only - shared notebook design system (buttons,
+   cards, tables) lives in frontend/src/styles/notebook.module.css. */
+
+.backLink {
+  display: inline-block;
+  margin-bottom: 1em;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted, #78766e);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--nb-text, #1c1b1a);
+}
+
+.subheading {
+  color: var(--nb-text-muted, #78766e);
+  margin: -0.5em 0 1.5em;
+}
+
+.correctCell {
+  white-space: nowrap;
+}

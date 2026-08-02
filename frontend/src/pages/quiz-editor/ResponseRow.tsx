@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { gradeAnswer } from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
 import type { Answer, PlayerResponse, Quiz } from '../../api/types';
@@ -99,7 +100,13 @@ export function ResponseRow({
     <div className={nb.card}>
       <div className={styles.responseHeader} onClick={() => setIsOpen((v) => !v)}>
         <div>
-          <strong>{response.player_name}</strong>
+          <Link
+            to={`/players/${encodeURIComponent(response.player_name)}/history`}
+            className={styles.playerNameLink}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {response.player_name}
+          </Link>
           <span className={styles.responseMeta}>{new Date(response.submitted_at).toLocaleString()}</span>
         </div>
         <div className={styles.responseActions}>

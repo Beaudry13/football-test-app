@@ -31,6 +31,16 @@
   margin-bottom: 1.5em;
 }
 
+.missingCard {
+  margin-bottom: 1.5em;
+}
+
+.missingList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .responseList {
   display: flex;
   flex-direction: column;
@@ -48,6 +58,17 @@
   color: var(--nb-text-faint, #a6a192);
   margin-left: 0.75em;
   font-size: 0.85em;
+}
+
+.playerNameLink {
+  font-weight: 700;
+  color: var(--nb-text, #1c1b1a);
+  text-decoration: none;
+}
+
+.playerNameLink:hover {
+  color: var(--nb-accent, #4f46e5);
+  text-decoration: underline;
 }
 
 .responseActions {

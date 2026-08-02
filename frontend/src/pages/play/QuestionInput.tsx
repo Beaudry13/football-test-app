@@ -1,8 +1,26 @@
 import { useState } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
+import { AnnotationViewer } from '../../components/annotation/AnnotationViewer';
 import { ImageLightbox } from '../../components/ImageLightbox';
 import styles from './PlayPage.module.css';
+
+const IMAGE_STYLE = {
+  // width (not just maxWidth) so a smaller/cropped screenshot also scales
+  // up to fill the panel - the goal is the image dominating the view, not
+  // merely being capped when large. height:auto lets the browser preserve
+  // aspect ratio, and per the CSS2 replaced-element sizing algorithm,
+  // maxHeight correctly overrides that auto height (recomputing width from
+  // it in turn) if a tall image would otherwise blow past the viewport -
+  // no distortion either way.
+  width: '100%',
+  height: 'auto',
+  maxHeight: '82vh',
+  objectFit: 'contain' as const,
+  cursor: 'zoom-in',
+  borderRadius: 'var(--radius-sm)',
+  marginBottom: '0.75em',
+};
 
 export interface PlayerAnswer {
   selected_option_id?: number;
@@ -21,37 +39,36 @@ export function QuestionInput({
   onChange: (answer: PlayerAnswer) => void;
 }) {
   const [isZoomed, setIsZoomed] = useState(false);
+  const image = question.image;
+  const hasAnnotations = (image?.annotations.length ?? 0) > 0;
 
   return (
     <div className={`card ${styles.questionCard}`}>
-      {question.image && (
+      {image && (
         <>
-          <img
-            src={resolveMediaUrl(question.image.image_url)}
-            alt="Film still"
-            onClick={() => setIsZoomed(true)}
-            style={{
-              // width (not just maxWidth) so a smaller/cropped screenshot
-              // also scales up to fill the panel - the goal is the image
-              // dominating the view, not merely being capped when large.
-              // height:auto lets the browser preserve aspect ratio, and
-              // per the CSS2 replaced-element sizing algorithm, maxHeight
-              // correctly overrides that auto height (recomputing width
-              // from it in turn) if a tall image would otherwise blow past
-              // the viewport - no distortion either way.
-              width: '100%',
-              height: 'auto',
-              maxHeight: '82vh',
-              objectFit: 'contain',
-              cursor: 'zoom-in',
-              borderRadius: 'var(--radius-sm)',
-              marginBottom: '0.75em',
-            }}
-          />
+          {hasAnnotations ? (
+            <AnnotationViewer
+              imageUrl={resolveMediaUrl(image.image_url)}
+              annotations={image.annotations}
+              canvasWidth={image.canvas_width}
+              alt="Film still with coach's annotations"
+              onClick={() => setIsZoomed(true)}
+              style={IMAGE_STYLE}
+            />
+          ) : (
+            <img
+              src={resolveMediaUrl(image.image_url)}
+              alt="Film still"
+              onClick={() => setIsZoomed(true)}
+              style={IMAGE_STYLE}
+            />
+          )}
           {isZoomed && (
             <ImageLightbox
-              src={resolveMediaUrl(question.image.image_url)}
+              src={resolveMediaUrl(image.image_url)}
               alt="Film still, enlarged"
+              annotations={image.annotations}
+              canvasWidth={image.canvas_width}
               onClose={() => setIsZoomed(false)}
             />
           )}

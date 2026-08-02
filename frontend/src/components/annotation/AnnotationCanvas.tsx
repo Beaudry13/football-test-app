@@ -25,18 +25,9 @@ import {
   styleFromObject,
 } from './shapeFactories';
 import { resolveCanvasWidth } from './canvasSizing';
+import { loadPrescaledImage } from './imageLoading';
 import { DEFAULT_STYLE, type AnnotationStyle, type AnnotationTool } from './types';
 import styles from './AnnotationCanvas.module.css';
-
-function loadImageElement(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-    img.src = url;
-  });
-}
 
 export interface AnnotationCanvasHandle {
   getAnnotations: () => AnnotationLayer[];
@@ -168,37 +159,11 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
       async function setup() {
         try {
-          // Load the raw element ourselves (not via FabricImage.fromURL) and
-          // pre-render it to its exact display size on a plain canvas before
-          // handing it to Fabric. Fabric's own image-drawing path has a bug
-          // where a large source image (e.g. a 2048x1152 or 1242x2208 photo)
-          // only renders a portion of itself once scaled down - traced to its
-          // internal filter-scaling/crop math, not to caching or CORS (both
-          // independently verified fine: a manual drawImage() at the same
-          // target size always renders correctly, regardless of source
-          // resolution). Handing Fabric an already-correctly-sized source
-          // sidesteps that internal path entirely.
-          //
-          // crossOrigin: 'anonymous' is still required for the raw load once
-          // images can come from a different origin (R2) - without it the
-          // browser taints the canvas the moment we draw a cross-origin image
-          // onto it, so getContext('2d').drawImage() below would silently
-          // fail. The image host must send matching CORS headers back (see R2
-          // bucket CORS policy / backend CORS config for local uploads).
-          const rawImage = await loadImageElement(imageUrl);
+          const { canvas: prescaled, width, height } = await loadPrescaledImage(
+            imageUrl,
+            canvasWidthRef.current,
+          );
           if (cancelled) return;
-
-          const capWidth = canvasWidthRef.current;
-          const naturalWidth = rawImage.naturalWidth || capWidth;
-          const naturalHeight = rawImage.naturalHeight || naturalWidth;
-          const scale = Math.min(1, capWidth / naturalWidth);
-          const width = Math.round(naturalWidth * scale);
-          const height = Math.round(naturalHeight * scale);
-
-          const prescaled = document.createElement('canvas');
-          prescaled.width = width;
-          prescaled.height = height;
-          prescaled.getContext('2d')!.drawImage(rawImage, 0, 0, width, height);
 
           const image = new FabricImage(prescaled);
           canvas.setDimensions({ width, height });

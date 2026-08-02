@@ -25,6 +25,7 @@ const sampleDashboard: QuizDashboard = {
   roster_size: 2,
   response_count: 1,
   response_rate: 0.5,
+  missing_players: [],
   question_breakdown: [],
 };
 
@@ -83,5 +84,24 @@ describe('ResultsTab exports', () => {
 
     expect(await screen.findByText('Request failed')).toBeInTheDocument();
     expect(downloadUtil.downloadBlob).not.toHaveBeenCalled();
+  });
+
+  it('lists roster players who have not submitted yet', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      missing_players: ['Alex Lee', 'Sam Park'],
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText("Haven't submitted yet (2)")).toBeInTheDocument();
+    expect(screen.getByText('Alex Lee')).toBeInTheDocument();
+    expect(screen.getByText('Sam Park')).toBeInTheDocument();
+  });
+
+  it('omits the missing-players card once everyone has submitted', async () => {
+    renderResultsTab();
+
+    await screen.findByRole('button', { name: 'Export CSV' });
+    expect(screen.queryByText(/Haven't submitted yet/)).not.toBeInTheDocument();
   });
 });

@@ -90,6 +90,21 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             </button>
           </div>
 
+          {dashboard.missing_players.length > 0 && (
+            <div className={`${nb.card} ${styles.missingCard}`}>
+              <h3 className={nb.subheading}>
+                Haven't submitted yet ({dashboard.missing_players.length})
+              </h3>
+              <div className={styles.missingList}>
+                {dashboard.missing_players.map((name) => (
+                  <span key={name} className={`${nb.badge} ${nb.badgeWarning}`}>
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {dashboard.question_breakdown.length > 0 && (
             <div className={`${nb.card} ${styles.breakdownCard}`}>
               <h3 className={nb.subheading}>Per-question breakdown</h3>

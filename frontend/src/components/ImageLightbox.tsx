@@ -1,8 +1,21 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import type { AnnotationLayer } from '../api/types';
+import { AnnotationViewer } from './annotation/AnnotationViewer';
 import styles from './ImageLightbox.module.css';
 
-export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+interface ImageLightboxProps {
+  src: string;
+  alt: string;
+  onClose: () => void;
+  /** When present (and non-empty), the zoomed view renders the coach's
+   * drawn routes/circles/callouts on top of the image instead of the bare
+   * photo - the whole point of zooming in is usually to see them clearly. */
+  annotations?: AnnotationLayer[];
+  canvasWidth?: number | null;
+}
+
+export function ImageLightbox({ src, alt, onClose, annotations, canvasWidth = null }: ImageLightboxProps) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
@@ -23,7 +36,18 @@ export function ImageLightbox({ src, alt, onClose }: { src: string; alt: string;
       >
         ×
       </button>
-      <img className={styles.image} src={src} alt={alt} onClick={(e) => e.stopPropagation()} />
+      {annotations && annotations.length > 0 ? (
+        <AnnotationViewer
+          imageUrl={src}
+          annotations={annotations}
+          canvasWidth={canvasWidth}
+          alt={alt}
+          className={styles.image}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <img className={styles.image} src={src} alt={alt} onClick={(e) => e.stopPropagation()} />
+      )}
     </div>,
     document.body,
   );

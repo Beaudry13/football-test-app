@@ -92,6 +92,23 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
   });
 
+  it('badges a quiz with a live access code as Active', async () => {
+    const active: Quiz = { ...sampleQuiz, is_active: true };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([active]);
+    renderDashboard();
+
+    expect(await screen.findByText('Week 1 Prep')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+  });
+
+  it('does not badge a quiz with no live access code', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([{ ...sampleQuiz, is_active: false }]);
+    renderDashboard();
+
+    expect(await screen.findByText('Week 1 Prep')).toBeInTheDocument();
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
+  });
+
   it('disables New quiz until a title is entered, then creates and refreshes the list', async () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);

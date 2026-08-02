@@ -46,7 +46,12 @@ class Quiz(TimestampMixin, db.Model):
         "PlayerResponse", back_populates="quiz", cascade="all, delete-orphan"
     )
 
-    def to_dict(self, include_questions: bool = False, include_correct_answers: bool = False) -> dict:
+    def to_dict(
+        self,
+        include_questions: bool = False,
+        include_correct_answers: bool = False,
+        is_active: bool | None = None,
+    ) -> dict:
         data = {
             "id": self.id,
             "organization_id": self.organization_id,
@@ -66,4 +71,10 @@ class Quiz(TimestampMixin, db.Model):
             data["questions"] = [
                 q.to_dict(include_correct_answers=include_correct_answers) for q in self.questions
             ]
+        # Only set by list_quizzes, which batch-computes this for every quiz
+        # in one query - omitted elsewhere (e.g. get_quiz) rather than
+        # forcing every other caller to pay for the same computation when
+        # the Activate tab already shows the accurate, single-quiz answer.
+        if is_active is not None:
+            data["is_active"] = is_active
         return data

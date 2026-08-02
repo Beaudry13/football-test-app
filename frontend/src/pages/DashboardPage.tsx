@@ -146,7 +146,12 @@ export function DashboardPage() {
       <div key={quiz.id} className={`${nb.card} ${nb.cardHoverable} ${styles.quizCard}`}>
         <div className={nb.accentStripe} />
         <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
-          <h3>{quiz.title}</h3>
+          <h3>
+            {quiz.title}
+            {quiz.is_active && (
+              <span className={`${nb.badge} ${nb.badgeSuccess} ${styles.activeBadge}`}>Active</span>
+            )}
+          </h3>
           <div className={styles.quizMeta}>
             {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
             {new Date(quiz.updated_at).toLocaleDateString()}

@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
 import { TeamPage } from './pages/TeamPage';
+import { PlayerHistoryPage } from './pages/PlayerHistoryPage';
 import { JoinOrgPage } from './pages/JoinOrgPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
@@ -42,6 +43,7 @@ function App() {
               <Route path="/team" element={<TeamPage />} />
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
+              <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />
               <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />
               <Route
                 path="/quizzes/:quizId/questions/:questionId/annotate"

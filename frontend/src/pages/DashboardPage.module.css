@@ -49,6 +49,11 @@
   margin: 0;
 }
 
+.activeBadge {
+  margin-left: 0.5em;
+  vertical-align: middle;
+}
+
 .quizMeta {
   color: var(--nb-text-faint, #a6a192);
   font-size: 13px;

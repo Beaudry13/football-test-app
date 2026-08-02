@@ -6,13 +6,14 @@ app/utils/auth.py for the tenancy rules.
 """
 
 import copy
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from sqlalchemy.orm import selectinload
 
 from app.extensions import db
-from app.models import Question, QuestionImage, QuestionOption, Quiz
+from app.models import AccessCode, Question, QuestionImage, QuestionOption, Quiz
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.file_storage import get_file_storage
 from app.utils.auth import current_coach, get_editable_quiz, get_org_folder, get_visible_quiz
@@ -33,7 +34,27 @@ def list_quizzes():
         .order_by(Quiz.updated_at.desc())
         .all()
     )
-    return jsonify([q.to_dict() for q in quizzes])
+
+    # One query for every quiz's active-code status, instead of walking each
+    # quiz's full access_codes history (which only grows over time) or
+    # issuing a per-quiz query (N+1). A quiz appears here at most once in
+    # practice (reactivating deactivates the prior code), but a set handles
+    # it either way.
+    quiz_ids = [q.id for q in quizzes]
+    active_quiz_ids: set[int] = set()
+    if quiz_ids:
+        active_quiz_ids = {
+            quiz_id
+            for (quiz_id,) in db.session.query(AccessCode.quiz_id)
+            .filter(
+                AccessCode.quiz_id.in_(quiz_ids),
+                AccessCode.is_active.is_(True),
+                AccessCode.expires_at > datetime.now(timezone.utc),
+            )
+            .all()
+        }
+
+    return jsonify([q.to_dict(is_active=q.id in active_quiz_ids) for q in quizzes])
 
 
 @quizzes_bp.post("")

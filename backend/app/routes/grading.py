@@ -84,9 +84,18 @@ def grade_answer(answer_id: int):
 
 
 def _build_dashboard_data(quiz: Quiz, responses: list[PlayerResponse]) -> dict:
-    roster_size = len(quiz.roster.players) if quiz.roster else 0
+    roster_names = [p.player_name for p in quiz.roster.players] if quiz.roster else []
+    roster_size = len(roster_names)
     response_count = len(responses)
     response_rate = (response_count / roster_size) if roster_size else 0.0
+
+    # Same roster this function already uses for roster_size/response_rate -
+    # if the quiz's most recent activation was restricted to a specific
+    # group rather than the full roster, a name here may not actually have
+    # been eligible to submit. Good enough for "who should I follow up
+    # with" without tracking which activation was in effect when.
+    responded_names = {r.player_name for r in responses}
+    missing_players = [name for name in roster_names if name not in responded_names]
 
     question_breakdown = []
     for question in sorted(quiz.questions, key=lambda q: q.position):
@@ -112,6 +121,7 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerResponse]) -> dict:
         "roster_size": roster_size,
         "response_count": response_count,
         "response_rate": round(response_rate, 4),
+        "missing_players": missing_players,
         "question_breakdown": question_breakdown,
     }
 

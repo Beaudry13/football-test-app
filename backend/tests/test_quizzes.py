@@ -27,6 +27,37 @@ def test_create_and_list_quizzes(client, coach_headers):
     assert quizzes[0]["title"] == "Week 1 Prep"
 
 
+def test_list_quizzes_reports_is_active(client, coach_headers):
+    active_quiz = create_quiz(client, coach_headers, title="Active Quiz")
+    create_quiz(client, coach_headers, title="Never Activated")
+
+    client.post(
+        f"/api/quizzes/{active_quiz['id']}/questions",
+        json={
+            "question_text": "Is this active?",
+            "question_type": "true_false",
+            "options": [
+                {"option_text": "True", "is_correct_answer": True},
+                {"option_text": "False", "is_correct_answer": False},
+            ],
+        },
+        headers=coach_headers,
+    )
+    client.put(
+        f"/api/quizzes/{active_quiz['id']}/roster",
+        json={"players": ["Jordan Smith"]},
+        headers=coach_headers,
+    )
+    activate_response = client.post(
+        f"/api/quizzes/{active_quiz['id']}/access-codes", headers=coach_headers
+    )
+    assert activate_response.status_code == 201
+
+    quizzes_by_title = {q["title"]: q for q in client.get("/api/quizzes", headers=coach_headers).get_json()}
+    assert quizzes_by_title["Active Quiz"]["is_active"] is True
+    assert quizzes_by_title["Never Activated"]["is_active"] is False
+
+
 def test_quiz_endpoints_require_auth(client):
     assert client.get("/api/quizzes").status_code == 401
     assert client.post("/api/quizzes", json={"title": "x"}).status_code == 401

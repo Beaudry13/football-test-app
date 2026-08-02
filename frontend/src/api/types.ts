@@ -55,6 +55,10 @@ export interface Quiz {
   question_count: number;
   created_at: string;
   updated_at: string;
+  /** Only present on list_quizzes - whether the quiz currently has a live,
+   * unexpired access code. Omitted (not just false) on single-quiz
+   * responses (get/create/update), which don't compute it. */
+  is_active?: boolean;
   questions?: Question[];
 }
 
@@ -196,6 +200,7 @@ export interface QuizDashboard {
   roster_size: number;
   response_count: number;
   response_rate: number;
+  missing_players: string[];
   question_breakdown: QuestionBreakdown[];
 }
 

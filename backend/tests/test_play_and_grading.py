@@ -400,8 +400,30 @@ def test_quiz_dashboard_summarizes_responses(client, coach_headers):
     assert body["roster_size"] == 2
     assert body["response_count"] == 1
     assert body["response_rate"] == 0.5
+    assert body["missing_players"] == ["Alex Lee"]
     breakdown_by_id = {q["question_id"]: q for q in body["question_breakdown"]}
     assert breakdown_by_id[written_question["id"]]["ungraded_count"] == 1
+
+
+def test_quiz_dashboard_missing_players_empty_once_everyone_has_submitted(client, coach_headers):
+    quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    for player_name in ("Jordan Smith", "Alex Lee"):
+        client.post(
+            "/api/play/submit",
+            json={
+                "access_code_id": access_code["id"],
+                "player_name": player_name,
+                "answers": [
+                    {"question_id": tf_question["id"]},
+                    {"question_id": written_question["id"], "answer_text": "I set the edge."},
+                ],
+            },
+        )
+
+    response = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers)
+
+    assert response.status_code == 200
+    assert response.get_json()["missing_players"] == []
 
 
 def test_player_history_across_quizzes(client, coach_headers):
