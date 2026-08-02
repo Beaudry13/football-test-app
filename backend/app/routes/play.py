@@ -32,7 +32,7 @@ from app.schemas.play import (
 from app.services.access_codes import (
     effective_roster_names,
     find_access_code_by_code,
-    find_valid_access_code,
+    reason_for_invalid,
 )
 from app.services.attempts import find_attempt, upsert_answer
 from app.utils.validation import load_json_body
@@ -41,6 +41,15 @@ play_bp = Blueprint("play", __name__)
 
 NO_RESULTS_FOUND = "No results found for that code and name"
 ALREADY_SUBMITTED = "This player has already submitted this quiz"
+
+
+def _invalid_code_error(reason: str) -> ApiError:
+    # not_found and deactivated share one message deliberately - telling a
+    # caller which of the two applies would let them enumerate which codes
+    # are real. expired gets its own calmer, specific message since knowing
+    # a code *used to* work leaks nothing new (the player just had it).
+    message = "This access code has expired" if reason == "expired" else "Invalid access code"
+    return ApiError(message, status_code=404, reason=reason)
 
 
 def _resolve_answer_text(question: Question, answer: Answer | None) -> str | None:
@@ -85,9 +94,11 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
 def validate_code():
     data = load_json_body(ValidateCodeSchema())
 
-    access_code = find_valid_access_code(data["code"])
-    if access_code is None:
-        raise ApiError("Invalid or expired access code", status_code=404)
+    normalized_code = data["code"].strip().upper()
+    access_code = AccessCode.query.filter_by(code=normalized_code).first()
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        raise _invalid_code_error(reason)
 
     quiz = access_code.quiz
 
@@ -109,8 +120,9 @@ def start_attempt():
     data = load_json_body(StartAttemptSchema())
 
     access_code = db.session.get(AccessCode, data["access_code_id"])
-    if access_code is None or not access_code.is_valid():
-        raise ApiError("Invalid or expired access code", status_code=404)
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        raise _invalid_code_error(reason)
 
     roster_names = set(effective_roster_names(access_code))
     if data["player_name"] not in roster_names:
@@ -153,11 +165,12 @@ def save_answer():
     data = load_json_body(SaveAnswerSchema())
 
     access_code = db.session.get(AccessCode, data["access_code_id"])
-    if access_code is None or not access_code.is_valid():
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
         # Same check /submit already makes - without it a player could
         # autosave indefinitely past expiry, only discovering the code
         # expired at final submit instead of the moment it actually does.
-        raise ApiError("Invalid or expired access code", status_code=404)
+        raise _invalid_code_error(reason)
 
     attempt = find_attempt(access_code.id, data["player_name"])
     if attempt is None:
@@ -178,8 +191,9 @@ def submit_quiz():
     data = load_json_body(SubmitQuizSchema())
 
     access_code = db.session.get(AccessCode, data["access_code_id"])
-    if access_code is None or not access_code.is_valid():
-        raise ApiError("Invalid or expired access code", status_code=404)
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        raise _invalid_code_error(reason)
 
     attempt = find_attempt(access_code.id, data["player_name"])
     if attempt is None:

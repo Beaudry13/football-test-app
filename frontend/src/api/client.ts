@@ -13,12 +13,14 @@ export function resolveMediaUrl(path: string): string {
 export class ApiError extends Error {
   status: number;
   details?: Record<string, string[]>;
+  reason?: string;
 
-  constructor(message: string, status: number, details?: Record<string, string[]>) {
+  constructor(message: string, status: number, details?: Record<string, string[]>, reason?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.details = details;
+    this.reason = reason;
   }
 }
 
@@ -78,7 +80,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!response.ok) {
     const errorBody = payload as ApiErrorBody | null;
-    throw new ApiError(errorBody?.error ?? 'Request failed', response.status, errorBody?.details);
+    throw new ApiError(
+      errorBody?.error ?? 'Request failed',
+      response.status,
+      errorBody?.details,
+      errorBody?.reason,
+    );
   }
 
   return payload as T;
@@ -103,7 +110,12 @@ async function requestBlob(path: string, options: RequestOptions = {}): Promise<
 
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => null)) as ApiErrorBody | null;
-    throw new ApiError(errorBody?.error ?? 'Request failed', response.status, errorBody?.details);
+    throw new ApiError(
+      errorBody?.error ?? 'Request failed',
+      response.status,
+      errorBody?.details,
+      errorBody?.reason,
+    );
   }
 
   return response.blob();

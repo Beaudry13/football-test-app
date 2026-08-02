@@ -6,6 +6,7 @@ Codes are short, uppercase, and avoid visually ambiguous characters
 
 import secrets
 import string
+from datetime import datetime, timezone
 
 from app.models import AccessCode
 
@@ -22,12 +23,21 @@ def generate_unique_code() -> str:
             return candidate
 
 
-def find_valid_access_code(code: str) -> AccessCode | None:
-    normalized = code.strip().upper()
-    access_code = AccessCode.query.filter_by(code=normalized).first()
-    if access_code is None or not access_code.is_valid():
-        return None
-    return access_code
+def reason_for_invalid(access_code: AccessCode | None) -> str | None:
+    """Why `access_code` can't be used right now, or None if it's valid.
+
+    Never branches on org/quiz ownership - a code belonging to a different
+    org must report the same "not_found" as a code that plain doesn't exist,
+    or a caller could enumerate which codes are real across organizations
+    they have no business knowing about.
+    """
+    if access_code is None:
+        return "not_found"
+    if not access_code.is_active:
+        return "deactivated"
+    if access_code.expires_at <= datetime.now(timezone.utc):
+        return "expired"
+    return None
 
 
 def find_access_code_by_code(code: str) -> AccessCode | None:

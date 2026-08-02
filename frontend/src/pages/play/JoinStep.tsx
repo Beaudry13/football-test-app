@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { validateCode } from '../../api/play';
-import { getErrorMessage } from '../../api/client';
+import { ApiError, getErrorMessage } from '../../api/client';
 import type { ValidateCodeResponse } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import styles from './PlayPage.module.css';
@@ -26,7 +26,15 @@ export function JoinStep({
       const result = await validateCode(trimmedCode);
       onJoined(trimmedCode, result);
     } catch (err) {
-      setError(getErrorMessage(err));
+      // "expired" gets its own calmer, specific message - a code that used
+      // to work but doesn't anymore isn't the player's mistake, and telling
+      // them to just "try again" (the generic message's implicit framing)
+      // would be actively unhelpful, since retrying can't fix it.
+      if (err instanceof ApiError && err.reason === 'expired') {
+        setError('This code has expired — ask your coach for a new one.');
+      } else {
+        setError(getErrorMessage(err));
+      }
     } finally {
       setIsSubmitting(false);
     }

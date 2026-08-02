@@ -156,6 +156,7 @@ export interface Answer {
   is_correct: boolean | null;
   coach_feedback: string | null;
   graded_at: string | null;
+  graded_by_username: string | null;
 }
 
 export interface PlayerResponse {
@@ -262,4 +263,7 @@ export interface AttemptState {
 export interface ApiErrorBody {
   error: string;
   details?: Record<string, string[]>;
+  /** Machine-readable code (e.g. "expired") for a client that needs to
+   * branch on the specific failure rather than just relay `error`. */
+  reason?: string;
 }
