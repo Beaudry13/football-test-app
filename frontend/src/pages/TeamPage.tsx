@@ -86,6 +86,9 @@ export function TeamPage() {
   }
 
   async function handleRevoke(inviteId: number) {
+    if (!window.confirm('Revoke this invite? The link will stop working immediately.')) {
+      return;
+    }
     setError(null);
     try {
       await revokeInvite(inviteId);

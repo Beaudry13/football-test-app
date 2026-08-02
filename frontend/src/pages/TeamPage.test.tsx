@@ -116,18 +116,35 @@ describe('TeamPage', () => {
     expect(linkInput).toBeInTheDocument();
   });
 
-  it('revokes a pending invite', async () => {
+  it('revokes a pending invite after confirming', async () => {
     const user = userEvent.setup();
     mockAuth(adminCoach);
     vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
     vi.spyOn(orgApi, 'listInvites').mockResolvedValue([invite]);
     const revokeSpy = vi.spyOn(orgApi, 'revokeInvite').mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderTeam();
 
     await screen.findByText('Wildcats');
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
 
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('stop working'));
     await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(5));
+  });
+
+  it('does not revoke the invite if the confirmation is cancelled', async () => {
+    const user = userEvent.setup();
+    mockAuth(adminCoach);
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
+    vi.spyOn(orgApi, 'listInvites').mockResolvedValue([invite]);
+    const revokeSpy = vi.spyOn(orgApi, 'revokeInvite').mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderTeam();
+
+    await screen.findByText('Wildcats');
+    await user.click(screen.getByRole('button', { name: 'Revoke' }));
+
+    expect(revokeSpy).not.toHaveBeenCalled();
   });
 
   it("promotes a member to admin", async () => {

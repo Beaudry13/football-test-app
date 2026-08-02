@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerListEditor } from './PlayerListEditor';
 import type { RosterPlayer } from '../api/types';
 
@@ -15,6 +15,10 @@ async function findInList(name: string) {
 }
 
 describe('PlayerListEditor', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('loads and displays the current list', async () => {
     const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Alex Lee']) });
     render(
@@ -63,13 +67,63 @@ describe('PlayerListEditor', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it('confirms before a save that would remove players, and skips the save if cancelled', async () => {
+    const user = userEvent.setup();
+    const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Alex Lee']) });
+    const onSave = vi.fn();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<PlayerListEditor load={load} onSave={onSave} onUploadCsv={vi.fn()} />);
+
+    await findInList('Jordan Smith');
+    const textarea = screen.getByRole('textbox');
+    await user.clear(textarea);
+    await user.type(textarea, 'Jordan Smith');
+    await user.click(screen.getByRole('button', { name: 'Save roster' }));
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Alex Lee'));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('saves a removal once the confirmation is accepted', async () => {
+    const user = userEvent.setup();
+    const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Alex Lee']) });
+    const onSave = vi.fn().mockResolvedValue({ players: players(['Jordan Smith']) });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<PlayerListEditor load={load} onSave={onSave} onUploadCsv={vi.fn()} />);
+
+    await findInList('Jordan Smith');
+    const textarea = screen.getByRole('textbox');
+    await user.clear(textarea);
+    await user.type(textarea, 'Jordan Smith');
+    await user.click(screen.getByRole('button', { name: 'Save roster' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(['Jordan Smith']));
+  });
+
+  it('does not prompt for confirmation when the save only adds players', async () => {
+    const user = userEvent.setup();
+    const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith']) });
+    const onSave = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Sam Rivera']) });
+    const confirmSpy = vi.spyOn(window, 'confirm');
+    render(<PlayerListEditor load={load} onSave={onSave} onUploadCsv={vi.fn()} />);
+
+    await findInList('Jordan Smith');
+    const textarea = screen.getByRole('textbox');
+    await user.clear(textarea);
+    await user.type(textarea, 'Jordan Smith\nSam Rivera');
+    await user.click(screen.getByRole('button', { name: 'Save roster' }));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(['Jordan Smith', 'Sam Rivera']));
+  });
+
   it('uploads a CSV and refreshes both the list and the textarea', async () => {
     const user = userEvent.setup();
     const load = vi.fn().mockResolvedValue({ players: [] });
     const onUploadCsv = vi.fn().mockResolvedValue({ players: players(['Casey Jones']) });
     render(<PlayerListEditor load={load} onSave={vi.fn()} onUploadCsv={onUploadCsv} />);
 
-    await screen.findByText('No players yet.');
+    await screen.findByText(/No players yet/);
     const file = new File(['Casey Jones'], 'roster.csv', { type: 'text/csv' });
     const input = screen.getByLabelText('Upload CSV', { exact: false }) as HTMLInputElement;
     await user.upload(input, file);

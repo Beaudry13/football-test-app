@@ -137,7 +137,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
       {responses === null ? (
         <p>Loading…</p>
       ) : responses.length === 0 ? (
-        <div className={nb.card}>No responses yet.</div>
+        <div className={`${nb.card} ${nb.empty}`}>
+          No responses yet. Share the access code to start collecting them.
+        </div>
       ) : (
         <div className={styles.responseList}>
           {responses.map((response) => (

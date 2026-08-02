@@ -57,6 +57,13 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   }
 
   async function handleDeactivate(accessCodeId: number) {
+    if (
+      !window.confirm(
+        'Deactivate this code now? Any player still taking the quiz will be immediately locked out, even mid-attempt.',
+      )
+    ) {
+      return;
+    }
     setError(null);
     try {
       await deactivateAccessCode(quiz.id, accessCodeId);

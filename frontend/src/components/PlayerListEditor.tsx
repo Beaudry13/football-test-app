@@ -61,6 +61,22 @@ export function PlayerListEditor({
       setError('Add at least one player name.');
       return;
     }
+
+    // Only prompt when the save would actually *drop* someone - a save that's
+    // pure additions/edits shouldn't force a confirmation nobody needs.
+    const lowerNames = new Set(names.map((n) => n.toLowerCase()));
+    const removedNames = players.filter((p) => !lowerNames.has(p.player_name.toLowerCase()));
+    if (removedNames.length > 0) {
+      const list = removedNames.map((p) => p.player_name).join(', ');
+      if (
+        !window.confirm(
+          `Save will remove ${removedNames.length} player${removedNames.length === 1 ? '' : 's'} no longer in the list: ${list}. Continue?`,
+        )
+      ) {
+        return;
+      }
+    }
+
     setError(null);
     setIsSaving(true);
     try {
@@ -99,7 +115,7 @@ export function PlayerListEditor({
             {currentListTitle} ({players.length})
           </h3>
           {players.length === 0 ? (
-            <p>No players yet.</p>
+            <div className={nb.empty}>No players yet. Add names in the box on the right.</div>
           ) : (
             <ul className={styles.playerList}>
               {players.map((player) => (

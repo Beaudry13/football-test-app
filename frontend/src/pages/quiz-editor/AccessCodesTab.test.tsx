@@ -88,3 +88,36 @@ describe('AccessCodesTab group selection', () => {
     expect(screen.queryByText('Restrict to saved group(s) (optional)')).not.toBeInTheDocument();
   });
 });
+
+describe('AccessCodesTab deactivation', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([defenseGroup]);
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+  });
+
+  it('confirms before deactivating a live code, and does nothing if cancelled', async () => {
+    const user = userEvent.setup();
+    const deactivateSpy = vi.spyOn(accessCodesApi, 'deactivateAccessCode').mockResolvedValue(activeCode);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Deactivate now' }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('locked out'),
+    );
+    expect(deactivateSpy).not.toHaveBeenCalled();
+  });
+
+  it('deactivates once the confirmation is accepted', async () => {
+    const user = userEvent.setup();
+    const deactivateSpy = vi.spyOn(accessCodesApi, 'deactivateAccessCode').mockResolvedValue(activeCode);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Deactivate now' }));
+
+    await waitFor(() => expect(deactivateSpy).toHaveBeenCalledWith(1, 3));
+  });
+});

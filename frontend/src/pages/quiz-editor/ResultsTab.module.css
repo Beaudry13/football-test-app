@@ -125,3 +125,8 @@
 .gradeIncorrect {
   border-color: var(--nb-margin-solid, #b8492f) !important;
 }
+
+.gradedBy {
+  font-size: 0.85em;
+  color: var(--nb-text-faint, #a6a192);
+}
