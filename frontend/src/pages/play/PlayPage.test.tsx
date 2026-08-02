@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayPage } from './PlayPage';
 import * as playApi from '../../api/play';
-import type { PlayerResultsResponse, ValidateCodeResponse } from '../../api/types';
+import type { AttemptState, PlayerResultsResponse, ValidateCodeResponse } from '../../api/types';
 
 const joinedResponse: ValidateCodeResponse = {
   access_code_id: 42,
@@ -38,6 +38,8 @@ const joinedResponse: ValidateCodeResponse = {
     ],
   },
 };
+
+const startedAttempt: AttemptState = { attempt_id: 900, status: 'in_progress', answers: [] };
 
 const submittedResponse = {
   id: 1,
@@ -91,6 +93,8 @@ describe('PlayPage', () => {
   it('walks a player from code entry through to a submitted confirmation', async () => {
     const user = userEvent.setup();
     vi.spyOn(playApi, 'validateCode').mockResolvedValue(joinedResponse);
+    const startSpy = vi.spyOn(playApi, 'startAttempt').mockResolvedValue(startedAttempt);
+    vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
     const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue(submittedResponse);
     const resultsSpy = vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue(playerResults);
     renderPlayPage();
@@ -104,6 +108,9 @@ describe('PlayPage', () => {
     await user.click(screen.getByRole('button', { name: 'Jordan Smith' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
+    await waitFor(() =>
+      expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Jordan Smith' }),
+    );
     expect(
       await screen.findByText((_, element) => element?.textContent === '1. Is this cover 2?'),
     ).toBeInTheDocument();

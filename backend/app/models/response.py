@@ -1,12 +1,32 @@
-"""Player response and per-question answer models."""
+"""Player attempt and per-question answer models."""
+
+import enum
 
 from app.extensions import db
 
 
-class PlayerResponse(db.Model):
-    """One player's full attempt at a quiz, submitted under a specific access code."""
+class AttemptStatus(str, enum.Enum):
+    """IN_PROGRESS from the moment a player picks their name, until the
+    final submit locks it to SUBMITTED. No third state - a reset (coach
+    action) deletes the row outright rather than reverting it, so there's
+    no "was retaken" history to represent."""
 
-    __tablename__ = "player_responses"
+    IN_PROGRESS = "in_progress"
+    SUBMITTED = "submitted"
+
+
+class PlayerAttempt(db.Model):
+    """One player's attempt at a quiz, under a specific access code.
+
+    Created the moment a player picks their name (status=IN_PROGRESS, see
+    POST /play/start), not at final submission - this is what lets answers
+    autosave somewhere durable before the player is done. `submit_quiz`
+    flips it to SUBMITTED and stamps `submitted_at`, after which the
+    /play/answers and /play/submit routes both refuse further writes to it
+    (the hard-lock is enforced there, not by a DB trigger - see PR notes).
+    """
+
+    __tablename__ = "player_attempts"
 
     id = db.Column(db.Integer, primary_key=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes.id"), nullable=False, index=True)
@@ -14,17 +34,19 @@ class PlayerResponse(db.Model):
         db.Integer, db.ForeignKey("access_codes.id"), nullable=False, index=True
     )
     player_name = db.Column(db.String(255), nullable=False, index=True)
-    submitted_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
-
-    quiz = db.relationship("Quiz", back_populates="responses")
-    access_code = db.relationship("AccessCode", back_populates="responses")
-    answers = db.relationship(
-        "Answer", back_populates="player_response", cascade="all, delete-orphan"
+    status = db.Column(
+        db.Enum(AttemptStatus), nullable=False, default=AttemptStatus.IN_PROGRESS
     )
+    started_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=db.func.now())
+    submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    quiz = db.relationship("Quiz", back_populates="attempts")
+    access_code = db.relationship("AccessCode", back_populates="attempts")
+    answers = db.relationship("Answer", back_populates="attempt", cascade="all, delete-orphan")
 
     __table_args__ = (
         db.UniqueConstraint(
-            "access_code_id", "player_name", name="uq_one_response_per_player_per_activation"
+            "access_code_id", "player_name", name="uq_one_attempt_per_player_per_activation"
         ),
     )
 
@@ -34,7 +56,9 @@ class PlayerResponse(db.Model):
             "quiz_id": self.quiz_id,
             "access_code_id": self.access_code_id,
             "player_name": self.player_name,
-            "submitted_at": self.submitted_at.isoformat(),
+            "status": self.status.value,
+            "started_at": self.started_at.isoformat(),
+            "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
         }
         if include_answers:
             data["answers"] = [a.to_dict() for a in self.answers]
@@ -42,14 +66,14 @@ class PlayerResponse(db.Model):
 
 
 class Answer(db.Model):
-    """A player's answer to a single question within a response."""
+    """A player's answer to a single question within an attempt."""
 
     __tablename__ = "answers"
 
     id = db.Column(db.Integer, primary_key=True)
-    player_response_id = db.Column(
+    attempt_id = db.Column(
         db.Integer,
-        db.ForeignKey("player_responses.id", ondelete="CASCADE"),
+        db.ForeignKey("player_attempts.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -67,13 +91,13 @@ class Answer(db.Model):
     coach_feedback = db.Column(db.Text, nullable=True)
     graded_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    player_response = db.relationship("PlayerResponse", back_populates="answers")
+    attempt = db.relationship("PlayerAttempt", back_populates="answers")
     question = db.relationship("Question", back_populates="answers")
     selected_option = db.relationship("QuestionOption")
 
     __table_args__ = (
         db.UniqueConstraint(
-            "player_response_id", "question_id", name="uq_one_answer_per_question_per_response"
+            "attempt_id", "question_id", name="uq_one_answer_per_question_per_attempt"
         ),
     )
 

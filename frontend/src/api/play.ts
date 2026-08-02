@@ -1,8 +1,32 @@
 import { api } from './client';
-import type { PlayerResponse, PlayerResultsResponse, ValidateCodeResponse } from './types';
+import type { AttemptState, PlayerResponse, PlayerResultsResponse, ValidateCodeResponse } from './types';
 
 export function validateCode(code: string): Promise<ValidateCodeResponse> {
   return api.post<ValidateCodeResponse>('/play/validate-code', { code }, { auth: false });
+}
+
+/** Creates the attempt the moment a player picks their name, or resumes an
+ * existing in-progress one with its saved answers if they've already
+ * started. Throws an ApiError with status 409 if this name has already
+ * submitted this quiz under this access code. */
+export function startAttempt(input: {
+  access_code_id: number;
+  player_name: string;
+}): Promise<AttemptState> {
+  return api.post<AttemptState>('/play/start', input, { auth: false });
+}
+
+/** Autosaves one answer against an already-started attempt. Re-derives the
+ * attempt server-side from (access_code_id, player_name) rather than
+ * trusting a client-held attempt id. */
+export function saveAnswer(input: {
+  access_code_id: number;
+  player_name: string;
+  question_id: number;
+  selected_option_id?: number | null;
+  answer_text?: string | null;
+}): Promise<void> {
+  return api.post<void>('/play/answers', input, { auth: false });
 }
 
 export interface AnswerSubmission {

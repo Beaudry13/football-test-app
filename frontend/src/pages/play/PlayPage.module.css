@@ -55,6 +55,17 @@
   margin-bottom: 0.75em;
 }
 
+.saveStatus {
+  font-size: 0.85em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.75em;
+  min-height: 1.2em;
+}
+
+.saveStatusError {
+  color: var(--color-danger);
+}
+
 .questionCard {
   margin-bottom: 1em;
 }

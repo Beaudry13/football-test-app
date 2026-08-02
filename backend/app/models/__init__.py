@@ -9,7 +9,7 @@ from app.models.question import Question, QuestionOption, QuestionType
 from app.models.question_image import QuestionImage
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
-from app.models.response import Answer, PlayerResponse
+from app.models.response import Answer, AttemptStatus, PlayerAttempt
 
 __all__ = [
     "Organization",
@@ -27,6 +27,7 @@ __all__ = [
     "Roster",
     "RosterPlayer",
     "AccessCode",
-    "PlayerResponse",
+    "PlayerAttempt",
+    "AttemptStatus",
     "Answer",
 ]

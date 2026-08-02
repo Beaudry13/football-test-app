@@ -42,8 +42,8 @@ class Quiz(TimestampMixin, db.Model):
         cascade="all, delete-orphan",
         order_by="AccessCode.activated_at.desc()",
     )
-    responses = db.relationship(
-        "PlayerResponse", back_populates="quiz", cascade="all, delete-orphan"
+    attempts = db.relationship(
+        "PlayerAttempt", back_populates="quiz", cascade="all, delete-orphan"
     )
 
     def to_dict(

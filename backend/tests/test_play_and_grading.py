@@ -39,6 +39,22 @@ def build_ready_quiz(client, headers):
     return quiz, tf_question, written_question, access_code
 
 
+def start_attempt(client, access_code_id, player_name):
+    return client.post(
+        "/api/play/start", json={"access_code_id": access_code_id, "player_name": player_name}
+    )
+
+
+def start_and_submit(client, access_code_id, player_name, answers):
+    """Most tests just want an existing, submitted attempt - start one and
+    submit it, since /submit now requires /start to have happened first."""
+    start_attempt(client, access_code_id, player_name)
+    return client.post(
+        "/api/play/submit",
+        json={"access_code_id": access_code_id, "player_name": player_name, "answers": answers},
+    )
+
+
 def test_validate_code_returns_quiz_without_correct_answers(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
 
@@ -83,23 +99,15 @@ def test_group_linked_access_code_replaces_the_quizs_own_roster_at_join_time(cli
     assert response.get_json()["roster_players"] == ["Sam Rivera"]
 
 
-def test_submit_rejects_a_quiz_roster_name_that_is_not_in_the_linked_group(client, coach_headers):
-    quiz, tf_question, written_question, _ = build_ready_quiz(client, coach_headers)
+def test_start_rejects_a_quiz_roster_name_that_is_not_in_the_linked_group(client, coach_headers):
+    quiz, _, _, _ = build_ready_quiz(client, coach_headers)
     access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera"])
 
     # "Jordan Smith" is on the quiz's own roster but not in the linked group -
     # the group must win even though the name would be valid without it.
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": written_question["id"], "answer_text": "x"},
-            ],
-        },
-    )
+    # This is now rejected at name-selection (/start), not just at submit -
+    # an invalid name never gets to create an attempt at all.
+    response = start_attempt(client, access_code["id"], "Jordan Smith")
     assert response.status_code == 422
 
 
@@ -107,16 +115,14 @@ def test_submit_succeeds_for_a_name_that_is_in_the_linked_group(client, coach_he
     quiz, tf_question, written_question, _ = build_ready_quiz(client, coach_headers)
     access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera"])
 
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Sam Rivera",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": written_question["id"], "answer_text": "x"},
-            ],
-        },
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Sam Rivera",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": written_question["id"], "answer_text": "x"},
+        ],
     )
     assert response.status_code == 201
 
@@ -175,16 +181,14 @@ def test_submit_quiz_auto_grades_true_false_and_leaves_written_ungraded(client, 
         if o["is_correct_answer"]
     )
 
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"], "selected_option_id": correct_option_id},
-                {"question_id": written_question["id"], "answer_text": "I set the edge."},
-            ],
-        },
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": correct_option_id},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
     )
 
     assert response.status_code == 201
@@ -193,42 +197,66 @@ def test_submit_quiz_auto_grades_true_false_and_leaves_written_ungraded(client, 
     assert answers[written_question["id"]]["is_correct"] is None
 
 
-def test_submit_rejects_player_not_on_roster(client, coach_headers):
-    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+def test_start_rejects_player_not_on_roster(client, coach_headers):
+    _, _, _, access_code = build_ready_quiz(client, coach_headers)
 
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Not On Roster",
-            "answers": [{"question_id": tf_question["id"]}],
-        },
-    )
+    response = start_attempt(client, access_code["id"], "Not On Roster")
 
     assert response.status_code == 422
 
 
 def test_submit_rejects_duplicate_submission(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
-    payload = {
-        "access_code_id": access_code["id"],
-        "player_name": "Jordan Smith",
-        "answers": [{"question_id": tf_question["id"]}],
-    }
+    answers = [{"question_id": tf_question["id"]}]
 
-    first = client.post("/api/play/submit", json=payload)
-    second = client.post("/api/play/submit", json=payload)
+    first = start_and_submit(client, access_code["id"], "Jordan Smith", answers)
+    second = client.post(
+        "/api/play/submit",
+        json={"access_code_id": access_code["id"], "player_name": "Jordan Smith", "answers": answers},
+    )
 
     assert first.status_code == 201
     assert second.status_code == 409
 
 
+def test_start_rejects_starting_again_after_already_submitted(client, coach_headers):
+    """Requirement 4's other half: no new attempt under the same name once
+    one has already been submitted for this activation."""
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_and_submit(client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}])
+
+    response = start_attempt(client, access_code["id"], "Jordan Smith")
+
+    assert response.status_code == 409
+
+
+def test_autosave_rejects_once_the_attempt_is_submitted(client, coach_headers):
+    """The hard lock: once submitted, no further edits via autosave either."""
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_and_submit(client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}])
+
+    response = client.post(
+        "/api/play/answers",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "question_id": tf_question["id"],
+            "selected_option_id": None,
+            "answer_text": None,
+        },
+    )
+
+    assert response.status_code == 409
+
+
 def test_submit_rejects_truly_concurrent_duplicate_submissions(app, coach_headers):
-    """Two requests that both pass the pre-check before either commits (a real
-    race, not just two sequential calls) must still only produce one response -
-    the DB's unique constraint is the real guard, not the pre-check query."""
+    """Two requests that both pass the status check before either commits (a
+    real race, not just two sequential calls) must still only produce one
+    locked attempt - the conditional UPDATE is the real guard, not the
+    status check alone."""
     with app.test_client() as setup_client:
         _, tf_question, _, access_code = build_ready_quiz(setup_client, coach_headers)
+        start_attempt(setup_client, access_code["id"], "Jordan Smith")
 
     payload = {
         "access_code_id": access_code["id"],
@@ -263,16 +291,14 @@ def test_submit_rejects_truly_concurrent_duplicate_submissions(app, coach_header
 def test_submit_rejects_duplicate_question_id_within_one_submission(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
 
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": tf_question["id"]},
-            ],
-        },
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": tf_question["id"]},
+        ],
     )
 
     assert response.status_code == 422
@@ -286,16 +312,14 @@ def test_submit_rejects_answer_for_question_deleted_after_player_loaded_quiz(cli
 
     client.delete(f"/api/quizzes/{quiz['id']}/questions/{written_question['id']}", headers=coach_headers)
 
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": written_question["id"], "answer_text": "still typing when it vanished"},
-            ],
-        },
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": written_question["id"], "answer_text": "still typing when it vanished"},
+        ],
     )
 
     assert response.status_code == 422
@@ -337,13 +361,11 @@ def test_submit_rejects_option_id_from_before_coach_edited_question(client, coac
         headers=coach_headers,
     )
 
-    response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [{"question_id": tf_question["id"], "selected_option_id": stale_option_id}],
-        },
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [{"question_id": tf_question["id"], "selected_option_id": stale_option_id}],
     )
 
     assert response.status_code == 422
@@ -351,16 +373,14 @@ def test_submit_rejects_option_id_from_before_coach_edited_question(client, coac
 
 def test_coach_can_grade_written_answer_and_leave_feedback(client, coach_headers):
     _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
-    submit_response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": written_question["id"], "answer_text": "I set the edge."},
-            ],
-        },
+    submit_response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
     ).get_json()
     written_answer_id = next(
         a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]
@@ -381,16 +401,14 @@ def test_coach_can_grade_written_answer_and_leave_feedback(client, coach_headers
 
 def test_quiz_dashboard_summarizes_responses(client, coach_headers):
     quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
-    client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": written_question["id"], "answer_text": "I set the edge."},
-            ],
-        },
+    start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
     )
 
     response = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers)
@@ -405,19 +423,45 @@ def test_quiz_dashboard_summarizes_responses(client, coach_headers):
     assert breakdown_by_id[written_question["id"]]["ungraded_count"] == 1
 
 
+def test_quiz_dashboard_excludes_an_in_progress_attempt(client, coach_headers):
+    """A player who has only started (not submitted) must not be counted as
+    a response - not in response_count/response_rate, and not removed from
+    missing_players."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_attempt(client, access_code["id"], "Alex Lee")
+    client.post(
+        "/api/play/answers",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Alex Lee",
+            "question_id": tf_question["id"],
+            "selected_option_id": None,
+            "answer_text": None,
+        },
+    )
+
+    response = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["response_count"] == 0
+    assert body["missing_players"] == ["Jordan Smith", "Alex Lee"]
+
+    responses = client.get(f"/api/quizzes/{quiz['id']}/responses", headers=coach_headers).get_json()
+    assert responses == []
+
+
 def test_quiz_dashboard_missing_players_empty_once_everyone_has_submitted(client, coach_headers):
     quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
     for player_name in ("Jordan Smith", "Alex Lee"):
-        client.post(
-            "/api/play/submit",
-            json={
-                "access_code_id": access_code["id"],
-                "player_name": player_name,
-                "answers": [
-                    {"question_id": tf_question["id"]},
-                    {"question_id": written_question["id"], "answer_text": "I set the edge."},
-                ],
-            },
+        start_and_submit(
+            client,
+            access_code["id"],
+            player_name,
+            [
+                {"question_id": tf_question["id"]},
+                {"question_id": written_question["id"], "answer_text": "I set the edge."},
+            ],
         )
 
     response = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers)
@@ -428,14 +472,7 @@ def test_quiz_dashboard_missing_players_empty_once_everyone_has_submitted(client
 
 def test_player_history_across_quizzes(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
-    client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [{"question_id": tf_question["id"]}],
-        },
-    )
+    start_and_submit(client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}])
 
     response = client.get("/api/players/history?name=Jordan Smith", headers=coach_headers)
 
@@ -443,6 +480,16 @@ def test_player_history_across_quizzes(client, coach_headers):
     body = response.get_json()
     assert len(body["history"]) == 1
     assert body["history"][0]["quiz_title"] == "Week 1 Prep"
+
+
+def test_player_history_excludes_an_in_progress_attempt(client, coach_headers):
+    _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_attempt(client, access_code["id"], "Jordan Smith")
+
+    response = client.get("/api/players/history?name=Jordan Smith", headers=coach_headers)
+
+    assert response.status_code == 200
+    assert response.get_json()["history"] == []
 
 
 def test_player_can_view_their_own_results_after_submitting(client, coach_headers):
@@ -454,16 +501,14 @@ def test_player_can_view_their_own_results_after_submitting(client, coach_header
         ][0]["options"]
         if o["is_correct_answer"]
     )
-    client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"], "selected_option_id": correct_option_id},
-                {"question_id": written_question["id"], "answer_text": "I set the edge."},
-            ],
-        },
+    start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": correct_option_id},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
     )
 
     response = client.post(
@@ -485,14 +530,7 @@ def test_player_can_view_their_own_results_after_submitting(client, coach_header
 
 def test_player_results_name_match_is_case_insensitive(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
-    client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [{"question_id": tf_question["id"]}],
-        },
-    )
+    start_and_submit(client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}])
 
     response = client.post(
         "/api/play/results", json={"code": access_code["code"], "player_name": "jordan smith"}
@@ -516,16 +554,20 @@ def test_player_results_404_for_a_name_that_never_submitted(client, coach_header
     assert response.status_code == 404
 
 
+def test_player_results_404_for_a_name_that_only_started(client, coach_headers):
+    _, _, _, access_code = build_ready_quiz(client, coach_headers)
+    start_attempt(client, access_code["id"], "Alex Lee")
+
+    response = client.post(
+        "/api/play/results", json={"code": access_code["code"], "player_name": "Alex Lee"}
+    )
+
+    assert response.status_code == 404
+
+
 def test_player_results_still_works_after_the_access_code_has_expired(app, client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
-    client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [{"question_id": tf_question["id"]}],
-        },
-    )
+    start_and_submit(client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}])
 
     with app.app_context():
         code_row = db.session.get(AccessCode, access_code["id"])
@@ -545,16 +587,14 @@ def test_player_results_still_works_after_the_access_code_has_expired(app, clien
 
 def test_player_results_reflect_grading_done_after_submission(client, coach_headers):
     _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
-    submit_response = client.post(
-        "/api/play/submit",
-        json={
-            "access_code_id": access_code["id"],
-            "player_name": "Jordan Smith",
-            "answers": [
-                {"question_id": tf_question["id"]},
-                {"question_id": written_question["id"], "answer_text": "I set the edge."},
-            ],
-        },
+    submit_response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
     ).get_json()
     written_answer_id = next(
         a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]

@@ -2,26 +2,45 @@
 
 No player accounts exist: identity is (access code + a name chosen from
 the coach-uploaded roster), which is exactly what every route here checks.
+
+Attempt lifecycle: /start creates or resumes a PlayerAttempt the moment a
+player picks their name; /answers autosaves one answer at a time against
+it; /submit locks it. Every mutating route re-derives the attempt from
+(access_code_id, player_name) rather than trusting a client-supplied
+attempt id - the id is a guessable sequential PK, and the composite key is
+exactly the same proof-of-eligibility a player already demonstrated by
+holding a valid code and picking a roster-matched name.
 """
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, jsonify
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.errors import ApiError
 from app.extensions import db, limiter
-from app.models import AccessCode, Answer, PlayerResponse, Question
-from app.schemas.play import PlayerResultsSchema, SubmitQuizSchema, ValidateCodeSchema
+from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question
+from app.schemas.play import (
+    PlayerResultsSchema,
+    SaveAnswerSchema,
+    StartAttemptSchema,
+    SubmitQuizSchema,
+    ValidateCodeSchema,
+)
 from app.services.access_codes import (
     effective_roster_names,
     find_access_code_by_code,
     find_valid_access_code,
 )
+from app.services.attempts import find_attempt, upsert_answer
 from app.utils.validation import load_json_body
 
 play_bp = Blueprint("play", __name__)
 
 NO_RESULTS_FOUND = "No results found for that code and name"
+ALREADY_SUBMITTED = "This player has already submitted this quiz"
 
 
 def _resolve_answer_text(question: Question, answer: Answer | None) -> str | None:
@@ -31,6 +50,30 @@ def _resolve_answer_text(question: Question, answer: Answer | None) -> str | Non
         return answer.answer_text
     option = next((o for o in question.options if o.id == answer.selected_option_id), None)
     return option.option_text if option else None
+
+
+def _attempt_state(attempt: PlayerAttempt) -> dict:
+    """Player-safe attempt payload for /start and /answers.
+
+    Unlike PlayerAttempt.to_dict() (coach-facing, used by the grading
+    routes), this never includes is_correct/coach_feedback/graded_at -
+    matching validate-code's existing include_correct_answers=False rule,
+    a player must not be able to learn which of their answers are correct
+    before they submit, even though is_correct is now computed at autosave
+    time rather than deferred to submit.
+    """
+    return {
+        "attempt_id": attempt.id,
+        "status": attempt.status.value,
+        "answers": [
+            {
+                "question_id": a.question_id,
+                "selected_option_id": a.selected_option_id,
+                "answer_text": a.answer_text,
+            }
+            for a in attempt.answers
+        ],
+    }
 
 
 @play_bp.post("/validate-code")
@@ -58,6 +101,77 @@ def validate_code():
     )
 
 
+@play_bp.post("/start")
+# Once per name-selection (not per answer), so the same rate as
+# validate-code/submit is the right ballpark.
+@limiter.limit("20 per minute")
+def start_attempt():
+    data = load_json_body(StartAttemptSchema())
+
+    access_code = db.session.get(AccessCode, data["access_code_id"])
+    if access_code is None or not access_code.is_valid():
+        raise ApiError("Invalid or expired access code", status_code=404)
+
+    roster_names = set(effective_roster_names(access_code))
+    if data["player_name"] not in roster_names:
+        raise ApiError("Player name is not on this quiz's roster", status_code=422)
+
+    existing = find_attempt(access_code.id, data["player_name"])
+    if existing is not None:
+        if existing.status == AttemptStatus.SUBMITTED:
+            raise ApiError(ALREADY_SUBMITTED, status_code=409)
+        return jsonify(_attempt_state(existing))
+
+    attempt = PlayerAttempt(
+        quiz_id=access_code.quiz_id, access_code_id=access_code.id, player_name=data["player_name"]
+    )
+    db.session.add(attempt)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # Two concurrent "start" calls for the same name is a benign race
+        # (e.g. a fast double-tap), not a genuine conflict - converge to
+        # whichever one won instead of erroring.
+        db.session.rollback()
+        existing = find_attempt(access_code.id, data["player_name"])
+        if existing is None:
+            raise
+        if existing.status == AttemptStatus.SUBMITTED:
+            raise ApiError(ALREADY_SUBMITTED, status_code=409) from None
+        return jsonify(_attempt_state(existing))
+
+    return jsonify(_attempt_state(attempt)), 201
+
+
+@play_bp.post("/answers")
+# Fires once per answer change (debounced/blur-triggered client-side, plus
+# an immediate save on every option pick), not once per session like
+# /start or /submit - a normal quiz's answer count stays well under this
+# even accounting for retries.
+@limiter.limit("60 per minute")
+def save_answer():
+    data = load_json_body(SaveAnswerSchema())
+
+    access_code = db.session.get(AccessCode, data["access_code_id"])
+    if access_code is None or not access_code.is_valid():
+        # Same check /submit already makes - without it a player could
+        # autosave indefinitely past expiry, only discovering the code
+        # expired at final submit instead of the moment it actually does.
+        raise ApiError("Invalid or expired access code", status_code=404)
+
+    attempt = find_attempt(access_code.id, data["player_name"])
+    if attempt is None:
+        raise ApiError("Start the quiz before saving an answer", status_code=404)
+    if attempt.status == AttemptStatus.SUBMITTED:
+        # The hard lock: once submitted, no further edits.
+        raise ApiError("This attempt has already been submitted", status_code=409)
+
+    upsert_answer(attempt, data["question_id"], data["selected_option_id"], data["answer_text"])
+    db.session.commit()
+
+    return "", 204
+
+
 @play_bp.post("/submit")
 @limiter.limit("20 per minute")
 def submit_quiz():
@@ -67,79 +181,65 @@ def submit_quiz():
     if access_code is None or not access_code.is_valid():
         raise ApiError("Invalid or expired access code", status_code=404)
 
-    quiz = access_code.quiz
-    roster_names = set(effective_roster_names(access_code))
-    if data["player_name"] not in roster_names:
-        raise ApiError("Player name is not on this quiz's roster", status_code=422)
-
-    existing = PlayerResponse.query.filter_by(
-        access_code_id=access_code.id, player_name=data["player_name"]
-    ).first()
-    if existing is not None:
-        raise ApiError("This player has already submitted this quiz", status_code=409)
+    attempt = find_attempt(access_code.id, data["player_name"])
+    if attempt is None:
+        raise ApiError("Start the quiz before submitting", status_code=404)
+    if attempt.status == AttemptStatus.SUBMITTED:
+        raise ApiError(ALREADY_SUBMITTED, status_code=409)
 
     submitted_question_ids = [a["question_id"] for a in data["answers"]]
     if len(submitted_question_ids) != len(set(submitted_question_ids)):
-        # Caught here, not left to the DB's unique constraint, so this doesn't get
-        # misreported as "already submitted" by the IntegrityError handler below.
         raise ApiError("Each question can only be answered once per submission", status_code=422)
 
-    # Validate every answer *before* writing anything. Raising mid-write (after
-    # a flush assigns response.id but before commit) would leave an uncommitted
-    # transaction sitting on the connection for the rest of the request/test -
-    # harmless in isolation, but it can hold locks that block later work on the
-    # same rows until something eventually tears the session down.
-    quiz_question_ids = {q.id for q in quiz.questions}
-    questions_by_id = {q.id: q for q in quiz.questions}
-    graded_answers = []
-
-    for submitted_answer in data["answers"]:
-        question_id = submitted_answer["question_id"]
-        if question_id not in quiz_question_ids:
-            raise ApiError(f"Question {question_id} does not belong to this quiz", status_code=422)
-
-        question: Question = questions_by_id[question_id]
-        selected_option_id = submitted_answer["selected_option_id"]
-        is_correct = None
-
-        if selected_option_id is not None:
-            option = next((o for o in question.options if o.id == selected_option_id), None)
-            if option is None:
-                raise ApiError(
-                    f"Option {selected_option_id} does not belong to question {question_id}",
-                    status_code=422,
-                )
-            is_correct = option.is_correct_answer
-
-        graded_answers.append(
-            {
-                "question_id": question_id,
-                "answer_text": submitted_answer["answer_text"],
-                "selected_option_id": selected_option_id,
-                "is_correct": is_correct,
-            }
-        )
-
-    response = PlayerResponse(
-        quiz_id=quiz.id, access_code_id=access_code.id, player_name=data["player_name"]
-    )
-    # Appending through the relationship (rather than setting player_response_id
-    # directly) lets SQLAlchemy assign the FK itself during commit, so there's
-    # no need for an intermediate flush just to learn response.id.
-    for graded_answer in graded_answers:
-        response.answers.append(Answer(**graded_answer))
-    db.session.add(response)
-
+    # Everything from here writes. If anything raises partway through - an
+    # invalid question/option in a *later* answer after an *earlier* one in
+    # this same payload already upserted cleanly, or the IntegrityError
+    # below - the session must not be left holding an uncommitted write:
+    # that leaves the connection "idle in transaction", holding a lock that
+    # blocks later work on the same rows (this attempt's own teardown
+    # included) until something eventually tears it down. The original
+    # single-insert version of this route avoided the problem by
+    # validating every answer *before* writing any of them; looping over
+    # the shared validate-and-upsert helper reintroduces the same failure
+    # mode, so every exit past this point goes through one rollback.
     try:
-        # The only way this can still fail is a truly concurrent duplicate
-        # submission: two requests both pass the pre-check above before either
-        # has committed, and only the DB's unique constraint catches that.
+        # Final sync: upsert whatever the client currently has, so submit
+        # is robust even if an individual autosave call failed transiently
+        # along the way - not solely reliant on every autosave succeeding.
+        for submitted_answer in data["answers"]:
+            upsert_answer(
+                attempt,
+                submitted_answer["question_id"],
+                submitted_answer["selected_option_id"],
+                submitted_answer["answer_text"],
+            )
+
+        # A conditional UPDATE, not a plain read-then-write: a debounced
+        # autosave and this submit can race within the same network
+        # window. Checking rowcount makes the two requests serialize
+        # correctly regardless of commit order, instead of risking a
+        # lost-update where an autosave silently attaches an answer after
+        # the attempt is already shown elsewhere as locked.
+        result = db.session.execute(
+            sa_update(PlayerAttempt)
+            .where(PlayerAttempt.id == attempt.id, PlayerAttempt.status == AttemptStatus.IN_PROGRESS)
+            .values(status=AttemptStatus.SUBMITTED, submitted_at=datetime.now(timezone.utc))
+        )
+        if result.rowcount == 0:
+            # Lost the race to a concurrent submit between the status
+            # check above and this update.
+            raise ApiError(ALREADY_SUBMITTED, status_code=409)
+
         db.session.commit()
     except IntegrityError as exc:
         db.session.rollback()
-        raise ApiError("This player has already submitted this quiz", status_code=409) from exc
+        raise ApiError(ALREADY_SUBMITTED, status_code=409) from exc
+    except Exception:
+        db.session.rollback()
+        raise
 
-    return jsonify(response.to_dict(include_answers=True)), 201
+    db.session.refresh(attempt)
+    return jsonify(attempt.to_dict(include_answers=True)), 201
 
 
 @play_bp.post("/results")
@@ -153,19 +253,20 @@ def player_results():
     if access_code is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
-    response = (
-        PlayerResponse.query.filter(
-            PlayerResponse.access_code_id == access_code.id,
-            db.func.lower(PlayerResponse.player_name) == data["player_name"].strip().lower(),
+    attempt = (
+        PlayerAttempt.query.filter(
+            PlayerAttempt.access_code_id == access_code.id,
+            PlayerAttempt.status == AttemptStatus.SUBMITTED,
+            db.func.lower(PlayerAttempt.player_name) == data["player_name"].strip().lower(),
         )
-        .options(selectinload(PlayerResponse.answers))
+        .options(selectinload(PlayerAttempt.answers))
         .first()
     )
-    if response is None:
+    if attempt is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
     quiz = access_code.quiz
-    answers_by_question = {a.question_id: a for a in response.answers}
+    answers_by_question = {a.question_id: a for a in attempt.answers}
 
     answer_details = []
     for question in sorted(quiz.questions, key=lambda q: q.position):
@@ -188,8 +289,8 @@ def player_results():
     return jsonify(
         {
             "quiz_title": quiz.title,
-            "player_name": response.player_name,
-            "submitted_at": response.submitted_at.isoformat(),
+            "player_name": attempt.player_name,
+            "submitted_at": attempt.submitted_at.isoformat(),
             "answers": answer_details,
         }
     )

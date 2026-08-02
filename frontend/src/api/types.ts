@@ -220,6 +220,22 @@ export interface ValidateCodeResponse {
   roster_players: string[];
 }
 
+/** A player's saved answer as returned by /play/start and /play/answers -
+ * deliberately never includes is_correct: a player must not learn which
+ * answers are correct before they submit, even though grading now happens
+ * at autosave time rather than being deferred to submit. */
+export interface ResumedAnswer {
+  question_id: number;
+  selected_option_id: number | null;
+  answer_text: string | null;
+}
+
+export interface AttemptState {
+  attempt_id: number;
+  status: 'in_progress' | 'submitted';
+  answers: ResumedAnswer[];
+}
+
 export interface ApiErrorBody {
   error: string;
   details?: Record<string, string[]>;

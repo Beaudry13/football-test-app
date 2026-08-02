@@ -1,33 +1,103 @@
-import { useState } from 'react';
-import { submitQuiz } from '../../api/play';
+import { useEffect, useRef, useState } from 'react';
+import { saveAnswer, submitQuiz } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
-import type { Quiz } from '../../api/types';
+import type { Quiz, ResumedAnswer } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import styles from './PlayPage.module.css';
+
+const AUTOSAVE_DEBOUNCE_MS = 800;
+
+function seedAnswers(initialAnswers: ResumedAnswer[]): Record<number, PlayerAnswer> {
+  const seeded: Record<number, PlayerAnswer> = {};
+  for (const a of initialAnswers) {
+    seeded[a.question_id] = {
+      selected_option_id: a.selected_option_id ?? undefined,
+      answer_text: a.answer_text ?? undefined,
+    };
+  }
+  return seeded;
+}
 
 export function QuizStep({
   quiz,
   accessCodeId,
   playerName,
+  initialAnswers,
   onSubmitted,
 }: {
   quiz: Quiz;
   accessCodeId: number;
   playerName: string;
+  initialAnswers: ResumedAnswer[];
   onSubmitted: () => void;
 }) {
   const questions = quiz.questions ?? [];
-  const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>({});
+  const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => seedAnswers(initialAnswers));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  useEffect(() => {
+    const timers = debounceTimers.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
+
+  function performSave(questionId: number, answer: PlayerAnswer) {
+    setSaveStatus('saving');
+    saveAnswer({
+      access_code_id: accessCodeId,
+      player_name: playerName,
+      question_id: questionId,
+      selected_option_id: answer.selected_option_id ?? null,
+      answer_text: answer.answer_text ?? null,
+    })
+      .then(() => setSaveStatus('saved'))
+      .catch(() => setSaveStatus('error'));
+    // A non-409 failure here is caught, not surfaced as a blocking error -
+    // submit's own final sync (see handleSubmit) re-sends every answer's
+    // current value as a safety net, so a transient autosave failure isn't
+    // the only chance this answer has to reach the server. A 409 (attempt
+    // already locked, e.g. finished on another device) shows the same
+    // "error" indicator; the player's local state stays visible but stops
+    // saving, and hitting Submit will 409 too and can be routed from there.
+  }
 
   function updateAnswer(questionId: number, answer: PlayerAnswer) {
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+
+    if (debounceTimers.current[questionId]) {
+      clearTimeout(debounceTimers.current[questionId]);
+      delete debounceTimers.current[questionId];
+    }
+
+    if (answer.selected_option_id !== undefined) {
+      // A radio/option pick is the final value until changed again -
+      // nothing to protect against by delaying it, and delaying only
+      // widens the window where a closed browser loses the just-picked answer.
+      performSave(questionId, answer);
+    } else {
+      // Free text: debounce so this isn't firing a request per keystroke.
+      debounceTimers.current[questionId] = setTimeout(() => {
+        delete debounceTimers.current[questionId];
+        performSave(questionId, answer);
+      }, AUTOSAVE_DEBOUNCE_MS);
+    }
   }
 
   async function handleSubmit() {
+    // Cancel every pending debounce timer first - none of them should fire
+    // after submit has locked the attempt. Submit's own payload is built
+    // from this component's full local `answers` state below, which is
+    // always at least as current as anything a cancelled timer would have
+    // sent, so nothing is lost by cancelling rather than flushing.
+    Object.values(debounceTimers.current).forEach(clearTimeout);
+    debounceTimers.current = {};
+
     setError(null);
     setIsSubmitting(true);
     try {
@@ -48,6 +118,19 @@ export function QuizStep({
     }
   }
 
+  const saveStatusText: Record<typeof saveStatus, string> = {
+    idle: '',
+    saving: 'Saving…',
+    saved: 'Saved',
+    error: "Couldn't save - will retry",
+  };
+
+  const saveIndicator = saveStatusText[saveStatus] && (
+    <div className={`${styles.saveStatus} ${saveStatus === 'error' ? styles.saveStatusError : ''}`}>
+      {saveStatusText[saveStatus]}
+    </div>
+  );
+
   if (quiz.one_question_at_a_time) {
     const question = questions[currentIndex];
     const isLast = currentIndex === questions.length - 1;
@@ -57,6 +140,7 @@ export function QuizStep({
         <div className={styles.progress}>
           Question {currentIndex + 1} of {questions.length}
         </div>
+        {saveIndicator}
         <ErrorBanner message={error} />
         <QuestionInput
           question={question}
@@ -88,6 +172,7 @@ export function QuizStep({
 
   return (
     <div className={styles.quizPanel}>
+      {saveIndicator}
       <ErrorBanner message={error} />
       {questions.map((question, index) => (
         <QuestionInput

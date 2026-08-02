@@ -2,6 +2,15 @@
 
 Registered under /api directly (not /api/quizzes) because it also exposes
 cross-quiz endpoints like per-player history.
+
+Every read here that lists/counts "responses" filters to
+PlayerAttempt.status == SUBMITTED - an in-progress attempt is not a
+response yet, and showing one here (with no answers, or answers a player
+is still actively changing) would corrupt the dashboard stats, the
+missing-players list, exports, and player history. `grade_answer` is the
+one deliberate exception: grading an in-progress attempt's answer is
+inert (it's not visible anywhere until the attempt is actually submitted),
+so it isn't gated - a documented choice, not an oversight.
 """
 
 from datetime import datetime, timezone
@@ -12,7 +21,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Answer, PlayerResponse, Quiz
+from app.models import Answer, AttemptStatus, PlayerAttempt, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.export import build_results_csv, build_results_pdf, export_filename_slug
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
@@ -30,14 +39,14 @@ def _get_gradable_answer(answer_id: int) -> Answer:
     """
     coach = current_coach()
     answer = (
-        Answer.query.join(PlayerResponse)
+        Answer.query.join(PlayerAttempt)
         .join(Quiz)
         .filter(Answer.id == answer_id, Quiz.organization_id == coach.organization_id)
         .first()
     )
     if answer is None:
         raise ApiError("Answer not found", status_code=404)
-    get_editable_quiz(answer.player_response.quiz_id)
+    get_editable_quiz(answer.attempt.quiz_id)
     return answer
 
 
@@ -46,9 +55,9 @@ def _get_gradable_answer(answer_id: int) -> Answer:
 def list_responses(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = (
-        PlayerResponse.query.filter_by(quiz_id=quiz.id)
-        .options(selectinload(PlayerResponse.answers))
-        .order_by(PlayerResponse.submitted_at.desc())
+        PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        .options(selectinload(PlayerAttempt.answers))
+        .order_by(PlayerAttempt.submitted_at.desc())
         .all()
     )
     return jsonify([r.to_dict(include_answers=True) for r in responses])
@@ -59,13 +68,38 @@ def list_responses(quiz_id: int):
 def get_response(quiz_id: int, response_id: int):
     quiz = get_visible_quiz(quiz_id)
     response = (
-        PlayerResponse.query.filter_by(id=response_id, quiz_id=quiz.id)
-        .options(selectinload(PlayerResponse.answers))
+        PlayerAttempt.query.filter_by(
+            id=response_id, quiz_id=quiz.id, status=AttemptStatus.SUBMITTED
+        )
+        .options(selectinload(PlayerAttempt.answers))
         .first()
     )
     if response is None:
         raise ApiError("Response not found", status_code=404)
     return jsonify(response.to_dict(include_answers=True))
+
+
+@grading_bp.delete("/quizzes/<int:quiz_id>/attempts/<int:attempt_id>")
+@jwt_required()
+def reset_attempt(quiz_id: int, attempt_id: int):
+    """Coach-triggered manual reset: deletes the attempt outright (cascades
+    to its answers) so the player can start fresh next time they enter
+    their name. Full delete, not a soft/archived reset - there's no
+    requirement to preserve a discarded attempt's record, and this is
+    framed as fixing an accidental early submit, not an audit feature.
+    Any prior grading/feedback on it is gone, not archived.
+    """
+    quiz = get_editable_quiz(quiz_id)
+    # Scoped by both ids, not just attempt_id - get_editable_quiz only
+    # proves the coach controls this quiz, not that the attempt belongs to
+    # it. Matches how get_response already scopes its lookup.
+    attempt = PlayerAttempt.query.filter_by(id=attempt_id, quiz_id=quiz.id).first()
+    if attempt is None:
+        raise ApiError("Attempt not found", status_code=404)
+
+    db.session.delete(attempt)
+    db.session.commit()
+    return "", 204
 
 
 @grading_bp.patch("/answers/<int:answer_id>/grade")
@@ -83,7 +117,7 @@ def grade_answer(answer_id: int):
     return jsonify(answer.to_dict())
 
 
-def _build_dashboard_data(quiz: Quiz, responses: list[PlayerResponse]) -> dict:
+def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
     roster_names = [p.player_name for p in quiz.roster.players] if quiz.roster else []
     roster_size = len(roster_names)
     response_count = len(responses)
@@ -126,10 +160,14 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerResponse]) -> dict:
     }
 
 
-def _load_responses_for_export(quiz: Quiz) -> list[PlayerResponse]:
+def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
+    # Filtered here (not just trusted to callers) since export.py's CSV/PDF
+    # builders call .submitted_at.isoformat() unconditionally - submitted_at
+    # is nullable now, so an in-progress attempt reaching either builder
+    # would crash rather than just look wrong.
     return (
-        PlayerResponse.query.filter_by(quiz_id=quiz.id)
-        .options(selectinload(PlayerResponse.answers).selectinload(Answer.selected_option))
+        PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        .options(selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option))
         .all()
     )
 
@@ -139,8 +177,8 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerResponse]:
 def quiz_dashboard(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = (
-        PlayerResponse.query.filter_by(quiz_id=quiz.id)
-        .options(selectinload(PlayerResponse.answers))
+        PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        .options(selectinload(PlayerAttempt.answers))
         .all()
     )
     return jsonify(_build_dashboard_data(quiz, responses))
@@ -184,18 +222,19 @@ def player_history():
         raise ApiError("Query parameter 'name' is required", status_code=400)
 
     responses = (
-        PlayerResponse.query.join(Quiz)
+        PlayerAttempt.query.join(Quiz)
         # Org-wide, not per-coach: a player's development across the whole
         # program is the point, and quizzes from different coaches on the
         # same staff are all part of that picture.
         .filter(
             Quiz.organization_id == coach.organization_id,
-            PlayerResponse.player_name == player_name,
+            PlayerAttempt.player_name == player_name,
+            PlayerAttempt.status == AttemptStatus.SUBMITTED,
         )
         # contains_eager reuses the join above for response.quiz.title instead of
         # a separate lazy-load per response; selectinload batches .answers in one query.
-        .options(contains_eager(PlayerResponse.quiz), selectinload(PlayerResponse.answers))
-        .order_by(PlayerResponse.submitted_at.desc())
+        .options(contains_eager(PlayerAttempt.quiz), selectinload(PlayerAttempt.answers))
+        .order_by(PlayerAttempt.submitted_at.desc())
         .all()
     )
 

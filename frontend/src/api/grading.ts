@@ -9,6 +9,13 @@ export function getResponse(quizId: number, responseId: number): Promise<PlayerR
   return api.get<PlayerResponse>(`/quizzes/${quizId}/responses/${responseId}`);
 }
 
+/** Coach-triggered manual reset: deletes the attempt outright so the
+ * player can start fresh next time they enter their name. Not reversible -
+ * any grading/feedback already on it is gone, not archived. */
+export function resetAttempt(quizId: number, attemptId: number): Promise<void> {
+  return api.delete<void>(`/quizzes/${quizId}/attempts/${attemptId}`);
+}
+
 export function gradeAnswer(
   answerId: number,
   input: { is_correct: boolean; coach_feedback?: string | null },

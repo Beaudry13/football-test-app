@@ -3,10 +3,11 @@
 import csv
 import io
 
-from tests.test_play_and_grading import build_ready_quiz
+from tests.test_play_and_grading import build_ready_quiz, start_attempt
 
 
 def _submit(client, access_code, tf_question, written_question, correct_option_id, player_name):
+    start_attempt(client, access_code["id"], player_name)
     return client.post(
         "/api/play/submit",
         json={

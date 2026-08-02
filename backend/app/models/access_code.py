@@ -33,7 +33,7 @@ class AccessCode(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     quiz = db.relationship("Quiz", back_populates="access_codes")
-    responses = db.relationship("PlayerResponse", back_populates="access_code")
+    attempts = db.relationship("PlayerAttempt", back_populates="access_code")
     groups = db.relationship("Group", secondary=access_code_groups)
 
     def is_valid(self) -> bool:

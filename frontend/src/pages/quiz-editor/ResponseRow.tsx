@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { gradeAnswer } from '../../api/grading';
+import { gradeAnswer, resetAttempt } from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import type { Answer, PlayerResponse, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import nb from '../../styles/notebook.module.css';
@@ -10,11 +11,11 @@ import styles from './ResultsTab.module.css';
 function AnswerRow({
   answer,
   quiz,
-  onGraded,
+  onChanged,
 }: {
   answer: Answer;
   quiz: Quiz;
-  onGraded: () => void;
+  onChanged: () => void;
 }) {
   const question = quiz.questions?.find((q) => q.id === answer.question_id);
   const [feedback, setFeedback] = useState(answer.coach_feedback ?? '');
@@ -31,7 +32,7 @@ function AnswerRow({
     setIsSaving(true);
     try {
       await gradeAnswer(answer.id, { is_correct: isCorrect, coach_feedback: feedback || null });
-      onGraded();
+      onChanged();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -83,18 +84,44 @@ function AnswerRow({
 export function ResponseRow({
   quiz,
   response,
-  onGraded,
+  onChanged,
 }: {
   quiz: Quiz;
   response: PlayerResponse;
-  onGraded: () => void;
+  onChanged: () => void;
 }) {
+  const { coach } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const answers = response.answers ?? [];
   const gradedCorrect = answers.filter((a) => a.is_correct === true).length;
   const pendingGrading = answers.filter(
     (a) => a.is_correct === null && quiz.questions?.find((q) => q.id === a.question_id)?.question_type === 'written',
   ).length;
+  // Mirrors the backend's get_editable_quiz rule so the UI doesn't offer an
+  // action the API will refuse - the server is still the enforcement point.
+  const canReset = coach != null && (coach.id === quiz.coach_id || coach.role === 'admin');
+
+  async function handleReset(event: ReactMouseEvent) {
+    event.stopPropagation();
+    if (
+      !window.confirm(
+        `Reset ${response.player_name}'s attempt? This permanently deletes their answers and any grading/feedback on them, and lets them start the quiz fresh.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setIsResetting(true);
+    try {
+      await resetAttempt(quiz.id, response.id);
+      onChanged();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setIsResetting(false);
+    }
+  }
 
   return (
     <div className={nb.card}>
@@ -114,11 +141,21 @@ export function ResponseRow({
           {pendingGrading > 0 && (
             <span className={`${nb.badge} ${nb.badgeWarning}`}>{pendingGrading} to grade</span>
           )}
+          {canReset && (
+            <button
+              className={`${nb.btnSm} ${nb.btnDanger}`}
+              onClick={handleReset}
+              disabled={isResetting}
+            >
+              {isResetting ? 'Resetting…' : 'Reset attempt'}
+            </button>
+          )}
           <span>{isOpen ? '▲' : '▼'}</span>
         </div>
       </div>
+      <ErrorBanner message={error} />
       {isOpen && answers.map((answer) => (
-        <AnswerRow key={answer.id} answer={answer} quiz={quiz} onGraded={onGraded} />
+        <AnswerRow key={answer.id} answer={answer} quiz={quiz} onChanged={onChanged} />
       ))}
     </div>
   );

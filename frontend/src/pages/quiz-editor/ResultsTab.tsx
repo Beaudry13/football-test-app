@@ -141,7 +141,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
       ) : (
         <div className={styles.responseList}>
           {responses.map((response) => (
-            <ResponseRow key={response.id} quiz={quiz} response={response} onGraded={load} />
+            <ResponseRow key={response.id} quiz={quiz} response={response} onChanged={load} />
           ))}
         </div>
       )}
