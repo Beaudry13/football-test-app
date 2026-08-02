@@ -8,17 +8,21 @@ class, so the backend is chosen once in `get_file_storage()` and nothing
 else needs to know which one is active.
 """
 
-import mimetypes
+import io
 import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 
 import boto3
 from flask import current_app
+from PIL import Image, ImageOps, UnidentifiedImageError
 from werkzeug.datastructures import FileStorage as UploadedFile
 from werkzeug.utils import secure_filename
 
 from app.errors import ApiError
+
+COMPRESSED_CONTENT_TYPE = "image/jpeg"
+COMPRESSED_EXTENSION = "jpg"
 
 
 def _validated_extension(uploaded_file: UploadedFile, allowed_extensions: set[str]) -> str:
@@ -35,6 +39,40 @@ def _validated_extension(uploaded_file: UploadedFile, allowed_extensions: set[st
     return extension
 
 
+def _compress_image(uploaded_file: UploadedFile, max_dimension: int, quality: int) -> bytes:
+    """Recompresses an uploaded image to a JPEG capped at `max_dimension` on
+    its longest side, for storage. Runs once, at upload time, before a coach
+    can ever open the annotation editor - resizing an already-annotated
+    image would shift shapes out from under the coordinate space they were
+    drawn against (see AnnotationCanvas.tsx/AnnotationViewer.tsx), which is
+    exactly the bug this project already fixed once for a different reason.
+    Always outputs JPEG (transparency isn't a real use case for football
+    film-still photos), so the caller must not assume the original
+    extension/content-type survive.
+    """
+    raw_bytes = uploaded_file.stream.read()
+    try:
+        image = Image.open(io.BytesIO(raw_bytes))
+        image.load()
+    except (OSError, UnidentifiedImageError) as exc:
+        raise ApiError("The uploaded file isn't a valid image", status_code=400) from exc
+
+    # Must run before anything measures width/height - phone photos often
+    # carry an EXIF rotation flag Pillow doesn't apply automatically, so
+    # skipping this would silently bake a sideways image into storage.
+    image = ImageOps.exif_transpose(image) or image
+    # RGB, unconditionally: source may be P/RGBA/CMYK/etc, and JPEG has no
+    # alpha channel to preserve one in even if we wanted to.
+    image = image.convert("RGB")
+
+    if max(image.width, image.height) > max_dimension:
+        image.thumbnail((max_dimension, max_dimension), Image.LANCZOS)
+
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=quality, optimize=True)
+    return output.getvalue()
+
+
 class FileStorage(ABC):
     @abstractmethod
     def save_image(self, uploaded_file: UploadedFile) -> str:
@@ -46,16 +84,19 @@ class FileStorage(ABC):
 
 
 class LocalFileStorage(FileStorage):
-    def __init__(self, upload_folder: str, allowed_extensions: set[str]):
+    def __init__(self, upload_folder: str, allowed_extensions: set[str], max_dimension: int, jpeg_quality: int):
         self.upload_folder = Path(upload_folder)
         self.allowed_extensions = allowed_extensions
+        self.max_dimension = max_dimension
+        self.jpeg_quality = jpeg_quality
 
     def save_image(self, uploaded_file: UploadedFile) -> str:
-        extension = _validated_extension(uploaded_file, self.allowed_extensions)
+        _validated_extension(uploaded_file, self.allowed_extensions)
+        compressed = _compress_image(uploaded_file, self.max_dimension, self.jpeg_quality)
 
-        stored_name = f"{uuid.uuid4().hex}.{extension}"
+        stored_name = f"{uuid.uuid4().hex}.{COMPRESSED_EXTENSION}"
         self.upload_folder.mkdir(parents=True, exist_ok=True)
-        uploaded_file.save(self.upload_folder / stored_name)
+        (self.upload_folder / stored_name).write_bytes(compressed)
 
         return f"/uploads/{stored_name}"
 
@@ -82,10 +123,14 @@ class S3FileStorage(FileStorage):
         secret_access_key: str,
         bucket_name: str,
         public_url_base: str,
+        max_dimension: int,
+        jpeg_quality: int,
     ):
         self.allowed_extensions = allowed_extensions
         self.bucket_name = bucket_name
         self.public_url_base = public_url_base.rstrip("/")
+        self.max_dimension = max_dimension
+        self.jpeg_quality = jpeg_quality
         self.client = boto3.client(
             "s3",
             endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
@@ -95,15 +140,15 @@ class S3FileStorage(FileStorage):
         )
 
     def save_image(self, uploaded_file: UploadedFile) -> str:
-        extension = _validated_extension(uploaded_file, self.allowed_extensions)
+        _validated_extension(uploaded_file, self.allowed_extensions)
+        compressed = _compress_image(uploaded_file, self.max_dimension, self.jpeg_quality)
 
-        stored_name = f"{uuid.uuid4().hex}.{extension}"
-        content_type = uploaded_file.content_type or mimetypes.guess_type(stored_name)[0] or "application/octet-stream"
+        stored_name = f"{uuid.uuid4().hex}.{COMPRESSED_EXTENSION}"
         self.client.put_object(
             Bucket=self.bucket_name,
             Key=stored_name,
-            Body=uploaded_file.stream,
-            ContentType=content_type,
+            Body=compressed,
+            ContentType=COMPRESSED_CONTENT_TYPE,
         )
 
         return f"{self.public_url_base}/{stored_name}"
@@ -123,8 +168,12 @@ def get_file_storage() -> FileStorage:
             secret_access_key=current_app.config["R2_SECRET_ACCESS_KEY"],
             bucket_name=current_app.config["R2_BUCKET_NAME"],
             public_url_base=current_app.config["R2_PUBLIC_URL_BASE"],
+            max_dimension=current_app.config["IMAGE_MAX_DIMENSION"],
+            jpeg_quality=current_app.config["IMAGE_JPEG_QUALITY"],
         )
     return LocalFileStorage(
         upload_folder=current_app.config["UPLOAD_FOLDER"],
         allowed_extensions=current_app.config["ALLOWED_IMAGE_EXTENSIONS"],
+        max_dimension=current_app.config["IMAGE_MAX_DIMENSION"],
+        jpeg_quality=current_app.config["IMAGE_JPEG_QUALITY"],
     )

@@ -126,5 +126,13 @@ def invite_teammate(client):
     return _invite
 
 
-def make_image_file(name: str = "play.png") -> tuple[io.BytesIO, str]:
-    return io.BytesIO(b"fake-image-bytes"), name
+def make_image_file(name: str = "play.png", size: tuple[int, int] = (20, 20)) -> tuple[io.BytesIO, str]:
+    """A real, decodable image - uploads now go through Pillow-based
+    compression (see app/services/file_storage.py), so fake placeholder
+    bytes no longer survive the upload route."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", size, color=(0, 128, 255)).save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer, name

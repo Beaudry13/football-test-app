@@ -45,6 +45,14 @@ class BaseConfig:
     UPLOAD_FOLDER = _resolve_upload_folder(os.environ.get("UPLOAD_FOLDER", "uploads"))
     MAX_CONTENT_LENGTH = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "10")) * 1024 * 1024
     ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+    # Every accepted upload is recompressed to a JPEG capped at this longest
+    # dimension - comfortably above MAX_CANVAS_WIDTH (1400, see
+    # frontend/src/components/annotation/canvasSizing.ts) so it's never the
+    # binding constraint on annotation coordinate space, while still cutting
+    # typical 3000-4000px phone photos down significantly for players on
+    # weak cell signal.
+    IMAGE_MAX_DIMENSION = int(os.environ.get("IMAGE_MAX_DIMENSION", "2400"))
+    IMAGE_JPEG_QUALITY = int(os.environ.get("IMAGE_JPEG_QUALITY", "88"))
 
     # "local" (default, disk-backed) or "s3" (R2/S3-compatible bucket, see
     # app/services/file_storage.py) - most PaaS hosts wipe local disk on
