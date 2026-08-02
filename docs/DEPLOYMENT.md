@@ -55,8 +55,13 @@ You now have all five `R2_*` values `render.yaml` expects.
      now; you'll update it in step 4 once the Netlify URL exists.
 5. Wait for the deploy to finish, then note the service's URL, shown at the
    top of its dashboard page — something like
-   `https://football-quiz-backend.onrender.com`.
-6. Verify it's actually up: open `https://football-quiz-backend.onrender.com/api/health`
+   `https://football-quiz-backend.onrender.com`. **Copy the exact URL shown
+   in your dashboard rather than assuming this pattern**: Render appends a
+   random suffix (e.g. `-d2f5`) if the plain name is already taken, which
+   it may be even on a first deploy depending on prior attempts. This
+   project's actual URL is `https://football-quiz-backend-d2f5.onrender.com`
+   — always check the dashboard, don't guess from the service name.
+6. Verify it's actually up: open `https://football-quiz-backend-d2f5.onrender.com/api/health`
    in a browser. You should see `{"status":"ok"}`.
 
 **Cost note:** the web service is on the Starter plan (not free) in
@@ -76,9 +81,10 @@ you'll lose the database.
    directory `dist`) — you shouldn't need to touch the build settings.
 3. Before the first deploy (or after, then redeploy), go to **Site
    configuration** → **Environment variables** and add:
-   - `VITE_API_URL` = `https://football-quiz-backend.onrender.com/api`
-     (your Render URL from step 2.5, with `/api` on the end — matches the
-     local `.env.example` convention).
+   - `VITE_API_URL` = `https://football-quiz-backend-d2f5.onrender.com/api`
+     (your actual Render URL from step 2.5 — copy it from the dashboard,
+     don't assume the un-suffixed name — with `/api` on the end, matching
+     the local `.env.example` convention).
 4. Deploy. Note the resulting site URL, e.g.
    `https://your-site-name.netlify.app`.
 
