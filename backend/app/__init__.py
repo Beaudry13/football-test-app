@@ -3,6 +3,8 @@
 import os
 
 from flask import Flask, jsonify, send_from_directory
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_config
 from app.errors import register_error_handlers
@@ -26,6 +28,14 @@ def create_app(env_name: str | None = None) -> Flask:
 
     @app.get("/api/health")
     def health_check():
+        # Render's healthCheckPath (see render.yaml) hits this to decide
+        # whether to route traffic to this instance / trigger a restart -
+        # a plain {"status": "ok"} only proved Flask itself was up, not that
+        # it could actually serve a request that touches the database.
+        try:
+            db.session.execute(text("SELECT 1"))
+        except SQLAlchemyError:
+            return jsonify({"status": "error", "detail": "database unreachable"}), 503
         return jsonify({"status": "ok"})
 
     @app.get("/uploads/<path:filename>")

@@ -67,10 +67,40 @@ You now have all five `R2_*` values `render.yaml` expects.
 **Cost note:** the web service is on the Starter plan (not free) in
 `render.yaml` deliberately — Render's free tier spins down after 15 minutes
 of inactivity, and the first request after that (very plausibly a player
-mid-quiz) would stall 30-50 seconds on a cold start. The Postgres instance
-is on Render's free plan, which is fine to start but **expires after 90
-days** — put a reminder in your calendar to upgrade it before then, or
-you'll lose the database.
+mid-quiz) would stall 30-50 seconds on a cold start.
+
+### Backups
+
+The Postgres instance is on Render's **free plan** in `render.yaml`. As of
+this writing, that plan has **no backup guarantee at all** — no automated
+snapshots, no point-in-time recovery — and the database is deleted outright
+90 days after creation. Put a reminder in your calendar to upgrade it before
+then, or you will lose the database entirely, not just recent changes.
+
+This is a real gap, not a hypothetical one: once real coaches and players
+are relying on this data, "the free tier will probably be fine" is not an
+acceptable backup story. Two options, in order of how much this matters to
+you:
+
+1. **Upgrade the Postgres plan.** Render's paid database plans include
+   automated daily backups with a retention window — confirm the current
+   specifics on [Render's Postgres pricing page](https://render.com/pricing)
+   before deciding, since exact retention/pricing can change. This is the
+   real fix, and it's a billing decision only you can make — nothing in this
+   repo can do it for you.
+2. **Manual backups as a stopgap.** See [`BACKUP.md`](BACKUP.md) for a
+   `pg_dump`/`pg_restore` command pair you can run yourself periodically.
+   This is explicitly a manual procedure — nothing in this stack schedules
+   or automates it, so it's only as good as your own discipline about
+   actually running it.
+
+**Uptime monitoring:** `GET /api/health` checks real database connectivity
+(not just "is the Flask process up"), so it's a meaningful target for an
+external monitor. Pointing a free service (e.g.
+[UptimeRobot](https://uptimerobot.com)) at
+`https://<your-render-url>/api/health` is a five-minute setup outside this
+repo and means an outage gets caught proactively instead of by a coach
+reporting it mid-camp.
 
 ## 3. Netlify (frontend)
 
