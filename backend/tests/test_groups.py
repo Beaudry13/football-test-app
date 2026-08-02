@@ -65,7 +65,7 @@ def test_delete_group(client, coach_headers):
     assert client.get(f"/api/groups/{group['id']}", headers=coach_headers).status_code == 404
 
 
-def test_groups_are_scoped_per_coach(client, coach_headers, register_coach):
+def test_groups_are_scoped_per_organization(client, coach_headers, register_coach):
     create_group(client, coach_headers, name="Mine")
     _, _, other_headers = register_coach(username="coach2", email="coach2@example.com")
 
@@ -74,7 +74,7 @@ def test_groups_are_scoped_per_coach(client, coach_headers, register_coach):
     assert response.get_json() == []
 
 
-def test_cannot_view_rename_or_delete_another_coachs_group(client, coach_headers, register_coach):
+def test_cannot_view_rename_or_delete_another_organizations_group(client, coach_headers, register_coach):
     group = create_group(client, coach_headers, name="Mine")
     _, _, other_headers = register_coach(username="coach2", email="coach2@example.com")
 

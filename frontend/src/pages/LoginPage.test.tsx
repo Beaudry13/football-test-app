@@ -13,6 +13,8 @@ const mockCoach: Coach = {
   username: 'coach_smith',
   email: 'coach@example.com',
   organization: 'Wildcats',
+  organization_id: 1,
+  role: 'admin',
   created_at: '2026-01-01T00:00:00Z',
 };
 

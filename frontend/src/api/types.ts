@@ -1,16 +1,53 @@
 export type QuestionType = 'true_false' | 'multiple_choice' | 'written';
 
+export type CoachRole = 'admin' | 'member';
+
 export interface Coach {
   id: number;
   username: string;
   email: string;
+  /** Display name of the coach's organization. */
   organization: string;
+  organization_id: number;
+  role: CoachRole;
   created_at: string;
+}
+
+export interface OrganizationMember {
+  id: number;
+  username: string;
+  email: string;
+  role: CoachRole;
+}
+
+export interface Organization {
+  id: number;
+  name: string;
+  members: OrganizationMember[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationInvite {
+  id: number;
+  organization_id: number;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  is_revoked: boolean;
+  is_usable: boolean;
+  created_by: string | null;
+  accepted_by: string | null;
+  /** Only returned once, on creation - the list endpoint omits it. */
+  code?: string;
 }
 
 export interface Quiz {
   id: number;
-  coach_id: number;
+  organization_id: number;
+  /** Creator. Null if that coach has since been removed from the org. */
+  coach_id: number | null;
+  created_by_username: string | null;
   title: string;
   description: string | null;
   one_question_at_a_time: boolean;
@@ -23,7 +60,10 @@ export interface Quiz {
 
 export interface Folder {
   id: number;
-  coach_id: number;
+  organization_id: number;
+  /** Creator, for attribution only - folders are org-shared and any member
+   * can edit them. Null if that coach has left the org. */
+  coach_id: number | null;
   name: string;
   quiz_count: number;
   created_at: string;
@@ -84,7 +124,9 @@ export interface Roster {
 
 export interface Group {
   id: number;
-  coach_id: number;
+  organization_id: number;
+  /** Creator, for attribution only - groups are org-shared. */
+  coach_id: number | null;
   name: string;
   players: RosterPlayer[];
   created_at: string;

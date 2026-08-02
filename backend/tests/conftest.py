@@ -88,5 +88,43 @@ def coach_headers(register_coach):
     return headers
 
 
+@pytest.fixture
+def invite_teammate(client):
+    """Adds a second coach to an existing coach's organization, the same way
+    a real one joins: the admin mints an invite, the teammate registers with
+    it. Returns (coach, token, auth_headers) for the new teammate.
+
+    `register_coach` always creates a *separate* organization, so this is the
+    only fixture that produces two coaches who can see each other's data -
+    without it, org-sharing behaviour can't be tested at all.
+    """
+
+    def _invite(
+        admin_headers,
+        username="teammate",
+        email="teammate@example.com",
+        password="password123",
+    ):
+        invite = client.post("/api/organizations/invites", headers=admin_headers)
+        assert invite.status_code == 201, invite.get_json()
+        code = invite.get_json()["code"]
+
+        response = client.post(
+            "/api/auth/register-with-invite",
+            json={
+                "username": username,
+                "email": email,
+                "password": password,
+                "invite_code": code,
+            },
+        )
+        assert response.status_code == 201, response.get_json()
+        body = response.get_json()
+        headers = {"Authorization": f"Bearer {body['access_token']}"}
+        return body["coach"], body["access_token"], headers
+
+    return _invite
+
+
 def make_image_file(name: str = "play.png") -> tuple[io.BytesIO, str]:
     return io.BytesIO(b"fake-image-bytes"), name

@@ -9,7 +9,9 @@ import type { Quiz } from '../../api/types';
 
 const quizWithNoImage: Quiz = {
   id: 1,
+  organization_id: 1,
   coach_id: 1,
+  created_by_username: 'coach1',
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: false,

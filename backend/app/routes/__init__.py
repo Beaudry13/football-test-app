@@ -13,6 +13,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.grading import grading_bp
     from app.routes.folders import folders_bp
     from app.routes.groups import groups_bp
+    from app.routes.organizations import organizations_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -23,3 +24,4 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(grading_bp, url_prefix="/api")
     app.register_blueprint(folders_bp, url_prefix="/api/folders")
     app.register_blueprint(groups_bp, url_prefix="/api/groups")
+    app.register_blueprint(organizations_bp, url_prefix="/api/organizations")

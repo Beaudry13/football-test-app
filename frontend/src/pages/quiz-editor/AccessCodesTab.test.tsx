@@ -8,7 +8,9 @@ import type { AccessCode, Group, Quiz } from '../../api/types';
 
 const quiz: Quiz = {
   id: 1,
+  organization_id: 1,
   coach_id: 1,
+  created_by_username: 'coach1',
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: true,
@@ -20,6 +22,7 @@ const quiz: Quiz = {
 
 const defenseGroup: Group = {
   id: 7,
+  organization_id: 1,
   coach_id: 1,
   name: 'Defense',
   players: [{ id: 1, player_name: 'Jordan Smith', position: 0 }],

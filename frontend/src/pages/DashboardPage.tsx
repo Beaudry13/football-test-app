@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
 import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
 import { getErrorMessage } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import styles from './DashboardPage.module.css';
 
 export function DashboardPage() {
+  const { coach } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [newTitle, setNewTitle] = useState('');
@@ -131,6 +133,12 @@ export function DashboardPage() {
   }
 
   function renderQuizCard(quiz: Quiz) {
+    // Mirrors the backend's get_editable_quiz rule so the UI doesn't offer
+    // actions the API will refuse. The server is still the enforcement
+    // point - this only keeps the buttons honest.
+    const canEdit = coach != null && (quiz.coach_id === coach.id || coach.role === 'admin');
+    const isTeammates = coach != null && quiz.coach_id !== coach.id;
+
     return (
       <div key={quiz.id} className={`card ${styles.quizCard}`}>
         <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
@@ -138,10 +146,13 @@ export function DashboardPage() {
           <div className={styles.quizMeta}>
             {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
             {new Date(quiz.updated_at).toLocaleDateString()}
+            {isTeammates && (
+              <> · by {quiz.created_by_username ?? 'a former coach'}</>
+            )}
           </div>
         </Link>
         <div className={styles.actions}>
-          {folders && folders.length > 0 && (
+          {canEdit && folders && folders.length > 0 && (
             <select
               className={styles.folderSelect}
               value={quiz.folder_id ?? ''}
@@ -156,12 +167,16 @@ export function DashboardPage() {
               ))}
             </select>
           )}
+          {/* Duplicate stays available to everyone: the copy belongs to
+              whoever made it, so starting from a teammate's quiz is safe. */}
           <button className="btn btn-secondary btn-sm" onClick={() => handleDuplicate(quiz.id)}>
             Duplicate
           </button>
-          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(quiz.id, quiz.title)}>
-            Delete
-          </button>
+          {canEdit && (
+            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(quiz.id, quiz.title)}>
+              Delete
+            </button>
+          )}
         </div>
       </div>
     );

@@ -15,10 +15,19 @@ class Group(TimestampMixin, db.Model):
     __tablename__ = "groups"
 
     id = db.Column(db.Integer, primary_key=True)
-    coach_id = db.Column(db.Integer, db.ForeignKey("coaches.id"), nullable=False, index=True)
+    # Org-shared, same as Folder: organization_id scopes visibility and
+    # editing; coach_id is creator attribution only. Sharing the season's
+    # roster across the staff is the whole point of groups.
+    organization_id = db.Column(
+        db.Integer, db.ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    coach_id = db.Column(
+        db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     name = db.Column(db.String(255), nullable=False)
 
-    coach = db.relationship("Coach", back_populates="groups")
+    organization = db.relationship("Organization", back_populates="groups")
+    coach = db.relationship("Coach", back_populates="groups", foreign_keys=[coach_id])
     players = db.relationship(
         "GroupPlayer",
         back_populates="group",
@@ -29,6 +38,7 @@ class Group(TimestampMixin, db.Model):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "organization_id": self.organization_id,
             "coach_id": self.coach_id,
             "name": self.name,
             "players": [p.to_dict() for p in self.players],

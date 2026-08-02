@@ -1,4 +1,9 @@
-"""Quiz CRUD, duplication, and preview. All routes are coach-scoped."""
+"""Quiz CRUD, duplication, and preview.
+
+All routes are organization-scoped: any coach in the organization can read
+a quiz, but only its creator or an org admin can change it. See
+app/utils/auth.py for the tenancy rules.
+"""
 
 import copy
 
@@ -10,7 +15,7 @@ from app.extensions import db
 from app.models import Question, QuestionImage, QuestionOption, Quiz
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.file_storage import get_file_storage
-from app.utils.auth import current_coach, get_owned_folder, get_owned_quiz
+from app.utils.auth import current_coach, get_editable_quiz, get_org_folder, get_visible_quiz
 from app.utils.validation import load_json_body
 
 quizzes_bp = Blueprint("quizzes", __name__)
@@ -23,8 +28,8 @@ def list_quizzes():
     # selectinload: to_dict() reads len(quiz.questions) for question_count, so
     # without this each quiz would trigger its own lazy-load query (N+1).
     quizzes = (
-        Quiz.query.filter_by(coach_id=coach.id)
-        .options(selectinload(Quiz.questions))
+        Quiz.query.filter_by(organization_id=coach.organization_id)
+        .options(selectinload(Quiz.questions), selectinload(Quiz.coach))
         .order_by(Quiz.updated_at.desc())
         .all()
     )
@@ -38,6 +43,7 @@ def create_quiz():
     data = load_json_body(QuizCreateSchema())
 
     quiz = Quiz(
+        organization_id=coach.organization_id,
         coach_id=coach.id,
         title=data["title"],
         description=data["description"],
@@ -51,14 +57,14 @@ def create_quiz():
 @quizzes_bp.get("/<int:quiz_id>")
 @jwt_required()
 def get_quiz(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_visible_quiz(quiz_id)
     return jsonify(quiz.to_dict(include_questions=True, include_correct_answers=True))
 
 
 @quizzes_bp.patch("/<int:quiz_id>")
 @jwt_required()
 def update_quiz(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_editable_quiz(quiz_id)
     data = load_json_body(QuizUpdateSchema())
 
     for field in ("title", "description", "one_question_at_a_time"):
@@ -69,7 +75,7 @@ def update_quiz(quiz_id: int):
         if data["folder_id"] is None:
             quiz.folder_id = None
         else:
-            quiz.folder_id = get_owned_folder(data["folder_id"]).id
+            quiz.folder_id = get_org_folder(data["folder_id"]).id
 
     db.session.commit()
     return jsonify(quiz.to_dict())
@@ -78,7 +84,7 @@ def update_quiz(quiz_id: int):
 @quizzes_bp.delete("/<int:quiz_id>")
 @jwt_required()
 def delete_quiz(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_editable_quiz(quiz_id)
     # DB-level cascade removes the question_images rows, but not the actual
     # files - those have to be cleaned up explicitly before the row goes away.
     storage = get_file_storage()
@@ -93,10 +99,15 @@ def delete_quiz(quiz_id: int):
 @quizzes_bp.post("/<int:quiz_id>/duplicate")
 @jwt_required()
 def duplicate_quiz(quiz_id: int):
-    original = get_owned_quiz(quiz_id)
+    # Readable by anyone in the org, so a coach can start from a teammate's
+    # quiz. The copy belongs to whoever duplicated it, not to the original
+    # author - otherwise they'd end up unable to edit their own new copy.
+    original = get_visible_quiz(quiz_id)
+    coach = current_coach()
 
     copy_quiz = Quiz(
-        coach_id=original.coach_id,
+        organization_id=coach.organization_id,
+        coach_id=coach.id,
         title=f"{original.title} (Copy)",
         description=original.description,
         one_question_at_a_time=original.one_question_at_a_time,

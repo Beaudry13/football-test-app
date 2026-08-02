@@ -20,6 +20,7 @@ export function Layout() {
         <nav className={styles.nav}>
           <Link to="/">Quizzes</Link>
           <Link to="/groups">Groups</Link>
+          <Link to="/team">Team</Link>
           {coach ? (
             <div className={styles.coachInfo}>
               <span>{coach.username}</span>

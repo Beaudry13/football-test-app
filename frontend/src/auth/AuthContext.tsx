@@ -1,5 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { login as apiLogin, register as apiRegister, me as apiMe } from '../api/auth';
+import {
+  login as apiLogin,
+  register as apiRegister,
+  registerWithInvite as apiRegisterWithInvite,
+  me as apiMe,
+} from '../api/auth';
 import { ApiError, clearToken, getToken, setToken } from '../api/client';
 import type { Coach } from '../api/types';
 
@@ -12,6 +17,12 @@ interface AuthContextValue {
     email: string;
     password: string;
     organization: string;
+  }) => Promise<void>;
+  registerWithInvite: (input: {
+    username: string;
+    email: string;
+    password: string;
+    invite_code: string;
   }) => Promise<void>;
   logout: () => void;
 }
@@ -57,13 +68,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const registerWithInvite = useCallback(
+    async (input: { username: string; email: string; password: string; invite_code: string }) => {
+      const result = await apiRegisterWithInvite(input);
+      setToken(result.access_token);
+      setCoach(result.coach);
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     clearToken();
     setCoach(null);
   }, []);
 
   return (
-    <AuthContext.Provider value={{ coach, isLoading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ coach, isLoading, login, register, registerWithInvite, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

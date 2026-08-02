@@ -15,29 +15,36 @@ from app.extensions import db
 from app.models import Answer, PlayerResponse, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.export import build_results_csv, build_results_pdf, export_filename_slug
-from app.utils.auth import current_coach, get_owned_quiz
+from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_json_body
 
 grading_bp = Blueprint("grading", __name__)
 
 
-def _get_owned_answer(answer_id: int) -> Answer:
+def _get_gradable_answer(answer_id: int) -> Answer:
+    """An answer the caller may grade.
+
+    Scoped to the organization first (a 404 for anyone outside it), then
+    delegated to `get_editable_quiz`: viewing a teammate's results is fine,
+    but recording a grade against their quiz is an edit.
+    """
     coach = current_coach()
     answer = (
         Answer.query.join(PlayerResponse)
         .join(Quiz)
-        .filter(Answer.id == answer_id, Quiz.coach_id == coach.id)
+        .filter(Answer.id == answer_id, Quiz.organization_id == coach.organization_id)
         .first()
     )
     if answer is None:
         raise ApiError("Answer not found", status_code=404)
+    get_editable_quiz(answer.player_response.quiz_id)
     return answer
 
 
 @grading_bp.get("/quizzes/<int:quiz_id>/responses")
 @jwt_required()
 def list_responses(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_visible_quiz(quiz_id)
     responses = (
         PlayerResponse.query.filter_by(quiz_id=quiz.id)
         .options(selectinload(PlayerResponse.answers))
@@ -50,7 +57,7 @@ def list_responses(quiz_id: int):
 @grading_bp.get("/quizzes/<int:quiz_id>/responses/<int:response_id>")
 @jwt_required()
 def get_response(quiz_id: int, response_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_visible_quiz(quiz_id)
     response = (
         PlayerResponse.query.filter_by(id=response_id, quiz_id=quiz.id)
         .options(selectinload(PlayerResponse.answers))
@@ -64,7 +71,7 @@ def get_response(quiz_id: int, response_id: int):
 @grading_bp.patch("/answers/<int:answer_id>/grade")
 @jwt_required()
 def grade_answer(answer_id: int):
-    answer = _get_owned_answer(answer_id)
+    answer = _get_gradable_answer(answer_id)
     data = load_json_body(GradeAnswerSchema())
 
     answer.is_correct = data["is_correct"]
@@ -120,7 +127,7 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerResponse]:
 @grading_bp.get("/quizzes/<int:quiz_id>/dashboard")
 @jwt_required()
 def quiz_dashboard(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_visible_quiz(quiz_id)
     responses = (
         PlayerResponse.query.filter_by(quiz_id=quiz.id)
         .options(selectinload(PlayerResponse.answers))
@@ -132,7 +139,7 @@ def quiz_dashboard(quiz_id: int):
 @grading_bp.get("/quizzes/<int:quiz_id>/export.csv")
 @jwt_required()
 def export_results_csv(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_visible_quiz(quiz_id)
     responses = _load_responses_for_export(quiz)
     csv_text = build_results_csv(quiz, responses)
     slug = export_filename_slug(quiz.title)
@@ -146,7 +153,7 @@ def export_results_csv(quiz_id: int):
 @grading_bp.get("/quizzes/<int:quiz_id>/export.pdf")
 @jwt_required()
 def export_results_pdf(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_visible_quiz(quiz_id)
     responses = _load_responses_for_export(quiz)
     dashboard_data = _build_dashboard_data(quiz, responses)
     pdf_bytes = build_results_pdf(quiz, dashboard_data, responses)
@@ -168,7 +175,13 @@ def player_history():
 
     responses = (
         PlayerResponse.query.join(Quiz)
-        .filter(Quiz.coach_id == coach.id, PlayerResponse.player_name == player_name)
+        # Org-wide, not per-coach: a player's development across the whole
+        # program is the point, and quizzes from different coaches on the
+        # same staff are all part of that picture.
+        .filter(
+            Quiz.organization_id == coach.organization_id,
+            PlayerResponse.player_name == player_name,
+        )
         # contains_eager reuses the join above for response.quiz.title instead of
         # a separate lazy-load per response; selectinload batches .answers in one query.
         .options(contains_eager(PlayerResponse.quiz), selectinload(PlayerResponse.answers))

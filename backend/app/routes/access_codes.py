@@ -14,7 +14,7 @@ from app.extensions import db
 from app.models import AccessCode, Group
 from app.schemas.access_code import ActivateQuizSchema
 from app.services.access_codes import generate_unique_code
-from app.utils.auth import current_coach, get_owned_quiz
+from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_optional_json_body
 
 access_codes_bp = Blueprint("access_codes", __name__)
@@ -23,21 +23,23 @@ access_codes_bp = Blueprint("access_codes", __name__)
 @access_codes_bp.get("/<int:quiz_id>/access-codes")
 @jwt_required()
 def list_access_codes(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    # Read-only: any coach in the org may look up the active code to share it.
+    quiz = get_visible_quiz(quiz_id)
     return jsonify([code.to_dict() for code in quiz.access_codes])
 
 
 @access_codes_bp.post("/<int:quiz_id>/access-codes")
 @jwt_required()
 def activate_quiz(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_editable_quiz(quiz_id)
     data = load_optional_json_body(ActivateQuizSchema())
 
     groups: list[Group] = []
     if data["group_ids"]:
         coach = current_coach()
         groups = Group.query.filter(
-            Group.id.in_(data["group_ids"]), Group.coach_id == coach.id
+            Group.id.in_(data["group_ids"]),
+            Group.organization_id == coach.organization_id,
         ).all()
         if len(groups) != len(set(data["group_ids"])):
             raise ApiError("One or more selected groups were not found", status_code=404)
@@ -74,7 +76,7 @@ def activate_quiz(quiz_id: int):
 @access_codes_bp.post("/<int:quiz_id>/access-codes/<int:access_code_id>/deactivate")
 @jwt_required()
 def deactivate_access_code(quiz_id: int, access_code_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_editable_quiz(quiz_id)
     access_code = AccessCode.query.filter_by(id=access_code_id, quiz_id=quiz.id).first()
     if access_code is None:
         raise ApiError("Access code not found", status_code=404)

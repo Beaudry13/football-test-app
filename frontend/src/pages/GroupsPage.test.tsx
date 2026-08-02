@@ -8,6 +8,7 @@ import type { Group } from '../api/types';
 
 const sampleGroup: Group = {
   id: 7,
+  organization_id: 1,
   coach_id: 1,
   name: 'Defense',
   players: [

@@ -1,7 +1,8 @@
 """Question CRUD, reordering, and image/annotation management.
 
-Nested under /api/quizzes/<quiz_id>/questions. Every route re-verifies
-quiz ownership so a coach can never read or mutate another coach's data.
+Nested under /api/quizzes/<quiz_id>/questions. Every route re-verifies that
+the caller may edit the parent quiz, so a coach can never mutate another
+organization's data - or a teammate's quiz they didn't create.
 """
 
 from flask import Blueprint, jsonify, request
@@ -18,14 +19,14 @@ from app.schemas.question import (
     validate_options_for_type,
 )
 from app.services.file_storage import get_file_storage
-from app.utils.auth import get_owned_quiz
+from app.utils.auth import get_editable_quiz
 from app.utils.validation import load_json_body
 
 questions_bp = Blueprint("questions", __name__)
 
 
-def _get_owned_question(quiz_id: int, question_id: int) -> Question:
-    quiz = get_owned_quiz(quiz_id)
+def _get_editable_question(quiz_id: int, question_id: int) -> Question:
+    quiz = get_editable_quiz(quiz_id)
     question = Question.query.filter_by(id=question_id, quiz_id=quiz.id).first()
     if question is None:
         raise ApiError("Question not found", status_code=404)
@@ -47,7 +48,7 @@ def _replace_options(question: Question, options: list[dict]) -> None:
 @questions_bp.post("/<int:quiz_id>/questions")
 @jwt_required()
 def create_question(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_editable_quiz(quiz_id)
     data = load_json_body(QuestionCreateSchema())
     validate_options_for_type(data["question_type"], data["options"])
 
@@ -72,7 +73,7 @@ def create_question(quiz_id: int):
 @questions_bp.patch("/<int:quiz_id>/questions/<int:question_id>")
 @jwt_required()
 def update_question(quiz_id: int, question_id: int):
-    question = _get_owned_question(quiz_id, question_id)
+    question = _get_editable_question(quiz_id, question_id)
     data = load_json_body(QuestionUpdateSchema())
 
     question_type = data.get("question_type", question.question_type.value)
@@ -93,7 +94,7 @@ def update_question(quiz_id: int, question_id: int):
 @questions_bp.delete("/<int:quiz_id>/questions/<int:question_id>")
 @jwt_required()
 def delete_question(quiz_id: int, question_id: int):
-    question = _get_owned_question(quiz_id, question_id)
+    question = _get_editable_question(quiz_id, question_id)
 
     if question.image is not None:
         get_file_storage().delete_image(question.image.image_url)
@@ -106,7 +107,7 @@ def delete_question(quiz_id: int, question_id: int):
 @questions_bp.post("/<int:quiz_id>/questions/reorder")
 @jwt_required()
 def reorder_questions(quiz_id: int):
-    quiz = get_owned_quiz(quiz_id)
+    quiz = get_editable_quiz(quiz_id)
     data = load_json_body(QuestionReorderSchema())
 
     question_ids = data["question_ids"]
@@ -130,7 +131,7 @@ def reorder_questions(quiz_id: int):
 @questions_bp.post("/<int:quiz_id>/questions/<int:question_id>/image")
 @jwt_required()
 def upload_question_image(quiz_id: int, question_id: int):
-    question = _get_owned_question(quiz_id, question_id)
+    question = _get_editable_question(quiz_id, question_id)
 
     if "image" not in request.files:
         raise ApiError("No image file provided under the 'image' field", status_code=400)
@@ -151,7 +152,7 @@ def upload_question_image(quiz_id: int, question_id: int):
 @questions_bp.put("/<int:quiz_id>/questions/<int:question_id>/image/annotations")
 @jwt_required()
 def update_question_image_annotations(quiz_id: int, question_id: int):
-    question = _get_owned_question(quiz_id, question_id)
+    question = _get_editable_question(quiz_id, question_id)
     if question.image is None:
         raise ApiError("Question has no image to annotate", status_code=404)
 
@@ -169,7 +170,7 @@ def update_question_image_annotations(quiz_id: int, question_id: int):
 @questions_bp.delete("/<int:quiz_id>/questions/<int:question_id>/image")
 @jwt_required()
 def delete_question_image(quiz_id: int, question_id: int):
-    question = _get_owned_question(quiz_id, question_id)
+    question = _get_editable_question(quiz_id, question_id)
     if question.image is None:
         raise ApiError("Question has no image", status_code=404)
 

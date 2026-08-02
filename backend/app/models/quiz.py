@@ -8,7 +8,15 @@ class Quiz(TimestampMixin, db.Model):
     __tablename__ = "quizzes"
 
     id = db.Column(db.Integer, primary_key=True)
-    coach_id = db.Column(db.Integer, db.ForeignKey("coaches.id"), nullable=False, index=True)
+    # organization_id is the tenancy scope (who can *see* this quiz);
+    # coach_id is the creator (who can *edit* it, alongside org admins).
+    # See app/utils/auth.py::get_visible_quiz / get_editable_quiz.
+    organization_id = db.Column(
+        db.Integer, db.ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    coach_id = db.Column(
+        db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
     one_question_at_a_time = db.Column(db.Boolean, nullable=False, default=True)
@@ -16,7 +24,8 @@ class Quiz(TimestampMixin, db.Model):
         db.Integer, db.ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    coach = db.relationship("Coach", back_populates="quizzes")
+    organization = db.relationship("Organization", back_populates="quizzes")
+    coach = db.relationship("Coach", back_populates="quizzes", foreign_keys=[coach_id])
     folder = db.relationship("Folder", back_populates="quizzes")
     questions = db.relationship(
         "Question",
@@ -40,7 +49,11 @@ class Quiz(TimestampMixin, db.Model):
     def to_dict(self, include_questions: bool = False, include_correct_answers: bool = False) -> dict:
         data = {
             "id": self.id,
+            "organization_id": self.organization_id,
             "coach_id": self.coach_id,
+            # Lets the dashboard label quizzes made by a teammate without a
+            # second round-trip per card.
+            "created_by_username": self.coach.username if self.coach else None,
             "title": self.title,
             "description": self.description,
             "one_question_at_a_time": self.one_question_at_a_time,

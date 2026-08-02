@@ -5,11 +5,37 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPage } from './DashboardPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
-import type { Folder, Quiz } from '../api/types';
+import * as authContext from '../auth/AuthContext';
+import type { Coach, Folder, Quiz } from '../api/types';
+
+const currentCoach: Coach = {
+  id: 1,
+  username: 'coach1',
+  email: 'coach1@example.com',
+  organization: 'Wildcats',
+  organization_id: 1,
+  role: 'member',
+  created_at: '2026-01-01T00:00:00Z',
+};
+
+/** DashboardPage reads the signed-in coach to decide which quizzes it may
+ * edit, so every test needs an auth context. */
+function mockAuth(overrides: Partial<Coach> = {}) {
+  vi.spyOn(authContext, 'useAuth').mockReturnValue({
+    coach: { ...currentCoach, ...overrides },
+    isLoading: false,
+    login: vi.fn(),
+    register: vi.fn(),
+    registerWithInvite: vi.fn(),
+    logout: vi.fn(),
+  });
+}
 
 const sampleQuiz: Quiz = {
   id: 1,
+  organization_id: 1,
   coach_id: 1,
+  created_by_username: 'coach1',
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: true,
@@ -21,6 +47,7 @@ const sampleQuiz: Quiz = {
 
 const sampleFolder: Folder = {
   id: 10,
+  organization_id: 1,
   coach_id: 1,
   name: 'Fall Camp',
   quiz_count: 1,
@@ -40,6 +67,7 @@ describe('DashboardPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue([]);
+    mockAuth();
   });
 
   it('shows the empty state when there are no quizzes', async () => {
@@ -183,5 +211,55 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: 'Delete folder' }));
 
     await waitFor(() => expect(deleteFolderSpy).toHaveBeenCalledWith(10));
+  });
+
+  // --- organization sharing: see all, edit own ---------------------------
+
+  it("labels a teammate's quiz with its creator and hides the edit controls", async () => {
+    const teammates: Quiz = {
+      ...sampleQuiz,
+      id: 2,
+      coach_id: 99,
+      created_by_username: 'coach_jones',
+      title: "Jones's quiz",
+    };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([teammates]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
+    renderDashboard();
+
+    await screen.findByText("Jones's quiz");
+    expect(screen.getByText(/by coach_jones/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/to folder/)).not.toBeInTheDocument();
+    // Duplicating a teammate's quiz is always allowed - the copy is yours.
+    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+  });
+
+  it('lets an admin edit a teammate\'s quiz', async () => {
+    const teammates: Quiz = { ...sampleQuiz, id: 2, coach_id: 99, created_by_username: 'coach_jones' };
+    mockAuth({ role: 'admin' });
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([teammates]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('does not label or restrict the coach\'s own quiz', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.queryByText(/by coach1/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('falls back gracefully when the creator has left the organization', async () => {
+    const orphaned: Quiz = { ...sampleQuiz, id: 3, coach_id: null, created_by_username: null };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([orphaned]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.getByText(/by a former coach/)).toBeInTheDocument();
   });
 });

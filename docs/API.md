@@ -31,11 +31,17 @@ See each endpoint below for its specific limit.
 
 ## Auth
 
+Every coach belongs to exactly one **organization** (a coaching staff sharing
+one workspace) — see [Organizations](#organizations-) below for the tenancy
+model. `POST /register` starts a brand-new organization; `POST
+/register-with-invite` joins an existing one. There's no third way in.
+
 ### `POST /api/auth/register`
 
 Rate limit: 10 requests/hour per IP.
 
-Create a coach account.
+Creates a coach account **and** a new organization, with this coach as its
+admin.
 
 **Request**
 ```json
@@ -50,12 +56,37 @@ Create a coach account.
 **Response `201`**
 ```json
 {
-  "coach": { "id": 1, "username": "coach_smith", "email": "coach@example.com", "organization": "Wildcats Football", "created_at": "..." },
+  "coach": {
+    "id": 1, "username": "coach_smith", "email": "coach@example.com",
+    "organization": "Wildcats Football", "organization_id": 1, "role": "admin",
+    "created_at": "..."
+  },
   "access_token": "..."
 }
 ```
 
 `409` if username or email is already taken. `422` on validation failure.
+
+### `POST /api/auth/register-with-invite`
+
+Rate limit: 10 requests/hour per IP.
+
+Creates a coach account that joins an existing organization as a **member**
+(see `POST /api/organizations/invites`). No `organization` field — the org
+comes from the invite.
+
+**Request:** `{ "username": "...", "email": "...", "password": "...", "invite_code": "..." }`
+**Response `201`:** same shape as `/register`, with `"role": "member"`.
+
+`404` for any invite that's invalid, expired, revoked, or already used — one
+message for all four so a guessed code can't be probed to find out which.
+`409` if username or email is already taken.
+
+### `GET /api/auth/invites/{invite_code}` (public, no auth)
+
+Lets the join page show which organization an invite is for before asking
+for a password. **Response `200`:** `{ "organization_name": "..." }`. `404`
+if the invite isn't usable (same generic condition as above).
 
 ### `POST /api/auth/login`
 
@@ -70,11 +101,72 @@ Returns the authenticated coach's profile.
 
 ---
 
+## Organizations 🔒
+
+The tenancy boundary. Every quiz, folder, and group belongs to an
+organization (`organization_id`) — that's what a coach can **see**. Quizzes
+additionally track a creator (`coach_id`) — that's what a coach can **edit**,
+alongside org admins; see the note on each resource below. Folders and
+groups have no such restriction: any member can edit them, since they're
+shared team infrastructure (a season roster) rather than one coach's work.
+
+All routes here resolve the organization from the authenticated coach —
+there's no way to name a different one in a request, so there's nothing to
+authorize against.
+
+### `GET /api/organizations`
+
+The current org plus its member list (`id`, `username`, `email`, `role`).
+
+### `PATCH /api/organizations` (admin only)
+
+**Request:** `{ "name": "..." }` — rename the organization.
+
+### `GET /api/organizations/invites` (admin only)
+
+Pending and past invites, newest first. **Invite codes are never included**
+in this listing — a code is shown exactly once, in the create response.
+
+### `POST /api/organizations/invites` (admin only)
+
+Creates a single-use invite, valid 14 days.
+
+**Response `201`**
+```json
+{ "id": 5, "organization_id": 1, "code": "...", "expires_at": "...", "is_usable": true, "created_by": "coach_smith", "accepted_at": null, "accepted_by": null }
+```
+This is the only response that includes `code` — show it to the admin as a
+copyable `/join/{code}` link immediately, since it can't be read back later.
+
+### `DELETE /api/organizations/invites/{invite_id}` (admin only)
+
+Revokes an invite. `204`. Already-accepted invites can still be revoked
+(harmlessly — they're already unusable), so this never needs a special case.
+
+### `PATCH /api/organizations/members/{coach_id}` (admin only)
+
+**Request:** `{ "role": "admin" | "member" }`. `422` if this would demote the
+organization's last admin.
+
+### `DELETE /api/organizations/members/{coach_id}` (admin only)
+
+Removes a coach from the organization. `422` if `coach_id` is the caller
+themselves, or the organization's last admin. Quizzes, folders, and groups
+the removed coach created **stay with the organization** — their `coach_id`
+is set to `null`, not deleted.
+
+---
+
 ## Quizzes 🔒
 
-All quiz endpoints are scoped to the authenticated coach — a coach can
-never read or modify another coach's quizzes (cross-org requests return
-`404`, not `403`, to avoid confirming another coach's quiz IDs exist).
+Every quiz is visible to every coach in its organization; only its creator or
+an org admin may change it. A quiz belonging to another organization is
+always a `404` (nothing to confirm exists). A quiz in *your* org that a
+teammate created is a different case: it shows up in listings and `GET`, but
+an edit/delete attempt is a `403` with a clear reason — a `404` there would
+be actively misleading, since the coach can see the quiz right in front of
+them. Endpoints below are marked 👁 (any org member) or ✏️ (creator or admin
+only).
 
 ### `GET /api/quizzes`
 

@@ -67,7 +67,7 @@ def test_deleting_a_folder_does_not_delete_its_quizzes(client, coach_headers):
     assert get_response.get_json()["folder_id"] is None
 
 
-def test_cannot_assign_a_quiz_to_another_coachs_folder(client, coach_headers, register_coach):
+def test_cannot_assign_a_quiz_to_another_organizations_folder(client, coach_headers, register_coach):
     _, _, other_headers = register_coach(username="coach2", email="coach2@example.com")
     other_folder = create_folder(client, other_headers, name="Other Coach's Folder")
     quiz = create_quiz(client, coach_headers)
@@ -78,7 +78,7 @@ def test_cannot_assign_a_quiz_to_another_coachs_folder(client, coach_headers, re
     assert response.status_code == 404
 
 
-def test_folders_are_scoped_per_coach(client, coach_headers, register_coach):
+def test_folders_are_scoped_per_organization(client, coach_headers, register_coach):
     create_folder(client, coach_headers, name="Mine")
     _, _, other_headers = register_coach(username="coach2", email="coach2@example.com")
 
@@ -87,7 +87,7 @@ def test_folders_are_scoped_per_coach(client, coach_headers, register_coach):
     assert response.get_json() == []
 
 
-def test_cannot_rename_or_delete_another_coachs_folder(client, coach_headers, register_coach):
+def test_cannot_rename_or_delete_another_organizations_folder(client, coach_headers, register_coach):
     folder = create_folder(client, coach_headers, name="Mine")
     _, _, other_headers = register_coach(username="coach2", email="coach2@example.com")
 
