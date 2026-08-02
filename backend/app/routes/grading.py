@@ -21,7 +21,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Answer, AttemptStatus, PlayerAttempt, Quiz
+from app.models import Answer, AttemptStatus, GradeAuditLog, PlayerAttempt, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.export import build_results_csv, build_results_pdf, export_filename_slug
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
@@ -107,11 +107,31 @@ def reset_attempt(quiz_id: int, attempt_id: int):
 def grade_answer(answer_id: int):
     answer = _get_gradable_answer(answer_id)
     data = load_json_body(GradeAnswerSchema())
+    coach = current_coach()
+
+    previous_is_correct = answer.is_correct
+    previous_coach_feedback = answer.coach_feedback
 
     answer.is_correct = data["is_correct"]
     if data["coach_feedback"] is not None:
         answer.coach_feedback = data["coach_feedback"]
     answer.graded_at = datetime.now(timezone.utc)
+    answer.graded_by_coach_id = coach.id
+
+    # Unconditional, even when nothing actually changed - a coach
+    # re-confirming an existing grade is still a meaningful "who touched
+    # this last" event, and skipping no-ops would mean the audit trail
+    # can't answer "did anyone look at this again after the first grade."
+    db.session.add(
+        GradeAuditLog(
+            answer_id=answer.id,
+            coach_id=coach.id,
+            previous_is_correct=previous_is_correct,
+            previous_coach_feedback=previous_coach_feedback,
+            new_is_correct=answer.is_correct,
+            new_coach_feedback=answer.coach_feedback,
+        )
+    )
 
     db.session.commit()
     return jsonify(answer.to_dict())

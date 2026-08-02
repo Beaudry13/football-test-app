@@ -1,10 +1,34 @@
 ﻿import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResultsTab } from './ResultsTab';
 import * as gradingApi from '../../api/grading';
 import * as downloadUtil from '../../utils/download';
-import type { Quiz, QuizDashboard } from '../../api/types';
+import * as authContext from '../../auth/AuthContext';
+import type { Coach, PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
+
+/** ResponseRow (rendered once a response is expanded) reads the signed-in
+ * coach to decide whether to show the "Reset attempt" button. */
+function mockAuth() {
+  const currentCoach: Coach = {
+    id: 1,
+    username: 'coach1',
+    email: 'coach1@example.com',
+    organization: 'Wildcats',
+    organization_id: 1,
+    role: 'member',
+    created_at: '2026-01-01T00:00:00Z',
+  };
+  vi.spyOn(authContext, 'useAuth').mockReturnValue({
+    coach: currentCoach,
+    isLoading: false,
+    login: vi.fn(),
+    register: vi.fn(),
+    registerWithInvite: vi.fn(),
+    logout: vi.fn(),
+  });
+}
 
 const sampleQuiz: Quiz = {
   id: 1,
@@ -29,8 +53,12 @@ const sampleDashboard: QuizDashboard = {
   question_breakdown: [],
 };
 
-function renderResultsTab() {
-  render(<ResultsTab quiz={sampleQuiz} />);
+function renderResultsTab(quiz: Quiz = sampleQuiz) {
+  render(
+    <MemoryRouter>
+      <ResultsTab quiz={quiz} />
+    </MemoryRouter>,
+  );
 }
 
 describe('ResultsTab exports', () => {
@@ -103,5 +131,94 @@ describe('ResultsTab exports', () => {
 
     await screen.findByRole('button', { name: 'Export CSV' });
     expect(screen.queryByText(/Haven't submitted yet/)).not.toBeInTheDocument();
+  });
+
+  it('shows who graded an answer once graded_by_username is present', async () => {
+    mockAuth();
+    const user = userEvent.setup();
+    const quizWithQuestion: Quiz = {
+      ...sampleQuiz,
+      questions: [
+        {
+          id: 10,
+          quiz_id: 1,
+          question_text: 'Describe your assignment.',
+          question_type: 'written',
+          position: 0,
+          options: [],
+          image: null,
+        },
+      ],
+    };
+    const response: PlayerResponse = {
+      id: 100,
+      quiz_id: 1,
+      access_code_id: 5,
+      player_name: 'Jordan Smith',
+      submitted_at: '2026-01-05T00:00:00Z',
+      answers: [
+        {
+          id: 200,
+          question_id: 10,
+          answer_text: 'I set the edge.',
+          selected_option_id: null,
+          is_correct: true,
+          coach_feedback: 'Nice work.',
+          graded_at: '2026-01-06T00:00:00Z',
+          graded_by_username: 'coach_amy',
+        },
+      ],
+    };
+    vi.spyOn(gradingApi, 'listResponses').mockResolvedValue([response]);
+    renderResultsTab(quizWithQuestion);
+
+    await user.click(await screen.findByText('▼'));
+
+    expect(await screen.findByText('Graded by coach_amy')).toBeInTheDocument();
+  });
+
+  it('does not show a graded-by line when the answer has not been graded yet', async () => {
+    mockAuth();
+    const user = userEvent.setup();
+    const quizWithQuestion: Quiz = {
+      ...sampleQuiz,
+      questions: [
+        {
+          id: 10,
+          quiz_id: 1,
+          question_text: 'Describe your assignment.',
+          question_type: 'written',
+          position: 0,
+          options: [],
+          image: null,
+        },
+      ],
+    };
+    const response: PlayerResponse = {
+      id: 100,
+      quiz_id: 1,
+      access_code_id: 5,
+      player_name: 'Jordan Smith',
+      submitted_at: '2026-01-05T00:00:00Z',
+      answers: [
+        {
+          id: 200,
+          question_id: 10,
+          answer_text: 'I set the edge.',
+          selected_option_id: null,
+          is_correct: null,
+          coach_feedback: null,
+          graded_at: null,
+          graded_by_username: null,
+        },
+      ],
+    };
+    vi.spyOn(gradingApi, 'listResponses').mockResolvedValue([response]);
+    renderResultsTab(quizWithQuestion);
+
+    await user.click(await screen.findByText('▼'));
+
+    expect(await screen.findByText('I set the edge.')).toBeInTheDocument();
+    expect(screen.queryByText(/Graded by/)).not.toBeInTheDocument();
   });
 });

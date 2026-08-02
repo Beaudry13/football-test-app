@@ -4,7 +4,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
-from app.models import AccessCode
+from app.models import AccessCode, Answer, GradeAuditLog
 
 
 def build_ready_quiz(client, headers):
@@ -137,6 +137,7 @@ def test_expired_code_is_rejected_at_validate_and_submit(app, client, coach_head
 
     validate_response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
     assert validate_response.status_code == 404
+    assert validate_response.get_json()["reason"] == "expired"
 
     submit_response = client.post(
         "/api/play/submit",
@@ -147,6 +148,7 @@ def test_expired_code_is_rejected_at_validate_and_submit(app, client, coach_head
         },
     )
     assert submit_response.status_code == 404
+    assert submit_response.get_json()["reason"] == "expired"
 
 
 def test_deactivated_code_is_rejected_even_before_expiry(client, coach_headers):
@@ -159,6 +161,7 @@ def test_deactivated_code_is_rejected_even_before_expiry(client, coach_headers):
 
     validate_response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
     assert validate_response.status_code == 404
+    assert validate_response.get_json()["reason"] == "deactivated"
 
     submit_response = client.post(
         "/api/play/submit",
@@ -169,6 +172,33 @@ def test_deactivated_code_is_rejected_even_before_expiry(client, coach_headers):
         },
     )
     assert submit_response.status_code == 404
+    assert submit_response.get_json()["reason"] == "deactivated"
+
+
+def test_validate_code_reports_not_found_for_a_code_that_never_existed(client):
+    response = client.post("/api/play/validate-code", json={"code": "NOPECD"})
+    assert response.status_code == 404
+    assert response.get_json()["reason"] == "not_found"
+    # not_found and deactivated must share the same message, or a caller
+    # could tell the two apart just by reading the error text.
+    assert response.get_json()["error"] == "Invalid access code"
+
+
+def test_validate_code_never_scopes_by_organization(client, register_coach):
+    """reason_for_invalid must never branch on org/quiz ownership - a real,
+    active code from ANY organization has to validate successfully no
+    matter who (if anyone) happens to be asking. If lookup were scoped to
+    "does this code belong to the caller's org," a valid code from a
+    different org would incorrectly report not_found, which would let a
+    caller enumerate which codes exist in orgs they have no business
+    knowing about."""
+    _, _, coach_a_headers = register_coach(
+        username="coach_a", email="coach_a@example.com", organization="Wildcats"
+    )
+    _, _, _, access_code = build_ready_quiz(client, coach_a_headers)
+
+    response = client.post("/api/play/validate-code", json={"code": access_code["code"]})
+    assert response.status_code == 200
 
 
 def test_submit_quiz_auto_grades_true_false_and_leaves_written_ungraded(client, coach_headers):
@@ -397,6 +427,119 @@ def test_coach_can_grade_written_answer_and_leave_feedback(client, coach_headers
     assert body["is_correct"] is True
     assert body["coach_feedback"] == "Nice job identifying the assignment."
     assert body["graded_at"] is not None
+    assert body["graded_by_username"] == "coach1"
+
+
+def _grade_written_answer(client, coach_headers, is_correct=True, feedback="Nice job."):
+    """Builds a ready quiz, submits a written answer, and grades it once -
+    the setup every audit-trail test below starts from."""
+    _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    submit_response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"]},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
+    ).get_json()
+    answer_id = next(
+        a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]
+    )
+    client.patch(
+        f"/api/answers/{answer_id}/grade",
+        json={"is_correct": is_correct, "coach_feedback": feedback},
+        headers=coach_headers,
+    )
+    return answer_id
+
+
+def test_grade_answer_records_which_coach_graded_it(app, client, coach_headers):
+    answer_id = _grade_written_answer(client, coach_headers)
+
+    with app.app_context():
+        answer = db.session.get(Answer, answer_id)
+        assert answer.graded_by_coach_id is not None
+        assert answer.graded_by.username == "coach1"
+
+
+def test_grade_answer_writes_an_audit_log_entry(app, client, coach_headers):
+    answer_id = _grade_written_answer(
+        client, coach_headers, is_correct=True, feedback="Nice job identifying the assignment."
+    )
+
+    with app.app_context():
+        logs = GradeAuditLog.query.filter_by(answer_id=answer_id).all()
+        assert len(logs) == 1
+        log = logs[0]
+        assert log.previous_is_correct is None
+        assert log.previous_coach_feedback is None
+        assert log.new_is_correct is True
+        assert log.new_coach_feedback == "Nice job identifying the assignment."
+        assert log.coach.username == "coach1"
+
+
+def test_re_grading_appends_a_second_audit_entry_capturing_the_prior_values(app, client, coach_headers):
+    answer_id = _grade_written_answer(
+        client, coach_headers, is_correct=True, feedback="First pass feedback."
+    )
+
+    response = client.patch(
+        f"/api/answers/{answer_id}/grade",
+        json={"is_correct": False, "coach_feedback": "Actually, reconsidered this one."},
+        headers=coach_headers,
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        logs = GradeAuditLog.query.filter_by(answer_id=answer_id).order_by(GradeAuditLog.id).all()
+        assert len(logs) == 2
+        first, second = logs
+        assert first.new_is_correct is True
+        assert second.previous_is_correct is True
+        assert second.previous_coach_feedback == "First pass feedback."
+        assert second.new_is_correct is False
+        assert second.new_coach_feedback == "Actually, reconsidered this one."
+
+
+def test_re_confirming_the_same_grade_still_appends_an_audit_entry(client, coach_headers, app):
+    """Even a no-op re-grade is a meaningful "someone looked at this again"
+    event, so it must not be silently skipped."""
+    answer_id = _grade_written_answer(client, coach_headers, is_correct=True, feedback="Good.")
+
+    client.patch(
+        f"/api/answers/{answer_id}/grade",
+        json={"is_correct": True, "coach_feedback": "Good."},
+        headers=coach_headers,
+    )
+
+    with app.app_context():
+        assert GradeAuditLog.query.filter_by(answer_id=answer_id).count() == 2
+
+
+def test_removing_a_coach_nulls_graded_by_but_keeps_the_audit_log_row(
+    app, client, coach_headers, invite_teammate
+):
+    teammate, _, teammate_headers = invite_teammate(coach_headers)
+    answer_id = _grade_written_answer(client, teammate_headers)
+
+    with app.app_context():
+        answer = db.session.get(Answer, answer_id)
+        assert answer.graded_by_coach_id == teammate["id"]
+        log = GradeAuditLog.query.filter_by(answer_id=answer_id).first()
+        assert log.coach_id == teammate["id"]
+
+    remove_response = client.delete(f"/api/organizations/members/{teammate['id']}", headers=coach_headers)
+    assert remove_response.status_code == 204
+
+    with app.app_context():
+        answer = db.session.get(Answer, answer_id)
+        assert answer.graded_by_coach_id is None
+        log = GradeAuditLog.query.filter_by(answer_id=answer_id).first()
+        assert log is not None
+        assert log.coach_id is None
+        # The record of what happened survives even though "who" is gone.
+        assert log.new_is_correct is True
 
 
 def test_quiz_dashboard_summarizes_responses(client, coach_headers):

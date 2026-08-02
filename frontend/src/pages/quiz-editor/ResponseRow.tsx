@@ -71,6 +71,9 @@ function AnswerRow({
             ✕ Incorrect
           </button>
           {answer.graded_at && <span className={`${nb.badge} ${nb.badgeNeutral}`}>Graded</span>}
+          {answer.graded_by_username && (
+            <span className={styles.gradedBy}>Graded by {answer.graded_by_username}</span>
+          )}
         </div>
       ) : (
         <span className={`${nb.badge} ${answer.is_correct ? nb.badgeSuccess : nb.badgeWarning}`}>

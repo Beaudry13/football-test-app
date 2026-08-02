@@ -89,11 +89,22 @@ class Answer(db.Model):
     )
     is_correct = db.Column(db.Boolean, nullable=True)
     coach_feedback = db.Column(db.Text, nullable=True)
+    # Most-recently-graded-at, not first-graded-at - overwritten on every
+    # re-grade, same as is_correct/coach_feedback. The full history of every
+    # grading event (who, what changed, when) lives in GradeAuditLog instead;
+    # this column is just "when did the current grade get set."
     graded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # ondelete=SET NULL: matches Quiz.coach_id/Folder.coach_id/Group.coach_id
+    # - a coach leaving the org shouldn't delete or block deleting the grades
+    # they made, just lose the "who" attribution on them.
+    graded_by_coach_id = db.Column(
+        db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True
+    )
 
     attempt = db.relationship("PlayerAttempt", back_populates="answers")
     question = db.relationship("Question", back_populates="answers")
     selected_option = db.relationship("QuestionOption")
+    graded_by = db.relationship("Coach")
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -110,4 +121,5 @@ class Answer(db.Model):
             "is_correct": self.is_correct,
             "coach_feedback": self.coach_feedback,
             "graded_at": self.graded_at.isoformat() if self.graded_at else None,
+            "graded_by_username": self.graded_by.username if self.graded_by else None,
         }
