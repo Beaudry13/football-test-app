@@ -1,0 +1,45 @@
+/* Preview isn't nested in the coach Layout (see App.tsx) - it has no
+   ancestor providing page padding or a background, so both are set here. */
+.page {
+  min-height: 100%;
+  background: var(--color-bg);
+  padding: 1.5em;
+}
+
+.wrapper {
+  display: flex;
+  justify-content: center;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  flex-wrap: wrap;
+  max-width: 1300px;
+  margin: 0 auto 1em;
+}
+
+.backLink {
+  font-size: 0.9em;
+  text-decoration: none;
+}
+
+.banner {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.6em 0.9em;
+  font-size: 0.85em;
+  font-weight: 600;
+  margin-bottom: 1em;
+  text-align: center;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 3em 1em;
+  color: var(--color-text-muted);
+}

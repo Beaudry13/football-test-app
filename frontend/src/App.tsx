@@ -10,6 +10,7 @@ import { GroupDetailPage } from './pages/GroupDetailPage';
 import { TeamPage } from './pages/TeamPage';
 import { JoinOrgPage } from './pages/JoinOrgPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
+import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { PlayPage } from './pages/play/PlayPage';
 import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
@@ -28,6 +29,12 @@ function App() {
           <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
 
           <Route element={<ProtectedRoute />}>
+            {/* Preview is deliberately NOT nested in <Layout> - the whole
+                point is showing exactly what a player sees (no coach nav,
+                no editor's narrower content width), just gated behind
+                login instead of a real access code. */}
+            <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
+
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />
               <Route path="/team" element={<TeamPage />} />

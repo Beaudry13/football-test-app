@@ -31,8 +31,17 @@ export function QuestionInput({
             alt="Film still"
             onClick={() => setIsZoomed(true)}
             style={{
-              maxWidth: '100%',
-              maxHeight: '70vh',
+              // width (not just maxWidth) so a smaller/cropped screenshot
+              // also scales up to fill the panel - the goal is the image
+              // dominating the view, not merely being capped when large.
+              // height:auto lets the browser preserve aspect ratio, and
+              // per the CSS2 replaced-element sizing algorithm, maxHeight
+              // correctly overrides that auto height (recomputing width
+              // from it in turn) if a tall image would otherwise blow past
+              // the viewport - no distortion either way.
+              width: '100%',
+              height: 'auto',
+              maxHeight: '82vh',
               objectFit: 'contain',
               cursor: 'zoom-in',
               borderRadius: 'var(--radius-sm)',

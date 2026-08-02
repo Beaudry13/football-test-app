@@ -84,6 +84,15 @@ export function QuizEditorPage() {
           onChange={(e) => setQuiz({ ...quiz, title: e.target.value })}
           onBlur={(e) => handleFieldSave('title', e.target.value)}
         />
+        <Link
+          to={`/quizzes/${quiz.id}/preview`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-secondary btn-sm"
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          Preview as player
+        </Link>
       </div>
       <textarea
         className={styles.descriptionInput}

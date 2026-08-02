@@ -11,10 +11,13 @@
 
 /* Wider than .panel - the quiz-taking step is the one place a player needs
    room to actually read annotation detail (routes, circles) on a film
-   still, unlike the narrow code-entry/name-picker steps. */
+   still, unlike the narrow code-entry/name-picker steps. The film-still
+   image itself (see QuestionInput.tsx) is sized to fill most of this, not
+   just fit inside a modest column - the whole point of this cap being wide
+   is to give the image room to be the dominant thing on screen. */
 .quizPanel {
   width: 100%;
-  max-width: 900px;
+  max-width: 1300px;
 }
 
 .codeInput {
