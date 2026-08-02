@@ -211,6 +211,29 @@ export interface PlayerHistoryEntry {
   submitted_at: string;
   graded_answer_count: number;
   correct_answer_count: number;
+  pending_grading_count: number;
+}
+
+export interface ActiveAttemptSummary {
+  player_name: string;
+  /** Present on `submitted`, absent on `in_progress` entries. */
+  submitted_at?: string;
+  /** Present on `in_progress`, absent on `submitted` entries. */
+  started_at?: string;
+}
+
+export interface ActiveQuizStatus {
+  quiz_id: number;
+  quiz_title: string;
+  access_code_id: number;
+  code: string;
+  expires_at: string;
+  /** Empty means "whole roster" - no Group is linked to this activation. */
+  group_names: string[];
+  roster_size: number;
+  submitted: ActiveAttemptSummary[];
+  in_progress: ActiveAttemptSummary[];
+  not_started: string[];
 }
 
 export interface ValidateCodeResponse {

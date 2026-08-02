@@ -6,15 +6,27 @@ app/utils/auth.py for the tenancy rules.
 """
 
 import copy
+from collections import defaultdict
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from app.extensions import db
-from app.models import AccessCode, Question, QuestionImage, QuestionOption, Quiz
+from app.models import (
+    AccessCode,
+    AttemptStatus,
+    Group,
+    PlayerAttempt,
+    Question,
+    QuestionImage,
+    QuestionOption,
+    Quiz,
+    Roster,
+)
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
+from app.services.access_codes import effective_roster_names
 from app.services.file_storage import get_file_storage
 from app.utils.auth import current_coach, get_editable_quiz, get_org_folder, get_visible_quiz
 from app.utils.validation import load_json_body
@@ -55,6 +67,86 @@ def list_quizzes():
         }
 
     return jsonify([q.to_dict(is_active=q.id in active_quiz_ids) for q in quizzes])
+
+
+@quizzes_bp.get("/active-status")
+@jwt_required()
+def active_status():
+    """Live submitted/in-progress/not-started breakdown for every currently
+    active access code in the org - what the dashboard's prominent
+    active-quiz section polls. Keyed by access code, not quiz: nothing stops
+    two codes on the same quiz both being active in principle (the
+    retire-on-activate behavior in access_codes.py is app-level, not a DB
+    constraint), so keying by code means that surfaces as two cards instead
+    of silently colliding.
+
+    Two queries total regardless of how many quizzes are simultaneously
+    active - same batching discipline as list_quizzes' is_active computation
+    above, just extended to also carry the roster/group data each card
+    needs.
+    """
+    coach = current_coach()
+    active_codes = (
+        AccessCode.query.join(Quiz)
+        .filter(
+            Quiz.organization_id == coach.organization_id,
+            AccessCode.is_active.is_(True),
+            AccessCode.expires_at > datetime.now(timezone.utc),
+        )
+        .options(
+            contains_eager(AccessCode.quiz).selectinload(Quiz.roster).selectinload(Roster.players),
+            selectinload(AccessCode.groups).selectinload(Group.players),
+        )
+        .all()
+    )
+
+    attempts_by_code: dict[int, list[PlayerAttempt]] = defaultdict(list)
+    if active_codes:
+        code_ids = [c.id for c in active_codes]
+        for attempt in PlayerAttempt.query.filter(PlayerAttempt.access_code_id.in_(code_ids)).all():
+            attempts_by_code[attempt.access_code_id].append(attempt)
+
+    result = []
+    for code in active_codes:
+        attempts = attempts_by_code[code.id]
+        submitted = [
+            {"player_name": a.player_name, "submitted_at": a.submitted_at.isoformat()}
+            for a in attempts
+            if a.status == AttemptStatus.SUBMITTED
+        ]
+        in_progress = [
+            {"player_name": a.player_name, "started_at": a.started_at.isoformat()}
+            for a in attempts
+            if a.status == AttemptStatus.IN_PROGRESS
+        ]
+        # Ground truth is the attempt, not the roster snapshot - a coach can
+        # edit a group's membership after players already started, and an
+        # already-created attempt shouldn't vanish from view because of that
+        # (same staleness tolerance _build_dashboard_data already documents
+        # for its own missing_players list).
+        roster_names = effective_roster_names(code)
+        started_names = {a.player_name for a in attempts}
+        not_started = [name for name in roster_names if name not in started_names]
+
+        result.append(
+            {
+                "quiz_id": code.quiz_id,
+                "quiz_title": code.quiz.title,
+                "access_code_id": code.id,
+                "code": code.code,
+                "expires_at": code.expires_at.isoformat(),
+                # Sorted so the "sent to" line doesn't visually reorder on a
+                # background poll when nothing actually changed - a poll
+                # that reorders things nobody touched reads as a bug.
+                "group_names": sorted(g.name for g in code.groups),
+                "roster_size": len(roster_names),
+                "submitted": submitted,
+                "in_progress": in_progress,
+                "not_started": not_started,
+            }
+        )
+
+    return jsonify(result)
 
 
 @quizzes_bp.post("")

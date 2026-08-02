@@ -232,8 +232,12 @@ def player_history():
             PlayerAttempt.status == AttemptStatus.SUBMITTED,
         )
         # contains_eager reuses the join above for response.quiz.title instead of
-        # a separate lazy-load per response; selectinload batches .answers in one query.
-        .options(contains_eager(PlayerAttempt.quiz), selectinload(PlayerAttempt.answers))
+        # a separate lazy-load per response; selectinload batches .answers (and each
+        # answer's .question, needed below for pending_grading_count) in one query each.
+        .options(
+            contains_eager(PlayerAttempt.quiz),
+            selectinload(PlayerAttempt.answers).selectinload(Answer.question),
+        )
         .order_by(PlayerAttempt.submitted_at.desc())
         .all()
     )
@@ -242,6 +246,15 @@ def player_history():
     for response in responses:
         auto_graded = [a for a in response.answers if a.is_correct is not None]
         correct = sum(1 for a in auto_graded if a.is_correct)
+        # Same rule ResponseRow.tsx's "N to grade" badge uses - only written
+        # questions are ever manually graded (a multiple-choice answer's
+        # is_correct is computed immediately at answer time, never left
+        # null), so this and that badge always agree on the same response.
+        pending_grading = sum(
+            1
+            for a in response.answers
+            if a.is_correct is None and a.question.question_type.value == "written"
+        )
 
         history.append(
             {
@@ -251,6 +264,7 @@ def player_history():
                 "submitted_at": response.submitted_at.isoformat(),
                 "graded_answer_count": len(auto_graded),
                 "correct_answer_count": correct,
+                "pending_grading_count": pending_grading,
             }
         )
 

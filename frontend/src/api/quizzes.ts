@@ -1,8 +1,12 @@
 import { api } from './client';
-import type { Quiz } from './types';
+import type { ActiveQuizStatus, Quiz } from './types';
 
 export function listQuizzes(): Promise<Quiz[]> {
   return api.get<Quiz[]>('/quizzes');
+}
+
+export function getActiveStatus(): Promise<ActiveQuizStatus[]> {
+  return api.get<ActiveQuizStatus[]>('/quizzes/active-status');
 }
 
 export function getQuiz(quizId: number): Promise<Quiz> {

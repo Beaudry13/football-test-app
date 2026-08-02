@@ -482,6 +482,42 @@ def test_player_history_across_quizzes(client, coach_headers):
     assert body["history"][0]["quiz_title"] == "Week 1 Prep"
 
 
+def test_player_history_reports_pending_grading_count_for_ungraded_written_answers(
+    client, coach_headers
+):
+    _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
+    )
+
+    response = client.get("/api/players/history?name=Jordan Smith", headers=coach_headers)
+
+    assert response.status_code == 200
+    entry = response.get_json()["history"][0]
+    # The written answer hasn't been graded yet - one question pending.
+    assert entry["pending_grading_count"] == 1
+
+    answer_id = next(
+        a["id"]
+        for a in client.get(
+            f"/api/quizzes/{written_question['quiz_id']}/responses", headers=coach_headers
+        ).get_json()[0]["answers"]
+        if a["question_id"] == written_question["id"]
+    )
+    client.patch(
+        f"/api/answers/{answer_id}/grade", json={"is_correct": True}, headers=coach_headers
+    )
+
+    graded_response = client.get("/api/players/history?name=Jordan Smith", headers=coach_headers)
+    assert graded_response.get_json()["history"][0]["pending_grading_count"] == 0
+
+
 def test_player_history_excludes_an_in_progress_attempt(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
     start_attempt(client, access_code["id"], "Jordan Smith")

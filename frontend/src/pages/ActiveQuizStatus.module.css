@@ -1,0 +1,98 @@
+.section {
+  margin-bottom: 40px;
+}
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.card {
+  padding: 20px 24px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1em;
+  flex-wrap: wrap;
+  padding-left: 14px;
+}
+
+.title {
+  font-family: 'Caveat', cursive;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--nb-text);
+  text-decoration: none;
+}
+
+.meta {
+  color: var(--nb-text-faint);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.counts {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.statusLists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5em;
+  margin-top: 1em;
+  padding-left: 14px;
+}
+
+.statusColumn {
+  min-width: 0;
+}
+
+.columnHeading {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--nb-text-muted);
+  margin: 0 0 0.5em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.subLabel {
+  font-size: 0.8em;
+  color: var(--nb-text-muted2);
+  margin: 0.5em 0 0.25em;
+}
+
+.subLabel:first-child {
+  margin-top: 0;
+}
+
+.nameList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3em;
+  font-size: 0.92em;
+  color: var(--nb-text);
+}
+
+.emptyNote {
+  color: var(--nb-text-faint);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .statusLists {
+    grid-template-columns: 1fr;
+  }
+}

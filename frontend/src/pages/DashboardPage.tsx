@@ -8,6 +8,7 @@ import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
+import { ActiveQuizStatusSection } from './ActiveQuizStatus';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
@@ -197,6 +198,8 @@ export function DashboardPage() {
       <NotebookHeader />
 
       <div className={nb.content}>
+        <ActiveQuizStatusSection />
+
         <div className={styles.contentHeader}>
           <h1 className={nb.heading}>Your quizzes</h1>
           {quizzes && (

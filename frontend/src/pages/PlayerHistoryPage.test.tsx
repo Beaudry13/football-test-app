@@ -36,6 +36,7 @@ describe('PlayerHistoryPage', () => {
         submitted_at: '2026-01-05T00:00:00Z',
         graded_answer_count: 4,
         correct_answer_count: 3,
+        pending_grading_count: 0,
       },
       {
         quiz_id: 5,
@@ -44,6 +45,7 @@ describe('PlayerHistoryPage', () => {
         submitted_at: '2026-01-12T00:00:00Z',
         graded_answer_count: 0,
         correct_answer_count: 0,
+        pending_grading_count: 0,
       },
     ];
     vi.spyOn(gradingApi, 'getPlayerHistory').mockResolvedValue({ player_name: 'Mike Smith', history });
@@ -74,5 +76,49 @@ describe('PlayerHistoryPage', () => {
     vi.spyOn(gradingApi, 'getPlayerHistory').mockRejectedValue(new Error('Request failed'));
     renderPage('Mike Smith');
     expect(await screen.findByText('Request failed')).toBeInTheDocument();
+  });
+
+  it('shows a per-row pending-grading badge and does not fold pending into the average', async () => {
+    const history: PlayerHistoryEntry[] = [
+      {
+        quiz_id: 3,
+        quiz_title: 'Week 1 Prep',
+        response_id: 10,
+        submitted_at: '2026-01-05T00:00:00Z',
+        graded_answer_count: 2,
+        correct_answer_count: 2,
+        pending_grading_count: 1,
+      },
+    ];
+    vi.spyOn(gradingApi, 'getPlayerHistory').mockResolvedValue({ player_name: 'Mike Smith', history });
+    renderPage('Mike Smith');
+
+    expect(await screen.findByText('2 / 2')).toBeInTheDocument();
+    expect(screen.getByText('1 to grade')).toBeInTheDocument();
+    // 2/2 graded is 100%, unaffected by the still-ungraded answer.
+    const summary = screen.getByRole('heading', { level: 3 });
+    expect(summary.textContent).toContain('100% correct overall');
+    expect(screen.getByText(/pending grading$/)).toBeInTheDocument();
+    expect(screen.getByText(/doesn't include these yet/)).toBeInTheDocument();
+  });
+
+  it('does not show a pending badge or note when nothing is pending', async () => {
+    const history: PlayerHistoryEntry[] = [
+      {
+        quiz_id: 3,
+        quiz_title: 'Week 1 Prep',
+        response_id: 10,
+        submitted_at: '2026-01-05T00:00:00Z',
+        graded_answer_count: 2,
+        correct_answer_count: 2,
+        pending_grading_count: 0,
+      },
+    ];
+    vi.spyOn(gradingApi, 'getPlayerHistory').mockResolvedValue({ player_name: 'Mike Smith', history });
+    renderPage('Mike Smith');
+
+    await screen.findByText('2 / 2');
+    expect(screen.queryByText('to grade')).not.toBeInTheDocument();
+    expect(screen.queryByText(/doesn't include these yet/)).not.toBeInTheDocument();
   });
 });

@@ -67,6 +67,11 @@ describe('DashboardPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue([]);
+    // Every render mounts ActiveQuizStatusSection alongside the quiz list -
+    // default to "nothing live" so tests that don't care about it aren't
+    // forced to mock it individually. See ActiveQuizStatus.test.tsx for
+    // that section's own dedicated coverage.
+    vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([]);
     mockAuth();
   });
 

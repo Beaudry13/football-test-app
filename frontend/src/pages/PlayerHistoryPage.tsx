@@ -24,6 +24,7 @@ export function PlayerHistoryPage() {
 
   const totalGraded = history?.reduce((sum, h) => sum + h.graded_answer_count, 0) ?? 0;
   const totalCorrect = history?.reduce((sum, h) => sum + h.correct_answer_count, 0) ?? 0;
+  const totalPending = history?.reduce((sum, h) => sum + h.pending_grading_count, 0) ?? 0;
   const accuracy = totalGraded > 0 ? Math.round((totalCorrect / totalGraded) * 100) : null;
 
   return (
@@ -50,7 +51,20 @@ export function PlayerHistoryPage() {
             <h3 className={nb.subheading}>
               {history.length} quiz{history.length === 1 ? '' : 'zes'} taken
               {accuracy !== null && <> · {accuracy}% correct overall</>}
+              {totalPending > 0 && (
+                <>
+                  {' '}
+                  <span className={`${nb.badge} ${nb.badgeWarning}`}>
+                    {totalPending} answer{totalPending === 1 ? '' : 's'} pending grading
+                  </span>
+                </>
+              )}
             </h3>
+            {totalPending > 0 && (
+              <p className={styles.pendingNote}>
+                The overall average above doesn't include these yet - it'll shift once they're graded.
+              </p>
+            )}
           </div>
 
           <table className={nb.table}>
@@ -72,6 +86,11 @@ export function PlayerHistoryPage() {
                     {entry.graded_answer_count > 0
                       ? `${entry.correct_answer_count} / ${entry.graded_answer_count}`
                       : '—'}
+                    {entry.pending_grading_count > 0 && (
+                      <span className={`${nb.badge} ${nb.badgeWarning} ${styles.pendingBadge}`}>
+                        {entry.pending_grading_count} to grade
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
