@@ -27,3 +27,15 @@ export function resolveCanvasWidth(
   if (savedCanvasWidth != null) return savedCanvasWidth;
   return hasExistingAnnotations ? MAX_CANVAS_WIDTH_LEGACY : MAX_CANVAS_WIDTH;
 }
+
+/** The coordinate space annotation shapes were *actually* authored in, which can be smaller than
+ * `capWidth` (resolveCanvasWidth's output) when the source photo's real resolution is smaller -
+ * the editor's own loadPrescaledImage call would have capped at naturalWidth too, so shapes drawn
+ * there are positioned relative to naturalWidth, not capWidth, regardless of what got saved as
+ * `canvas_width`. Math.min means this can never exceed capWidth, so a normal photo (naturalWidth
+ * >= capWidth) is unaffected - this only kicks in for the smaller-than-cap case, and self-corrects
+ * any already-saved mismatch without a data migration, since it's derived from the photo file's
+ * real dimensions rather than trusted metadata. */
+export function resolveTrueCapWidth(capWidth: number, naturalWidth: number): number {
+  return Math.min(capWidth, naturalWidth);
+}

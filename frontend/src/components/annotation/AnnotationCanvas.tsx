@@ -165,6 +165,15 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           );
           if (cancelled) return;
 
+          // loadPrescaledImage never upscales past the source photo's real resolution, so for a
+          // photo smaller than the requested canvasWidthRef.current, `width` here is the smaller
+          // achieved value - shapes drawn below are positioned in *this* space via mouse events,
+          // not the originally-requested one. Correct the ref before anything reads it (draws,
+          // then getCanvasWidth() on save) so the saved canvas_width matches where shapes actually
+          // are - otherwise the mismatch is silently persisted (see AnnotationViewer.tsx's
+          // trueCapWidth for how the player-facing side self-corrects for already-saved cases).
+          canvasWidthRef.current = width;
+
           const image = new FabricImage(prescaled);
           canvas.setDimensions({ width, height });
           // originX/Y: Fabric objects default to *center* origin, not

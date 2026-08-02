@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import { FabricImage, StaticCanvas } from 'fabric';
 import type { AnnotationLayer } from '../../api/types';
-import { PLAYER_RENDER_SCALE, resolveCanvasWidth } from './canvasSizing';
+import { PLAYER_RENDER_SCALE, resolveCanvasWidth, resolveTrueCapWidth } from './canvasSizing';
 import { loadPrescaledImage } from './imageLoading';
 
 interface AnnotationViewerProps {
@@ -51,9 +51,9 @@ export function AnnotationViewer({
         // the factor that brings the image back into alignment with capWidth-space shapes.
         const capWidth = resolveCanvasWidth(canvasWidth, annotations.length > 0);
         const targetWidth = capWidth * PLAYER_RENDER_SCALE;
-        const { canvas: prescaled, width, height } = await loadPrescaledImage(imageUrl, targetWidth);
+        const { canvas: prescaled, width, height, naturalWidth } = await loadPrescaledImage(imageUrl, targetWidth);
         if (cancelled || !canvasElRef.current) return;
-        const renderScale = width / capWidth;
+        const renderScale = width / resolveTrueCapWidth(capWidth, naturalWidth);
 
         // enableRetinaScaling is disabled so the backing store size is driven entirely by our
         // own renderScale math, not additionally multiplied by devicePixelRatio (which could

@@ -12,6 +12,10 @@ export interface PrescaledImage {
   canvas: HTMLCanvasElement;
   width: number;
   height: number;
+  /** The source photo's real, uncapped resolution - lets a caller detect
+   * when `capWidth` couldn't be reached because the photo itself is
+   * smaller (see AnnotationViewer.tsx's renderScale computation). */
+  naturalWidth: number;
 }
 
 /** Loads `url` and pre-renders it to its exact display size (capped at
@@ -47,5 +51,5 @@ export async function loadPrescaledImage(url: string, capWidth: number): Promise
   canvas.height = height;
   canvas.getContext('2d')!.drawImage(rawImage, 0, 0, width, height);
 
-  return { canvas, width, height };
+  return { canvas, width, height, naturalWidth };
 }
