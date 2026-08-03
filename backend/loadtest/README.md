@@ -117,7 +117,7 @@ automatically - only run it after 5/25/50 all pass their thresholds):
 ```bash
 python loadtest/seed.py --players 100   # if not already seeded at >=100
 cd loadtest
-locust -f locustfile.py --headless -u 100 -r 15 -t 120s --csv=results/stage_100 --host=http://localhost:5055
+locust -f locustfile.py --headless -u 100 -r 15 -t 120s --csv=results/stage_100 --host=http://127.0.0.1:5055
 ```
 
 ### 5. Verify data integrity (run after every stage)
