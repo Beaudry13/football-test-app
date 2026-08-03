@@ -370,6 +370,12 @@ textarea.input {
   --nb-delete-bg-hover: rgba(184, 73, 47, 0.12);
   --nb-success: #2e6b3e;
   --nb-success-bg: rgba(58, 122, 74, 0.16);
+  /* Not just defining the custom property above - applying it as .card's
+     own `color` too, so anything using `color: inherit` (e.g. the
+     quiz/group title <a> wrapping an <h3>) actually resolves to the new
+     dark value instead of silently inheriting the page-level light one
+     from further up the tree. */
+  color: var(--nb-text);
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   padding: 1.25em;
