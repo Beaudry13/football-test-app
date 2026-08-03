@@ -158,7 +158,7 @@ export function QuizStep({
           </button>
           {isLast ? (
             <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting…' : 'Submit quiz'}
+              {isSubmitting ? 'Submitting…' : 'Submit Peira'}
             </button>
           ) : (
             <button className="btn btn-primary" onClick={() => setCurrentIndex((i) => i + 1)}>
@@ -184,7 +184,7 @@ export function QuizStep({
         />
       ))}
       <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting} style={{ width: '100%' }}>
-        {isSubmitting ? 'Submitting…' : 'Submit quiz'}
+        {isSubmitting ? 'Submitting…' : 'Submit Peira'}
       </button>
     </div>
   );

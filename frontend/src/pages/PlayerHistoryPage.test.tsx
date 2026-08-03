@@ -63,13 +63,13 @@ describe('PlayerHistoryPage', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
 
     const summary = screen.getByRole('heading', { level: 3 });
-    expect(summary.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 quizzes taken · 75% correct overall');
+    expect(summary.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 Peiras taken · 75% correct overall');
   });
 
   it('shows an empty state when the player has no history', async () => {
     vi.spyOn(gradingApi, 'getPlayerHistory').mockResolvedValue({ player_name: 'Nobody', history: [] });
     renderPage('Nobody');
-    expect(await screen.findByText(/No quiz history found/)).toBeInTheDocument();
+    expect(await screen.findByText(/No Peira history found/)).toBeInTheDocument();
   });
 
   it('shows an error banner when the request fails', async () => {

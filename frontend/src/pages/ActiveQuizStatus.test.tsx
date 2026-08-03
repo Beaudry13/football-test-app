@@ -1,9 +1,20 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
 import * as quizzesApi from '../api/quizzes';
-import type { ActiveQuizStatus } from '../api/types';
+import * as gradingApi from '../api/grading';
+import type { ActiveQuizStatus, QuizDashboard } from '../api/types';
+
+const baseDashboard: QuizDashboard = {
+  quiz_id: 1,
+  roster_size: 2,
+  response_count: 1,
+  response_rate: 0.5,
+  missing_players: [],
+  question_breakdown: [],
+};
 
 const baseEntry: ActiveQuizStatus = {
   quiz_id: 1,
@@ -58,9 +69,12 @@ describe('ActiveQuizStatusSection', () => {
     vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([
       { ...baseEntry, in_progress: [{ player_name: 'Alex Lee', started_at: '2026-01-01T00:00:00Z' }], not_started: ['Sam Rivera'] },
     ]);
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(baseDashboard);
+    const user = userEvent.setup();
     renderSection();
 
     await screen.findByText('Week 1 Prep');
+    await user.click(screen.getByText('1 submitted'));
     expect(screen.getByText('Started, not submitted')).toBeInTheDocument();
     expect(screen.getByText('Alex Lee')).toBeInTheDocument();
     expect(screen.getByText('Not started')).toBeInTheDocument();
@@ -107,9 +121,46 @@ describe('ActiveQuizStatusSection', () => {
     vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([
       { ...baseEntry, in_progress: [], not_started: [] },
     ]);
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(baseDashboard);
+    const user = userEvent.setup();
     renderSection();
 
     await screen.findByText('Week 1 Prep');
+    await user.click(screen.getByText('0 pending'));
     expect(screen.getByText('Everyone has submitted.')).toBeInTheDocument();
+  });
+
+  it('stays collapsed by default and does not fetch the dashboard breakdown', async () => {
+    vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([baseEntry]);
+    const dashboardSpy = vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(baseDashboard);
+    renderSection();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.queryByText('Answer breakdown')).not.toBeInTheDocument();
+    expect(dashboardSpy).not.toHaveBeenCalled();
+  });
+
+  it('fetches and shows the per-question answer breakdown when expanded', async () => {
+    vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([baseEntry]);
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...baseDashboard,
+      question_breakdown: [
+        {
+          question_id: 1,
+          question_text: 'What gap does the 3-tech attack?',
+          question_type: 'multiple_choice',
+          answered_count: 1,
+          correct_count: 1,
+          incorrect_count: 0,
+          ungraded_count: 0,
+        },
+      ],
+    });
+    const user = userEvent.setup();
+    renderSection();
+
+    await screen.findByText('Week 1 Prep');
+    await user.click(screen.getByText('1 submitted'));
+    expect(await screen.findByText('What gap does the 3-tech attack?')).toBeInTheDocument();
   });
 });

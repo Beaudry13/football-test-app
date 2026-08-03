@@ -30,11 +30,11 @@ export function PlayerHistoryPage() {
   return (
     <div>
       <Link to="/" className={styles.backLink}>
-        ← All quizzes
+        ← All Peiras
       </Link>
 
       <h1 className={nb.heading}>{playerName}</h1>
-      <p className={styles.subheading}>Quiz history across your whole organization</p>
+      <p className={styles.subheading}>Peira history across your whole organization</p>
 
       <ErrorBanner message={error} />
 
@@ -42,14 +42,14 @@ export function PlayerHistoryPage() {
         <p>Loading…</p>
       ) : history.length === 0 ? (
         <div className={`${nb.card} ${nb.empty}`}>
-          No quiz history found for this name yet. Names must match exactly, including spelling and
+          No Peira history found for this name yet. Names must match exactly, including spelling and
           spacing.
         </div>
       ) : (
         <>
           <div className={nb.card} style={{ marginBottom: '1.5em' }}>
             <h3 className={nb.subheading}>
-              {history.length} quiz{history.length === 1 ? '' : 'zes'} taken
+              {history.length} Peira{history.length === 1 ? '' : 's'} taken
               {accuracy !== null && <> · {accuracy}% correct overall</>}
               {totalPending > 0 && (
                 <>
@@ -70,7 +70,7 @@ export function PlayerHistoryPage() {
           <table className={nb.table}>
             <thead>
               <tr>
-                <th>Quiz</th>
+                <th>Peira</th>
                 <th>Submitted</th>
                 <th>Graded correct</th>
               </tr>

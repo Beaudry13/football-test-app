@@ -11,3 +11,10 @@
   base = "frontend"
   command = "npm run build"
   publish = "dist"
+
+# Rewrites the SPA shell's <title>/og:title/og:description server-side on
+# /play/CODE URLs so link-preview crawlers (which don't execute the SPA's
+# JS) see the actual Peira's name. See frontend/netlify/edge-functions/og-tags.ts.
+[[edge_functions]]
+  path = "/play/*"
+  function = "og-tags"

@@ -1,7 +1,8 @@
-# Football Quiz Platform
+# Peira
 
-A quiz/test platform for football coaches to build, administer, and grade
-pre-game and practice quizzes — with a built-in image annotation tool for
+Peira (Greek: trial, test, experience gained through testing) is a football
+knowledge-assessment platform for coaches to build, administer, and grade
+pre-game and practice Peiras — with a built-in image annotation tool for
 drawing routes, circling players, and highlighting on film stills.
 
 This repo contains both phases: **Phase 1**, a PostgreSQL + Flask REST API,

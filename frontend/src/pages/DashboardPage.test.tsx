@@ -79,7 +79,7 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     renderDashboard();
 
-    expect(await screen.findByText('No quizzes yet. Create your first one above.')).toBeInTheDocument();
+    expect(await screen.findByText('No Peiras yet. Create your first one above.')).toBeInTheDocument();
   });
 
   it('lists quizzes with their question count and update date', async () => {
@@ -114,17 +114,17 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Active')).not.toBeInTheDocument();
   });
 
-  it('disables New quiz until a title is entered, then creates and refreshes the list', async () => {
+  it('disables New Peira until a title is entered, then creates and refreshes the list', async () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     const createSpy = vi.spyOn(quizzesApi, 'createQuiz').mockResolvedValue(sampleQuiz);
     renderDashboard();
-    await screen.findByText('No quizzes yet. Create your first one above.');
+    await screen.findByText('No Peiras yet. Create your first one above.');
 
-    const newQuizButton = screen.getByRole('button', { name: 'New quiz' });
+    const newQuizButton = screen.getByRole('button', { name: 'New Peira' });
     expect(newQuizButton).toBeDisabled();
 
-    await user.type(screen.getByPlaceholderText('New quiz title, e.g. Week 3 Prep'), '  Week 3 Prep  ');
+    await user.type(screen.getByPlaceholderText('New Peira title, e.g. Week 3 Prep'), '  Week 3 Prep  ');
     expect(newQuizButton).not.toBeDisabled();
 
     vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([sampleQuiz]);
@@ -198,7 +198,7 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     const createFolderSpy = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(sampleFolder);
     renderDashboard();
-    await screen.findByText('No quizzes yet. Create your first one above.');
+    await screen.findByText('No Peiras yet. Create your first one above.');
 
     await user.type(screen.getByPlaceholderText('New folder, e.g. Fall Camp'), 'Fall Camp');
     await user.click(screen.getByRole('button', { name: 'New folder' }));

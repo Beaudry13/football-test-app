@@ -1,22 +1,27 @@
+/* Light/cream "Peira" player theme - deliberately kept light (not the dark
+   gold-on-black coach theme in styles/notebook.module.css) for readability
+   by players on phones. See styles/notebook.module.css's own header comment
+   for why these two themes are intentionally never mixed. */
 :root {
-  --color-bg: #f4f5f7;
-  --color-surface: #ffffff;
-  --color-border: #dde1e6;
-  --color-text: #1a1d21;
-  --color-text-muted: #5b6470;
-  --color-primary: #1f5c3f;
-  --color-primary-hover: #164630;
+  --color-bg: #f3efe6;
+  --color-surface: #fffdf8;
+  --color-border: #e3dbc8;
+  --color-text: #2a2416;
+  --color-text-muted: #6e6858;
+  --color-primary: #c9a24b;
+  --color-primary-hover: #a6822f;
   --color-primary-contrast: #ffffff;
+  --color-primary-bg: #fbf3de;
   --color-danger: #b3261e;
   --color-danger-bg: #fdecea;
   --color-success: #1f5c3f;
   --color-success-bg: #e8f3ec;
   --color-warning-bg: #fff6e0;
   --color-warning-text: #8a5a00;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --shadow-card: 0 1px 2px rgba(16, 24, 32, 0.06), 0 1px 8px rgba(16, 24, 32, 0.04);
-  --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --shadow-card: 0 2px 8px rgba(30, 25, 10, 0.04);
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 * {

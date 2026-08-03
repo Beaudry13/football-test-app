@@ -43,6 +43,16 @@ export function submitQuiz(input: {
   return api.post<PlayerResponse>('/play/submit', input, { auth: false });
 }
 
+/** Title-only lookup for the browser tab title, fired before a player has
+ * done anything (just landed on /play/CODE). Never errors on an invalid/
+ * expired/deactivated code - resolves to `{ quiz_title: null }` instead, so
+ * callers fall back to generic branding. */
+export function getQuizTitleByCode(code: string): Promise<{ quiz_title: string | null }> {
+  return api.get<{ quiz_title: string | null }>(`/play/quiz-by-code/${encodeURIComponent(code)}`, {
+    auth: false,
+  });
+}
+
 export function getPlayerResults(code: string, playerName: string): Promise<PlayerResultsResponse> {
   return api.post<PlayerResultsResponse>(
     '/play/results',

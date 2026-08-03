@@ -111,7 +111,7 @@ export function TeamPage() {
   async function handleRemove(coachId: number, username: string) {
     if (
       !window.confirm(
-        `Remove ${username} from this organization? Quizzes they created stay with the team.`,
+        `Remove ${username} from this organization? Peiras they created stay with the team.`,
       )
     ) {
       return;

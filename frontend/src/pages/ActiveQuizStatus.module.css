@@ -20,12 +20,14 @@
   gap: 1em;
   flex-wrap: wrap;
   padding-left: 14px;
+  cursor: pointer;
 }
 
 .title {
-  font-family: 'Caveat', cursive;
-  font-size: 24px;
-  font-weight: 700;
+  font-family: 'Cinzel', serif;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   color: var(--nb-text);
   text-decoration: none;
 }
@@ -89,6 +91,15 @@
   color: var(--nb-text-faint);
   font-size: 0.9em;
   margin: 0;
+}
+
+.breakdownSection {
+  margin-top: 1.5em;
+  padding-left: 14px;
+}
+
+.breakdownSection .columnHeading {
+  margin-bottom: 0.75em;
 }
 
 @media (max-width: 560px) {

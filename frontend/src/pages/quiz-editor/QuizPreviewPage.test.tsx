@@ -79,7 +79,7 @@ describe('QuizPreviewPage', () => {
     renderPreview();
 
     await screen.findByText('Is this cover 2?', { exact: false });
-    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
 
     expect(await screen.findByText('End of preview')).toBeInTheDocument();
     expect(submitSpy).not.toHaveBeenCalled();
@@ -97,7 +97,7 @@ describe('QuizPreviewPage', () => {
     expect(await screen.findByText('Question 2 of 2')).toBeInTheDocument();
     expect(screen.getByText('Describe the coverage.', { exact: false })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
     expect(await screen.findByText('End of preview')).toBeInTheDocument();
   });
 
@@ -107,7 +107,7 @@ describe('QuizPreviewPage', () => {
     renderPreview();
 
     await screen.findByText('Is this cover 2?', { exact: false });
-    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
     await screen.findByText('End of preview');
 
     await user.click(screen.getByRole('button', { name: 'Restart preview' }));

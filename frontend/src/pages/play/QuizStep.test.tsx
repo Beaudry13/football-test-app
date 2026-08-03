@@ -156,7 +156,7 @@ describe('QuizStep', () => {
 
       const written = screen.getAllByRole('textbox')[0];
       await user.type(written, 'I set the edge.');
-      await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
 
       // The debounce timer never gets a chance to fire post-submit.
       await vi.advanceTimersByTimeAsync(800);

@@ -37,6 +37,12 @@ export function RegisterPage() {
     <NotebookPage>
       <NotebookHeader />
       <div className={nb.contentNarrow}>
+        <div className={styles.intro}>
+          <p className={styles.introText}>
+            Peira means learning through testing. Create assessments that help your players prove
+            what they know.
+          </p>
+        </div>
         <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit}>
           <h2 className={nb.subheading}>Create a coach account</h2>
           <ErrorBanner message={error} />

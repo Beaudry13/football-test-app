@@ -201,10 +201,10 @@ export function DashboardPage() {
         <ActiveQuizStatusSection />
 
         <div className={styles.contentHeader}>
-          <h1 className={nb.heading}>Your quizzes</h1>
+          <h1 className={nb.heading}>Your Trials</h1>
           {quizzes && (
             <span className={nb.countBadge}>
-              {quizzes.length} quiz{quizzes.length === 1 ? '' : 'zes'}
+              {quizzes.length} Peira{quizzes.length === 1 ? '' : 's'}
             </span>
           )}
         </div>
@@ -215,12 +215,12 @@ export function DashboardPage() {
           <input
             className={nb.input}
             type="text"
-            placeholder="New quiz title, e.g. Week 3 Prep"
+            placeholder="New Peira title, e.g. Week 3 Prep"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
           />
           <button type="submit" className={nb.btnPrimary} disabled={isCreating || !newTitle.trim()}>
-            {isCreating ? 'Creating…' : 'New quiz'}
+            {isCreating ? 'Creating…' : 'New Peira'}
           </button>
         </form>
 
@@ -240,7 +240,7 @@ export function DashboardPage() {
         {quizzes === null ? (
           <p>Loading…</p>
         ) : quizzes.length === 0 ? (
-          <div className={`${nb.card} ${nb.empty}`}>No quizzes yet. Create your first one above.</div>
+          <div className={`${nb.card} ${nb.empty}`}>No Peiras yet. Create your first one above.</div>
         ) : !hasFolders ? (
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
@@ -296,7 +296,7 @@ export function DashboardPage() {
                   {!isCollapsed && (
                     <div className={styles.list}>
                       {folderQuizzes.length === 0 ? (
-                        <div className={styles.emptyFolder}>No quizzes in this folder yet.</div>
+                        <div className={styles.emptyFolder}>No Peiras in this folder yet.</div>
                       ) : (
                         folderQuizzes.map(renderQuizCard)
                       )}

@@ -1,6 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { getQuizTitleByCode } from '../../api/play';
 import type { ResumedAnswer, ValidateCodeResponse } from '../../api/types';
+import { PeiraLogo } from '../../components/brand/PeiraLogo';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { JoinStep } from './JoinStep';
 import { NameStep } from './NameStep';
 import { QuizStep } from './QuizStep';
@@ -22,9 +25,36 @@ type Step =
 export function PlayPage() {
   const { code } = useParams<{ code?: string }>();
   const [step, setStep] = useState<Step>({ name: 'join' });
+  // Fetched once, up front from the URL's code - before the player has
+  // picked a name, `step` itself carries no quiz data yet to set a title
+  // from. Once JoinStep's own validateCode resolves (step advances past
+  // 'join'), step.joined.quiz.title below is the same value, just from a
+  // call that was already happening anyway.
+  const [prefetchedTitle, setPrefetchedTitle] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!code) return;
+    let cancelled = false;
+    getQuizTitleByCode(code)
+      .then((res) => {
+        if (!cancelled) setPrefetchedTitle(res.quiz_title);
+      })
+      .catch(() => {
+        // Tab title is a nice-to-have, not core flow - leave it generic.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [code]);
+
+  const quizTitle = step.name === 'name' || step.name === 'quiz' ? step.joined.quiz.title : prefetchedTitle;
+  useDocumentTitle(quizTitle ? `${quizTitle} | Peira` : undefined);
 
   return (
     <div className={styles.wrapper}>
+      <div className={styles.brandRow}>
+        <PeiraLogo variant="light" markOnly size={28} />
+      </div>
       {step.name === 'join' && (
         <JoinStep
           initialCode={code ?? ''}

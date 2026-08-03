@@ -42,7 +42,7 @@ export function GroupsPage() {
   }
 
   async function handleDelete(groupId: number, name: string) {
-    if (!window.confirm(`Delete group "${name}"? This does not affect quizzes it was used on.`)) return;
+    if (!window.confirm(`Delete group "${name}"? This does not affect Peiras it was used on.`)) return;
     setError(null);
     try {
       await deleteGroup(groupId);
@@ -60,7 +60,7 @@ export function GroupsPage() {
 
       <p className={styles.description}>
         Build reusable groups like "Varsity" or "Defense" once, then pick which group(s) can access a
-        quiz when you activate it.
+        Peira when you activate it.
       </p>
 
       <ErrorBanner message={error} />

@@ -4,7 +4,7 @@
 .backLink {
   display: inline-block;
   margin-bottom: 1em;
-  font-family: 'Caveat', cursive;
+  font-family: 'Cinzel', serif;
   font-weight: 700;
   font-size: 20px;
   color: var(--nb-text-muted, #78766e);
@@ -24,7 +24,7 @@
 }
 
 .titleInput {
-  font-family: 'Caveat', cursive;
+  font-family: 'Cinzel', serif;
   font-size: 40px;
   font-weight: 700;
   color: var(--nb-text, #1c1b1a);
@@ -82,7 +82,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  font-family: 'Caveat', cursive;
+  font-family: 'Cinzel', serif;
   font-weight: 700;
   font-size: 20px;
   color: var(--nb-text-muted, #78766e);

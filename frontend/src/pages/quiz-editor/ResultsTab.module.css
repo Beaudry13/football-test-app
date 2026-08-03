@@ -10,7 +10,7 @@
 }
 
 .statValue {
-  font-family: 'Caveat', cursive;
+  font-family: 'Cinzel', serif;
   font-size: 2.2em;
   font-weight: 700;
   color: var(--nb-accent, #4f46e5);
@@ -123,7 +123,7 @@
 }
 
 .gradeIncorrect {
-  border-color: var(--nb-margin-solid, #b8492f) !important;
+  border-color: var(--nb-warning-text, #d98e82) !important;
 }
 
 .gradedBy {

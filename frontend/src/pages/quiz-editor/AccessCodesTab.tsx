@@ -59,7 +59,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   async function handleDeactivate(accessCodeId: number) {
     if (
       !window.confirm(
-        'Deactivate this code now? Any player still taking the quiz will be immediately locked out, even mid-attempt.',
+        'Deactivate this code now? Any player still taking the Peira will be immediately locked out, even mid-attempt.',
       )
     ) {
       return;
@@ -118,7 +118,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
           </>
         ) : (
           <>
-            <p>This quiz has no active access code.</p>
+            <p>This Peira has no active access code.</p>
 
             {groups.length > 0 && (
               <div className={styles.groupPicker}>
@@ -139,7 +139,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
             )}
 
             <button className={nb.btnPrimary} onClick={handleActivate} disabled={isActivating}>
-              {isActivating ? 'Activating…' : 'Activate quiz'}
+              {isActivating ? 'Activating…' : 'Activate Peira'}
             </button>
             <p className={styles.activateHint}>
               Requires at least one question, and either a non-empty roster or a selected group. The

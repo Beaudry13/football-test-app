@@ -1,8 +1,7 @@
-/* Shared "notebook" design system for coach-facing pages, extracted from
-   the Dashboard's original reskin (which copied every value here directly
-   from a provided mockup: Desktop\claude\Quiz Dashboard Redesign -
-   standalone.html). Import this alongside a page's own CSS module rather
-   than redeclaring these values per page.
+/* Shared "Peira" dark design system for coach-facing pages - gold-on-black,
+   per the provided design handoff (Desktop\claude\Website redesign
+   request.zip -> design_handoff_peira/). Import this alongside a page's own
+   CSS module rather than redeclaring these values per page.
 
    The --nb-* custom properties are defined on .page (see NotebookPage.tsx)
    and cascade to everything below it in the DOM - every class here relies
@@ -10,28 +9,37 @@
 
    Deliberately NOT touching frontend/src/index.css's globals (.btn, .card,
    .field, .badge, --color-primary, ...): those are still used by the
-   player-facing pages that are staying on the old look, and repainting
-   them would leak this theme there too. */
+   player-facing pages, which stay on a separate light/cream theme (kept
+   light deliberately, for phone readability) - repainting them here would
+   leak this dark theme there too. */
 
 .page {
-  --nb-bg: #faf9f6;
-  --nb-text: #1c1b1a;
-  --nb-text-muted: #78766e;
-  --nb-text-muted2: #8a8577;
-  --nb-text-faint: #a6a192;
-  --nb-rule: rgba(79, 70, 229, 0.09);
-  --nb-margin-line: rgba(184, 73, 47, 0.25);
-  --nb-margin-solid: #b8492f;
-  --nb-accent: #4f46e5;
-  --nb-accent-hover: #372fbe;
-  --nb-card-border: #e7e3d8;
-  --nb-input-border: #dad5c8;
-  --nb-delete-border: #eac4bc;
-  --nb-delete-bg-hover: #fcefec;
-  --nb-success: #1f8a4c;
-  --nb-success-bg: #e7f5ec;
-  --nb-warning-text: #8a5a00;
-  --nb-warning-bg: #fff6e0;
+  --nb-bg: #121009;
+  --nb-text: #f3eee2;
+  --nb-text-muted: #8c8578;
+  --nb-text-muted2: #6e6858;
+  --nb-text-faint: #6e6858;
+  --nb-accent: #c9a24b;
+  --nb-accent-bright: #e4c066;
+  --nb-accent-deep: #a6822f;
+  --nb-accent-hover: #e4c066;
+  --nb-card-border: rgba(201, 162, 75, 0.25);
+  --nb-input-border: rgba(201, 162, 75, 0.55);
+  --nb-delete-border: rgba(180, 70, 60, 0.45);
+  --nb-delete-bg-hover: rgba(180, 70, 60, 0.12);
+  --nb-success: #4caf6e;
+  --nb-success-bg: rgba(76, 175, 110, 0.15);
+  --nb-warning-text: #d98e82;
+  --nb-warning-bg: rgba(217, 142, 130, 0.15);
+
+  /* Shared global components (e.g. ErrorBanner's plain ".error-banner"
+     class in index.css) read --color-* custom properties, not --nb-*.
+     Those only have :root (light-theme) values by default - overriding
+     them here means anything rendered inside a coach page (dark theme)
+     picks up dark-appropriate colors too, via ordinary CSS custom-property
+     inheritance, without needing a notebook-specific ErrorBanner variant. */
+  --color-danger: var(--nb-warning-text);
+  --color-danger-bg: var(--nb-warning-bg);
 
   position: relative;
   overflow: hidden;
@@ -39,25 +47,11 @@
   font-family: 'Inter', sans-serif;
   color: var(--nb-text);
   background-color: var(--nb-bg);
-  background-image:
-    repeating-linear-gradient(
-      180deg,
-      transparent,
-      transparent 35px,
-      var(--nb-rule) 35px,
-      var(--nb-rule) 36px
-    ),
-    linear-gradient(
-      90deg,
-      transparent 88px,
-      var(--nb-margin-line) 88px,
-      var(--nb-margin-line) 90px,
-      transparent 90px
-    );
+  background-image: linear-gradient(160deg, #16130d 0%, #0d0c09 55%, #14110b 100%);
 }
 
-/* Mouse-tracked spotlight + dot-grid overlays. NotebookPage.tsx sets the
-   background/mask inline since they change on every mousemove. */
+/* Mouse-tracked spotlight + line-art texture overlays. NotebookPage.tsx sets
+   the background/mask inline since they change on every mousemove. */
 .spotlight,
 .dotGrid {
   position: absolute;
@@ -67,22 +61,9 @@
 }
 
 .dotGrid {
-  opacity: 0.5;
-  background-image: radial-gradient(rgba(120, 116, 108, 0.35) 1px, transparent 1px);
-  background-size: 28px 28px;
-}
-
-.holePunch {
-  position: absolute;
-  left: 22px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #edebe5, #d8d5cc 60%, #c4c0b5 100%);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.25),
-    inset 0 -1px 2px rgba(255, 255, 255, 0.5);
-  z-index: 2;
+  opacity: 0.16;
+  background-image: url('../assets/coach-texture.svg');
+  background-size: 360px 360px;
 }
 
 /* --- Header (NotebookHeader.tsx) ------------------------------------- */
@@ -95,17 +76,16 @@
   justify-content: space-between;
   gap: 1em;
   flex-wrap: wrap;
-  padding: 34px 48px 20px;
+  padding: 30px 48px;
   background: var(--nb-bg);
-  border-bottom: 3px solid var(--nb-margin-solid);
+  border-bottom: 1px solid rgba(201, 162, 75, 0.35);
 }
 
+/* Wraps a <PeiraLogo/> (see components/brand/PeiraLogo.tsx), which styles
+   its own mark + wordmark inline - this class only needs to undo the
+   <Link>'s default underline. */
 .brand {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 34px;
-  letter-spacing: 0.01em;
-  color: var(--nb-text);
+  display: inline-flex;
   text-decoration: none;
 }
 
@@ -117,9 +97,11 @@
 }
 
 .navLink {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 22px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--nb-text-muted);
   text-decoration: none;
 }
@@ -131,32 +113,32 @@
 .navDivider {
   width: 1px;
   height: 18px;
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(201, 162, 75, 0.3);
 }
 
 .coachName {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
   color: var(--nb-text-muted);
 }
 
 .logoutButton {
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.2);
+  padding: 9px 20px;
+  border-radius: 2px;
+  border: 1px solid rgba(201, 162, 75, 0.5);
   background: transparent;
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 20px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.04em;
   color: var(--nb-text);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 
 .logoutButton:hover {
-  border-color: var(--nb-text);
-  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--nb-accent);
+  background: rgba(201, 162, 75, 0.08);
 }
 
 /* --- Content wrapper ---------------------------------------------------- */
@@ -181,27 +163,29 @@
 /* --- Typography ----------------------------------------------------------- */
 
 .heading {
-  font-family: 'Caveat', cursive;
-  font-size: 48px;
+  font-family: 'Cinzel', serif;
+  font-size: 40px;
   font-weight: 700;
   margin: 0;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.03em;
   color: var(--nb-text);
 }
 
 .subheading {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 26px;
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  font-size: 20px;
   color: var(--nb-text);
   margin: 0 0 0.5em;
 }
 
 .countBadge {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--nb-text-muted2);
-  font-size: 20px;
+  font-size: 13px;
 }
 
 /* --- Form controls -------------------------------------------------------- */
@@ -214,27 +198,33 @@
 }
 
 .fieldLabel {
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 18px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
   color: var(--nb-text);
 }
 
 .input {
-  padding: 14px 16px;
-  border-radius: 6px;
-  border: 1px solid var(--nb-input-border);
-  background: rgba(255, 255, 255, 0.92);
+  padding: 16px 18px;
+  border-radius: 3px;
+  border: 1.5px solid var(--nb-input-border);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--nb-text);
   font-family: 'Inter', sans-serif;
   font-size: 15px;
   outline: none;
-  transition: border-color 0.15s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  transition: border-color 0.15s, background 0.15s;
   width: 100%;
 }
 
 .input:focus {
-  border-color: var(--nb-accent);
+  border-color: var(--nb-accent-bright);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.input::placeholder {
+  color: var(--nb-text-muted);
 }
 
 textarea.input {
@@ -246,36 +236,30 @@ textarea.input {
 /* --- Buttons -------------------------------------------------------------- */
 
 .btnPrimary {
-  padding: 0 24px;
+  padding: 0 28px;
   min-height: 48px;
-  border-radius: 6px;
-  border: none;
-  background: linear-gradient(180deg, #6d5ef5 0%, #4f46e5 60%, #4338ca 100%);
-  color: #ffffff;
-  font-family: 'Caveat', cursive;
+  border-radius: 2px;
+  border: 1px solid var(--nb-accent);
+  background: linear-gradient(180deg, var(--nb-accent-bright) 0%, var(--nb-accent) 55%, var(--nb-accent-deep) 100%);
+  color: #14110b;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 20px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
-    0 4px 12px rgba(79, 70, 229, 0.35),
-    0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(201, 162, 75, 0.25);
   transition: transform 0.1s, box-shadow 0.1s;
 }
 
 .btnPrimary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.25) inset,
-    0 6px 16px rgba(79, 70, 229, 0.45),
-    0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 20px rgba(201, 162, 75, 0.4);
 }
 
 .btnPrimary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.15) inset,
-    0 2px 6px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 2px 8px rgba(201, 162, 75, 0.3);
 }
 
 .btnPrimary:disabled {
@@ -284,23 +268,24 @@ textarea.input {
 }
 
 .btnSecondary {
-  padding: 0 24px;
+  padding: 0 28px;
   min-height: 48px;
-  border-radius: 6px;
-  border: 1px solid var(--nb-input-border);
-  background: rgba(255, 255, 255, 0.9);
+  border-radius: 2px;
+  border: 1px solid rgba(201, 162, 75, 0.4);
+  background: transparent;
   color: var(--nb-text);
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 20px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: all 0.15s;
 }
 
 .btnSecondary:hover:not(:disabled) {
-  border-color: var(--nb-text);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  border-color: var(--nb-accent);
+  background: rgba(201, 162, 75, 0.06);
 }
 
 .btnSecondary:disabled {
@@ -310,21 +295,22 @@ textarea.input {
 
 /* Smaller variant used inline on cards/rows (Duplicate, Delete, Rename...). */
 .btnSm {
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-family: 'Caveat', cursive;
-  font-weight: 700;
-  font-size: 18px;
+  padding: 9px 18px;
+  border-radius: 2px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  background: #ffffff;
-  border: 1px solid var(--nb-input-border);
+  background: transparent;
+  border: 1px solid rgba(201, 162, 75, 0.35);
   color: var(--nb-text);
-  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
 }
 
 .btnSm:hover:not(:disabled) {
-  border-color: var(--nb-text);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border-color: var(--nb-accent);
+  background: rgba(201, 162, 75, 0.06);
   transform: translateY(-1px);
 }
 
@@ -336,7 +322,7 @@ textarea.input {
 /* Combine with .btnSm (or use standalone) for destructive actions. */
 .btnDanger {
   border-color: var(--nb-delete-border);
-  color: var(--nb-margin-solid);
+  color: var(--nb-warning-text);
 }
 
 .btnDanger:hover:not(:disabled) {
@@ -345,7 +331,7 @@ textarea.input {
      to text color instead. */
   border-color: var(--nb-delete-border);
   background: var(--nb-delete-bg-hover);
-  box-shadow: 0 2px 6px rgba(184, 73, 47, 0.15);
+  box-shadow: 0 2px 6px rgba(217, 142, 130, 0.15);
   transform: translateY(-1px);
 }
 
@@ -353,22 +339,23 @@ textarea.input {
 
 .card {
   position: relative;
-  border-radius: 10px;
+  border-radius: 3px;
   border: 1px solid var(--nb-card-border);
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.025);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   padding: 1.25em;
 }
 
 /* Combine with .card in JSX: className={`${styles.card} ${styles.cardHoverable}`} */
 .cardHoverable {
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
 }
 
 .cardHoverable:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   transform: translateY(-2px);
+  border-color: rgba(201, 162, 75, 0.5);
 }
 
 /* Left accent stripe used on list-row cards (quiz/group cards). Parent
@@ -380,15 +367,15 @@ textarea.input {
   bottom: 12px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: linear-gradient(180deg, #8478f7, #4f46e5);
+  background: linear-gradient(180deg, var(--nb-accent-bright), var(--nb-accent-deep));
 }
 
 .empty {
   text-align: center;
   padding: 3em 1em;
   color: var(--nb-text-muted);
-  font-family: 'Caveat', cursive;
-  font-size: 22px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
 }
 
 /* --- Tables ------------------------------------------------------------- */
@@ -436,6 +423,6 @@ textarea.input {
 }
 
 .badgeNeutral {
-  background: #f1efe9;
+  background: rgba(201, 162, 75, 0.12);
   color: var(--nb-text-muted);
 }

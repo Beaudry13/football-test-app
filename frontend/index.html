@@ -4,14 +4,36 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Football Quiz Platform</title>
-    <!-- Caveat + Inter: used by the notebook-themed dashboard redesign
-         (frontend/src/pages/DashboardPage.tsx). Loaded globally here since
-         a per-page @import would duplicate the request on every visit. -->
+    <title>Peira | Know it before you play it</title>
+    <meta
+      name="description"
+      content="Peira helps coaches create, distribute, and analyze football knowledge assessments so players can master their assignments, prepare with confidence, and play faster."
+    />
+    <!-- Generic fallback link-preview tags. On /play/* routes,
+         netlify/edge-functions/og-tags.ts rewrites title/og:title/
+         og:description server-side (before a crawler ever sees this HTML)
+         to name the actual Peira being shared - everywhere else, these
+         defaults are what a crawler sees since no edge function runs. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Peira" />
+    <meta property="og:title" content="Peira | Know it before you play it" />
+    <meta
+      property="og:description"
+      content="Peira helps coaches create, distribute, and analyze football knowledge assessments so players can master their assignments, prepare with confidence, and play faster."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Peira | Know it before you play it" />
+    <meta
+      name="twitter:description"
+      content="Peira helps coaches create, distribute, and analyze football knowledge assessments so players can master their assignments, prepare with confidence, and play faster."
+    />
+    <!-- Cinzel (display/headers, coach-facing dark theme) + Inter (body,
+         both themes). Loaded globally here since a per-page @import would
+         duplicate the request on every visit. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
   </head>

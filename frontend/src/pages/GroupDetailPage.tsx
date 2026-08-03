@@ -61,7 +61,7 @@ export function GroupDetailPage() {
 
   async function handleDelete() {
     if (!group) return;
-    if (!window.confirm(`Delete group "${group.name}"? This does not affect quizzes it was used on.`)) {
+    if (!window.confirm(`Delete group "${group.name}"? This does not affect Peiras it was used on.`)) {
       return;
     }
     setError(null);

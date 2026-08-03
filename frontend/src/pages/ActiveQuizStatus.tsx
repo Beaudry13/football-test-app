@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getActiveStatus } from '../api/quizzes';
+import { getQuizDashboard } from '../api/grading';
 import { usePolling } from '../hooks/usePolling';
-import type { ActiveQuizStatus as ActiveQuizStatusEntry } from '../api/types';
+import type { ActiveQuizStatus as ActiveQuizStatusEntry, QuestionBreakdown } from '../api/types';
 import nb from '../styles/notebook.module.css';
 import styles from './ActiveQuizStatus.module.css';
 
@@ -24,15 +25,63 @@ function sentToLabel(entry: ActiveQuizStatusEntry): string {
   return entry.group_names.join(', ');
 }
 
+function QuestionBreakdownTable({ breakdown }: { breakdown: QuestionBreakdown[] }) {
+  return (
+    <table className={nb.table}>
+      <thead>
+        <tr>
+          <th>Question</th>
+          <th>Correct</th>
+          <th>Incorrect</th>
+          <th>Ungraded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {breakdown.map((q) => (
+          <tr key={q.question_id}>
+            <td>{q.question_text}</td>
+            <td>{q.correct_count}</td>
+            <td>{q.incorrect_count}</td>
+            <td>{q.ungraded_count}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
   const pendingCount = entry.in_progress.length + entry.not_started.length;
+  const [isOpen, setIsOpen] = useState(false);
+  const [breakdown, setBreakdown] = useState<QuestionBreakdown[] | null>(null);
+
+  const fetchBreakdown = useCallback(async () => {
+    try {
+      const dashboard = await getQuizDashboard(entry.quiz_id);
+      setBreakdown(dashboard.question_breakdown);
+    } catch {
+      // Same "leave last known state, let the next tick retry" reasoning
+      // as the outer section's own poll - this is a nice-to-have snapshot,
+      // not the only way to reach this data (the Results tab still works).
+    }
+  }, [entry.quiz_id]);
+
+  useEffect(() => {
+    if (isOpen) fetchBreakdown();
+  }, [isOpen, fetchBreakdown]);
+
+  usePolling(fetchBreakdown, POLL_INTERVAL_MS, isOpen);
 
   return (
     <div className={`${nb.card} ${nb.cardHoverable} ${styles.card}`}>
       <div className={nb.accentStripe} />
-      <div className={styles.cardHeader}>
+      <div className={styles.cardHeader} onClick={() => setIsOpen((v) => !v)}>
         <div>
-          <Link to={`/quizzes/${entry.quiz_id}?tab=results`} className={styles.title}>
+          <Link
+            to={`/quizzes/${entry.quiz_id}?tab=results`}
+            className={styles.title}
+            onClick={(e) => e.stopPropagation()}
+          >
             {entry.quiz_title}
           </Link>
           <div className={styles.meta}>
@@ -42,53 +91,69 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
         <div className={styles.counts}>
           <span className={`${nb.badge} ${nb.badgeSuccess}`}>{entry.submitted.length} submitted</span>
           <span className={`${nb.badge} ${nb.badgeWarning}`}>{pendingCount} pending</span>
+          <span>{isOpen ? '▲' : '▼'}</span>
         </div>
       </div>
 
-      <div className={styles.statusLists}>
-        <div className={styles.statusColumn}>
-          <h4 className={styles.columnHeading}>Submitted ({entry.submitted.length})</h4>
-          {entry.submitted.length === 0 ? (
-            <p className={styles.emptyNote}>No one yet.</p>
-          ) : (
-            <ul className={styles.nameList}>
-              {entry.submitted.map((p) => (
-                <li key={p.player_name}>{p.player_name}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+      {isOpen && (
+        <>
+          <div className={styles.statusLists}>
+            <div className={styles.statusColumn}>
+              <h4 className={styles.columnHeading}>Submitted ({entry.submitted.length})</h4>
+              {entry.submitted.length === 0 ? (
+                <p className={styles.emptyNote}>No one yet.</p>
+              ) : (
+                <ul className={styles.nameList}>
+                  {entry.submitted.map((p) => (
+                    <li key={p.player_name}>{p.player_name}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
-        <div className={styles.statusColumn}>
-          <h4 className={styles.columnHeading}>Pending ({pendingCount})</h4>
-          {pendingCount === 0 ? (
-            <p className={styles.emptyNote}>Everyone has submitted.</p>
-          ) : (
-            <>
-              {entry.in_progress.length > 0 && (
+            <div className={styles.statusColumn}>
+              <h4 className={styles.columnHeading}>Pending ({pendingCount})</h4>
+              {pendingCount === 0 ? (
+                <p className={styles.emptyNote}>Everyone has submitted.</p>
+              ) : (
                 <>
-                  <div className={styles.subLabel}>Started, not submitted</div>
-                  <ul className={styles.nameList}>
-                    {entry.in_progress.map((p) => (
-                      <li key={p.player_name}>{p.player_name}</li>
-                    ))}
-                  </ul>
+                  {entry.in_progress.length > 0 && (
+                    <>
+                      <div className={styles.subLabel}>Started, not submitted</div>
+                      <ul className={styles.nameList}>
+                        {entry.in_progress.map((p) => (
+                          <li key={p.player_name}>{p.player_name}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {entry.not_started.length > 0 && (
+                    <>
+                      <div className={styles.subLabel}>Not started</div>
+                      <ul className={styles.nameList}>
+                        {entry.not_started.map((name) => (
+                          <li key={name}>{name}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </>
               )}
-              {entry.not_started.length > 0 && (
-                <>
-                  <div className={styles.subLabel}>Not started</div>
-                  <ul className={styles.nameList}>
-                    {entry.not_started.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+
+          <div className={styles.breakdownSection}>
+            <h4 className={styles.columnHeading}>Answer breakdown</h4>
+            {breakdown == null ? (
+              <p className={styles.emptyNote}>Loading…</p>
+            ) : breakdown.length === 0 ? (
+              <p className={styles.emptyNote}>No questions on this Peira.</p>
+            ) : (
+              <QuestionBreakdownTable breakdown={breakdown} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

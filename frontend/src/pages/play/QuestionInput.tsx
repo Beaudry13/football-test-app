@@ -57,7 +57,7 @@ export function QuestionInput({
           )}
         </>
       )}
-      <strong>
+      <strong className={styles.questionText}>
         {index + 1}. {question.question_text}
       </strong>
 

@@ -4,6 +4,8 @@ import { getPlayerResults } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
 import type { PlayerResultsResponse } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { PeiraLogo } from '../../components/brand/PeiraLogo';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { ResultsView } from './ResultsView';
 import styles from './PlayPage.module.css';
 
@@ -36,6 +38,8 @@ export function ResultsCheckPage() {
     }
   }, [params.code, params.playerName, fetchResults]);
 
+  useDocumentTitle(results ? `${results.quiz_title} | Peira` : undefined);
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!code.trim() || !playerName.trim()) return;
@@ -45,6 +49,9 @@ export function ResultsCheckPage() {
   if (results) {
     return (
       <div className={styles.wrapper}>
+        <div className={styles.brandRow}>
+          <PeiraLogo variant="light" markOnly size={28} />
+        </div>
         <ResultsView results={results} />
       </div>
     );
@@ -52,6 +59,9 @@ export function ResultsCheckPage() {
 
   return (
     <div className={styles.wrapper}>
+      <div className={styles.brandRow}>
+        <PeiraLogo variant="light" markOnly size={28} />
+      </div>
       <form className={`card ${styles.panel}`} onSubmit={handleSubmit}>
         <h2>Check your results</h2>
         <p>Enter the access code and the name you played under.</p>

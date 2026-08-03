@@ -34,6 +34,17 @@ export function LoginPage() {
     <NotebookPage>
       <NotebookHeader />
       <div className={nb.contentNarrow}>
+        <div className={styles.intro}>
+          <h1 className={nb.heading} style={{ fontSize: '2em' }}>
+            Know it before you play it.
+          </h1>
+          <p className={styles.introText}>
+            Peira comes from an Ancient Greek word meaning trial, test, and experience gained
+            through testing. In football, preparation isn't complete until knowledge has been
+            tested — Peira gives coaches a clearer picture of what their players understand,
+            while giving athletes the mental reps they need to perform with confidence.
+          </p>
+        </div>
         <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit}>
           <h2 className={nb.subheading}>Coach log in</h2>
           <ErrorBanner message={error} />

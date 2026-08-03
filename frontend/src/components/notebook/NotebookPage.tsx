@@ -1,11 +1,11 @@
 import { useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import styles from '../../styles/notebook.module.css';
 
-/** Page shell for the notebook-themed redesign: ruled-paper background,
- * red margin line, hole-punch dots, and a mouse-tracked spotlight glow +
- * masked dot-grid overlay. Extracted from DashboardPage.tsx's original
- * inline implementation so every reskinned page shares one copy of this
- * logic instead of re-declaring it. */
+/** Page shell for the dark Peira coach theme: gold gradient background and
+ * a mouse-tracked spotlight glow + masked line-art texture overlay.
+ * Extracted from DashboardPage.tsx's original inline implementation so
+ * every reskinned page shares one copy of this logic instead of
+ * re-declaring it. */
 export function NotebookPage({ children }: { children: ReactNode }) {
   const [mouse, setMouse] = useState({ x: 50, y: 20 });
 
@@ -22,19 +22,16 @@ export function NotebookPage({ children }: { children: ReactNode }) {
       <div
         className={styles.spotlight}
         style={{
-          background: `radial-gradient(600px 400px at ${mouse.x}% ${mouse.y}%, rgba(79,70,229,0.07), transparent 70%)`,
+          background: `radial-gradient(700px 500px at ${mouse.x}% ${mouse.y}%, rgba(201,162,75,0.1), transparent 70%)`,
         }}
       />
       <div
         className={styles.dotGrid}
         style={{
-          maskImage: `radial-gradient(ellipse 800px 500px at ${mouse.x}% ${mouse.y}%, black, transparent 70%)`,
-          WebkitMaskImage: `radial-gradient(ellipse 800px 500px at ${mouse.x}% ${mouse.y}%, black, transparent 70%)`,
+          maskImage: `radial-gradient(ellipse 900px 600px at ${mouse.x}% ${mouse.y}%, black, transparent 75%)`,
+          WebkitMaskImage: `radial-gradient(ellipse 900px 600px at ${mouse.x}% ${mouse.y}%, black, transparent 75%)`,
         }}
       />
-      <div className={styles.holePunch} style={{ top: 42 }} />
-      <div className={styles.holePunch} style={{ top: '50%' }} />
-      <div className={styles.holePunch} style={{ top: '88%' }} />
 
       {children}
     </div>

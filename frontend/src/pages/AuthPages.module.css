@@ -1,6 +1,18 @@
 /* Sizing/centering now comes from notebook.module.css's .contentNarrow -
    this file only holds what's specific to the auth card itself. */
 
+.intro {
+  margin-bottom: 2em;
+  text-align: center;
+}
+
+.introText {
+  color: var(--nb-text-muted, #78766e);
+  font-size: 0.95em;
+  line-height: 1.6;
+  margin: 0.5em 0 0;
+}
+
 .form {
   width: 100%;
 }

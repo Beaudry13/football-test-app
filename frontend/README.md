@@ -1,8 +1,8 @@
-# Football Quiz Platform — Frontend
+# Peira — Frontend
 
 Phase 2 of the project: a React + TypeScript SPA (Vite) for coaches to
-build and grade quizzes, including the film-annotation drawing tool, plus
-the public flow players use to take a quiz. Talks to the Flask API in
+build and grade Peiras, including the film-annotation drawing tool, plus
+the public flow players use to take one. Talks to the Flask API in
 `../backend`.
 
 ## Stack

@@ -1,7 +1,12 @@
 .wrapper {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding-top: 1.5em;
+}
+
+.brandRow {
+  margin-bottom: 1.25em;
 }
 
 .panel {
@@ -55,8 +60,8 @@
 
 .nameButtonActive {
   border-color: var(--color-primary);
-  background: var(--color-success-bg);
-  color: var(--color-primary);
+  background: var(--color-primary-bg);
+  color: var(--color-primary-hover);
 }
 
 .progress {
@@ -78,6 +83,15 @@
 
 .questionCard {
   margin-bottom: 1em;
+}
+
+.questionText {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 0.6em;
 }
 
 /* Image sizing is the top priority for the player-facing view - these images are film stills
@@ -133,8 +147,9 @@
 }
 
 .optionRowActive {
+  border-width: 2px;
   border-color: var(--color-primary);
-  background: var(--color-success-bg);
+  background: var(--color-primary-bg);
 }
 
 .navRow {

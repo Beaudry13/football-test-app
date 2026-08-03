@@ -184,6 +184,63 @@ def test_validate_code_reports_not_found_for_a_code_that_never_existed(client):
     assert response.get_json()["error"] == "Invalid access code"
 
 
+def test_quiz_by_code_returns_the_title_for_a_valid_code(client, coach_headers):
+    quiz, _, _, access_code = build_ready_quiz(client, coach_headers)
+
+    response = client.get(f"/api/play/quiz-by-code/{access_code['code']}")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"quiz_title": quiz["title"]}
+
+
+def test_quiz_by_code_is_case_insensitive(client, coach_headers):
+    quiz, _, _, access_code = build_ready_quiz(client, coach_headers)
+
+    response = client.get(f"/api/play/quiz-by-code/{access_code['code'].lower()}")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"quiz_title": quiz["title"]}
+
+
+def test_quiz_by_code_returns_null_title_for_a_code_that_never_existed(client):
+    response = client.get("/api/play/quiz-by-code/NOPECD")
+
+    # Deliberately 200 + null, not a 404 - a tab-title lookup fired
+    # automatically on page load must never surface an error before the
+    # player has done anything, and must not let a caller tell "never
+    # existed" apart from "expired"/"deactivated" by response shape either.
+    assert response.status_code == 200
+    assert response.get_json() == {"quiz_title": None}
+
+
+def test_quiz_by_code_returns_null_title_for_an_expired_code(app, client, coach_headers):
+    _, _, _, access_code = build_ready_quiz(client, coach_headers)
+
+    with app.app_context():
+        code_row = db.session.get(AccessCode, access_code["id"])
+        code_row.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+
+    response = client.get(f"/api/play/quiz-by-code/{access_code['code']}")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"quiz_title": None}
+
+
+def test_quiz_by_code_returns_null_title_for_a_deactivated_code(client, coach_headers):
+    _, _, _, access_code = build_ready_quiz(client, coach_headers)
+    quiz_id = access_code["quiz_id"]
+
+    client.post(
+        f"/api/quizzes/{quiz_id}/access-codes/{access_code['id']}/deactivate", headers=coach_headers
+    )
+
+    response = client.get(f"/api/play/quiz-by-code/{access_code['code']}")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"quiz_title": None}
+
+
 def test_validate_code_never_scopes_by_organization(client, register_coach):
     """reason_for_invalid must never branch on org/quiz ownership - a real,
     active code from ANY organization has to validate successfully no

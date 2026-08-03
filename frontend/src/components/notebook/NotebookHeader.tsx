@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { PeiraLogo } from '../brand/PeiraLogo';
 import styles from '../../styles/notebook.module.css';
 
 const NAV_LINKS = [
@@ -28,8 +29,8 @@ export function NotebookHeader() {
 
   return (
     <div className={styles.header}>
-      <Link to="/" className={styles.brand}>
-        Football Quiz Platform
+      <Link to="/" className={styles.brand} aria-label="Peira">
+        <PeiraLogo variant="dark" size={30} />
       </Link>
       {/* Logged-out pages (Login/Register/Join) are themselves the way to
           get signed in, so there's nothing useful to put in the nav - just

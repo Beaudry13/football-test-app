@@ -40,7 +40,7 @@ from app.utils.validation import load_json_body
 play_bp = Blueprint("play", __name__)
 
 NO_RESULTS_FOUND = "No results found for that code and name"
-ALREADY_SUBMITTED = "This player has already submitted this quiz"
+ALREADY_SUBMITTED = "This player has already submitted this Peira"
 
 
 def _invalid_code_error(reason: str) -> ApiError:
@@ -254,6 +254,26 @@ def submit_quiz():
 
     db.session.refresh(attempt)
     return jsonify(attempt.to_dict(include_answers=True)), 201
+
+
+@play_bp.get("/quiz-by-code/<code>")
+# A lightweight, read-only lookup (title only) fired automatically on page
+# load to set the browser tab title - higher than the POST routes since it
+# isn't gated behind a player typing anything, but still capped against
+# scripted enumeration.
+@limiter.limit("30 per minute")
+def quiz_by_code(code: str):
+    """Quiz title for a code, for tab-title purposes only - deliberately not
+    the full validate-code payload (no questions/roster), and deliberately
+    never errors on an invalid/expired/deactivated code: callers fall back
+    to generic branding on a null title rather than surfacing a lookup
+    failure before the player has done anything."""
+    access_code = AccessCode.query.filter_by(code=code.strip().upper()).first()
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        return jsonify({"quiz_title": None})
+
+    return jsonify({"quiz_title": access_code.quiz.title})
 
 
 @play_bp.post("/results")
