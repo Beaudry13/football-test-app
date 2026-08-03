@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerListEditor } from './PlayerListEditor';
+import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { RosterPlayer } from '../api/types';
 
 function players(names: string[]): RosterPlayer[] {
@@ -71,7 +72,6 @@ describe('PlayerListEditor', () => {
     const user = userEvent.setup();
     const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Alex Lee']) });
     const onSave = vi.fn();
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<PlayerListEditor load={load} onSave={onSave} onUploadCsv={vi.fn()} />);
 
     await findInList('Jordan Smith');
@@ -80,7 +80,8 @@ describe('PlayerListEditor', () => {
     await user.type(textarea, 'Jordan Smith');
     await user.click(screen.getByRole('button', { name: 'Save roster' }));
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Alex Lee'));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Alex Lee');
+    await cancelConfirm(user);
     expect(onSave).not.toHaveBeenCalled();
   });
 
@@ -88,7 +89,6 @@ describe('PlayerListEditor', () => {
     const user = userEvent.setup();
     const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Alex Lee']) });
     const onSave = vi.fn().mockResolvedValue({ players: players(['Jordan Smith']) });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<PlayerListEditor load={load} onSave={onSave} onUploadCsv={vi.fn()} />);
 
     await findInList('Jordan Smith');
@@ -96,6 +96,7 @@ describe('PlayerListEditor', () => {
     await user.clear(textarea);
     await user.type(textarea, 'Jordan Smith');
     await user.click(screen.getByRole('button', { name: 'Save roster' }));
+    await acceptConfirm(user, 'Remove and Save');
 
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(['Jordan Smith']));
   });
@@ -104,7 +105,6 @@ describe('PlayerListEditor', () => {
     const user = userEvent.setup();
     const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith']) });
     const onSave = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Sam Rivera']) });
-    const confirmSpy = vi.spyOn(window, 'confirm');
     render(<PlayerListEditor load={load} onSave={onSave} onUploadCsv={vi.fn()} />);
 
     await findInList('Jordan Smith');
@@ -113,7 +113,7 @@ describe('PlayerListEditor', () => {
     await user.type(textarea, 'Jordan Smith\nSam Rivera');
     await user.click(screen.getByRole('button', { name: 'Save roster' }));
 
-    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(['Jordan Smith', 'Sam Rivera']));
   });
 

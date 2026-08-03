@@ -51,6 +51,7 @@ export interface Quiz {
   title: string;
   description: string | null;
   one_question_at_a_time: boolean;
+  require_all_answers: boolean;
   folder_id: number | null;
   question_count: number;
   created_at: string;
@@ -102,7 +103,11 @@ export interface QuestionOption {
  */
 export interface AnnotationLayer {
   id: string;
-  type: 'line' | 'group' | 'ellipse' | 'rect' | 'path' | 'textbox' | 'polyline';
+  // Fabric's toObject() serializes with capitalized class names (e.g.
+  // 'Polyline'), distinct from the lowercase 'polyline' a live in-canvas
+  // Fabric object reports via its own .type getter - this is the
+  // serialized/saved shape, not the live-canvas one.
+  type: 'Line' | 'Group' | 'Ellipse' | 'Rect' | 'Path' | 'Textbox' | 'Polyline';
   [key: string]: unknown;
 }
 

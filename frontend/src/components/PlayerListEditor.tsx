@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getErrorMessage } from '../api/client';
 import type { RosterPlayer } from '../api/types';
 import { ErrorBanner } from './ErrorBanner';
+import { useConfirmDialog } from './ConfirmDialog';
 import nb from '../styles/notebook.module.css';
 import styles from './PlayerListEditor.module.css';
 
@@ -38,6 +39,7 @@ export function PlayerListEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [filterText, setFilterText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   const doLoad = useCallback(async () => {
     try {
@@ -68,14 +70,14 @@ export function PlayerListEditor({
     const lowerNames = new Set(names.map((n) => n.toLowerCase()));
     const removedNames = players.filter((p) => !lowerNames.has(p.player_name.toLowerCase()));
     if (removedNames.length > 0) {
+      const count = removedNames.length;
       const list = removedNames.map((p) => p.player_name).join(', ');
-      if (
-        !window.confirm(
-          `Save will remove ${removedNames.length} player${removedNames.length === 1 ? '' : 's'} no longer in the list: ${list}. Continue?`,
-        )
-      ) {
-        return;
-      }
+      const confirmed = await confirm({
+        title: `Remove ${count} Player${count === 1 ? '' : 's'}?`,
+        body: `Saving drops ${count === 1 ? 'this player' : 'these players'}, no longer in the list: ${list}.`,
+        confirmLabel: `Remove and Save`,
+      });
+      if (!confirmed) return;
     }
 
     setError(null);
@@ -113,6 +115,7 @@ export function PlayerListEditor({
 
   return (
     <div>
+      {dialog}
       <ErrorBanner message={error} />
       <div className={styles.layout}>
         <div className={nb.card}>

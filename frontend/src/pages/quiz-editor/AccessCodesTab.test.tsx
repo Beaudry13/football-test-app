@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccessCodesTab } from './AccessCodesTab';
 import * as accessCodesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
+import { acceptConfirm, cancelConfirm } from '../../test/confirmDialog';
 import type { AccessCode, Group, Quiz } from '../../api/types';
 
 const quiz: Quiz = {
@@ -14,6 +15,7 @@ const quiz: Quiz = {
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: true,
+  require_all_answers: false,
   folder_id: null,
   question_count: 2,
   created_at: '2026-01-01T00:00:00Z',
@@ -99,24 +101,22 @@ describe('AccessCodesTab deactivation', () => {
   it('confirms before deactivating a live code, and does nothing if cancelled', async () => {
     const user = userEvent.setup();
     const deactivateSpy = vi.spyOn(accessCodesApi, 'deactivateAccessCode').mockResolvedValue(activeCode);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(<AccessCodesTab quiz={quiz} />);
 
     await user.click(await screen.findByRole('button', { name: 'Deactivate now' }));
 
-    expect(window.confirm).toHaveBeenCalledWith(
-      expect.stringContaining('locked out'),
-    );
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('locked out');
+    await cancelConfirm(user);
     expect(deactivateSpy).not.toHaveBeenCalled();
   });
 
   it('deactivates once the confirmation is accepted', async () => {
     const user = userEvent.setup();
     const deactivateSpy = vi.spyOn(accessCodesApi, 'deactivateAccessCode').mockResolvedValue(activeCode);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<AccessCodesTab quiz={quiz} />);
 
     await user.click(await screen.findByRole('button', { name: 'Deactivate now' }));
+    await acceptConfirm(user, 'Deactivate Code');
 
     await waitFor(() => expect(deactivateSpy).toHaveBeenCalledWith(1, 3));
   });

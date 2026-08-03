@@ -71,7 +71,7 @@ describe('ImageLightbox', () => {
         src="/photo.png"
         alt="Film still, enlarged"
         onClose={vi.fn()}
-        annotations={[{ id: 'a1', type: 'line' }]}
+        annotations={[{ id: 'a1', type: 'Line' }]}
         canvasWidth={1400}
       />,
     );

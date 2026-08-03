@@ -82,6 +82,36 @@
   align-items: center;
 }
 
+/* Duplicate/Delete on a quiz card read as tinted, filled actions at rest
+   (not just a neutral outline that only colors up on hover) - per the
+   design handoff's literal card-action styling. Qualified with the `button`
+   type (not just the class alone) so this reliably beats the shared
+   .btnSm's same-specificity border/color rules regardless of which of the
+   two CSS-module stylesheets Vite happens to inject first. */
+button.actionDuplicate {
+  border: 1.5px solid var(--nb-accent-deep, #a6822f);
+  background: rgba(166, 130, 47, 0.14);
+  color: #6b4e14;
+  font-weight: 700;
+}
+
+button.actionDuplicate:hover:not(:disabled) {
+  border-color: var(--nb-accent-deep, #a6822f);
+  background: rgba(166, 130, 47, 0.22);
+}
+
+button.actionDelete {
+  border: 1.5px solid #b8492f;
+  background: var(--nb-delete-bg-hover, rgba(184, 73, 47, 0.12));
+  color: #9a3d25;
+  font-weight: 700;
+}
+
+button.actionDelete:hover:not(:disabled) {
+  border-color: #b8492f;
+  background: rgba(184, 73, 47, 0.22);
+}
+
 .folderSelect {
   padding: 6px 10px;
   border-radius: 2px;

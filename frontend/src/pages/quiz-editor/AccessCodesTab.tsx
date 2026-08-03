@@ -4,6 +4,7 @@ import { listGroups } from '../../api/groups';
 import { getErrorMessage } from '../../api/client';
 import type { AccessCode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
 import nb from '../../styles/notebook.module.css';
 import styles from './AccessCodesTab.module.css';
 
@@ -16,6 +17,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -57,17 +59,17 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   }
 
   async function handleDeactivate(accessCodeId: number) {
-    if (
-      !window.confirm(
-        'Deactivate this code now? Any player still taking the Peira will be immediately locked out, even mid-attempt.',
-      )
-    ) {
-      return;
-    }
     setError(null);
     try {
-      await deactivateAccessCode(quiz.id, accessCodeId);
-      await load();
+      await confirm({
+        title: 'Deactivate Code?',
+        body: 'Any player still taking the Peira will be locked out immediately, even mid-attempt.',
+        confirmLabel: 'Deactivate Code',
+        action: async () => {
+          await deactivateAccessCode(quiz.id, accessCodeId);
+          await load();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -83,6 +85,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
 
   return (
     <div>
+      {dialog}
       <ErrorBanner message={error} />
 
       <div className={`${nb.card} ${styles.activeCard}`}>

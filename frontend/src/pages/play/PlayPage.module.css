@@ -86,6 +86,17 @@
   margin-bottom: 1em;
 }
 
+.questionCardUnanswered {
+  border: 2px solid var(--color-danger);
+}
+
+.questionRequiredNote {
+  color: var(--color-danger);
+  font-size: 0.85em;
+  font-weight: 600;
+  margin: -0.3em 0 0.6em;
+}
+
 .questionText {
   display: block;
   font-family: 'Cinzel', serif;

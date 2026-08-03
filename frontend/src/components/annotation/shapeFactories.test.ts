@@ -1,18 +1,38 @@
 import { describe, expect, it } from 'vitest';
+import { Group, type FabricObject } from 'fabric';
 import {
   applyStyleToObject,
+  capsFromObject,
   createArrow,
   createCircle,
   createLine,
   createRectangle,
+  createSegment,
+  createSmoothPath,
   createTextbox,
   currentSegment,
   styleFromObject,
 } from './shapeFactories';
-import { DEFAULT_STYLE, type AnnotationStyle } from './types';
+import { DEFAULT_STYLE, type AnnotationStyle, type LineCap } from './types';
 
-const redSolid: AnnotationStyle = { color: '#e63946', strokeWidth: 3, dashed: false, fillOpacity: 0.25 };
-const bluedashed: AnnotationStyle = { color: '#264653', strokeWidth: 8, dashed: true, fillOpacity: 0.6 };
+const redSolid: AnnotationStyle = {
+  color: '#e63946',
+  strokeWidth: 3,
+  dashed: false,
+  fillOpacity: 0.25,
+  bold: true,
+  startCap: 'none',
+  endCap: 'none',
+};
+const bluedashed: AnnotationStyle = {
+  color: '#264653',
+  strokeWidth: 8,
+  dashed: true,
+  fillOpacity: 0.6,
+  bold: true,
+  startCap: 'none',
+  endCap: 'none',
+};
 
 describe('segment tracking for endpoint dragging', () => {
   it('tags a line with its endpoints for the drag hit-test', () => {
@@ -107,7 +127,8 @@ describe('applyStyleToObject', () => {
   it('updates both the shaft and head of an arrow', () => {
     const arrow = createArrow({ x: 0, y: 0 }, { x: 50, y: 50 }, redSolid);
     applyStyleToObject(arrow, bluedashed);
-    const [shaft, head] = arrow.getObjects();
+    // createArrow always forces endCap: 'arrow', so this is always a Group.
+    const [shaft, head] = (arrow as Group).getObjects();
     expect(shaft.stroke).toBe(bluedashed.color);
     expect(shaft.strokeWidth).toBe(bluedashed.strokeWidth);
     expect(head.fill).toBe(bluedashed.color);
@@ -126,5 +147,104 @@ describe('applyStyleToObject', () => {
     applyStyleToObject(line, bluedashed);
     expect(line.stroke).toBe(bluedashed.color);
     expect(line.fill).toBe(fillBefore);
+  });
+
+  it('recolours a curve path, so a placed curve never needs redrawing to restyle', () => {
+    const path = createSmoothPath([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 0 }], redSolid);
+    applyStyleToObject(path, bluedashed);
+    expect(path.stroke).toBe(bluedashed.color);
+    expect(path.strokeWidth).toBe(bluedashed.strokeWidth);
+    expect(styleFromObject(path).color).toBe(bluedashed.color);
+    expect(styleFromObject(path).dashed).toBe(true);
+  });
+
+  it('recolours every cap of a segment, not just the shaft', () => {
+    const segment = createSegment({ x: 0, y: 0 }, { x: 60, y: 0 }, {
+      ...redSolid,
+      startCap: 'open-circle',
+      endCap: 'arrow',
+    });
+    applyStyleToObject(segment, { ...bluedashed, startCap: 'open-circle', endCap: 'arrow' });
+
+    const [shaft, startCircle, endArrow] = (segment as Group).getObjects();
+    expect(shaft.stroke).toBe(bluedashed.color);
+    // An open circle is stroke-only; its white centre must survive a recolour.
+    expect(startCircle.stroke).toBe(bluedashed.color);
+    expect(startCircle.fill).toBe('#ffffff');
+    expect(endArrow.fill).toBe(bluedashed.color);
+  });
+
+  it('toggles a textbox between bold and regular weight', () => {
+    const textbox = createTextbox({ x: 0, y: 0 }, redSolid);
+    expect(textbox.fontWeight).toBe(700);
+    expect(styleFromObject(textbox).bold).toBe(true);
+
+    applyStyleToObject(textbox, { ...redSolid, bold: false });
+    expect(textbox.fontWeight).toBe(400);
+    expect(styleFromObject(textbox).bold).toBe(false);
+  });
+});
+
+describe('line end caps', () => {
+  it('stays a bare line when both ends are plain', () => {
+    const segment = createSegment({ x: 0, y: 0 }, { x: 50, y: 0 }, redSolid);
+    expect(segment.type).toBe('line');
+    expect(capsFromObject(segment)).toEqual({ startCap: 'none', endCap: 'none' });
+  });
+
+  it.each<LineCap>(['arrow', 'filled-circle', 'open-circle', 'tbar'])(
+    'builds a segment with %s on both ends independently',
+    (cap) => {
+      const segment = createSegment({ x: 0, y: 0 }, { x: 50, y: 0 }, {
+        ...redSolid,
+        startCap: cap,
+        endCap: cap,
+      });
+      const children = (segment as Group).getObjects();
+      expect(children).toHaveLength(3); // shaft + two caps
+      expect(children.slice(1).map((c: FabricObject) => c.get('capKind'))).toEqual([cap, cap]);
+      expect(capsFromObject(segment)).toEqual({ startCap: cap, endCap: cap });
+    },
+  );
+
+  it('supports different caps at each end', () => {
+    const segment = createSegment({ x: 0, y: 0 }, { x: 50, y: 0 }, {
+      ...redSolid,
+      startCap: 'open-circle',
+      endCap: 'arrow',
+    });
+    expect(capsFromObject(segment)).toEqual({ startCap: 'open-circle', endCap: 'arrow' });
+    expect(styleFromObject(segment).startCap).toBe('open-circle');
+    expect(styleFromObject(segment).endCap).toBe('arrow');
+  });
+
+  it('points each cap outward, away from the middle of the segment', () => {
+    // Horizontal, left-to-right: the end arrowhead points right (+90 from
+    // Triangle's default "up"), the start arrowhead points back left (-90).
+    const segment = createSegment({ x: 0, y: 0 }, { x: 50, y: 0 }, {
+      ...redSolid,
+      startCap: 'arrow',
+      endCap: 'arrow',
+    });
+    const [, startHead, endHead] = (segment as Group).getObjects();
+    expect(endHead.angle).toBe(90);
+    expect(startHead.angle).toBe(270);
+  });
+
+  it('reads an arrow saved before caps existed as an end-arrow segment', () => {
+    // Pre-cap annotations carry only the old isArrow flag, no startCap/endCap.
+    const legacy = createArrow({ x: 0, y: 0 }, { x: 50, y: 50 }, redSolid);
+    legacy.set({ startCap: undefined, endCap: undefined });
+    expect(legacy.get('isArrow')).toBe(true);
+    expect(capsFromObject(legacy)).toEqual({ startCap: 'none', endCap: 'arrow' });
+  });
+
+  it('keeps endpoint tagging on a capped segment so it stays reshapeable', () => {
+    const segment = createSegment({ x: 10, y: 20 }, { x: 100, y: 200 }, {
+      ...redSolid,
+      endCap: 'tbar',
+    });
+    expect(segment.get('hasEditableEndpoints')).toBe(true);
+    expect(currentSegment(segment)).toEqual({ start: { x: 10, y: 20 }, end: { x: 100, y: 200 } });
   });
 });

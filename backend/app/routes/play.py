@@ -215,6 +215,21 @@ def submit_quiz():
     if len(submitted_question_ids) != len(set(submitted_question_ids)):
         raise ApiError("Each question can only be answered once per submission", status_code=422)
 
+    if access_code.quiz.require_all_answers:
+        # A question counts as answered only if the submission actually
+        # carries content for it - an autosaved-then-cleared text box or a
+        # deselected option must still block submission, not just "some
+        # Answer row exists in the database for this question" (which
+        # upsert_answer creates even for a blank autosave).
+        answered_question_ids = {
+            a["question_id"]
+            for a in data["answers"]
+            if a["selected_option_id"] is not None or (a["answer_text"] or "").strip()
+        }
+        all_question_ids = {q.id for q in access_code.quiz.questions}
+        if not all_question_ids <= answered_question_ids:
+            raise ApiError("Please answer all questions before submitting.", status_code=422)
+
     # Everything from here writes. If anything raises partway through - an
     # invalid question/option in a *later* answer after an *earlier* one in
     # this same payload already upserted cleanly, or the IntegrityError

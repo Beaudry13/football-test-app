@@ -1,4 +1,4 @@
-import { STROKE_COLORS, type AnnotationStyle, type AnnotationTool } from './types';
+import { LINE_CAPS, STROKE_COLORS, type AnnotationStyle, type AnnotationTool, type LineCap } from './types';
 import styles from './AnnotationToolbar.module.css';
 
 const TOOLS: { key: AnnotationTool; label: string; icon: string }[] = [
@@ -18,6 +18,10 @@ interface AnnotationToolbarProps {
   style: AnnotationStyle;
   onStyleChange: (style: AnnotationStyle) => void;
   showFillOpacity: boolean;
+  /** Start/end cap pickers only apply to lines and arrows. */
+  showLineCaps: boolean;
+  /** Bold toggle only applies to text labels. */
+  showTextWeight: boolean;
   canUndo: boolean;
   canRedo: boolean;
   onUndo: () => void;
@@ -32,6 +36,8 @@ export function AnnotationToolbar({
   style,
   onStyleChange,
   showFillOpacity,
+  showLineCaps,
+  showTextWeight,
   canUndo,
   canRedo,
   onUndo,
@@ -101,6 +107,48 @@ export function AnnotationToolbar({
               onChange={(e) => onStyleChange({ ...style, fillOpacity: Number(e.target.value) })}
             />
           </label>
+        )}
+
+        {showTextWeight && (
+          <label className={styles.sliderLabel}>
+            <input
+              type="checkbox"
+              checked={style.bold}
+              onChange={(e) => onStyleChange({ ...style, bold: e.target.checked })}
+            />
+            Bold
+          </label>
+        )}
+
+        {showLineCaps && (
+          <>
+            <label className={styles.sliderLabel}>
+              Start
+              <select
+                value={style.startCap}
+                onChange={(e) => onStyleChange({ ...style, startCap: e.target.value as LineCap })}
+              >
+                {LINE_CAPS.map((cap) => (
+                  <option key={cap.value} value={cap.value}>
+                    {cap.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.sliderLabel}>
+              End
+              <select
+                value={style.endCap}
+                onChange={(e) => onStyleChange({ ...style, endCap: e.target.value as LineCap })}
+              >
+                {LINE_CAPS.map((cap) => (
+                  <option key={cap.value} value={cap.value}>
+                    {cap.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         )}
       </div>
 

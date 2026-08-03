@@ -55,6 +55,7 @@ describe('JoinStep', () => {
         title: 'Week 1',
         description: null,
         one_question_at_a_time: false,
+        require_all_answers: false,
         folder_id: null,
         question_count: 0,
         created_at: '2026-01-01T00:00:00Z',

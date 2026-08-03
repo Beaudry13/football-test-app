@@ -458,6 +458,101 @@ def test_submit_rejects_option_id_from_before_coach_edited_question(client, coac
     assert response.status_code == 422
 
 
+def test_submit_rejects_when_require_all_answers_is_on_and_a_question_is_blank(client, coach_headers):
+    quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    client.patch(f"/api/quizzes/{quiz['id']}", json={"require_all_answers": True}, headers=coach_headers)
+
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]},
+            # written_question omitted entirely - the exact "player left a
+            # question blank" shape the frontend's own payload always sends
+            # (one entry per question, blank ones carry nulls), so this also
+            # covers an explicit blank entry, not just an absent one.
+        ],
+    )
+
+    assert response.status_code == 422
+    assert response.get_json()["error"] == "Please answer all questions before submitting."
+
+
+def test_submit_rejects_when_require_all_answers_is_on_and_a_written_answer_is_only_whitespace(
+    client, coach_headers
+):
+    quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    client.patch(f"/api/quizzes/{quiz['id']}", json={"require_all_answers": True}, headers=coach_headers)
+
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]},
+            {"question_id": written_question["id"], "answer_text": "   "},
+        ],
+    )
+
+    assert response.status_code == 422
+
+
+def test_submit_succeeds_when_require_all_answers_is_on_and_every_question_is_answered(client, coach_headers):
+    quiz, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+    client.patch(f"/api/quizzes/{quiz['id']}", json={"require_all_answers": True}, headers=coach_headers)
+
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]},
+            {"question_id": written_question["id"], "answer_text": "I set the edge."},
+        ],
+    )
+
+    assert response.status_code == 201
+
+
+def test_submit_allows_a_blank_question_when_require_all_answers_is_off(client, coach_headers):
+    # require_all_answers defaults to False (build_ready_quiz never sets it) -
+    # this is the existing, unrestricted behavior every quiz predating this
+    # setting keeps getting.
+    _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
+
+    response = start_and_submit(
+        client,
+        access_code["id"],
+        "Jordan Smith",
+        [
+            {"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]},
+            {"question_id": written_question["id"], "answer_text": None},
+        ],
+    )
+
+    assert response.status_code == 201
+
+
+def test_require_all_answers_survives_quiz_duplication(client, coach_headers):
+    quiz, _, _, _ = build_ready_quiz(client, coach_headers)
+    client.patch(f"/api/quizzes/{quiz['id']}", json={"require_all_answers": True}, headers=coach_headers)
+
+    copy = client.post(f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers).get_json()
+
+    assert copy["require_all_answers"] is True
+
+
+def test_require_all_answers_defaults_to_false_and_round_trips_through_update(client, coach_headers):
+    quiz = client.post("/api/quizzes", json={"title": "Week 1 Prep"}, headers=coach_headers).get_json()
+    assert quiz["require_all_answers"] is False
+
+    updated = client.patch(
+        f"/api/quizzes/{quiz['id']}", json={"require_all_answers": True}, headers=coach_headers
+    ).get_json()
+    assert updated["require_all_answers"] is True
+
+
 def test_coach_can_grade_written_answer_and_leave_feedback(client, coach_headers):
     _, tf_question, written_question, access_code = build_ready_quiz(client, coach_headers)
     submit_response = start_and_submit(

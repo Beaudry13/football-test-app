@@ -10,6 +10,7 @@ import {
 import { getErrorMessage } from '../api/client';
 import type { Group } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 import { PlayerListEditor } from '../components/PlayerListEditor';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupDetailPage.module.css';
@@ -21,6 +22,7 @@ export function GroupDetailPage() {
   const [nameValue, setNameValue] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   const loadGroup = useCallback(async () => {
     if (!groupId) return;
@@ -61,13 +63,17 @@ export function GroupDetailPage() {
 
   async function handleDelete() {
     if (!group) return;
-    if (!window.confirm(`Delete group "${group.name}"? This does not affect Peiras it was used on.`)) {
-      return;
-    }
     setError(null);
     try {
-      await deleteGroup(group.id);
-      navigate('/groups');
+      await confirm({
+        title: 'Delete Group?',
+        body: `"${group.name}" will be removed. Peiras it was already used on are not affected.`,
+        confirmLabel: 'Delete Group',
+        action: async () => {
+          await deleteGroup(group.id);
+          navigate('/groups');
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -84,6 +90,7 @@ export function GroupDetailPage() {
 
   return (
     <div>
+      {dialog}
       <div className={styles.header}>
         <Link to="/groups" className={styles.backLink}>
           ← Back to groups

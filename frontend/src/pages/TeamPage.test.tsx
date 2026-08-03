@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TeamPage } from './TeamPage';
 import * as orgApi from '../api/organizations';
 import * as authContext from '../auth/AuthContext';
+import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { Coach, Organization, OrganizationInvite } from '../api/types';
 
 const adminCoach: Coach = {
@@ -122,13 +123,13 @@ describe('TeamPage', () => {
     vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
     vi.spyOn(orgApi, 'listInvites').mockResolvedValue([invite]);
     const revokeSpy = vi.spyOn(orgApi, 'revokeInvite').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderTeam();
 
     await screen.findByText('Wildcats');
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
 
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('stop working'));
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('stop working');
+    await acceptConfirm(user, 'Revoke Invite');
     await waitFor(() => expect(revokeSpy).toHaveBeenCalledWith(5));
   });
 
@@ -138,11 +139,11 @@ describe('TeamPage', () => {
     vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
     vi.spyOn(orgApi, 'listInvites').mockResolvedValue([invite]);
     const revokeSpy = vi.spyOn(orgApi, 'revokeInvite').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderTeam();
 
     await screen.findByText('Wildcats');
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
+    await cancelConfirm(user);
 
     expect(revokeSpy).not.toHaveBeenCalled();
   });
@@ -169,11 +170,11 @@ describe('TeamPage', () => {
     vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
     vi.spyOn(orgApi, 'listInvites').mockResolvedValue([]);
     const removeSpy = vi.spyOn(orgApi, 'removeMember').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderTeam();
 
     await screen.findByText('Wildcats');
     await user.click(screen.getByRole('button', { name: 'Remove' }));
+    await acceptConfirm(user, 'Remove Coach');
 
     await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(2));
   });

@@ -21,6 +21,15 @@
   margin-bottom: 0.4em;
 }
 
+.questionNumber {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--nb-accent, #c9a24b);
+  white-space: nowrap;
+}
+
 .questionText {
   font-weight: 600;
   margin-bottom: 0.5em;

@@ -13,11 +13,13 @@ import { AnnotationToolbar } from './AnnotationToolbar';
 import { LayersPanel } from './LayersPanel';
 import {
   applyStyleToObject,
+  capsFromObject,
   createArrow,
   createCircle,
   createEndpointMarker,
   createLine,
   createRectangle,
+  createSegment,
   createSmoothPath,
   createTextbox,
   currentSegment,
@@ -26,7 +28,10 @@ import {
 } from './shapeFactories';
 import { resolveCanvasWidth } from './canvasSizing';
 import { loadPrescaledImage } from './imageLoading';
-import { DEFAULT_STYLE, type AnnotationStyle, type AnnotationTool } from './types';
+import { copyObject, hasClipboardContent, pasteObject } from './annotationClipboard';
+import { useAnnotationKeyboard } from './useAnnotationKeyboard';
+import { getRememberedStyle, rememberStyle } from './styleMemory';
+import { ANNOTATION_PROPS, type AnnotationStyle, type AnnotationTool } from './types';
 import styles from './AnnotationCanvas.module.css';
 
 export interface AnnotationCanvasHandle {
@@ -53,7 +58,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
     const [tool, setTool] = useState<AnnotationTool>('select');
     const toolRef = useRef(tool);
     toolRef.current = tool;
-    const [style, setStyle] = useState<AnnotationStyle>(DEFAULT_STYLE);
+    const [style, setStyle] = useState<AnnotationStyle>(getRememberedStyle);
     const styleRef = useRef(style);
     styleRef.current = style;
     const [isReady, setIsReady] = useState(false);
@@ -104,10 +109,62 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       markers[1].setCoords();
     }, []);
 
+    // In-progress multi-click curve state (click to add a point, double-click
+    // to finish - see the draw effect below). Lifted out to refs, rather than
+    // left as plain closure locals inside that effect, specifically so
+    // resetCurveState (and therefore handleRestored, on every undo/redo) can
+    // reach in and clear it - see its own comment for why that matters.
+    const curvePointsRef = useRef<Point[]>([]);
+    const curvePreviewRef = useRef<Polyline | null>(null);
+
+    /** Discards any in-progress (not yet double-click-finished) curve: the
+     * on-canvas preview polyline and the accumulated click points. Used when
+     * a curve is deliberately abandoned - Escape, or switching to another
+     * tool without finishing it - never on undo/redo (see
+     * syncCurveStateFromCanvas for why those need to *resync*, not blindly
+     * discard). */
+    const resetCurveState = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (canvas && curvePreviewRef.current) canvas.remove(curvePreviewRef.current);
+      curvePreviewRef.current = null;
+      curvePointsRef.current = [];
+    }, []);
+
+    /** Each click while drawing a curve is its own undo step on purpose - a
+     * coach who misclicks a point can Ctrl+Z just that point away without
+     * losing the rest of the curve. That's exactly what breaks
+     * curvePointsRef/curvePreviewRef: they're plain refs the click handler
+     * mutates directly, but undo/redo replace the *entire* Fabric object
+     * graph via loadFromJSON, which doesn't know those refs exist. Left
+     * unsynced, the refs keep pointing at whatever the curve looked like
+     * before the restore - undone points reappear the moment the coach
+     * clicks to add the next one, and curvePreviewRef points at a Fabric
+     * object loadFromJSON already discarded. Resyncing both from whatever
+     * the canvas *actually* contains after every restore - not just
+     * blanket-clearing them - is what lets undo-to-zero-points, redo, and
+     * "undo one point, then keep drawing" all end up in the right state. */
+    const syncCurveStateFromCanvas = useCallback(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        curvePreviewRef.current = null;
+        curvePointsRef.current = [];
+        return;
+      }
+      const preview = canvas.getObjects().find((o) => o.type === 'polyline') as Polyline | undefined;
+      if (preview) {
+        curvePreviewRef.current = preview;
+        curvePointsRef.current = (preview.points ?? []).map((p) => new Point(p.x, p.y));
+      } else {
+        curvePreviewRef.current = null;
+        curvePointsRef.current = [];
+      }
+    }, []);
+
     const handleRestored = useCallback(() => {
+      syncCurveStateFromCanvas();
       refreshLayers();
       setSelectedId(null);
-    }, [refreshLayers]);
+    }, [refreshLayers, syncCurveStateFromCanvas]);
 
     const history = useAnnotationHistory(canvasRef, handleRestored);
 
@@ -115,16 +172,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       getAnnotations: () => {
         const canvas = canvasRef.current;
         if (!canvas) return [];
-        return canvas.toObject([
-          'id',
-          'annotationFillOpacity',
-          'hasEditableEndpoints',
-          'isArrow',
-          'segStart',
-          'segEnd',
-          'segRefLeft',
-          'segRefTop',
-        ]).objects as AnnotationLayer[];
+        return canvas.toObject(ANNOTATION_PROPS).objects as AnnotationLayer[];
       },
       getCanvasWidth: () => canvasWidthRef.current,
     }));
@@ -138,15 +186,41 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
     const showFillOpacity = activeObject
       ? activeObject.type === 'rect' || activeObject.type === 'ellipse'
       : tool === 'circle' || tool === 'rectangle';
+    const showLineCaps = activeObject
+      ? activeObject.get('hasEditableEndpoints') === true
+      : tool === 'line' || tool === 'arrow';
+    const showTextWeight = activeObject ? activeObject.type === 'textbox' : tool === 'text';
 
     function handleStyleChange(newStyle: AnnotationStyle) {
       setStyle(newStyle);
-      if (activeObject) {
+      // Seeds the next new shape, including on the next image's canvas.
+      rememberStyle(newStyle);
+      if (!activeObject) return;
+
+      const canvas = canvasRef.current;
+      const caps = capsFromObject(activeObject);
+      const capsChanged = caps.startCap !== newStyle.startCap || caps.endCap !== newStyle.endCap;
+
+      if (canvas && capsChanged && activeObject.get('hasEditableEndpoints')) {
+        // Changing an end style changes which shapes the annotation is made
+        // of (a bare Line gains a cap and becomes a Group, or the reverse),
+        // so it has to be rebuilt rather than mutated in place. Keeping the
+        // same id means layers, selection, and history all still line up.
+        const { start, end } = currentSegment(activeObject);
+        const replacement = createSegment(start, end, newStyle);
+        replacement.set('id', activeObject.get('id'));
+        history.isRestoring.current = true;
+        canvas.remove(activeObject);
+        canvas.add(replacement);
+        history.isRestoring.current = false;
+        canvas.setActiveObject(replacement);
+      } else {
         applyStyleToObject(activeObject, newStyle);
-        canvasRef.current?.requestRenderAll();
-        refreshLayers();
-        history.pushSnapshot();
       }
+
+      canvas?.requestRenderAll();
+      refreshLayers();
+      history.pushSnapshot();
     }
 
     // --- Canvas + background image setup ---------------------------------
@@ -244,7 +318,14 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         setSelectedId(null);
         removeEndpointMarkers();
       }
-      function onChanged() {
+      // Shared by object:added/removed/modified (which pass {target}) and
+      // path:created (which passes {path} instead) - typed to cover both.
+      function onChanged(opt?: { target?: FabricObject; path?: FabricObject }) {
+        // Endpoint markers are decorations drawn around the current selection
+        // (excludeFromExport, never saved), but adding and removing them still
+        // fires object:added/removed. Left unfiltered, merely selecting a line
+        // banks two junk undo steps that appear to do nothing when replayed.
+        if (opt?.target?.excludeFromExport) return;
         refreshLayers();
         history.pushSnapshot();
       }
@@ -286,6 +367,12 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       const canvas = canvasRef.current;
       if (!canvas || !isReady) return;
 
+      // Switching to any other tool mid-curve (without double-clicking to
+      // finish) abandons it - clear the in-progress points/preview here too,
+      // or the next curve started later would silently resume from wherever
+      // the abandoned one left off (its points are still in curvePointsRef).
+      if (tool !== 'curve') resetCurveState();
+
       canvas.isDrawingMode = tool === 'freehand';
       canvas.selection = tool === 'select';
       canvas.forEachObject((obj) => obj.set({ selectable: tool === 'select', evented: tool === 'select' }));
@@ -297,7 +384,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         canvas.freeDrawingBrush = brush;
       }
       canvas.requestRenderAll();
-    }, [tool, style, isReady]);
+    }, [tool, style, isReady, resetCurveState]);
 
     // --- Click/drag drawing for line, arrow, circle, rectangle, curve, text
     useEffect(() => {
@@ -306,8 +393,6 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
       let shape: FabricObject | null = null;
       let startPoint: Point | null = null;
-      let curvePoints: Point[] = [];
-      let curvePreview: Polyline | null = null;
 
       // Dragging one end of an already-placed line/arrow to reshape it,
       // rather than the default resize/rotate bounding-box handles - see
@@ -321,21 +406,29 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         id: string;
         which: 'start' | 'end';
         fixed: XY;
-        isArrowType: boolean;
         style: AnnotationStyle;
       } | null = null;
       const ENDPOINT_HIT_RADIUS = 14;
 
       function finalizeCurve() {
-        if (curvePoints.length >= 2) {
-          const path = createSmoothPath(curvePoints, styleRef.current);
+        // The finished path is one deliberate action from the coach's
+        // perspective (finalizing the whole curve), so it gets exactly one
+        // history snapshot - same isRestoring bracketing pattern used around
+        // the line/arrow/circle/rectangle drag gesture below, just spanning
+        // the multi-click gesture instead of a single mouse drag.
+        history.isRestoring.current = true;
+        if (curvePreviewRef.current) canvas!.remove(curvePreviewRef.current);
+        curvePreviewRef.current = null;
+        if (curvePointsRef.current.length >= 2) {
+          const path = createSmoothPath(curvePointsRef.current, styleRef.current);
           path.set('id', makeId());
           canvas!.add(path);
-          setTool('select');
         }
-        if (curvePreview) canvas!.remove(curvePreview);
-        curvePreview = null;
-        curvePoints = [];
+        curvePointsRef.current = [];
+        history.isRestoring.current = false;
+        refreshLayers();
+        history.pushSnapshot();
+        setTool('select');
         canvas!.requestRenderAll();
       }
 
@@ -358,7 +451,8 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
                 id: active.get('id') as string,
                 which,
                 fixed,
-                isArrowType: active.get('isArrow') === true,
+                // styleFromObject already carries the segment's own caps, so
+                // the rebuild below preserves them through the drag.
                 style: styleFromObject(active),
               };
               history.isRestoring.current = true;
@@ -381,16 +475,21 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         }
 
         if (currentTool === 'curve') {
-          curvePoints.push(point);
-          if (curvePreview) canvas!.remove(curvePreview);
-          curvePreview = new Polyline(curvePoints, {
+          // Each click is its own history snapshot, deliberately - a coach
+          // who misclicks a point can Ctrl+Z just that point away without
+          // losing the rest of the curve (see syncCurveStateFromCanvas for
+          // how undo/redo stay in sync with curvePointsRef/curvePreviewRef
+          // across that).
+          curvePointsRef.current.push(point);
+          if (curvePreviewRef.current) canvas!.remove(curvePreviewRef.current);
+          curvePreviewRef.current = new Polyline(curvePointsRef.current, {
             stroke: styleRef.current.color,
             strokeWidth: styleRef.current.strokeWidth,
             fill: '',
             selectable: false,
             evented: false,
           });
-          canvas!.add(curvePreview);
+          canvas!.add(curvePreviewRef.current);
           canvas!.requestRenderAll();
           return;
         }
@@ -417,9 +516,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           const newEnd = draggingEndpoint.which === 'end' ? point : draggingEndpoint.fixed;
 
           if (draggingEndpoint.object) canvas!.remove(draggingEndpoint.object);
-          const rebuilt = draggingEndpoint.isArrowType
-            ? createArrow(newStart, newEnd, draggingEndpoint.style)
-            : createLine(newStart, newEnd, draggingEndpoint.style);
+          const rebuilt = createSegment(newStart, newEnd, draggingEndpoint.style);
           rebuilt.set('id', draggingEndpoint.id);
           canvas!.add(rebuilt);
           draggingEndpoint.object = rebuilt;
@@ -433,8 +530,17 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         const point = opt.scenePoint;
         const currentTool = toolRef.current;
 
-        if (currentTool === 'line') {
-          shape.set({ x2: point.x, y2: point.y });
+        if (currentTool === 'line' || currentTool === 'arrow') {
+          // Rebuilt rather than resized in place: with a start/end cap
+          // selected the segment is a Group of shaft + caps, whose geometry
+          // can't be updated by setting x2/y2 on a single Line.
+          canvas!.remove(shape);
+          shape =
+            currentTool === 'arrow'
+              ? createArrow(startPoint, point, styleRef.current)
+              : createLine(startPoint, point, styleRef.current);
+          shape.set('id', makeId());
+          canvas!.add(shape);
         } else if (currentTool === 'circle') {
           shape.set({
             left: Math.min(startPoint.x, point.x),
@@ -449,11 +555,6 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
             width: Math.abs(point.x - startPoint.x),
             height: Math.abs(point.y - startPoint.y),
           });
-        } else if (currentTool === 'arrow') {
-          canvas!.remove(shape);
-          shape = createArrow(startPoint, point, styleRef.current);
-          shape.set('id', makeId());
-          canvas!.add(shape);
         }
         canvas!.requestRenderAll();
       }
@@ -532,6 +633,59 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       }
     }
 
+    useAnnotationKeyboard(
+      {
+        onUndo: () => {
+          if (!history.canUndo) return false;
+          history.undo();
+          return true;
+        },
+        onRedo: () => {
+          if (!history.canRedo) return false;
+          history.redo();
+          return true;
+        },
+        onCopy: () => {
+          const active = canvasRef.current?.getActiveObject();
+          if (!active) return false;
+          copyObject(active);
+          return true;
+        },
+        onPaste: () => {
+          const canvas = canvasRef.current;
+          if (!canvas || !hasClipboardContent()) return false;
+          // The paste itself is async (Fabric has to rebuild the shape from
+          // its serialized form); claiming the keystroke synchronously is
+          // what stops the browser's own paste from also firing.
+          pasteObject(canvas).then(() => refreshLayers());
+          return true;
+        },
+        onDelete: () => {
+          const canvas = canvasRef.current;
+          if (!canvas || canvas.getActiveObjects().length === 0) return false;
+          handleDeleteSelected();
+          return true;
+        },
+        onEscape: () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return false;
+          if (curvePointsRef.current.length > 0 || curvePreviewRef.current) {
+            resetCurveState();
+            setTool('select');
+            canvas.requestRenderAll();
+            return true;
+          }
+          if (canvas.getActiveObject()) {
+            canvas.discardActiveObject();
+            canvas.requestRenderAll();
+            return true;
+          }
+          return false;
+        },
+      },
+      isReady,
+    );
+
     function handleSelectLayer(id: string) {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -557,6 +711,8 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
               style={displayedStyle}
               onStyleChange={handleStyleChange}
               showFillOpacity={showFillOpacity}
+              showLineCaps={showLineCaps}
+              showTextWeight={showTextWeight}
               canUndo={history.canUndo}
               canRedo={history.canRedo}
               onUndo={history.undo}

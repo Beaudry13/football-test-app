@@ -6,6 +6,7 @@ import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 import { QuizCard } from '../components/QuizCard';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
@@ -27,6 +28,7 @@ export function FolderPage() {
   const [renameValue, setRenameValue] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
     try {
@@ -69,15 +71,17 @@ export function FolderPage() {
 
   async function handleDelete() {
     if (!folder) return;
-    if (
-      !window.confirm(`Delete folder "${folder.name}"? Its quizzes move to Uncategorized, they are not deleted.`)
-    ) {
-      return;
-    }
     setError(null);
     try {
-      await deleteFolder(folder.id);
-      navigate('/');
+      await confirm({
+        title: 'Delete Folder?',
+        body: `"${folder.name}" will be removed. Its Peiras are not deleted - they move to Uncategorized.`,
+        confirmLabel: 'Delete Folder',
+        action: async () => {
+          await deleteFolder(folder.id);
+          navigate('/');
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -104,11 +108,17 @@ export function FolderPage() {
   }
 
   async function handleDeleteQuiz(quizId: number, title: string) {
-    if (!window.confirm(`Delete "${title}"? This removes its questions, roster, and results.`)) return;
     setError(null);
     try {
-      await deleteQuiz(quizId);
-      await load();
+      await confirm({
+        title: 'Delete Peira?',
+        body: `"${title}" and its questions, roster, and results will be removed. This action cannot be undone.`,
+        confirmLabel: 'Delete Peira',
+        action: async () => {
+          await deleteQuiz(quizId);
+          await load();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -146,6 +156,7 @@ export function FolderPage() {
 
   return (
     <NotebookPage>
+      {dialog}
       <NotebookHeader />
       <div className={nb.content}>
         <div className={styles.header}>

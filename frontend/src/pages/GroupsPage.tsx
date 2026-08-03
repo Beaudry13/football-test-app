@@ -4,6 +4,7 @@ import { createGroup, deleteGroup, listGroups } from '../api/groups';
 import { getErrorMessage } from '../api/client';
 import type { Group } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupsPage.module.css';
 
@@ -13,6 +14,7 @@ export function GroupsPage() {
   const [newName, setNewName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   useEffect(() => {
     refresh();
@@ -44,11 +46,17 @@ export function GroupsPage() {
   }
 
   async function handleDelete(groupId: number, name: string) {
-    if (!window.confirm(`Delete group "${name}"? This does not affect Peiras it was used on.`)) return;
     setError(null);
     try {
-      await deleteGroup(groupId);
-      await refresh();
+      await confirm({
+        title: 'Delete Group?',
+        body: `"${name}" will be removed. Peiras it was already used on are not affected.`,
+        confirmLabel: 'Delete Group',
+        action: async () => {
+          await deleteGroup(groupId);
+          await refresh();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -56,6 +64,7 @@ export function GroupsPage() {
 
   return (
     <div>
+      {dialog}
       <div className={styles.header}>
         <h1 className={nb.heading}>Player groups</h1>
       </div>

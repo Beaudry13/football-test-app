@@ -65,7 +65,7 @@ describe('QuestionInput image rendering', () => {
         id: 1,
         question_id: 1,
         image_url: '/uploads/x.png',
-        annotations: [{ id: 'a1', type: 'line' }],
+        annotations: [{ id: 'a1', type: 'Line' }],
         canvas_width: 1400,
         updated_at: '2026-01-01T00:00:00Z',
       },

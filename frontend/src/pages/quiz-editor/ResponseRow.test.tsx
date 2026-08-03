@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResponseRow } from './ResponseRow';
 import * as gradingApi from '../../api/grading';
 import * as authContext from '../../auth/AuthContext';
+import { acceptConfirm, cancelConfirm } from '../../test/confirmDialog';
 import type { Coach, PlayerResponse, Quiz } from '../../api/types';
 
 const currentCoach: Coach = {
@@ -36,6 +37,7 @@ const sampleQuiz: Quiz = {
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: true,
+  require_all_answers: false,
   folder_id: null,
   question_count: 0,
   created_at: '2026-01-01T00:00:00Z',
@@ -85,11 +87,11 @@ describe('ResponseRow reset attempt', () => {
   it('does nothing if the confirmation is declined', async () => {
     const user = userEvent.setup();
     mockAuth({ id: 1 });
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     const resetSpy = vi.spyOn(gradingApi, 'resetAttempt');
     renderRow();
 
     await user.click(screen.getByRole('button', { name: 'Reset attempt' }));
+    await cancelConfirm(user);
 
     expect(resetSpy).not.toHaveBeenCalled();
   });
@@ -97,7 +99,6 @@ describe('ResponseRow reset attempt', () => {
   it('resets the attempt once confirmed and refreshes the list', async () => {
     const user = userEvent.setup();
     mockAuth({ id: 1 });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const resetSpy = vi.spyOn(gradingApi, 'resetAttempt').mockResolvedValue(undefined);
     const onChanged = vi.fn();
     render(
@@ -107,19 +108,20 @@ describe('ResponseRow reset attempt', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Reset attempt' }));
+    await acceptConfirm(user, 'Reset Attempt');
 
-    expect(resetSpy).toHaveBeenCalledWith(1, 7);
+    await waitFor(() => expect(resetSpy).toHaveBeenCalledWith(1, 7));
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   it('shows an error and re-enables the button if the reset request fails', async () => {
     const user = userEvent.setup();
     mockAuth({ id: 1 });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.spyOn(gradingApi, 'resetAttempt').mockRejectedValue(new Error('Request failed'));
     renderRow();
 
     await user.click(screen.getByRole('button', { name: 'Reset attempt' }));
+    await acceptConfirm(user, 'Reset Attempt');
 
     expect(await screen.findByText('Request failed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reset attempt' })).not.toBeDisabled();

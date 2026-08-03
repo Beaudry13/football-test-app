@@ -15,18 +15,25 @@ export function QuestionInput({
   index,
   answer,
   onChange,
+  isUnanswered = false,
 }: {
   question: Question;
   index: number;
   answer: PlayerAnswer | undefined;
   onChange: (answer: PlayerAnswer) => void;
+  /** True once a blocked submit attempt has flagged this question as
+   * required and still blank - not a general "invalid" state. */
+  isUnanswered?: boolean;
 }) {
   const [isZoomed, setIsZoomed] = useState(false);
   const image = question.image;
   const hasAnnotations = (image?.annotations.length ?? 0) > 0;
 
   return (
-    <div className={`card ${styles.questionCard}`}>
+    <div
+      id={`question-${question.id}`}
+      className={`card ${styles.questionCard} ${isUnanswered ? styles.questionCardUnanswered : ''}`}
+    >
       {image && (
         <>
           {hasAnnotations ? (
@@ -60,6 +67,7 @@ export function QuestionInput({
       <strong className={styles.questionText}>
         {index + 1}. {question.question_text}
       </strong>
+      {isUnanswered && <div className={styles.questionRequiredNote}>Please answer this question.</div>}
 
       {question.question_type === 'written' ? (
         <textarea

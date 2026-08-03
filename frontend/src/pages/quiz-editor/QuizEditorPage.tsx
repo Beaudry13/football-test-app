@@ -61,6 +61,16 @@ export function QuizEditorPage() {
     }
   }
 
+  async function handleToggleRequireAllAnswers() {
+    if (!quiz) return;
+    try {
+      const updated = await updateQuiz(quiz.id, { require_all_answers: !quiz.require_all_answers });
+      setQuiz(updated);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
   if (!quiz) {
     return (
       <div>
@@ -106,6 +116,11 @@ export function QuizEditorPage() {
       <label className={styles.settingsRow}>
         <input type="checkbox" checked={quiz.one_question_at_a_time} onChange={handleToggleOneAtATime} />
         Show players one question at a time
+      </label>
+
+      <label className={styles.settingsRow}>
+        <input type="checkbox" checked={quiz.require_all_answers} onChange={handleToggleRequireAllAnswers} />
+        Require players to answer every question before submitting
       </label>
 
       <div className={styles.tabs}>

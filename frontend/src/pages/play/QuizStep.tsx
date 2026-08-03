@@ -38,7 +38,12 @@ export function QuizStep({
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [unansweredIds, setUnansweredIds] = useState<Set<number>>(new Set());
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  function isAnswered(answer: PlayerAnswer | undefined): boolean {
+    return answer?.selected_option_id !== undefined || Boolean(answer?.answer_text?.trim());
+  }
 
   useEffect(() => {
     const timers = debounceTimers.current;
@@ -69,6 +74,16 @@ export function QuizStep({
 
   function updateAnswer(questionId: number, answer: PlayerAnswer) {
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+    // Clears a stale highlight the instant the player fixes it, rather than
+    // only re-checking on the next submit attempt.
+    if (isAnswered(answer)) {
+      setUnansweredIds((prev) => {
+        if (!prev.has(questionId)) return prev;
+        const next = new Set(prev);
+        next.delete(questionId);
+        return next;
+      });
+    }
 
     if (debounceTimers.current[questionId]) {
       clearTimeout(debounceTimers.current[questionId]);
@@ -97,6 +112,23 @@ export function QuizStep({
     // sent, so nothing is lost by cancelling rather than flushing.
     Object.values(debounceTimers.current).forEach(clearTimeout);
     debounceTimers.current = {};
+
+    if (quiz.require_all_answers) {
+      const missing = questions.filter((q) => !isAnswered(answers[q.id]));
+      if (missing.length > 0) {
+        setUnansweredIds(new Set(missing.map((q) => q.id)));
+        setError('Please answer all questions before submitting.');
+        const firstMissingIndex = questions.findIndex((q) => q.id === missing[0].id);
+        if (quiz.one_question_at_a_time) {
+          setCurrentIndex(firstMissingIndex);
+        } else {
+          document
+            .getElementById(`question-${missing[0].id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
+    }
 
     setError(null);
     setIsSubmitting(true);
@@ -147,6 +179,7 @@ export function QuizStep({
           index={currentIndex}
           answer={answers[question.id]}
           onChange={(a) => updateAnswer(question.id, a)}
+          isUnanswered={unansweredIds.has(question.id)}
         />
         <div className={styles.navRow}>
           <button
@@ -181,6 +214,7 @@ export function QuizStep({
           index={index}
           answer={answers[question.id]}
           onChange={(a) => updateAnswer(question.id, a)}
+          isUnanswered={unansweredIds.has(question.id)}
         />
       ))}
       <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting} style={{ width: '100%' }}>

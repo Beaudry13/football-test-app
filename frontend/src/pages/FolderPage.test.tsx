@@ -7,6 +7,7 @@ import { DashboardPage } from './DashboardPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
 import * as authContext from '../auth/AuthContext';
+import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { Coach, Folder, Quiz } from '../api/types';
 
 const currentCoach: Coach = {
@@ -62,6 +63,7 @@ const quizInSubfolder: Quiz = {
   title: 'Install Quiz',
   description: null,
   one_question_at_a_time: true,
+  require_all_answers: false,
   folder_id: 20,
   question_count: 3,
   created_at: '2026-01-01T00:00:00Z',
@@ -134,11 +136,11 @@ describe('FolderPage', () => {
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue([root, subfolder]);
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([quizInSubfolder]);
     const deleteSpy = vi.spyOn(foldersApi, 'deleteFolder').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderAtFolder(20);
 
     await screen.findByRole('heading', { name: 'Week 1' });
     await user.click(screen.getByRole('button', { name: 'Delete folder' }));
+    await acceptConfirm(user, 'Delete Folder');
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(20));
     expect(await screen.findByRole('heading', { name: 'Your Trials' })).toBeInTheDocument();
@@ -149,11 +151,11 @@ describe('FolderPage', () => {
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue([root, subfolder]);
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([quizInSubfolder]);
     const deleteSpy = vi.spyOn(foldersApi, 'deleteFolder').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderAtFolder(20);
 
     await screen.findByRole('heading', { name: 'Week 1' });
     await user.click(screen.getByRole('button', { name: 'Delete folder' }));
+    await cancelConfirm(user);
 
     expect(deleteSpy).not.toHaveBeenCalled();
     expect(screen.getByRole('heading', { name: 'Week 1' })).toBeInTheDocument();

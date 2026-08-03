@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GroupsPage } from './GroupsPage';
 import * as groupsApi from '../api/groups';
+import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { Group } from '../api/types';
 
 const sampleGroup: Group = {
@@ -86,13 +87,13 @@ describe('GroupsPage', () => {
     const user = userEvent.setup();
     vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([sampleGroup]);
     const deleteSpy = vi.spyOn(groupsApi, 'deleteGroup').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderGroups();
     await screen.findByText('Defense');
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(window.confirm).toHaveBeenCalled();
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Delete Group?');
+    await cancelConfirm(user);
     expect(deleteSpy).not.toHaveBeenCalled();
   });
 
@@ -100,11 +101,11 @@ describe('GroupsPage', () => {
     const user = userEvent.setup();
     vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([sampleGroup]);
     const deleteSpy = vi.spyOn(groupsApi, 'deleteGroup').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderGroups();
     await screen.findByText('Defense');
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await acceptConfirm(user, 'Delete Group');
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(7));
   });

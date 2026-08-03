@@ -5,6 +5,7 @@ import { getErrorMessage } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type { Answer, PlayerResponse, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
 import nb from '../../styles/notebook.module.css';
 import styles from './ResultsTab.module.css';
 
@@ -97,6 +98,7 @@ export function ResponseRow({
   const [isOpen, setIsOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
   const answers = response.answers ?? [];
   const gradedCorrect = answers.filter((a) => a.is_correct === true).length;
   const pendingGrading = answers.filter(
@@ -108,18 +110,18 @@ export function ResponseRow({
 
   async function handleReset(event: ReactMouseEvent) {
     event.stopPropagation();
-    if (
-      !window.confirm(
-        `Reset ${response.player_name}'s attempt? This permanently deletes their answers and any grading/feedback on them, and lets them start the quiz fresh.`,
-      )
-    ) {
-      return;
-    }
     setError(null);
-    setIsResetting(true);
     try {
-      await resetAttempt(quiz.id, response.id);
-      onChanged();
+      await confirm({
+        title: 'Reset Attempt?',
+        body: `${response.player_name}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Peira fresh. This action cannot be undone.`,
+        confirmLabel: 'Reset Attempt',
+        action: async () => {
+          setIsResetting(true);
+          await resetAttempt(quiz.id, response.id);
+          onChanged();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
       setIsResetting(false);
@@ -128,6 +130,7 @@ export function ResponseRow({
 
   return (
     <div className={nb.card}>
+      {dialog}
       <div className={styles.responseHeader} onClick={() => setIsOpen((v) => !v)}>
         <div>
           <Link

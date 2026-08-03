@@ -86,11 +86,14 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
         )}
         {/* Duplicate stays available to everyone: the copy belongs to
             whoever made it, so starting from a teammate's quiz is safe. */}
-        <button className={nb.btnSm} onClick={() => onDuplicate(quiz.id)}>
+        <button className={`${nb.btnSm} ${styles.actionDuplicate}`} onClick={() => onDuplicate(quiz.id)}>
           <span aria-hidden="true">⧉</span> Duplicate
         </button>
         {canEdit && (
-          <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={() => onDelete(quiz.id, quiz.title)}>
+          <button
+            className={`${nb.btnSm} ${nb.btnDanger} ${styles.actionDelete}`}
+            onClick={() => onDelete(quiz.id, quiz.title)}
+          >
             <span aria-hidden="true">✕</span> Delete
           </button>
         )}

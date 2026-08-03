@@ -17,6 +17,7 @@ export function createQuiz(input: {
   title: string;
   description?: string | null;
   one_question_at_a_time?: boolean;
+  require_all_answers?: boolean;
 }): Promise<Quiz> {
   return api.post<Quiz>('/quizzes', input);
 }
@@ -27,6 +28,7 @@ export function updateQuiz(
     title: string;
     description: string | null;
     one_question_at_a_time: boolean;
+    require_all_answers: boolean;
     folder_id: number | null;
   }>,
 ): Promise<Quiz> {

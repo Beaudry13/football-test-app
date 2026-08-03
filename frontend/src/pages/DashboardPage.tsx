@@ -6,6 +6,7 @@ import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 import { QuizCard } from '../components/QuizCard';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
@@ -30,6 +31,7 @@ export function DashboardPage() {
   const [newSubfolderNames, setNewSubfolderNames] = useState<Record<number, string>>({});
   const [isCreatingSubfolderFor, setIsCreatingSubfolderFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   useEffect(() => {
     refresh();
@@ -72,11 +74,17 @@ export function DashboardPage() {
   }
 
   async function handleDelete(quizId: number, title: string) {
-    if (!window.confirm(`Delete "${title}"? This removes its questions, roster, and results.`)) return;
     setError(null);
     try {
-      await deleteQuiz(quizId);
-      await refresh();
+      await confirm({
+        title: 'Delete Peira?',
+        body: `"${title}" and its questions, roster, and results will be removed. This action cannot be undone.`,
+        confirmLabel: 'Delete Peira',
+        action: async () => {
+          await deleteQuiz(quizId);
+          await refresh();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -121,13 +129,17 @@ export function DashboardPage() {
   }
 
   async function handleDeleteFolder(folderId: number, name: string) {
-    if (!window.confirm(`Delete folder "${name}"? Its quizzes move to Uncategorized, they are not deleted.`)) {
-      return;
-    }
     setError(null);
     try {
-      await deleteFolder(folderId);
-      await refresh();
+      await confirm({
+        title: 'Delete Folder?',
+        body: `"${name}" will be removed. Its Peiras are not deleted - they move to Uncategorized.`,
+        confirmLabel: 'Delete Folder',
+        action: async () => {
+          await deleteFolder(folderId);
+          await refresh();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -182,6 +194,7 @@ export function DashboardPage() {
 
   return (
     <NotebookPage>
+      {dialog}
       <NotebookHeader />
 
       <div className={nb.content}>

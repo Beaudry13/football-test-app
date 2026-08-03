@@ -12,6 +12,7 @@ import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Organization, OrganizationInvite } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useConfirmDialog } from '../components/ConfirmDialog';
 import nb from '../styles/notebook.module.css';
 import styles from './TeamPage.module.css';
 
@@ -30,6 +31,7 @@ export function TeamPage() {
   const [copied, setCopied] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   const refresh = useCallback(async () => {
     try {
@@ -86,13 +88,17 @@ export function TeamPage() {
   }
 
   async function handleRevoke(inviteId: number) {
-    if (!window.confirm('Revoke this invite? The link will stop working immediately.')) {
-      return;
-    }
     setError(null);
     try {
-      await revokeInvite(inviteId);
-      await refresh();
+      await confirm({
+        title: 'Revoke Invite?',
+        body: 'The invite link will stop working immediately. Anyone who has not joined yet will need a new one.',
+        confirmLabel: 'Revoke Invite',
+        action: async () => {
+          await revokeInvite(inviteId);
+          await refresh();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -109,17 +115,17 @@ export function TeamPage() {
   }
 
   async function handleRemove(coachId: number, username: string) {
-    if (
-      !window.confirm(
-        `Remove ${username} from this organization? Peiras they created stay with the team.`,
-      )
-    ) {
-      return;
-    }
     setError(null);
     try {
-      await removeMember(coachId);
-      await refresh();
+      await confirm({
+        title: 'Remove Coach?',
+        body: `${username} will lose access to this organization. Peiras they created stay with the team.`,
+        confirmLabel: 'Remove Coach',
+        action: async () => {
+          await removeMember(coachId);
+          await refresh();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -138,6 +144,7 @@ export function TeamPage() {
 
   return (
     <div>
+      {dialog}
       <div className={styles.header}>
         <h1 className={nb.heading}>{org.name}</h1>
       </div>

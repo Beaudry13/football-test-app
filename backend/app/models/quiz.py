@@ -20,6 +20,10 @@ class Quiz(TimestampMixin, db.Model):
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
     one_question_at_a_time = db.Column(db.Boolean, nullable=False, default=True)
+    # When true, /play/submit rejects a submission that leaves any question
+    # unanswered - enforced server-side (see submit_quiz), not just by the
+    # player-facing Submit button's own client-side check.
+    require_all_answers = db.Column(db.Boolean, nullable=False, default=False)
     folder_id = db.Column(
         db.Integer, db.ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -65,6 +69,7 @@ class Quiz(TimestampMixin, db.Model):
             "title": self.title,
             "description": self.description,
             "one_question_at_a_time": self.one_question_at_a_time,
+            "require_all_answers": self.require_all_answers,
             "folder_id": self.folder_id,
             "question_count": len(self.questions),
             "created_at": self.created_at.isoformat(),

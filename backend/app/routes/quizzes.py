@@ -226,6 +226,7 @@ def create_quiz():
         title=data["title"],
         description=data["description"],
         one_question_at_a_time=data["one_question_at_a_time"],
+        require_all_answers=data["require_all_answers"],
     )
     db.session.add(quiz)
     db.session.commit()
@@ -245,7 +246,7 @@ def update_quiz(quiz_id: int):
     quiz = get_editable_quiz(quiz_id)
     data = load_json_body(QuizUpdateSchema())
 
-    for field in ("title", "description", "one_question_at_a_time"):
+    for field in ("title", "description", "one_question_at_a_time", "require_all_answers"):
         if field in data:
             setattr(quiz, field, data[field])
 
@@ -289,6 +290,7 @@ def duplicate_quiz(quiz_id: int):
         title=f"{original.title} (Copy)",
         description=original.description,
         one_question_at_a_time=original.one_question_at_a_time,
+        require_all_answers=original.require_all_answers,
         folder_id=original.folder_id,
     )
     db.session.add(copy_quiz)

@@ -7,6 +7,7 @@ import { FolderPage } from './FolderPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
 import * as authContext from '../auth/AuthContext';
+import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { Coach, Folder, Quiz } from '../api/types';
 
 const currentCoach: Coach = {
@@ -40,6 +41,7 @@ const sampleQuiz: Quiz = {
   title: 'Week 1 Prep',
   description: null,
   one_question_at_a_time: true,
+  require_all_answers: false,
   folder_id: null,
   question_count: 3,
   created_at: '2026-01-01T00:00:00Z',
@@ -181,13 +183,13 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
     const deleteSpy = vi.spyOn(quizzesApi, 'deleteQuiz').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(window.confirm).toHaveBeenCalled();
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Delete Peira?');
+    await cancelConfirm(user);
     expect(deleteSpy).not.toHaveBeenCalled();
   });
 
@@ -195,11 +197,11 @@ describe('DashboardPage', () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
     const deleteSpy = vi.spyOn(quizzesApi, 'deleteQuiz').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await acceptConfirm(user, 'Delete Peira');
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(1));
   });
@@ -257,11 +259,11 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([foldered]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
     const deleteFolderSpy = vi.spyOn(foldersApi, 'deleteFolder').mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
     await user.click(screen.getByRole('button', { name: 'Delete folder' }));
+    await acceptConfirm(user, 'Delete Folder');
 
     await waitFor(() => expect(deleteFolderSpy).toHaveBeenCalledWith(10));
   });

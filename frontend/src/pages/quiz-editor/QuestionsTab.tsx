@@ -10,6 +10,7 @@ import {
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { QuestionEditor } from './QuestionEditor';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
@@ -24,6 +25,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmDialog();
 
   const questions = quiz.questions ?? [];
 
@@ -39,12 +41,18 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
     await reload();
   }
 
-  async function handleDelete(questionId: number) {
-    if (!window.confirm('Delete this question?')) return;
+  async function handleDelete(questionId: number, number: number) {
     setError(null);
     try {
-      await deleteQuestion(quiz.id, questionId);
-      await reload();
+      await confirm({
+        title: 'Delete Question?',
+        body: `Question ${number}, its answer options, and any image annotations will be removed. This action cannot be undone.`,
+        confirmLabel: 'Delete Question',
+        action: async () => {
+          await deleteQuestion(quiz.id, questionId);
+          await reload();
+        },
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -66,6 +74,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
 
   return (
     <div>
+      {dialog}
       <ErrorBanner message={error} />
 
       <div className={styles.list}>
@@ -94,6 +103,9 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               )}
               <div className={styles.questionBody}>
                 <div className={styles.questionMeta}>
+                  {/* Derived from live list order, so it stays right after an
+                      add, delete, or reorder without any extra bookkeeping. */}
+                  <span className={styles.questionNumber}>Question {index + 1}</span>
                   <span className={`${nb.badge} ${nb.badgeNeutral}`}>{TYPE_LABELS[question.question_type]}</span>
                 </div>
                 <div className={styles.questionText}>{question.question_text}</div>
@@ -117,7 +129,10 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   >
                     {question.image ? 'Edit image' : 'Add image'}
                   </Link>
-                  <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={() => handleDelete(question.id)}>
+                  <button
+                    className={`${nb.btnSm} ${nb.btnDanger}`}
+                    onClick={() => handleDelete(question.id, index + 1)}
+                  >
                     Delete
                   </button>
                 </div>
