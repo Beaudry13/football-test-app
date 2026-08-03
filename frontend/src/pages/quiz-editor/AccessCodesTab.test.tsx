@@ -55,8 +55,8 @@ describe('AccessCodesTab group selection', () => {
     const activateSpy = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
     render(<AccessCodesTab quiz={quiz} />);
 
-    await screen.findByText('This Peira has no active access code.');
-    await user.click(screen.getByRole('button', { name: 'Activate Peira' }));
+    await screen.findByText('This Quiz has no active access code.');
+    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
     await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, []));
   });
@@ -67,9 +67,9 @@ describe('AccessCodesTab group selection', () => {
     const activateSpy = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
     render(<AccessCodesTab quiz={quiz} />);
 
-    await screen.findByText('This Peira has no active access code.');
+    await screen.findByText('This Quiz has no active access code.');
     await user.click(await screen.findByRole('checkbox', { name: /Defense/ }));
-    await user.click(screen.getByRole('button', { name: 'Activate Peira' }));
+    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
     await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7]));
   });
@@ -86,7 +86,7 @@ describe('AccessCodesTab group selection', () => {
     vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
     render(<AccessCodesTab quiz={quiz} />);
 
-    await screen.findByText('This Peira has no active access code.');
+    await screen.findByText('This Quiz has no active access code.');
     expect(screen.queryByText('Restrict to saved group(s) (optional)')).not.toBeInTheDocument();
   });
 });

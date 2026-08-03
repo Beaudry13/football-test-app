@@ -157,7 +157,7 @@ describe('QuizStep', () => {
 
       const written = screen.getAllByRole('textbox')[0];
       await user.type(written, 'I set the edge.');
-      await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 
       // The debounce timer never gets a chance to fire post-submit.
       await vi.advanceTimersByTimeAsync(800);
@@ -196,7 +196,7 @@ describe('QuizStep', () => {
       );
 
       await user.click(screen.getByLabelText('True'));
-      await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 
       expect(await screen.findByText('Please answer all questions before submitting.')).toBeInTheDocument();
       expect(submitSpy).not.toHaveBeenCalled();
@@ -229,7 +229,7 @@ describe('QuizStep', () => {
 
       await user.click(screen.getByLabelText('True'));
       await user.type(screen.getAllByRole('textbox')[0], 'I set the edge.');
-      await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 
       await waitFor(() => expect(submitSpy).toHaveBeenCalled());
       expect(onSubmitted).toHaveBeenCalled();
@@ -255,7 +255,7 @@ describe('QuizStep', () => {
       // Now on question 2 (written, blank) - Submit should bounce back to
       // question 1 only if it's the one left blank; here it's question 2
       // itself that's blank, so the wizard just stays put with the message.
-      await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 
       expect(await screen.findByText('Please answer all questions before submitting.')).toBeInTheDocument();
       expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
@@ -277,7 +277,7 @@ describe('QuizStep', () => {
         <QuizStep quiz={quiz} accessCodeId={42} playerName="Jordan Smith" initialAnswers={[]} onSubmitted={vi.fn()} />,
       );
 
-      await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
+      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 
       await waitFor(() => expect(submitSpy).toHaveBeenCalled());
       expect(screen.queryByText('Please answer all questions before submitting.')).not.toBeInTheDocument();

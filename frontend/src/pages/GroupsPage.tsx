@@ -50,7 +50,7 @@ export function GroupsPage() {
     try {
       await confirm({
         title: 'Delete Group?',
-        body: `"${name}" will be removed. Peiras it was already used on are not affected.`,
+        body: `"${name}" will be removed. Quizzes it was already used on are not affected.`,
         confirmLabel: 'Delete Group',
         action: async () => {
           await deleteGroup(groupId);
@@ -71,7 +71,7 @@ export function GroupsPage() {
 
       <p className={styles.description}>
         Build reusable groups like "Varsity" or "Defense" once, then pick which group(s) can access a
-        Peira when you activate it.
+        Quiz when you activate it.
       </p>
 
       <ErrorBanner message={error} />

@@ -114,7 +114,7 @@ export function ResponseRow({
     try {
       await confirm({
         title: 'Reset Attempt?',
-        body: `${response.player_name}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Peira fresh. This action cannot be undone.`,
+        body: `${response.player_name}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Quiz fresh. This action cannot be undone.`,
         confirmLabel: 'Reset Attempt',
         action: async () => {
           setIsResetting(true);

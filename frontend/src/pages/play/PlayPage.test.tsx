@@ -116,7 +116,7 @@ describe('PlayPage', () => {
       await screen.findByText((_, element) => element?.textContent === '1. Is this cover 2?'),
     ).toBeInTheDocument();
     await user.click(screen.getByLabelText('True'));
-    await user.click(screen.getByRole('button', { name: 'Submit Peira' }));
+    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 
     await waitFor(() =>
       expect(submitSpy).toHaveBeenCalledWith({

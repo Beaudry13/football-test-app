@@ -84,7 +84,7 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     renderDashboard();
 
-    expect(await screen.findByText('No Peiras yet. Create your first one above.')).toBeInTheDocument();
+    expect(await screen.findByText('No Quizzes yet. Create your first one above.')).toBeInTheDocument();
   });
 
   it('lists quizzes with their question count and update date', async () => {
@@ -147,17 +147,17 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Active')).not.toBeInTheDocument();
   });
 
-  it('disables New Peira until a title is entered, then creates and refreshes the list', async () => {
+  it('disables New Quiz until a title is entered, then creates and refreshes the list', async () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     const createSpy = vi.spyOn(quizzesApi, 'createQuiz').mockResolvedValue(sampleQuiz);
     renderDashboard();
-    await screen.findByText('No Peiras yet. Create your first one above.');
+    await screen.findByText('No Quizzes yet. Create your first one above.');
 
-    const newQuizButton = screen.getByRole('button', { name: 'New Peira' });
+    const newQuizButton = screen.getByRole('button', { name: 'New Quiz' });
     expect(newQuizButton).toBeDisabled();
 
-    await user.type(screen.getByPlaceholderText('New Peira title, e.g. Week 3 Prep'), '  Week 3 Prep  ');
+    await user.type(screen.getByPlaceholderText('New Quiz title, e.g. Week 3 Prep'), '  Week 3 Prep  ');
     expect(newQuizButton).not.toBeDisabled();
 
     vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([sampleQuiz]);
@@ -188,7 +188,7 @@ describe('DashboardPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Delete Peira?');
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Delete Quiz?');
     await cancelConfirm(user);
     expect(deleteSpy).not.toHaveBeenCalled();
   });
@@ -201,7 +201,7 @@ describe('DashboardPage', () => {
     await screen.findByText('Week 1 Prep');
 
     await user.click(screen.getByRole('button', { name: 'Delete' }));
-    await acceptConfirm(user, 'Delete Peira');
+    await acceptConfirm(user, 'Delete Quiz');
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(1));
   });
@@ -231,7 +231,7 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     const createFolderSpy = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(sampleFolder);
     renderDashboard();
-    await screen.findByText('No Peiras yet. Create your first one above.');
+    await screen.findByText('No Quizzes yet. Create your first one above.');
 
     await user.type(screen.getByPlaceholderText('New folder, e.g. Fall Camp'), 'Fall Camp');
     await user.click(screen.getByRole('button', { name: 'New folder' }));

@@ -147,7 +147,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
             {breakdown == null ? (
               <p className={styles.emptyNote}>Loading…</p>
             ) : breakdown.length === 0 ? (
-              <p className={styles.emptyNote}>No questions on this Peira.</p>
+              <p className={styles.emptyNote}>No questions on this Quiz.</p>
             ) : (
               <QuestionBreakdownTable breakdown={breakdown} />
             )}

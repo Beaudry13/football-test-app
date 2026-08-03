@@ -83,7 +83,7 @@ export function QuizEditorPage() {
   return (
     <div>
       <Link to="/dashboard" className={styles.backLink}>
-        ← All Peiras
+        ← All Quizzes
       </Link>
 
       <ErrorBanner message={error} />

@@ -111,7 +111,7 @@ describe('FolderPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     renderAtFolder(20);
 
-    expect(await screen.findByText('No Peiras in this folder yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No Quizzes in this folder yet.')).toBeInTheDocument();
   });
 
   it('renames a subfolder', async () => {
@@ -143,7 +143,7 @@ describe('FolderPage', () => {
     await acceptConfirm(user, 'Delete Folder');
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(20));
-    expect(await screen.findByRole('heading', { name: 'Your Trials' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Your Quizzes' })).toBeInTheDocument();
   });
 
   it('does nothing if the delete confirmation is declined', async () => {

@@ -77,9 +77,9 @@ export function DashboardPage() {
     setError(null);
     try {
       await confirm({
-        title: 'Delete Peira?',
+        title: 'Delete Quiz?',
         body: `"${title}" and its questions, roster, and results will be removed. This action cannot be undone.`,
-        confirmLabel: 'Delete Peira',
+        confirmLabel: 'Delete Quiz',
         action: async () => {
           await deleteQuiz(quizId);
           await refresh();
@@ -133,7 +133,7 @@ export function DashboardPage() {
     try {
       await confirm({
         title: 'Delete Folder?',
-        body: `"${name}" will be removed. Its Peiras are not deleted - they move to Uncategorized.`,
+        body: `"${name}" will be removed. Its Quizzes are not deleted - they move to Uncategorized.`,
         confirmLabel: 'Delete Folder',
         action: async () => {
           await deleteFolder(folderId);
@@ -201,10 +201,10 @@ export function DashboardPage() {
         <ActiveQuizStatusSection />
 
         <div className={styles.contentHeader}>
-          <h1 className={nb.heading}>Your Trials</h1>
+          <h1 className={nb.heading}>Your Quizzes</h1>
           {quizzes && (
             <span className={nb.countBadge}>
-              {quizzes.length} Peira{quizzes.length === 1 ? '' : 's'}
+              {quizzes.length} Quiz{quizzes.length === 1 ? '' : 'zes'}
             </span>
           )}
         </div>
@@ -215,12 +215,12 @@ export function DashboardPage() {
           <input
             className={nb.input}
             type="text"
-            placeholder="New Peira title, e.g. Week 3 Prep"
+            placeholder="New Quiz title, e.g. Week 3 Prep"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
           />
           <button type="submit" className={nb.btnPrimary} disabled={isCreating || !newTitle.trim()}>
-            {isCreating ? 'Creating…' : 'New Peira'}
+            {isCreating ? 'Creating…' : 'New Quiz'}
           </button>
         </form>
 
@@ -246,7 +246,7 @@ export function DashboardPage() {
         {quizzes === null ? (
           <p>Loading…</p>
         ) : quizzes.length === 0 && !hasFolders ? (
-          <div className={`${nb.card} ${nb.empty}`}>No Peiras yet. Create your first one above.</div>
+          <div className={`${nb.card} ${nb.empty}`}>No Quizzes yet. Create your first one above.</div>
         ) : !hasFolders ? (
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
@@ -345,7 +345,7 @@ export function DashboardPage() {
                       </div>
                       <div className={styles.list}>
                         {folderQuizzes.length === 0 ? (
-                          <div className={styles.emptyFolder}>No Peiras directly in this folder yet.</div>
+                          <div className={styles.emptyFolder}>No Quizzes directly in this folder yet.</div>
                         ) : (
                           folderQuizzes.map(renderQuizCard)
                         )}

@@ -75,7 +75,7 @@ export function FolderPage() {
     try {
       await confirm({
         title: 'Delete Folder?',
-        body: `"${folder.name}" will be removed. Its Peiras are not deleted - they move to Uncategorized.`,
+        body: `"${folder.name}" will be removed. Its Quizzes are not deleted - they move to Uncategorized.`,
         confirmLabel: 'Delete Folder',
         action: async () => {
           await deleteFolder(folder.id);
@@ -111,9 +111,9 @@ export function FolderPage() {
     setError(null);
     try {
       await confirm({
-        title: 'Delete Peira?',
+        title: 'Delete Quiz?',
         body: `"${title}" and its questions, roster, and results will be removed. This action cannot be undone.`,
-        confirmLabel: 'Delete Peira',
+        confirmLabel: 'Delete Quiz',
         action: async () => {
           await deleteQuiz(quizId);
           await load();
@@ -189,12 +189,12 @@ export function FolderPage() {
         <div className={dashboardStyles.contentHeader}>
           <h1 className={nb.heading}>{folder.name}</h1>
           <span className={nb.countBadge}>
-            {folderQuizzes.length} Peira{folderQuizzes.length === 1 ? '' : 's'}
+            {folderQuizzes.length} Quiz{folderQuizzes.length === 1 ? '' : 'zes'}
           </span>
         </div>
 
         {folderQuizzes.length === 0 ? (
-          <div className={`${nb.card} ${nb.empty}`}>No Peiras in this folder yet.</div>
+          <div className={`${nb.card} ${nb.empty}`}>No Quizzes in this folder yet.</div>
         ) : (
           <div className={dashboardStyles.list}>
             {folderQuizzes.map((quiz) => (

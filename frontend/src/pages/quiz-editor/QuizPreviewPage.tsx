@@ -114,7 +114,7 @@ export function QuizPreviewPage() {
                   </button>
                   {isLast ? (
                     <button className="btn btn-primary" onClick={() => setIsFinished(true)}>
-                      Submit Peira
+                      Submit Quiz
                     </button>
                   ) : (
                     <button className="btn btn-primary" onClick={() => setCurrentIndex((i) => i + 1)}>
@@ -141,7 +141,7 @@ export function QuizPreviewPage() {
               onClick={() => setIsFinished(true)}
               style={{ width: '100%' }}
             >
-              Submit Peira
+              Submit Quiz
             </button>
           </div>
         )}

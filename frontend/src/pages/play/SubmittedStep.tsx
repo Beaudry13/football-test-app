@@ -6,7 +6,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { ResultsView } from './ResultsView';
 import styles from './PlayPage.module.css';
 
-// How long the "Trial Complete" celebration stays up before fading away to
+// How long the "Quiz Complete" celebration stays up before fading away to
 // reveal the real results underneath.
 const CELEBRATION_MS = 1800;
 
@@ -43,7 +43,7 @@ export function SubmittedStep({ code, playerName }: { code: string; playerName: 
           <div className={styles.celebrationBadge}>
             <span aria-hidden="true">✓</span>
           </div>
-          <span className={styles.celebrationText}>Trial Complete</span>
+          <span className={styles.celebrationText}>Quiz Complete</span>
         </div>
       )}
       {!results ? (

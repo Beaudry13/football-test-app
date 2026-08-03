@@ -3,11 +3,11 @@ import nb from '../styles/notebook.module.css';
 import styles from './ConfirmDialog.module.css';
 
 export interface ConfirmOptions {
-  /** Short question, e.g. "Delete Peira?" */
+  /** Short question, e.g. "Delete Quiz?" */
   title: string;
   /** What will happen, plainly. */
   body: ReactNode;
-  /** Names the destructive act, e.g. "Delete Peira" - never a bare "OK". */
+  /** Names the destructive act, e.g. "Delete Quiz" - never a bare "OK". */
   confirmLabel: string;
   cancelLabel?: string;
   /** Run while the dialog stays open and disabled, so a slow request can't be

@@ -21,20 +21,20 @@ describe('SubmittedStep', () => {
     vi.useRealTimers();
   });
 
-  it('shows the Trial Complete celebration immediately, then fades it after a few seconds', async () => {
+  it('shows the Quiz Complete celebration immediately, then fades it after a few seconds', async () => {
     vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue(results);
     render(<SubmittedStep code="ABC123" playerName="Jordan Smith" />);
 
     // Present right away - this step only ever mounts after a real,
     // already-successful submission, so there's nothing to "simulate" here.
-    expect(screen.getByText('Trial Complete')).toBeInTheDocument();
+    expect(screen.getByText('Quiz Complete')).toBeInTheDocument();
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
     // The real results are already visible underneath the celebration -
     // it's a brief overlay, not something blocking access to the results.
 
     await vi.advanceTimersByTimeAsync(1800);
 
-    await waitFor(() => expect(screen.queryByText('Trial Complete')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Quiz Complete')).not.toBeInTheDocument());
     expect(screen.getByText('Results for Jordan Smith')).toBeInTheDocument();
   });
 

@@ -67,7 +67,7 @@ export function GroupDetailPage() {
     try {
       await confirm({
         title: 'Delete Group?',
-        body: `"${group.name}" will be removed. Peiras it was already used on are not affected.`,
+        body: `"${group.name}" will be removed. Quizzes it was already used on are not affected.`,
         confirmLabel: 'Delete Group',
         action: async () => {
           await deleteGroup(group.id);

@@ -119,7 +119,7 @@ export function TeamPage() {
     try {
       await confirm({
         title: 'Remove Coach?',
-        body: `${username} will lose access to this organization. Peiras they created stay with the team.`,
+        body: `${username} will lose access to this organization. Quizzes they created stay with the team.`,
         confirmLabel: 'Remove Coach',
         action: async () => {
           await removeMember(coachId);

@@ -179,7 +179,7 @@ export function AnnotationPage() {
     <div>
       <div className={styles.header}>
         <Link to={`/quizzes/${quizId}`} className={styles.backLink}>
-          ← Back to Peira
+          ← Back to Quiz
         </Link>
         {question.image && (
           <div>
