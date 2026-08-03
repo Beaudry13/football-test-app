@@ -1,10 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import { RootRoute } from './auth/RootRoute';
 import { NotebookLayout } from './components/notebook/NotebookLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
-import { DashboardPage } from './pages/DashboardPage';
 import { FolderPage } from './pages/FolderPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
@@ -22,6 +22,11 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          {/* Public: an anonymous visitor sees the marketing homepage here,
+              a signed-in coach sees their dashboard - same path, so this
+              stays outside ProtectedRoute rather than bouncing a logged-out
+              visitor to /login the way every other coach route does. */}
+          <Route path="/" element={<RootRoute />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/join/:inviteCode" element={<JoinOrgPage />} />
@@ -31,14 +36,10 @@ function App() {
           <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
 
           <Route element={<ProtectedRoute />}>
-            {/* Preview and the Dashboard are deliberately NOT nested in
-                <NotebookLayout> - Preview shows exactly what a player sees
-                (no coach nav), and the Dashboard manages its own
-                full-bleed content width rather than NotebookLayout's
-                shared max-width column. Both stay gated behind login via
-                ProtectedRoute directly. */}
+            {/* Preview is deliberately NOT nested in <NotebookLayout> - it
+                shows exactly what a player sees (no coach nav). Stays
+                gated behind login via ProtectedRoute directly. */}
             <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
-            <Route path="/" element={<DashboardPage />} />
             <Route path="/folders/:folderId" element={<FolderPage />} />
 
             <Route element={<NotebookLayout />}>
