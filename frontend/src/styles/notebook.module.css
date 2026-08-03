@@ -219,8 +219,11 @@
   padding: 16px 18px;
   border-radius: 3px;
   border: 1.5px solid var(--nb-input-border);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--nb-text);
+  /* Light cream, dark text - not dark-on-dark - per the design handoff's
+     literal input styling (Quiz Dashboard Redesign.dc.html), even though
+     these inputs sit on the dark page chrome. */
+  background: #f3eee0;
+  color: #14110b;
   font-family: 'Inter', sans-serif;
   font-size: 15px;
   outline: none;
@@ -231,11 +234,11 @@
 
 .input:focus {
   border-color: var(--nb-accent-bright);
-  background: rgba(255, 255, 255, 0.09);
+  background: #f8f3e7;
 }
 
 .input::placeholder {
-  color: var(--nb-text-muted);
+  color: rgba(20, 17, 11, 0.45);
 }
 
 textarea.input {
@@ -351,8 +354,22 @@ textarea.input {
 .card {
   position: relative;
   border-radius: 3px;
-  border: 1px solid var(--nb-card-border);
-  background: rgba(255, 255, 255, 0.025);
+  border: 1.5px solid var(--nb-accent);
+  /* Light cream card floating on the dark page chrome, per the design
+     handoff's literal card styling - not a dark/near-transparent panel.
+     Everything nested inside reads dark-on-light, so the shared --nb-*
+     text/status tokens are redefined here too - anything below using
+     var(--nb-text) etc. (card titles, tables, badges, buttons) picks this
+     up automatically via ordinary custom-property inheritance, the same
+     trick .page uses for the dark theme itself. */
+  background: #f3eee0;
+  --nb-text: #14110b;
+  --nb-text-muted: #6e6858;
+  --nb-warning-text: #b8492f;
+  --nb-delete-border: rgba(184, 73, 47, 0.55);
+  --nb-delete-bg-hover: rgba(184, 73, 47, 0.12);
+  --nb-success: #2e6b3e;
+  --nb-success-bg: rgba(58, 122, 74, 0.16);
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   padding: 1.25em;
@@ -360,13 +377,14 @@ textarea.input {
 
 /* Combine with .card in JSX: className={`${styles.card} ${styles.cardHoverable}`} */
 .cardHoverable {
-  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s, background 0.2s;
 }
 
 .cardHoverable:hover {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   transform: translateY(-2px);
-  border-color: rgba(201, 162, 75, 0.5);
+  border-color: var(--nb-accent-bright);
+  background: #f8f3e7;
 }
 
 /* Left accent stripe used on list-row cards (quiz/group cards). Parent

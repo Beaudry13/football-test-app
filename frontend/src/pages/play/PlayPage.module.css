@@ -66,7 +66,8 @@
 
 .progress {
   font-size: 0.85em;
-  color: var(--color-text-muted);
+  font-weight: 700;
+  color: var(--color-primary-hover);
   margin-bottom: 0.75em;
 }
 
