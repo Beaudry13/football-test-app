@@ -54,6 +54,13 @@ services:
 
 databases:
   - name: football-quiz-db
-    plan: free
+    # Basic-256mb (not free) - the free plan has no backup guarantee and
+    # Render deletes the database outright 90 days after creation. See the
+    # Backups section in docs/DEPLOYMENT.md. If this drifts from what's
+    # actually set in the Render dashboard, the dashboard wins - Render
+    # doesn't auto-downgrade an existing database to match a re-synced
+    # blueprint, but keep this current so a *fresh* deploy from this repo
+    # doesn't recreate the free-tier gap.
+    plan: basic-256mb
     databaseName: football_quiz
     user: football_quiz

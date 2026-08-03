@@ -71,28 +71,24 @@ mid-quiz) would stall 30-50 seconds on a cold start.
 
 ### Backups
 
-The Postgres instance is on Render's **free plan** in `render.yaml`. As of
-this writing, that plan has **no backup guarantee at all** — no automated
-snapshots, no point-in-time recovery — and the database is deleted outright
-90 days after creation. Put a reminder in your calendar to upgrade it before
-then, or you will lose the database entirely, not just recent changes.
+The Postgres instance is on Render's **Basic-256mb plan** (upgraded
+2026-08-03 from the free plan, which had no backup guarantee at all and
+would have deleted the database outright 90 days after creation). The Basic
+plan includes automated daily backups with a retention window - confirm the
+current retention specifics on [Render's Postgres pricing
+page](https://render.com/pricing) since exact terms can change, and verify
+in the Render dashboard under `football-quiz-db` → **Recovery** that a
+scheduled backup actually shows up there.
 
-This is a real gap, not a hypothetical one: once real coaches and players
-are relying on this data, "the free tier will probably be fine" is not an
-acceptable backup story. Two options, in order of how much this matters to
-you:
+`render.yaml` is kept in sync with this (`plan: basic-256mb`) so a *fresh*
+blueprint deploy doesn't recreate the free-tier gap - but note Render
+doesn't retroactively change an already-running database's plan just
+because the blueprint file changed, so if the database is ever recreated
+from scratch, double check the plan took effect.
 
-1. **Upgrade the Postgres plan.** Render's paid database plans include
-   automated daily backups with a retention window — confirm the current
-   specifics on [Render's Postgres pricing page](https://render.com/pricing)
-   before deciding, since exact retention/pricing can change. This is the
-   real fix, and it's a billing decision only you can make — nothing in this
-   repo can do it for you.
-2. **Manual backups as a stopgap.** See [`BACKUP.md`](BACKUP.md) for a
-   `pg_dump`/`pg_restore` command pair you can run yourself periodically.
-   This is explicitly a manual procedure — nothing in this stack schedules
-   or automates it, so it's only as good as your own discipline about
-   actually running it.
+A manual `pg_dump`/`pg_restore` stopgap is still documented in
+[`BACKUP.md`](BACKUP.md) if you ever want a portable, off-Render copy (e.g.
+before a risky migration) independent of Render's own backup system.
 
 **Uptime monitoring:** `GET /api/health` checks real database connectivity
 (not just "is the Flask process up"), so it's a meaningful target for an

@@ -1,11 +1,12 @@
 # Manual database backups
 
-This is a manual, run-it-yourself procedure — **nothing in this repo
-automates or schedules it**. This stack has no cron/scheduled-job
-infrastructure, so there is no "set it and forget it" option here short of
-upgrading the Render Postgres plan (see the Backups section in
-[`DEPLOYMENT.md`](DEPLOYMENT.md)), which is the real fix. Treat this as a
-stopgap for the free tier, not a substitute for that.
+The production database is on Render's Basic plan, which already includes
+automated daily backups (see the Backups section in
+[`DEPLOYMENT.md`](DEPLOYMENT.md)) - that's the primary backup mechanism now,
+not this document. Use the procedure below when you want a portable, ad-hoc
+copy independent of Render's own backup system (e.g. immediately before a
+risky migration, or an off-Render archive) - **nothing in this repo
+automates or schedules this specific procedure**, it's manual/run-it-yourself.
 
 ## Taking a backup
 

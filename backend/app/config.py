@@ -29,14 +29,22 @@ def _resolve_upload_folder(raw: str) -> str:
     return str(path if path.is_absolute() else BASE_DIR / path)
 
 
+# Dev-only fallback secrets, visible in the public repo - never valid in
+# production. Named here (not inlined) so app/__init__.py's production
+# startup check can compare against the exact same values rather than
+# duplicating the literal strings.
+DEV_SECRET_KEY_DEFAULT = "dev-secret-key-not-for-production-use-32b"
+DEV_JWT_SECRET_KEY_DEFAULT = "dev-jwt-secret-key-not-for-production-32b"
+
+
 class BaseConfig:
     """Shared configuration for all environments."""
 
     # Defaults are only for local dev convenience — real deployments must set
     # SECRET_KEY/JWT_SECRET_KEY explicitly. 32+ bytes to satisfy PyJWT's
     # minimum recommended HMAC-SHA256 key length.
-    SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-not-for-production-use-32b")
-    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret-key-not-for-production-32b")
+    SECRET_KEY = os.environ.get("SECRET_KEY", DEV_SECRET_KEY_DEFAULT)
+    JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", DEV_JWT_SECRET_KEY_DEFAULT)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=12)
 
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
@@ -101,6 +109,15 @@ CONFIG_BY_NAME = {
 }
 
 
-def get_config(env_name: str | None = None):
-    env_name = env_name or os.environ.get("FLASK_ENV", "development")
-    return CONFIG_BY_NAME.get(env_name, DevelopmentConfig)
+def get_config(env_name: str):
+    """Looks up a config class by resolved environment name.
+
+    Raises rather than silently falling back to DevelopmentConfig on an
+    unrecognized name (e.g. a typo'd FLASK_ENV=prodution) - a production
+    deploy should fail loudly at startup instead of quietly running with
+    development settings (debug output, permissive defaults, etc.)."""
+    if env_name not in CONFIG_BY_NAME:
+        raise RuntimeError(
+            f"Unknown FLASK_ENV: {env_name!r} (expected one of {sorted(CONFIG_BY_NAME)})"
+        )
+    return CONFIG_BY_NAME[env_name]
