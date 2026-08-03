@@ -23,3 +23,11 @@ backend/uploads/*
 htmlcov/
 .coverage
 pytest_output.txt
+
+# Load-test generated artifacts (seeded quiz/access-code/player data, run
+# results) - regenerated fresh by backend/loadtest/seed.py every run, never
+# meant to be committed. The scripts themselves ARE tracked.
+backend/loadtest/loadtest_config.json
+backend/loadtest/results/
+backend/loadtest/*.csv
+backend/loadtest/*.log

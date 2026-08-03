@@ -87,10 +87,15 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
 
 @play_bp.post("/validate-code")
 # Codes are 6 characters from a 31-character alphabet (~887M combinations).
-# Without a limit here, that space is guessable by brute force; at 20/minute
-# per IP it would take on the order of decades, while still leaving room for
-# a player who mistypes a code a few times in a row.
-@limiter.limit("20 per minute")
+# Without a limit here, that space is guessable by brute force. Every limit
+# in this file is keyed per-IP (see app/extensions.py's Limiter key_func) -
+# a real team joining together from one shared field/gym/school WiFi
+# network shares one public IP, so this has to comfortably cover an entire
+# roster (sized for up to 100 players, matching backend/loadtest's largest
+# stage) joining within the same short window, not just one player. At
+# 200/minute per IP, brute-forcing the code space would still take roughly
+# 8 years - the anti-brute-force purpose is unaffected by this headroom.
+@limiter.limit("200 per minute")
 def validate_code():
     data = load_json_body(ValidateCodeSchema())
 
@@ -114,8 +119,9 @@ def validate_code():
 
 @play_bp.post("/start")
 # Once per name-selection (not per answer), so the same rate as
-# validate-code/submit is the right ballpark.
-@limiter.limit("20 per minute")
+# validate-code/submit is the right ballpark - see validate-code's comment
+# for why this needs to cover a whole team on one shared IP, not one player.
+@limiter.limit("200 per minute")
 def start_attempt():
     data = load_json_body(StartAttemptSchema())
 
@@ -158,9 +164,11 @@ def start_attempt():
 @play_bp.post("/answers")
 # Fires once per answer change (debounced/blur-triggered client-side, plus
 # an immediate save on every option pick), not once per session like
-# /start or /submit - a normal quiz's answer count stays well under this
-# even accounting for retries.
-@limiter.limit("60 per minute")
+# /start or /submit, so this needs a higher ceiling than those even before
+# accounting for shared-IP headroom (see validate-code's comment) - up to
+# ~100 players each autosaving several answers within the same short
+# window, all from one IP, easily exceeds a single-player-sized budget.
+@limiter.limit("1000 per minute")
 def save_answer():
     data = load_json_body(SaveAnswerSchema())
 
@@ -186,7 +194,9 @@ def save_answer():
 
 
 @play_bp.post("/submit")
-@limiter.limit("20 per minute")
+# See validate-code's comment - keyed per-IP, needs to cover a whole team
+# submitting within the same short window, not one player.
+@limiter.limit("200 per minute")
 def submit_quiz():
     data = load_json_body(SubmitQuizSchema())
 
@@ -258,10 +268,10 @@ def submit_quiz():
 
 @play_bp.get("/quiz-by-code/<code>")
 # A lightweight, read-only lookup (title only) fired automatically on page
-# load to set the browser tab title - higher than the POST routes since it
-# isn't gated behind a player typing anything, but still capped against
-# scripted enumeration.
-@limiter.limit("30 per minute")
+# load to set the browser tab title - fires for every player the instant
+# they open the link, before they've done anything else, so this needs the
+# same whole-team-on-one-IP headroom as validate-code's comment describes.
+@limiter.limit("200 per minute")
 def quiz_by_code(code: str):
     """Quiz title for a code, for tab-title purposes only - deliberately not
     the full validate-code payload (no questions/roster), and deliberately
@@ -277,7 +287,9 @@ def quiz_by_code(code: str):
 
 
 @play_bp.post("/results")
-@limiter.limit("20 per minute")
+# See validate-code's comment - a whole team may check results within the
+# same short window right after everyone submits.
+@limiter.limit("200 per minute")
 def player_results():
     """A player's own graded results - revisitable after the code expires,
     since grading (especially of written answers) can happen well after."""
