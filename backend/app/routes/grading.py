@@ -21,8 +21,9 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Answer, AttemptStatus, GradeAuditLog, PlayerAttempt, Quiz
+from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Quiz
 from app.schemas.grading import GradeAnswerSchema
+from app.services.access_codes import effective_roster_names_for_quiz
 from app.services.export import build_results_csv, build_results_pdf, export_filename_slug
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_json_body
@@ -138,16 +139,30 @@ def grade_answer(answer_id: int):
 
 
 def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
-    roster_names = [p.player_name for p in quiz.roster.players] if quiz.roster else []
+    # Group-aware, same as the quiz-card analytics in list_quizzes: if the
+    # quiz's currently active code is restricted to group(s), that's who's
+    # actually eligible to submit, not the quiz's own Roster - see
+    # effective_roster_names_for_quiz.
+    active_code = (
+        AccessCode.query.filter(
+            AccessCode.quiz_id == quiz.id,
+            AccessCode.is_active.is_(True),
+            AccessCode.expires_at > datetime.now(timezone.utc),
+        )
+        .options(selectinload(AccessCode.groups).selectinload(Group.players))
+        .first()
+    )
+    roster_names = effective_roster_names_for_quiz(quiz, active_code)
     roster_size = len(roster_names)
     response_count = len(responses)
     response_rate = (response_count / roster_size) if roster_size else 0.0
 
-    # Same roster this function already uses for roster_size/response_rate -
-    # if the quiz's most recent activation was restricted to a specific
-    # group rather than the full roster, a name here may not actually have
-    # been eligible to submit. Good enough for "who should I follow up
-    # with" without tracking which activation was in effect when.
+    # Same effective roster this function already uses for
+    # roster_size/response_rate above - reflects whichever code is
+    # currently active, group-restricted or not. Still staleness-tolerant
+    # in the sense that a coach editing group membership after players have
+    # already started won't retroactively change who's "missing" for
+    # attempts already in progress - just like before groups existed.
     responded_names = {r.player_name for r in responses}
     missing_players = [name for name in roster_names if name not in responded_names]
 

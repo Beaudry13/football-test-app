@@ -670,6 +670,42 @@ def test_quiz_dashboard_missing_players_empty_once_everyone_has_submitted(client
     assert response.get_json()["missing_players"] == []
 
 
+def test_quiz_dashboard_roster_size_for_group_activated_quiz(client, coach_headers):
+    """The Results tab's dashboard must report the linked group's member
+    count, not the quiz's own (here, unrelated) direct roster - the same
+    bug the quiz-card analytics in list_quizzes had, fixed the same way."""
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)  # quiz's own roster: 2 players
+    access_code = _activate_with_group(
+        client, coach_headers, quiz, ["Sam Rivera", "Casey Jones", "Riley Park"]
+    )
+    start_and_submit(
+        client, access_code["id"], "Sam Rivera", [{"question_id": tf_question["id"]}]
+    )
+
+    response = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["roster_size"] == 3
+    assert body["response_count"] == 1
+    assert body["response_rate"] == round(1 / 3, 4)
+    assert body["missing_players"] == ["Casey Jones", "Riley Park"]
+
+
+def test_quiz_dashboard_roster_size_for_group_activated_quiz_with_zero_submissions(client, coach_headers):
+    quiz, _, _, _ = build_ready_quiz(client, coach_headers)
+    _activate_with_group(client, coach_headers, quiz, ["Sam Rivera", "Casey Jones"])
+
+    response = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers)
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["roster_size"] == 2
+    assert body["response_count"] == 0
+    assert body["response_rate"] == 0.0
+    assert body["missing_players"] == ["Sam Rivera", "Casey Jones"]
+
+
 def test_player_history_across_quizzes(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
     start_and_submit(client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}])

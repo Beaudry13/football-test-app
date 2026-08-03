@@ -5,7 +5,12 @@ from pathlib import Path
 from flask import current_app
 
 from tests.conftest import make_image_file
-from tests.test_play_and_grading import build_ready_quiz, start_and_submit, start_attempt
+from tests.test_play_and_grading import (
+    _activate_with_group,
+    build_ready_quiz,
+    start_and_submit,
+    start_attempt,
+)
 
 
 def create_quiz(client, headers, title="Week 1 Prep"):
@@ -172,6 +177,132 @@ def test_list_quizzes_score_stat_ignores_in_progress_attempts(client, coach_head
     listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
     assert listed["completed_count"] == 0
     assert "average_score_percent" not in listed
+
+
+def test_list_quizzes_roster_size_for_direct_roster_quiz_with_submissions(client, coach_headers):
+    """Baseline: a quiz activated against its own Roster (no linked groups)
+    reports that roster's size - unaffected by the group-aware roster-size
+    fix below, which only changes behavior when groups are involved."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)  # roster: 2 players
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    start_and_submit(
+        client, access_code["id"], "Jordan Smith",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["roster_size"] == 2
+    assert listed["completed_count"] == 1
+
+
+def test_list_quizzes_roster_size_for_group_activated_quiz_with_submissions(client, coach_headers):
+    """A quiz activated against a group (not its own Roster) must report the
+    group's member count, not the quiz's own (here, unrelated) direct
+    roster - this is the bug this fix addresses."""
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)  # quiz's own roster: 2 players
+    access_code = _activate_with_group(
+        client, coach_headers, quiz, ["Sam Rivera", "Casey Jones", "Riley Park"]
+    )
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    start_and_submit(
+        client, access_code["id"], "Sam Rivera",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["roster_size"] == 3
+    assert listed["completed_count"] == 1
+
+
+def test_list_quizzes_roster_size_for_group_activated_quiz_with_zero_submissions(client, coach_headers):
+    quiz, _, _, _ = build_ready_quiz(client, coach_headers)
+    _activate_with_group(client, coach_headers, quiz, ["Sam Rivera", "Casey Jones"])
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["roster_size"] == 2
+    assert listed["completed_count"] == 0
+    assert "average_score_percent" not in listed
+
+
+def test_list_quizzes_group_membership_can_exceed_completed_count(client, coach_headers):
+    """A partially-completed group activation must show a roster size
+    larger than its completed count - the exact "more completed than
+    roster" shape (previously "1/0") the bug produced."""
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(
+        client, coach_headers, quiz, ["Sam Rivera", "Casey Jones", "Riley Park"]
+    )
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    start_and_submit(
+        client, access_code["id"], "Sam Rivera",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["completed_count"] == 1
+    assert listed["roster_size"] == 3
+
+
+def test_list_quizzes_completed_count_excludes_reset_and_in_progress_attempts_for_group_activation(
+    client, coach_headers
+):
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera", "Casey Jones"])
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+
+    # Casey only starts (never submits) - must not count.
+    start_attempt(client, access_code["id"], "Casey Jones")
+
+    # Sam submits, then the coach resets it - must not count either.
+    submitted = start_and_submit(
+        client, access_code["id"], "Sam Rivera",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    ).get_json()
+    client.delete(f"/api/quizzes/{quiz['id']}/attempts/{submitted['id']}", headers=coach_headers)
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["completed_count"] == 0
+    assert listed["roster_size"] == 2
+
+
+def test_list_quizzes_duplicate_submission_is_not_double_counted(client, coach_headers):
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    answers = [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}]
+
+    first = start_and_submit(client, access_code["id"], "Jordan Smith", answers)
+    assert first.status_code == 201
+    second = client.post(
+        "/api/play/submit",
+        json={"access_code_id": access_code["id"], "player_name": "Jordan Smith", "answers": answers},
+    )
+    assert second.status_code == 409
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["completed_count"] == 1
+
+
+def test_quiz_card_analytics_and_dashboard_agree_on_roster_size_for_group_activated_quiz(
+    client, coach_headers
+):
+    """The dashboard's quiz-card list and the Results tab's own dashboard
+    endpoint must report the same roster size for the same group-activated
+    quiz - the exact cross-check this fix is meant to guarantee."""
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(
+        client, coach_headers, quiz, ["Sam Rivera", "Casey Jones", "Riley Park"]
+    )
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    start_and_submit(
+        client, access_code["id"], "Sam Rivera",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    dashboard = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
+
+    assert listed["roster_size"] == dashboard["roster_size"] == 3
+    assert listed["completed_count"] == dashboard["response_count"] == 1
 
 
 def test_duplicate_quiz_copies_questions_and_options(client, coach_headers):

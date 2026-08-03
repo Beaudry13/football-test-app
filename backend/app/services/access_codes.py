@@ -8,7 +8,7 @@ import secrets
 import string
 from datetime import datetime, timezone
 
-from app.models import AccessCode
+from app.models import AccessCode, Quiz
 
 CODE_ALPHABET = "".join(sorted(set(string.ascii_uppercase + string.digits) - set("0O1IL")))
 CODE_LENGTH = 6
@@ -71,4 +71,20 @@ def effective_roster_names(access_code: AccessCode) -> list[str]:
         return list(seen.values())
 
     quiz = access_code.quiz
+    return [p.player_name for p in (quiz.roster.players if quiz.roster else [])]
+
+
+def effective_roster_names_for_quiz(quiz: Quiz, active_code: AccessCode | None) -> list[str]:
+    """Same "who's eligible" rule as `effective_roster_names`, generalized
+    for callers that show a roster-size stat per quiz rather than per
+    activation (the dashboard's quiz-card list, the Results tab) - they
+    don't have one specific access code in hand, just whichever one (if
+    any) is currently active for the quiz. `active_code` is that code, or
+    None if the quiz has never been activated or its code has since been
+    deactivated/expired; either way this falls back to the quiz's own
+    Roster, exactly like `effective_roster_names` does for a code with no
+    linked groups.
+    """
+    if active_code is not None:
+        return effective_roster_names(active_code)
     return [p.player_name for p in (quiz.roster.players if quiz.roster else [])]

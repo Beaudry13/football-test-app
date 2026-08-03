@@ -28,7 +28,7 @@ from app.models import (
     Roster,
 )
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
-from app.services.access_codes import effective_roster_names
+from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
 from app.services.file_storage import get_file_storage
 from app.utils.auth import current_coach, get_editable_quiz, get_org_folder, get_visible_quiz
 from app.utils.validation import load_json_body
@@ -41,7 +41,8 @@ quizzes_bp = Blueprint("quizzes", __name__)
 def list_quizzes():
     coach = current_coach()
     # selectinload: to_dict() reads len(quiz.questions) for question_count,
-    # and the roster-size stat below reads len(quiz.roster.players) - without
+    # and the roster-size stat below falls back to len(quiz.roster.players)
+    # when a quiz has no active (or group-restricted) code - without
     # eager-loading both, each quiz would trigger its own lazy-load query
     # (N+1).
     quizzes = (
@@ -55,24 +56,28 @@ def list_quizzes():
         .all()
     )
 
-    # One query for every quiz's active-code status, instead of walking each
-    # quiz's full access_codes history (which only grows over time) or
-    # issuing a per-quiz query (N+1). A quiz appears here at most once in
-    # practice (reactivating deactivates the prior code), but a set handles
-    # it either way.
+    # One query for every quiz's currently-active access code, instead of
+    # walking each quiz's full access_codes history (which only grows over
+    # time) or issuing a per-quiz query (N+1). Eager-loads .groups.players
+    # so the group-aware roster-size stat below doesn't trigger a query per
+    # quiz either. A quiz has at most one active code in practice
+    # (reactivating deactivates the prior one), but nothing enforces that at
+    # the DB level; keying by quiz_id and keeping whichever comes back last
+    # for a given id is fine either way.
     quiz_ids = [q.id for q in quizzes]
-    active_quiz_ids: set[int] = set()
+    active_codes_by_quiz_id: dict[int, AccessCode] = {}
     if quiz_ids:
-        active_quiz_ids = {
-            quiz_id
-            for (quiz_id,) in db.session.query(AccessCode.quiz_id)
-            .filter(
+        active_codes = (
+            AccessCode.query.filter(
                 AccessCode.quiz_id.in_(quiz_ids),
                 AccessCode.is_active.is_(True),
                 AccessCode.expires_at > datetime.now(timezone.utc),
             )
+            .options(selectinload(AccessCode.groups).selectinload(Group.players))
             .all()
-        }
+        )
+        active_codes_by_quiz_id = {code.quiz_id: code for code in active_codes}
+    active_quiz_ids = set(active_codes_by_quiz_id)
 
     # Same batching discipline as is_active above: one query for every
     # quiz's completed-attempt count, and one more for the aggregate
@@ -113,10 +118,16 @@ def list_quizzes():
         # shouldn't show a misleading "0% avg. score" before anyone's
         # answered anything gradeable.
         average_score_percent = round(100 * correct / graded, 1) if graded else None
+        # Group-aware: if the quiz's active code is restricted to group(s),
+        # that's who's actually eligible to submit, not the quiz's own
+        # Roster - see effective_roster_names_for_quiz.
+        roster_size = len(
+            effective_roster_names_for_quiz(quiz, active_codes_by_quiz_id.get(quiz.id))
+        )
         return quiz.to_dict(
             is_active=quiz.id in active_quiz_ids,
             completed_count=completed_counts.get(quiz.id, 0),
-            roster_size=len(quiz.roster.players) if quiz.roster else 0,
+            roster_size=roster_size,
             average_score_percent=average_score_percent,
         )
 
