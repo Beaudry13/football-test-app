@@ -130,3 +130,28 @@ def test_rate_limit_response_has_a_readable_message_not_the_raw_limit_string(mon
 
     body = responses[-1].get_json()
     assert body["error"] == "Too many requests. Please wait a moment and try again."
+
+
+def test_invite_creation_is_rate_limited(monkeypatch):
+    """Organization-management routes had no rate limit at all until this
+    was added - confirmed by grepping organizations.py before this fix.
+    Lower severity than the public/unauthenticated routes above (this one's
+    already behind admin-only auth), but still worth a real limit."""
+    client = make_rate_limited_client(monkeypatch)
+
+    coach = client.post(
+        "/api/auth/register",
+        json={
+            "username": "invite_admin",
+            "email": "invite_admin@example.com",
+            "password": "correct horse battery staple",
+            "organization": "Rate Limit Test Org",
+        },
+    ).get_json()
+    headers = {"Authorization": f"Bearer {coach['access_token']}"}
+
+    responses = [client.post("/api/organizations/invites", headers=headers) for _ in range(21)]
+
+    statuses = [r.status_code for r in responses]
+    assert statuses.count(201) == 20  # the configured "20 per minute" limit
+    assert statuses[-1] == 429

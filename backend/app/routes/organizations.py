@@ -11,7 +11,7 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import Coach, CoachRole, OrganizationInvite
 from app.schemas.organization import MemberRoleUpdateSchema, OrganizationUpdateSchema
 from app.services.invites import INVITE_TTL_DAYS, generate_invite_code
@@ -60,6 +60,7 @@ def get_organization():
 
 @organizations_bp.patch("")
 @jwt_required()
+@limiter.limit("20 per minute")
 def rename_organization():
     coach = require_admin()
     data = load_json_body(OrganizationUpdateSchema())
@@ -71,6 +72,7 @@ def rename_organization():
 
 @organizations_bp.get("/invites")
 @jwt_required()
+@limiter.limit("30 per minute")
 def list_invites():
     coach = require_admin()
     invites = (
@@ -86,6 +88,7 @@ def list_invites():
 
 @organizations_bp.post("/invites")
 @jwt_required()
+@limiter.limit("20 per minute")
 def create_invite():
     coach = require_admin()
 
@@ -107,6 +110,7 @@ def create_invite():
 
 @organizations_bp.delete("/invites/<int:invite_id>")
 @jwt_required()
+@limiter.limit("20 per minute")
 def revoke_invite(invite_id: int):
     coach = require_admin()
     invite = OrganizationInvite.query.filter_by(
@@ -122,6 +126,7 @@ def revoke_invite(invite_id: int):
 
 @organizations_bp.patch("/members/<int:coach_id>")
 @jwt_required()
+@limiter.limit("20 per minute")
 def update_member_role(coach_id: int):
     admin = require_admin()
     data = load_json_body(MemberRoleUpdateSchema())
@@ -144,6 +149,7 @@ def update_member_role(coach_id: int):
 
 @organizations_bp.delete("/members/<int:coach_id>")
 @jwt_required()
+@limiter.limit("20 per minute")
 def remove_member(coach_id: int):
     admin = require_admin()
     member = _get_org_member(coach_id, admin.organization_id)

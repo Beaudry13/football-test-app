@@ -72,6 +72,11 @@ export function RegisterPage() {
               value={form.organization}
               onChange={(e) => update('organization', e.target.value)}
             />
+            <p className={styles.fieldHint}>
+              This creates a brand-new, private team workspace. Already coaching with a team that's
+              on Peira? Ask them for an invite link instead - typing their team's name here won't
+              join it, it starts a separate one.
+            </p>
           </div>
           <div className={nb.field}>
             <label className={nb.fieldLabel} htmlFor="email">

@@ -358,3 +358,58 @@ def test_admin_cannot_touch_another_orgs_members(client, coach_headers, register
     assert client.patch(
         f"/api/organizations/members/{victim_id}", json={"role": "member"}, headers=outsider
     ).status_code == 404
+
+
+def test_removed_coach_immediately_loses_access_with_their_still_unexpired_token(
+    client, coach_headers, invite_teammate
+):
+    """A removed Coach row is gone, not just relabeled - current_coach()
+    resolves the JWT's subject straight from the database on every request,
+    so the very next request with the removed coach's own (still technically
+    unexpired) token fails immediately. No token blacklist/revocation list
+    is needed for this to be true."""
+    teammate, _, teammate_headers = invite_teammate(coach_headers)
+    assert client.get("/api/quizzes", headers=teammate_headers).status_code == 200
+
+    assert client.delete(
+        f"/api/organizations/members/{teammate['id']}", headers=coach_headers
+    ).status_code == 204
+
+    response = client.get("/api/quizzes", headers=teammate_headers)
+    assert response.status_code == 401
+
+
+def test_an_existing_coach_cannot_accept_a_second_invite_with_their_own_identity(
+    client, coach_headers, register_coach
+):
+    """register_with_invite always creates a brand-new Coach row rather than
+    attaching an existing one to a second organization - so an existing
+    account holder trying to accept an invite with their own email/username
+    hits the ordinary "already taken" conflict, the same as any other
+    duplicate-registration attempt. This is what makes "one coach, one
+    organization, forever" true: there is no code path that lets an
+    existing identity join a second org."""
+    _, _, _ = register_coach(username="existing_coach", email="existing_coach@example.com")
+    invite = client.post("/api/organizations/invites", headers=coach_headers).get_json()
+
+    response = client.post(
+        "/api/auth/register-with-invite",
+        json={
+            "username": "existing_coach",
+            "email": "existing_coach@example.com",
+            "password": "password123",
+            "invite_code": invite["code"],
+        },
+    )
+
+    assert response.status_code == 409
+    # And the invite itself is untouched - still usable by someone else.
+    assert client.post(
+        "/api/auth/register-with-invite",
+        json={
+            "username": "new_person",
+            "email": "new_person@example.com",
+            "password": "password123",
+            "invite_code": invite["code"],
+        },
+    ).status_code == 201
