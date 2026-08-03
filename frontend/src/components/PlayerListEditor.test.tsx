@@ -117,6 +117,47 @@ describe('PlayerListEditor', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalledWith(['Jordan Smith', 'Sam Rivera']));
   });
 
+  it('shows a search box only once the roster is big enough to need one', async () => {
+    const load = vi.fn().mockResolvedValue({ players: players(['Jordan Smith', 'Alex Lee']) });
+    render(<PlayerListEditor load={load} onSave={vi.fn()} onUploadCsv={vi.fn()} />);
+
+    await findInList('Jordan Smith');
+    expect(screen.queryByLabelText('Search players')).not.toBeInTheDocument();
+  });
+
+  it('filters the current-members list by search text on a large roster', async () => {
+    const user = userEvent.setup();
+    const bigRoster = players([
+      'Jordan Smith', 'Alex Lee', 'Sam Rivera', 'Casey Jones', 'Chris Park',
+      'Drew Kim', 'Micah Torres', 'Noah Scott', 'Bryce Adams',
+    ]);
+    const load = vi.fn().mockResolvedValue({ players: bigRoster });
+    render(<PlayerListEditor load={load} onSave={vi.fn()} onUploadCsv={vi.fn()} />);
+
+    await findInList('Jordan Smith');
+    await user.type(screen.getByLabelText('Search players'), 'ri');
+
+    expect(await findInList('Sam Rivera')).toBeDefined();
+    expect(await findInList('Chris Park')).toBeDefined();
+    expect(await findInList('Jordan Smith')).toBeUndefined();
+    expect(screen.getByText('Current roster (9)')).toBeInTheDocument();
+  });
+
+  it('shows a no-matches message rather than an empty-roster message when a search has no hits', async () => {
+    const user = userEvent.setup();
+    const bigRoster = players([
+      'Jordan Smith', 'Alex Lee', 'Sam Rivera', 'Casey Jones', 'Chris Park',
+      'Drew Kim', 'Micah Torres', 'Noah Scott', 'Bryce Adams',
+    ]);
+    const load = vi.fn().mockResolvedValue({ players: bigRoster });
+    render(<PlayerListEditor load={load} onSave={vi.fn()} onUploadCsv={vi.fn()} />);
+
+    await findInList('Jordan Smith');
+    await user.type(screen.getByLabelText('Search players'), 'zzz');
+
+    expect(await screen.findByText('No players match "zzz".')).toBeInTheDocument();
+  });
+
   it('uploads a CSV and refreshes both the list and the textarea', async () => {
     const user = userEvent.setup();
     const load = vi.fn().mockResolvedValue({ players: [] });

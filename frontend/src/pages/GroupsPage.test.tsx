@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GroupsPage } from './GroupsPage';
 import * as groupsApi from '../api/groups';
@@ -54,11 +54,18 @@ describe('GroupsPage', () => {
     expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
   });
 
-  it('disables New group until a name is entered, then creates and refreshes', async () => {
+  it('disables New group until a name is entered, then creates and jumps straight into it', async () => {
     const user = userEvent.setup();
     vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
     const createSpy = vi.spyOn(groupsApi, 'createGroup').mockResolvedValue(sampleGroup);
-    renderGroups();
+    render(
+      <MemoryRouter initialEntries={['/groups']}>
+        <Routes>
+          <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/groups/:groupId" element={<div>Group detail page</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
     await screen.findByText('No groups yet. Create your first one above.');
 
     const button = screen.getByRole('button', { name: 'New group' });
@@ -67,10 +74,12 @@ describe('GroupsPage', () => {
     await user.type(screen.getByPlaceholderText('New group name, e.g. Defense'), '  Defense  ');
     expect(button).not.toBeDisabled();
 
-    vi.mocked(groupsApi.listGroups).mockResolvedValue([sampleGroup]);
     await user.click(button);
 
     await waitFor(() => expect(createSpy).toHaveBeenCalledWith({ name: 'Defense' }));
+    // A new group's very next step is adding players - land there directly
+    // instead of leaving the coach to find and click the new card in the list.
+    expect(await screen.findByText('Group detail page')).toBeInTheDocument();
   });
 
   it('asks for confirmation before deleting a group', async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createGroup, deleteGroup, listGroups } from '../api/groups';
 import { getErrorMessage } from '../api/client';
 import type { Group } from '../api/types';
@@ -8,6 +8,7 @@ import nb from '../styles/notebook.module.css';
 import styles from './GroupsPage.module.css';
 
 export function GroupsPage() {
+  const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [newName, setNewName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -31,12 +32,13 @@ export function GroupsPage() {
     setIsCreating(true);
     setError(null);
     try {
-      await createGroup({ name: newName.trim() });
-      setNewName('');
-      await refresh();
+      const created = await createGroup({ name: newName.trim() });
+      // Straight into the group that was just created - adding its first
+      // players is the very next thing a coach does, so don't make them
+      // find and click the new card in the list to get there.
+      navigate(`/groups/${created.id}`);
     } catch (err) {
       setError(getErrorMessage(err));
-    } finally {
       setIsCreating(false);
     }
   }

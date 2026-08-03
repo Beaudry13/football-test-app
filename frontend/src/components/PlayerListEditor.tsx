@@ -36,6 +36,7 @@ export function PlayerListEditor({
   const [namesText, setNamesText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [filterText, setFilterText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const doLoad = useCallback(async () => {
@@ -106,6 +107,10 @@ export function PlayerListEditor({
     }
   }
 
+  const filteredPlayers = filterText.trim()
+    ? players.filter((p) => p.player_name.toLowerCase().includes(filterText.trim().toLowerCase()))
+    : players;
+
   return (
     <div>
       <ErrorBanner message={error} />
@@ -117,11 +122,27 @@ export function PlayerListEditor({
           {players.length === 0 ? (
             <div className={nb.empty}>No players yet. Add names in the box on the right.</div>
           ) : (
-            <ul className={styles.playerList}>
-              {players.map((player) => (
-                <li key={player.id}>{player.player_name}</li>
-              ))}
-            </ul>
+            <>
+              {players.length > 8 && (
+                <input
+                  className={nb.input}
+                  type="text"
+                  placeholder="Search players…"
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  aria-label="Search players"
+                />
+              )}
+              {filteredPlayers.length === 0 ? (
+                <div className={nb.empty}>No players match "{filterText.trim()}".</div>
+              ) : (
+                <ul className={styles.playerList}>
+                  {filteredPlayers.map((player) => (
+                    <li key={player.id}>{player.player_name}</li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
 
