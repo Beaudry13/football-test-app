@@ -69,7 +69,11 @@ export interface Folder {
    * can edit them. Null if that coach has left the org. */
   coach_id: number | null;
   name: string;
+  /** Null = root folder. Fixed at creation - there is no route to change
+   * it afterward, so a folder is at most one level deep, always. */
+  parent_folder_id: number | null;
   quiz_count: number;
+  subfolder_count: number;
   created_at: string;
   updated_at: string;
 }

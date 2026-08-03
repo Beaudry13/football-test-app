@@ -1,0 +1,31 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1em;
+  gap: 1em;
+  flex-wrap: wrap;
+}
+
+.backLink {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted, #78766e);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--nb-text, #1c1b1a);
+}
+
+.renameForm {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 1.5em;
+}
+
+.renameForm input {
+  max-width: 320px;
+}

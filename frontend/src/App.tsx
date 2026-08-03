@@ -5,6 +5,7 @@ import { NotebookLayout } from './components/notebook/NotebookLayout';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { FolderPage } from './pages/FolderPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
 import { TeamPage } from './pages/TeamPage';
@@ -38,6 +39,7 @@ function App() {
                 ProtectedRoute directly. */}
             <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/folders/:folderId" element={<FolderPage />} />
 
             <Route element={<NotebookLayout />}>
               <Route path="/team" element={<TeamPage />} />

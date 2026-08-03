@@ -5,7 +5,7 @@ export function listFolders(): Promise<Folder[]> {
   return api.get<Folder[]>('/folders');
 }
 
-export function createFolder(input: { name: string }): Promise<Folder> {
+export function createFolder(input: { name: string; parent_folder_id?: number | null }): Promise<Folder> {
   return api.post<Folder>('/folders', input);
 }
 

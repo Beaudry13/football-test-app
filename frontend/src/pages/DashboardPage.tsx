@@ -6,6 +6,7 @@ import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { QuizCard } from '../components/QuizCard';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
@@ -23,6 +24,11 @@ export function DashboardPage() {
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(new Set());
+  // Keyed by root folder id - a separate "new subfolder" input per root,
+  // only ever one shown at a time in practice but each root keeps its own
+  // draft text independently.
+  const [newSubfolderNames, setNewSubfolderNames] = useState<Record<number, string>>({});
+  const [isCreatingSubfolderFor, setIsCreatingSubfolderFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -127,6 +133,23 @@ export function DashboardPage() {
     }
   }
 
+  async function handleCreateSubfolder(event: FormEvent, rootId: number) {
+    event.preventDefault();
+    const name = (newSubfolderNames[rootId] ?? '').trim();
+    if (!name) return;
+    setIsCreatingSubfolderFor(rootId);
+    setError(null);
+    try {
+      await createFolder({ name, parent_folder_id: rootId });
+      setNewSubfolderNames((prev) => ({ ...prev, [rootId]: '' }));
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsCreatingSubfolderFor(null);
+    }
+  }
+
   function toggleFolder(folderId: number) {
     setCollapsedFolderIds((prev) => {
       const next = new Set(prev);
@@ -137,60 +160,24 @@ export function DashboardPage() {
   }
 
   function renderQuizCard(quiz: Quiz) {
-    // Mirrors the backend's get_editable_quiz rule so the UI doesn't offer
-    // actions the API will refuse. The server is still the enforcement
-    // point - this only keeps the buttons honest.
-    const canEdit = coach != null && (quiz.coach_id === coach.id || coach.role === 'admin');
-    const isTeammates = coach != null && quiz.coach_id !== coach.id;
-
     return (
-      <div key={quiz.id} className={`${nb.card} ${nb.cardHoverable} ${styles.quizCard}`}>
-        <div className={nb.accentStripe} />
-        <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
-          <h3>
-            {quiz.title}
-            {quiz.is_active && (
-              <span className={`${nb.badge} ${nb.badgeSuccess} ${styles.activeBadge}`}>Active</span>
-            )}
-          </h3>
-          <div className={styles.quizMeta}>
-            {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
-            {new Date(quiz.updated_at).toLocaleDateString()}
-            {isTeammates && <> · by {quiz.created_by_username ?? 'a former coach'}</>}
-          </div>
-        </Link>
-        <div className={styles.actions}>
-          {canEdit && folders && folders.length > 0 && (
-            <select
-              className={styles.folderSelect}
-              value={quiz.folder_id ?? ''}
-              onChange={(e) => handleMoveToFolder(quiz.id, e.target.value ? Number(e.target.value) : null)}
-              aria-label={`Move "${quiz.title}" to folder`}
-            >
-              <option value="">Uncategorized</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {/* Duplicate stays available to everyone: the copy belongs to
-              whoever made it, so starting from a teammate's quiz is safe. */}
-          <button className={nb.btnSm} onClick={() => handleDuplicate(quiz.id)}>
-            Duplicate
-          </button>
-          {canEdit && (
-            <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={() => handleDelete(quiz.id, quiz.title)}>
-              Delete
-            </button>
-          )}
-        </div>
-      </div>
+      <QuizCard
+        key={quiz.id}
+        quiz={quiz}
+        coach={coach}
+        folders={folders}
+        onMoveToFolder={handleMoveToFolder}
+        onDuplicate={handleDuplicate}
+        onDelete={handleDelete}
+      />
     );
   }
 
-  const hasFolders = (folders?.length ?? 0) > 0;
+  // Only root folders (no parent) render as their own accordion section
+  // here - a subfolder is reached by clicking its link inside its parent's
+  // section, which navigates to its own page (FolderPage) instead.
+  const rootFolders = folders?.filter((f) => f.parent_folder_id === null) ?? [];
+  const hasFolders = rootFolders.length > 0;
   const uncategorized = quizzes?.filter((q) => q.folder_id === null) ?? [];
 
   return (
@@ -239,14 +226,15 @@ export function DashboardPage() {
 
         {quizzes === null ? (
           <p>Loading…</p>
-        ) : quizzes.length === 0 ? (
+        ) : quizzes.length === 0 && !hasFolders ? (
           <div className={`${nb.card} ${nb.empty}`}>No Peiras yet. Create your first one above.</div>
         ) : !hasFolders ? (
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
           <div className={styles.folderSections}>
-            {folders!.map((folder) => {
+            {rootFolders.map((folder) => {
               const folderQuizzes = quizzes.filter((q) => q.folder_id === folder.id);
+              const subfolders = folders?.filter((f) => f.parent_folder_id === folder.id) ?? [];
               const isCollapsed = collapsedFolderIds.has(folder.id);
               return (
                 <div key={folder.id} className={styles.folderSection}>
@@ -294,13 +282,56 @@ export function DashboardPage() {
                     </div>
                   </div>
                   {!isCollapsed && (
-                    <div className={styles.list}>
-                      {folderQuizzes.length === 0 ? (
-                        <div className={styles.emptyFolder}>No Peiras in this folder yet.</div>
-                      ) : (
-                        folderQuizzes.map(renderQuizCard)
-                      )}
-                    </div>
+                    <>
+                      <div className={styles.subfolderSection}>
+                        <h4 className={styles.subListHeading}>Subfolders</h4>
+                        {subfolders.length > 0 && (
+                          <div className={styles.subfolderList}>
+                            {subfolders.map((sub) => (
+                              <Link
+                                key={sub.id}
+                                to={`/folders/${sub.id}`}
+                                className={styles.subfolderLink}
+                              >
+                                📁 {sub.name} <span className={styles.folderCount}>({sub.quiz_count})</span>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                        <form
+                          className={styles.newSubfolderForm}
+                          onSubmit={(e) => handleCreateSubfolder(e, folder.id)}
+                        >
+                          <input
+                            className={nb.input}
+                            style={{ width: 200 }}
+                            type="text"
+                            placeholder="New subfolder, e.g. Week 1"
+                            value={newSubfolderNames[folder.id] ?? ''}
+                            onChange={(e) =>
+                              setNewSubfolderNames((prev) => ({ ...prev, [folder.id]: e.target.value }))
+                            }
+                            aria-label={`New subfolder inside "${folder.name}"`}
+                          />
+                          <button
+                            type="submit"
+                            className={nb.btnSm}
+                            disabled={
+                              isCreatingSubfolderFor === folder.id || !(newSubfolderNames[folder.id] ?? '').trim()
+                            }
+                          >
+                            {isCreatingSubfolderFor === folder.id ? 'Creating…' : 'New subfolder'}
+                          </button>
+                        </form>
+                      </div>
+                      <div className={styles.list}>
+                        {folderQuizzes.length === 0 ? (
+                          <div className={styles.emptyFolder}>No Peiras directly in this folder yet.</div>
+                        ) : (
+                          folderQuizzes.map(renderQuizCard)
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               );

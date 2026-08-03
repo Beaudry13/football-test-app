@@ -1,8 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPage } from './DashboardPage';
+import { FolderPage } from './FolderPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
 import * as authContext from '../auth/AuthContext';
@@ -50,7 +51,9 @@ const sampleFolder: Folder = {
   organization_id: 1,
   coach_id: 1,
   name: 'Fall Camp',
+  parent_folder_id: null,
   quiz_count: 1,
+  subfolder_count: 0,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -233,6 +236,90 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: 'Delete folder' }));
 
     await waitFor(() => expect(deleteFolderSpy).toHaveBeenCalledWith(10));
+  });
+
+  // --- simple two-level nesting -------------------------------------------
+
+  const sampleSubfolder: Folder = {
+    id: 20,
+    organization_id: 1,
+    coach_id: 1,
+    name: 'Week 1',
+    parent_folder_id: 10,
+    quiz_count: 1,
+    subfolder_count: 0,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  function renderDashboardWithFolderRoute() {
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/folders/:folderId" element={<FolderPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  it('shows a subfolder inside its root folder, visually distinct from a quiz card', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
+    renderDashboard();
+
+    await screen.findByRole('button', { name: /Fall Camp/ });
+    // A subfolder renders as a link (with a folder glyph), not a quiz card -
+    // sampleQuiz is titled "Week 1 Prep", so scope by href to tell them apart.
+    const subfolderLink = screen.getAllByRole('link').find((el) => el.getAttribute('href') === '/folders/20');
+    expect(subfolderLink).toBeDefined();
+    expect(subfolderLink).toHaveTextContent('Week 1');
+  });
+
+  it('creates a subfolder from the inline form inside its root folder', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
+    const createFolderSpy = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(sampleSubfolder);
+    renderDashboard();
+    await screen.findByRole('button', { name: /Fall Camp/ });
+
+    await user.type(screen.getByLabelText('New subfolder inside "Fall Camp"'), 'Week 1');
+    await user.click(screen.getByRole('button', { name: 'New subfolder' }));
+
+    await waitFor(() =>
+      expect(createFolderSpy).toHaveBeenCalledWith({ name: 'Week 1', parent_folder_id: 10 }),
+    );
+  });
+
+  it('opens a subfolder and navigates back to its parent via the breadcrumb', async () => {
+    const user = userEvent.setup();
+    const subQuiz: Quiz = { ...sampleQuiz, id: 2, title: 'Install Quiz', folder_id: 20 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([subQuiz]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
+    renderDashboardWithFolderRoute();
+
+    await user.click(await screen.findByRole('link', { name: /Week 1/ }));
+
+    expect(await screen.findByRole('heading', { name: 'Week 1' })).toBeInTheDocument();
+    expect(await screen.findByText('Install Quiz')).toBeInTheDocument();
+
+    await user.click(screen.getByText('← Back to Fall Camp'));
+    expect(await screen.findByRole('heading', { name: 'Your Trials' })).toBeInTheDocument();
+  });
+
+  it('lists a subfolder as an option (grouped under its root) in the move-quiz select', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
+    const updateSpy = vi.spyOn(quizzesApi, 'updateQuiz').mockResolvedValue(sampleQuiz);
+    renderDashboard();
+    await screen.findByText('Week 1 Prep');
+
+    const select = screen.getByLabelText('Move "Week 1 Prep" to folder');
+    await user.selectOptions(select, '↳ Week 1');
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { folder_id: 20 }));
   });
 
   // --- organization sharing: see all, edit own ---------------------------

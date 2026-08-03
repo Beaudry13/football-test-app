@@ -149,3 +149,43 @@
   font-size: 0.9em;
   padding: 0.5em 0;
 }
+
+.subfolderSection {
+  padding: 0.75em 1em;
+  border: 1px dashed var(--nb-card-border, #e7e3d8);
+  border-radius: 4px;
+}
+
+.subListHeading {
+  margin: 0 0 0.5em;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted2, #8a8577);
+}
+
+.subfolderList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin-bottom: 0.75em;
+}
+
+.subfolderLink {
+  color: var(--nb-text, #1c1b1a);
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+}
+
+.subfolderLink:hover {
+  color: var(--nb-accent, #4f46e5);
+  text-decoration: underline;
+}
+
+.newSubfolderForm {
+  display: flex;
+  gap: 8px;
+}
