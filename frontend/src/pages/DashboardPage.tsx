@@ -220,7 +220,13 @@ export function DashboardPage() {
             onChange={(e) => setNewFolderName(e.target.value)}
           />
           <button type="submit" className={nb.btnSecondary} disabled={isCreatingFolder || !newFolderName.trim()}>
-            {isCreatingFolder ? 'Creating…' : 'New folder'}
+            {isCreatingFolder ? (
+              'Creating…'
+            ) : (
+              <>
+                <span aria-hidden="true">＋</span> New folder
+              </>
+            )}
           </button>
         </form>
 

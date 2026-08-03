@@ -100,6 +100,34 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
   });
 
+  it('shows the completed count and average score stats when the backend reports them', async () => {
+    const withStats: Quiz = { ...sampleQuiz, completed_count: 4, roster_size: 4, average_score_percent: 82 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([withStats]);
+    renderDashboard();
+
+    expect(await screen.findByText('82%')).toBeInTheDocument();
+    expect(screen.getByText('avg. score')).toBeInTheDocument();
+    expect(screen.getByText('4/4')).toBeInTheDocument();
+    expect(screen.getByText('completed')).toBeInTheDocument();
+  });
+
+  it('omits the average-score stat until at least one answer has been graded', async () => {
+    const noScoreYet: Quiz = { ...sampleQuiz, completed_count: 0, roster_size: 4 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([noScoreYet]);
+    renderDashboard();
+
+    expect(await screen.findByText('0/4')).toBeInTheDocument();
+    expect(screen.queryByText('avg. score')).not.toBeInTheDocument();
+  });
+
+  it('omits the stats line entirely for a single-quiz response that never computed it', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.queryByText('completed')).not.toBeInTheDocument();
+  });
+
   it('badges a quiz with a live access code as Active', async () => {
     const active: Quiz = { ...sampleQuiz, is_active: true };
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([active]);

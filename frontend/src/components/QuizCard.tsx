@@ -44,6 +44,24 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
           {new Date(quiz.updated_at).toLocaleDateString()}
           {isTeammates && <> · by {quiz.created_by_username ?? 'a former coach'}</>}
         </div>
+        {/* Only present on list_quizzes, and only once there's something to
+            report - a brand-new quiz has no completed attempts yet, and no
+            average_score_percent until at least one answer's been graded. */}
+        {quiz.completed_count !== undefined && (
+          <div className={styles.quizStats}>
+            {quiz.average_score_percent !== undefined && (
+              <span className={styles.quizStat}>
+                <b>{quiz.average_score_percent}%</b> avg. score
+              </span>
+            )}
+            <span className={styles.quizStat}>
+              <b>
+                {quiz.completed_count}/{quiz.roster_size}
+              </b>{' '}
+              completed
+            </span>
+          </div>
+        )}
       </Link>
       <div className={styles.actions}>
         {canEdit && rootFolders.length > 0 && (
@@ -69,11 +87,11 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
         {/* Duplicate stays available to everyone: the copy belongs to
             whoever made it, so starting from a teammate's quiz is safe. */}
         <button className={nb.btnSm} onClick={() => onDuplicate(quiz.id)}>
-          Duplicate
+          <span aria-hidden="true">⧉</span> Duplicate
         </button>
         {canEdit && (
           <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={() => onDelete(quiz.id, quiz.title)}>
-            Delete
+            <span aria-hidden="true">✕</span> Delete
           </button>
         )}
       </div>

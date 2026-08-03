@@ -11,11 +11,13 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
+from sqlalchemy import case, func
 from sqlalchemy.orm import contains_eager, selectinload
 
 from app.extensions import db
 from app.models import (
     AccessCode,
+    Answer,
     AttemptStatus,
     Group,
     PlayerAttempt,
@@ -38,11 +40,17 @@ quizzes_bp = Blueprint("quizzes", __name__)
 @jwt_required()
 def list_quizzes():
     coach = current_coach()
-    # selectinload: to_dict() reads len(quiz.questions) for question_count, so
-    # without this each quiz would trigger its own lazy-load query (N+1).
+    # selectinload: to_dict() reads len(quiz.questions) for question_count,
+    # and the roster-size stat below reads len(quiz.roster.players) - without
+    # eager-loading both, each quiz would trigger its own lazy-load query
+    # (N+1).
     quizzes = (
         Quiz.query.filter_by(organization_id=coach.organization_id)
-        .options(selectinload(Quiz.questions), selectinload(Quiz.coach))
+        .options(
+            selectinload(Quiz.questions),
+            selectinload(Quiz.coach),
+            selectinload(Quiz.roster).selectinload(Roster.players),
+        )
         .order_by(Quiz.updated_at.desc())
         .all()
     )
@@ -66,7 +74,53 @@ def list_quizzes():
             .all()
         }
 
-    return jsonify([q.to_dict(is_active=q.id in active_quiz_ids) for q in quizzes])
+    # Same batching discipline as is_active above: one query for every
+    # quiz's completed-attempt count, and one more for the aggregate
+    # correct/graded answer counts behind the "average score" stat -
+    # counting only SUBMITTED attempts, matching quiz_dashboard's own
+    # definition of "a response" so the two numbers never disagree.
+    completed_counts: dict[int, int] = {}
+    score_totals: dict[int, tuple[int, int]] = {}
+    if quiz_ids:
+        completed_counts = dict(
+            db.session.query(PlayerAttempt.quiz_id, func.count(PlayerAttempt.id))
+            .filter(
+                PlayerAttempt.quiz_id.in_(quiz_ids),
+                PlayerAttempt.status == AttemptStatus.SUBMITTED,
+            )
+            .group_by(PlayerAttempt.quiz_id)
+            .all()
+        )
+        score_totals = {
+            quiz_id: (int(correct or 0), int(graded or 0))
+            for quiz_id, correct, graded in db.session.query(
+                PlayerAttempt.quiz_id,
+                func.sum(case((Answer.is_correct.is_(True), 1), else_=0)),
+                func.sum(case((Answer.is_correct.isnot(None), 1), else_=0)),
+            )
+            .join(Answer, Answer.attempt_id == PlayerAttempt.id)
+            .filter(
+                PlayerAttempt.quiz_id.in_(quiz_ids),
+                PlayerAttempt.status == AttemptStatus.SUBMITTED,
+            )
+            .group_by(PlayerAttempt.quiz_id)
+            .all()
+        }
+
+    def _quiz_dict(quiz: Quiz) -> dict:
+        correct, graded = score_totals.get(quiz.id, (0, 0))
+        # None (not 0%) when nothing's been graded yet - a brand-new quiz
+        # shouldn't show a misleading "0% avg. score" before anyone's
+        # answered anything gradeable.
+        average_score_percent = round(100 * correct / graded, 1) if graded else None
+        return quiz.to_dict(
+            is_active=quiz.id in active_quiz_ids,
+            completed_count=completed_counts.get(quiz.id, 0),
+            roster_size=len(quiz.roster.players) if quiz.roster else 0,
+            average_score_percent=average_score_percent,
+        )
+
+    return jsonify([_quiz_dict(quiz) for quiz in quizzes])
 
 
 @quizzes_bp.get("/active-status")

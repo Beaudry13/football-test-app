@@ -5,6 +5,7 @@ from pathlib import Path
 from flask import current_app
 
 from tests.conftest import make_image_file
+from tests.test_play_and_grading import build_ready_quiz, start_and_submit, start_attempt
 
 
 def create_quiz(client, headers, title="Week 1 Prep"):
@@ -115,6 +116,62 @@ def test_coach_cannot_access_another_coachs_quiz(client, register_coach):
 
     response = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_b_headers)
     assert response.status_code == 404
+
+
+def test_list_quizzes_reports_no_score_stat_before_anyone_has_been_graded(client, coach_headers):
+    """A brand-new quiz shouldn't show a misleading "0% avg. score" before
+    anyone's answered anything gradeable - the field is omitted entirely,
+    not sent as 0."""
+    quiz = create_quiz(client, coach_headers, title="Fresh Quiz")
+    client.put(f"/api/quizzes/{quiz['id']}/roster", json={"players": ["Jordan Smith", "Alex Lee"]}, headers=coach_headers)
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["completed_count"] == 0
+    assert listed["roster_size"] == 2
+    assert "average_score_percent" not in listed
+
+
+def test_list_quizzes_reports_completed_count_and_average_score(client, coach_headers):
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+
+    # Jordan gets it right, Alex gets it wrong - 1 of 2 graded answers correct.
+    start_and_submit(
+        client, access_code["id"], "Jordan Smith",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+    wrong_option = next(o for o in tf_question["options"] if o["id"] != correct_option["id"])
+    start_and_submit(
+        client, access_code["id"], "Alex Lee",
+        [{"question_id": tf_question["id"], "selected_option_id": wrong_option["id"]}],
+    )
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["completed_count"] == 2
+    assert listed["average_score_percent"] == 50.0
+
+
+def test_list_quizzes_score_stat_ignores_in_progress_attempts(client, coach_headers):
+    """Only SUBMITTED attempts count toward completed_count/average_score -
+    a player who's merely started (or autosaved an answer without
+    submitting) shouldn't move either number."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+
+    start_attempt(client, access_code["id"], "Jordan Smith")
+    client.post(
+        "/api/play/answers",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": "Jordan Smith",
+            "question_id": tf_question["id"],
+            "selected_option_id": correct_option["id"],
+        },
+    )
+
+    listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert listed["completed_count"] == 0
+    assert "average_score_percent" not in listed
 
 
 def test_duplicate_quiz_copies_questions_and_options(client, coach_headers):

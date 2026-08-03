@@ -192,3 +192,66 @@
   font-size: 0.9em;
   color: var(--color-text-muted);
 }
+
+.submittedWrapper {
+  position: relative;
+}
+
+.celebrationOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 253, 248, 0.96);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border-radius: 16px;
+  animation: peira-shimmer-in 0.3s ease-out;
+  z-index: 1;
+}
+
+.celebrationBadge {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, var(--color-primary-bg, #f0cf7a), var(--color-primary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 8px rgba(201, 162, 75, 0.15), 0 8px 24px rgba(201, 162, 75, 0.35);
+  animation: peira-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.celebrationBadge span {
+  color: var(--color-primary-contrast, #fffdf8);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.celebrationText {
+  font-family: 'Cinzel', serif;
+  color: var(--color-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+@keyframes peira-shimmer-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes peira-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

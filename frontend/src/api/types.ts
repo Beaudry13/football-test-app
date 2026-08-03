@@ -59,6 +59,13 @@ export interface Quiz {
    * unexpired access code. Omitted (not just false) on single-quiz
    * responses (get/create/update), which don't compute it. */
   is_active?: boolean;
+  /** Only present on list_quizzes, same reasoning as is_active. Counts only
+   * SUBMITTED attempts (matching the quiz dashboard's own definition). */
+  completed_count?: number;
+  roster_size?: number;
+  /** Omitted (not 0) until at least one gradeable answer exists - a brand
+   * new quiz has no score to report yet. */
+  average_score_percent?: number;
   questions?: Question[];
 }
 

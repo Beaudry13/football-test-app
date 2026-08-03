@@ -1,0 +1,51 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(10, 9, 6, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.card {
+  max-width: 460px;
+  width: 100%;
+  background: #14110b;
+  border: 1px solid rgba(201, 162, 75, 0.5);
+  border-radius: 6px;
+  padding: 40px 36px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.mark {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.heading {
+  font-family: 'Cinzel', serif;
+  color: var(--nb-text, #f3eee2);
+  font-size: 26px;
+  margin: 0 0 12px;
+  letter-spacing: 0.06em;
+}
+
+.body {
+  color: #aba492;
+  font-size: 14.5px;
+  line-height: 1.7;
+  margin: 0 0 20px;
+}
+
+.body:last-of-type {
+  margin-bottom: 28px;
+}
+
+.emphasis {
+  color: var(--nb-accent-bright, #e4c066);
+  font-style: normal;
+}

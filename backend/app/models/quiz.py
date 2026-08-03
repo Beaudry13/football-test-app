@@ -51,6 +51,9 @@ class Quiz(TimestampMixin, db.Model):
         include_questions: bool = False,
         include_correct_answers: bool = False,
         is_active: bool | None = None,
+        completed_count: int | None = None,
+        roster_size: int | None = None,
+        average_score_percent: float | None = None,
     ) -> dict:
         data = {
             "id": self.id,
@@ -71,10 +74,16 @@ class Quiz(TimestampMixin, db.Model):
             data["questions"] = [
                 q.to_dict(include_correct_answers=include_correct_answers) for q in self.questions
             ]
-        # Only set by list_quizzes, which batch-computes this for every quiz
-        # in one query - omitted elsewhere (e.g. get_quiz) rather than
-        # forcing every other caller to pay for the same computation when
-        # the Activate tab already shows the accurate, single-quiz answer.
+        # Only set by list_quizzes, which batch-computes these for every quiz
+        # in a fixed number of queries - omitted elsewhere (e.g. get_quiz)
+        # rather than forcing every other caller to pay for the same
+        # computation when nothing else needs it.
         if is_active is not None:
             data["is_active"] = is_active
+        if completed_count is not None:
+            data["completed_count"] = completed_count
+        if roster_size is not None:
+            data["roster_size"] = roster_size
+        if average_score_percent is not None:
+            data["average_score_percent"] = average_score_percent
         return data

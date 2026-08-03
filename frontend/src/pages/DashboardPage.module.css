@@ -61,6 +61,21 @@
   margin-top: 4px;
 }
 
+.quizStats {
+  display: flex;
+  gap: 18px;
+  margin-top: 10px;
+}
+
+.quizStat {
+  color: var(--nb-accent-deep, #a6822f);
+  font-size: 12.5px;
+}
+
+.quizStat b {
+  color: var(--nb-accent-bright, #e4c066);
+}
+
 .actions {
   display: flex;
   gap: 8px;

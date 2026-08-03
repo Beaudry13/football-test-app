@@ -116,6 +116,17 @@
   background: rgba(201, 162, 75, 0.3);
 }
 
+.whatIsPeira {
+  color: var(--nb-text-muted2, #6e6858);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.whatIsPeira:hover {
+  color: var(--nb-text-muted, #8c8578);
+}
+
 .coachName {
   font-family: 'Inter', sans-serif;
   font-size: 14px;
