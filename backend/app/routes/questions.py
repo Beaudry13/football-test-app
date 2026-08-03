@@ -10,7 +10,7 @@ from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Question, QuestionImage, QuestionOption, QuestionType, Quiz
+from app.models import Answer, Question, QuestionImage, QuestionOption, QuestionType, Quiz
 from app.schemas.question import (
     AnnotationsUpdateSchema,
     QuestionCreateSchema,
@@ -42,6 +42,21 @@ def _replace_options(question: Question, options: list[dict]) -> None:
                 is_correct_answer=option["is_correct_answer"],
                 position=index,
             )
+        )
+
+
+def _reject_if_already_answered(question: Question, action: str) -> None:
+    # Answer.question_id cascades (ON DELETE / SET NULL) specifically so a
+    # coach's edit/delete never crashes or errors - but that same cascade
+    # silently detaches or destroys any player's already-recorded answer and
+    # grade for this question, with no audit trail. Once a player has
+    # actually answered, force the coach through the explicit attempt-reset
+    # path instead of letting this happen invisibly.
+    if Answer.query.filter_by(question_id=question.id).first() is not None:
+        raise ApiError(
+            f"Cannot {action} - one or more players have already answered it. "
+            "Reset the affected player attempts first if you need to change it.",
+            status_code=422,
         )
 
 
@@ -79,6 +94,7 @@ def update_question(quiz_id: int, question_id: int):
     question_type = data.get("question_type", question.question_type.value)
     if "options" in data:
         validate_options_for_type(question_type, data["options"])
+        _reject_if_already_answered(question, "change this question's answer options")
 
     if "question_text" in data:
         question.question_text = data["question_text"]
@@ -95,6 +111,7 @@ def update_question(quiz_id: int, question_id: int):
 @jwt_required()
 def delete_question(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_already_answered(question, "delete this question")
 
     if question.image is not None:
         get_file_storage().delete_image(question.image.image_url)

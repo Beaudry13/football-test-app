@@ -3,6 +3,7 @@
 import io
 
 from tests.conftest import make_image_file
+from tests.test_play_and_grading import build_ready_quiz, start_and_submit
 
 
 def create_quiz(client, headers):
@@ -233,3 +234,80 @@ def test_wrong_file_extension_is_rejected(client, coach_headers):
     )
 
     assert response.status_code == 400
+
+
+def test_cannot_change_options_on_a_question_players_have_already_answered(client, coach_headers):
+    """Answer.question_id/selected_option_id cascade (DELETE/SET NULL) so an
+    edit never crashes - but that same cascade would silently detach an
+    already-graded answer from its option with no audit trail. Once a real
+    answer exists, this must be a loud 422, not a quiet data loss."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_and_submit(
+        client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]}]
+    )
+
+    response = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{tf_question['id']}",
+        json={
+            "options": [
+                {"option_text": "True", "is_correct_answer": True},
+                {"option_text": "False", "is_correct_answer": False},
+            ]
+        },
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 422
+    assert "already answered" in response.get_json()["error"].lower()
+
+
+def test_can_still_edit_question_text_after_players_have_answered(client, coach_headers):
+    """The guard is specifically about options (which are what player
+    answers reference) - editing wording (e.g. fixing a typo) must keep
+    working even after some players have already answered."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_and_submit(
+        client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]}]
+    )
+
+    response = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{tf_question['id']}",
+        json={"question_text": "Is this actually cover 2?"},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["question_text"] == "Is this actually cover 2?"
+
+
+def test_cannot_delete_a_question_players_have_already_answered(client, coach_headers):
+    """Deleting a question cascades and permanently destroys every player's
+    recorded (and possibly already-graded) answer for it with no audit
+    trail - block it once real answers exist rather than silently losing
+    graded data."""
+    quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    start_and_submit(
+        client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]}]
+    )
+
+    response = client.delete(
+        f"/api/quizzes/{quiz['id']}/questions/{tf_question['id']}", headers=coach_headers
+    )
+
+    assert response.status_code == 422
+    assert "already answered" in response.get_json()["error"].lower()
+
+
+def test_can_still_delete_a_question_nobody_has_answered_yet(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={"question_text": "Circle the mike backer", "question_type": "written", "options": []},
+        headers=coach_headers,
+    ).get_json()
+
+    response = client.delete(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}", headers=coach_headers
+    )
+
+    assert response.status_code == 204
