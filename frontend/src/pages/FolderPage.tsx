@@ -79,7 +79,7 @@ export function FolderPage() {
         confirmLabel: 'Delete Folder',
         action: async () => {
           await deleteFolder(folder.id);
-          navigate('/');
+          navigate('/dashboard');
         },
       });
     } catch (err) {
@@ -132,7 +132,7 @@ export function FolderPage() {
         <NotebookHeader />
         <div className={nb.content}>
           <ErrorBanner message="This folder no longer exists." />
-          <Link to="/" className={styles.backLink}>
+          <Link to="/dashboard" className={styles.backLink}>
             ← Back to Dashboard
           </Link>
         </div>
@@ -160,7 +160,7 @@ export function FolderPage() {
       <NotebookHeader />
       <div className={nb.content}>
         <div className={styles.header}>
-          <Link to="/" className={styles.backLink}>
+          <Link to={parent ? `/folders/${parent.id}` : '/dashboard'} className={styles.backLink}>
             ← Back to {parent ? parent.name : 'Dashboard'}
           </Link>
           <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={handleDelete}>

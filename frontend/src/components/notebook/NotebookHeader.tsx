@@ -11,7 +11,11 @@ const NAV_LINKS = [
   // isActive checks a prefix rather than exact match, so e.g. viewing a
   // specific quiz (/quizzes/5) or its annotation tool still highlights
   // "Quizzes" instead of showing no active tab at all.
-  { to: '/', label: 'Quizzes', isActive: (path: string) => path === '/' || path.startsWith('/quizzes') },
+  {
+    to: '/dashboard',
+    label: 'Quizzes',
+    isActive: (path: string) => path === '/dashboard' || path.startsWith('/quizzes'),
+  },
   { to: '/groups', label: 'Groups', isActive: (path: string) => path.startsWith('/groups') },
   { to: '/team', label: 'Team', isActive: (path: string) => path.startsWith('/team') },
 ];
@@ -44,7 +48,10 @@ export function NotebookHeader() {
 
   return (
     <div className={styles.header}>
-      <Link to="/" className={styles.brand} aria-label="Peira">
+      {/* Signed in, this is the way back into the app; signed out (Login/
+          Register/Join render this same header), "/" is the marketing
+          homepage itself, so there's nowhere else for it to point. */}
+      <Link to={coach ? '/dashboard' : '/'} className={styles.brand} aria-label="Peira">
         <PeiraLogo variant="dark" size={30} />
       </Link>
       {/* Logged-out pages (Login/Register/Join) are themselves the way to
@@ -52,9 +59,9 @@ export function NotebookHeader() {
           the brand, for visual consistency with the rest of the app. */}
       {coach && (
         <div className={styles.nav}>
-          <span className={styles.whatIsPeira} onClick={() => setOnboardingOpen(true)}>
+          <button type="button" className={styles.whatIsPeira} onClick={() => setOnboardingOpen(true)}>
             What is Peira?
-          </span>
+          </button>
           {NAV_LINKS.map((link) => (
             <Link
               key={link.to}

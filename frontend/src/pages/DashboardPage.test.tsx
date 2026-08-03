@@ -334,8 +334,10 @@ describe('DashboardPage', () => {
     expect(await screen.findByRole('heading', { name: 'Week 1' })).toBeInTheDocument();
     expect(await screen.findByText('Install Quiz')).toBeInTheDocument();
 
+    // The breadcrumb goes to the parent folder's own page, not the
+    // dashboard - "Back to Fall Camp" should actually land on Fall Camp.
     await user.click(screen.getByText('← Back to Fall Camp'));
-    expect(await screen.findByRole('heading', { name: 'Your Trials' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Fall Camp' })).toBeInTheDocument();
   });
 
   it('lists a subfolder as an option (grouped under its root) in the move-quiz select', async () => {

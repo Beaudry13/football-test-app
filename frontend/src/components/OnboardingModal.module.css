@@ -1,23 +1,50 @@
 .scrim {
   position: fixed;
   inset: 0;
-  z-index: 50;
-  background: rgba(10, 9, 6, 0.75);
+  z-index: 100;
+  background: rgba(8, 7, 4, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  overflow-y: auto;
 }
 
 .card {
+  position: relative;
   max-width: 460px;
   width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   background: #14110b;
   border: 1px solid rgba(201, 162, 75, 0.5);
   border-radius: 6px;
   padding: 40px 36px;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
   text-align: center;
+}
+
+.closeButton {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(201, 162, 75, 0.4);
+  border-radius: 50%;
+  background: rgba(201, 162, 75, 0.1);
+  color: var(--nb-text, #f3eee2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: rgba(201, 162, 75, 0.22);
+  border-color: rgba(201, 162, 75, 0.7);
 }
 
 .mark {

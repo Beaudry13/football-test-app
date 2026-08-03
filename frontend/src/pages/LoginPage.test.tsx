@@ -24,7 +24,7 @@ function renderLoginPage() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<div>Dashboard</div>} />
+          <Route path="/dashboard" element={<div>Dashboard</div>} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>,

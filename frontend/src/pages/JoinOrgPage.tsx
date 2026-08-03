@@ -38,7 +38,7 @@ export function JoinOrgPage() {
     setIsSubmitting(true);
     try {
       await registerWithInvite({ ...form, invite_code: inviteCode });
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

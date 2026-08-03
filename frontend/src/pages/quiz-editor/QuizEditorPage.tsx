@@ -82,7 +82,7 @@ export function QuizEditorPage() {
 
   return (
     <div>
-      <Link to="/" className={styles.backLink}>
+      <Link to="/dashboard" className={styles.backLink}>
         ← All Peiras
       </Link>
 

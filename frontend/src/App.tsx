@@ -1,8 +1,10 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
-import { RootRoute } from './auth/RootRoute';
+import { NotFoundRedirect } from './auth/NotFoundRedirect';
 import { NotebookLayout } from './components/notebook/NotebookLayout';
+import { HomePage } from './pages/HomePage';
+import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { FolderPage } from './pages/FolderPage';
@@ -22,11 +24,11 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public: an anonymous visitor sees the marketing homepage here,
-              a signed-in coach sees their dashboard - same path, so this
-              stays outside ProtectedRoute rather than bouncing a logged-out
-              visitor to /login the way every other coach route does. */}
-          <Route path="/" element={<RootRoute />} />
+          {/* "/" is always the public marketing homepage, signed in or not -
+              a coach who wants their dashboard uses the nav/logo (which
+              point at /dashboard) rather than the bare root landing them
+              back in the app automatically every time they open the site. */}
+          <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/join/:inviteCode" element={<JoinOrgPage />} />
@@ -36,9 +38,10 @@ function App() {
           <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
 
           <Route element={<ProtectedRoute />}>
-            {/* Preview is deliberately NOT nested in <NotebookLayout> - it
-                shows exactly what a player sees (no coach nav). Stays
+            {/* Preview and Dashboard are deliberately NOT nested in
+                <NotebookLayout> - they render their own chrome. Stays
                 gated behind login via ProtectedRoute directly. */}
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
             <Route path="/folders/:folderId" element={<FolderPage />} />
 
@@ -55,7 +58,7 @@ function App() {
             </Route>
           </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

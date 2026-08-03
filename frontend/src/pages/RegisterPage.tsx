@@ -25,7 +25,7 @@ export function RegisterPage() {
     setIsSubmitting(true);
     try {
       await register(form);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

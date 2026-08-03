@@ -74,7 +74,7 @@ function renderAtFolder(folderId: number) {
   render(
     <MemoryRouter initialEntries={[`/folders/${folderId}`]}>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/folders/:folderId" element={<FolderPage />} />
       </Routes>
     </MemoryRouter>,
@@ -103,7 +103,7 @@ describe('FolderPage', () => {
     renderAtFolder(20);
 
     const back = await screen.findByRole('link', { name: '← Back to 2026 Season' });
-    expect(back).toHaveAttribute('href', '/');
+    expect(back).toHaveAttribute('href', '/folders/10');
   });
 
   it('shows an empty-subfolder state distinct from an empty-roster message', async () => {
@@ -167,7 +167,7 @@ describe('FolderPage', () => {
     renderAtFolder(20);
 
     expect(await screen.findByText('This folder no longer exists.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '← Back to Dashboard' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: '← Back to Dashboard' })).toHaveAttribute('href', '/dashboard');
   });
 
   it('shows a friendly message, not a raw error, when the folder list fails to load', async () => {
