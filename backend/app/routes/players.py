@@ -7,13 +7,20 @@ Org-shared, same tenancy rule as Group/Folder: any coach in the
 organization may view or edit any player it owns (see get_org_player).
 """
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db
 from app.models import Player
-from app.schemas.player import PlayerBulkCreateSchema, PlayerCreateSchema, PlayerUpdateSchema
+from app.schemas.player import (
+    ImportConfirmSchema,
+    ImportPreviewSchema,
+    PlayerBulkCreateSchema,
+    PlayerCreateSchema,
+    PlayerUpdateSchema,
+)
+from app.services.roster_import import apply_import, build_preview
 from app.utils.auth import current_coach, get_org_player
 from app.utils.validation import load_json_body
 
@@ -128,6 +135,62 @@ def reactivate_player(player_id: int):
     player.is_active = True
     db.session.commit()
     return jsonify(player.to_dict())
+
+
+IMPORT_TEMPLATE_CSV = (
+    "First Name,Last Name,Jersey Number,Position\r\n"
+    "Jordan,Example,12,WR\r\n"
+    "Alex,Sample,7,DB\r\n"
+)
+
+
+@players_bp.get("/import/template.csv")
+@jwt_required()
+def import_template():
+    """A starting-point CSV a coach can open in Excel/Sheets, fill in, and
+    re-upload. The two example rows are just illustrative - they aren't
+    treated specially by the importer, so if a coach genuinely rosters a
+    "Jordan Example" it would just import as a real row like any other."""
+    return Response(
+        IMPORT_TEMPLATE_CSV,
+        mimetype="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="peira-roster-template.csv"'},
+    )
+
+
+@players_bp.post("/import/preview")
+@jwt_required()
+def import_preview():
+    """Parses and validates only - never writes to the database. See
+    services/roster_import.py::build_preview."""
+    coach = current_coach()
+    data = load_json_body(ImportPreviewSchema())
+
+    meta, rows = build_preview(data["raw_text"], coach.organization_id, data.get("column_mapping"))
+    if "error" in meta:
+        raise ApiError(meta["error"], status_code=422)
+
+    return jsonify({**meta, "rows": rows})
+
+
+@players_bp.post("/import/confirm")
+@jwt_required()
+def import_confirm():
+    """Creates/updates Players from a coach-reviewed, coach-corrected
+    preview. All-or-nothing in one transaction - see
+    services/roster_import.py::apply_import for why."""
+    coach = current_coach()
+    data = load_json_body(ImportConfirmSchema())
+
+    result = apply_import(data["rows"], coach.organization_id)
+    if not result["success"]:
+        # Row-level errors (list, keyed by row index), not the field-keyed
+        # shape ApiError.details assumes - returned as the response body
+        # directly instead, so the frontend gets exactly which rows failed
+        # and why, in the same shape apply_import already produced.
+        return jsonify({"error": "Import failed validation - nothing was created", **result}), 422
+
+    return jsonify(result), 201
 
 
 @players_bp.delete("/<int:player_id>")

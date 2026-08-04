@@ -8,8 +8,27 @@ init_app() time, so toggling app.config afterward has no effect and won't
 do here either.
 """
 
+import pytest
+
 from app import create_app
 from app.config import TestingConfig
+from app.extensions import limiter
+
+
+@pytest.fixture(autouse=True)
+def _restore_shared_limiter_state():
+    """`limiter` (app/extensions.py) is one module-level object reused by
+    every `create_app()` call, not per-app state - Flask-Limiter reads
+    RATELIMIT_ENABLED into that shared object's own `.enabled` flag once,
+    at init_app() time. Monkeypatching TestingConfig back afterward (see
+    make_rate_limited_client) reverts the *config class*, but not this
+    already-mutated flag on the live shared object - without resetting it
+    explicitly here, every test in every other file that runs later in the
+    same session would silently inherit real rate limiting too, since they
+    all route through this same `limiter` instance.
+    """
+    yield
+    limiter.enabled = False
 
 
 def make_rate_limited_client(monkeypatch):

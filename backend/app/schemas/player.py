@@ -39,3 +39,26 @@ class PlayerBulkCreateSchema(Schema):
 
 class GroupMembersAddSchema(Schema):
     player_ids = fields.List(fields.Int(), required=True, validate=validate.Length(min=1))
+
+
+class ImportPreviewSchema(Schema):
+    raw_text = fields.Str(required=True, validate=validate.Length(min=1))
+    # {"first_name": "First Name" | None, "last_name": ..., "full_name": ...,
+    #  "jersey_number": ..., "position": ...} - source column header per
+    # field, to override auto-detection. Omitted/None re-runs detection.
+    column_mapping = fields.Dict(required=False, allow_none=True, load_default=None)
+
+
+class ImportRowSchema(Schema):
+    first_name = fields.Str(required=False, allow_none=True, load_default="")
+    last_name = fields.Str(required=False, allow_none=True, load_default="")
+    jersey_number = fields.Str(required=False, allow_none=True, load_default=None)
+    position = fields.Str(required=False, allow_none=True, load_default=None)
+    action = fields.Str(
+        required=False, load_default="create", validate=validate.OneOf(["create", "update", "skip"])
+    )
+    existing_player_id = fields.Int(required=False, allow_none=True, load_default=None)
+
+
+class ImportConfirmSchema(Schema):
+    rows = fields.List(fields.Nested(ImportRowSchema), required=True, validate=validate.Length(min=1))
