@@ -7,11 +7,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # backend/ - the directory this config lives under, independent of the
 # process's cwd or Flask's app.root_path (which is backend/app/, not backend/).
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Resolved against BASE_DIR rather than left to load_dotenv()'s default
+# cwd-upward search, which silently finds nothing (or, worse, the wrong
+# .env) when the process is launched from outside backend/.
+load_dotenv(BASE_DIR / ".env")
 
 
 def _split_origins(raw: str) -> list[str]:
