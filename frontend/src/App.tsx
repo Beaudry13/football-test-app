@@ -14,6 +14,7 @@ import { TeamPage } from './pages/TeamPage';
 import { PlayerHistoryPage } from './pages/PlayerHistoryPage';
 import { MasterRosterPage } from './pages/MasterRosterPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
+import { OrgProgressPage } from './pages/OrgProgressPage';
 import { JoinOrgPage } from './pages/JoinOrgPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
@@ -51,6 +52,7 @@ function App() {
               <Route path="/team" element={<TeamPage />} />
               <Route path="/roster" element={<MasterRosterPage />} />
               <Route path="/roster/:playerId" element={<PlayerProfilePage />} />
+              <Route path="/progress" element={<OrgProgressPage />} />
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />

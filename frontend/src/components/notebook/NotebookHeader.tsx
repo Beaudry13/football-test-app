@@ -18,6 +18,7 @@ const NAV_LINKS = [
   },
   { to: '/roster', label: 'Roster', isActive: (path: string) => path.startsWith('/roster') },
   { to: '/groups', label: 'Groups', isActive: (path: string) => path.startsWith('/groups') },
+  { to: '/progress', label: 'Progress', isActive: (path: string) => path.startsWith('/progress') },
   { to: '/team', label: 'Team', isActive: (path: string) => path.startsWith('/team') },
 ];
 

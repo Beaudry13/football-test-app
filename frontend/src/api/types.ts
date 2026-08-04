@@ -172,25 +172,134 @@ export interface Group {
   updated_at: string;
 }
 
-export interface PlayerHistoryResult {
-  quiz_id: number;
-  quiz_title: string;
-  attempt_id: number;
-  submitted_at: string | null;
-  score_percent: number | null;
-  graded_answer_count: number;
-  correct_answer_count: number;
-  pending_grading_count: number;
-}
+/** "strong"/"needs_review" only apply to a graded, SUBMITTED attempt;
+ * "pending_grading" means a written answer is still awaiting a coach grade
+ * (never treated as incorrect); null means the attempt isn't submitted yet. */
+export type ReviewStatus = 'strong' | 'needs_review' | 'pending_grading' | null;
 
-export interface PlayerHistory {
-  player: Player;
-  current_groups: { id: number; name: string }[];
+export type TrendDirection = 'improving' | 'declining' | 'flat' | null;
+
+/** Player Progress Analytics summary for one Player - see
+ * backend/app/services/player_analytics.py for the exact ASSIGNED/
+ * COMPLETED/AVERAGE SCORE definitions this is computed from. */
+export interface PlayerAnalyticsSummary {
   assigned_count: number;
   completed_count: number;
   completion_percent: number | null;
   average_score_percent: number | null;
-  recent_results: PlayerHistoryResult[];
+  below_threshold_count: number;
+  pending_grading_count: number;
+  last_completed_at: string | null;
+  current_groups: { id: number; name: string }[];
+  review_threshold_percent: number;
+}
+
+/** One row in a Player's full chronological attempt history,
+ * most-recent-first. */
+export interface PlayerHistoryRow {
+  attempt_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  started_at: string;
+  submitted_at: string | null;
+  completion_status: 'completed' | 'incomplete';
+  score_percent: number | null;
+  review_status: ReviewStatus;
+  correct_count: number;
+  graded_count: number;
+  /** The Group(s) this specific historical attempt was reached through -
+   * empty means it came from the quiz's own direct Roster. */
+  group_source: { id: number; name: string }[];
+}
+
+export interface TrendPoint {
+  date: string | null;
+  score_percent: number;
+}
+
+export interface PlayerTrend {
+  /** False (with empty points) when fewer than 2 graded results exist -
+   * never fabricate a direction from a single data point. */
+  available: boolean;
+  direction: TrendDirection;
+  points: TrendPoint[];
+}
+
+export interface MissedQuestion {
+  question_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  question_number: number;
+  question_preview: string;
+  /** How many times this *exact* question (same question_id) was missed -
+   * never an inferred "concept," since no tagging system exists. */
+  miss_count: number;
+  most_recent_missed_at: string | null;
+}
+
+export interface ComparisonStats {
+  average_score_percent: number | null;
+  graded_answer_count: number;
+  player_count: number;
+  /** False when player_count is below the minimum sample size - the UI
+   * must not present a misleadingly small comparison as meaningful. */
+  sufficient_data: boolean;
+}
+
+export interface GroupComparison extends ComparisonStats {
+  group_id: number;
+  group_name: string;
+}
+
+export interface PositionComparison extends ComparisonStats {
+  position: string;
+}
+
+export interface PlayerComparisons {
+  player: ComparisonStats;
+  /** One entry per Group the Player currently belongs to - shown
+   * separately, never blended into one number. */
+  groups: GroupComparison[];
+  position: PositionComparison | null;
+  organization: ComparisonStats;
+}
+
+export interface PlayerHistory {
+  player: Player;
+  summary: PlayerAnalyticsSummary;
+  history: PlayerHistoryRow[];
+  trend: PlayerTrend;
+  missed_questions: MissedQuestion[];
+  comparisons: PlayerComparisons;
+}
+
+/** One row of the organization-wide Player Progress roster table. */
+export interface OrgRosterPlayerRow {
+  player: Player;
+  assigned_count: number;
+  completed_count: number;
+  completion_percent: number | null;
+  average_score_percent: number | null;
+  below_threshold_count: number;
+  needs_review: boolean;
+  last_activity_at: string | null;
+  trend_direction: TrendDirection;
+  current_groups: { id: number; name: string }[];
+}
+
+export interface OrgProgressSummary {
+  total_active_players: number;
+  players_with_incomplete_assignments: number;
+  players_below_threshold: number;
+  average_score_percent: number | null;
+  completion_rate: number | null;
+  players_with_no_recent_activity: number;
+  review_threshold_percent: number;
+}
+
+export interface OrgProgress {
+  players: OrgRosterPlayerRow[];
+  summary: OrgProgressSummary;
 }
 
 export interface ImportPreviewRow {

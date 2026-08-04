@@ -3,6 +3,7 @@ import type {
   Group,
   ImportConfirmResponse,
   ImportPreviewResponse,
+  OrgProgress,
   Player,
   PlayerHistory,
   Roster,
@@ -38,6 +39,13 @@ export function getPlayer(playerId: number): Promise<Player> {
 
 export function getPlayerHistory(playerId: number): Promise<PlayerHistory> {
   return api.get<PlayerHistory>(`/players/${playerId}/history`);
+}
+
+export function getOrgProgress(params: { active?: 'true' | 'false' | 'all' } = {}): Promise<OrgProgress> {
+  const search = new URLSearchParams();
+  if (params.active) search.set('active', params.active);
+  const query = search.toString();
+  return api.get<OrgProgress>(`/players/progress${query ? `?${query}` : ''}`);
 }
 
 export function updatePlayer(playerId: number, input: PlayerInput): Promise<Player> {

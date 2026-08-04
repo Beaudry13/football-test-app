@@ -1,0 +1,41 @@
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+}
+
+.svg {
+  width: 160px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.line {
+  stroke: var(--nb-accent, #c9a24b);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dot {
+  fill: var(--nb-accent, #c9a24b);
+}
+
+.directionLabel {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.improving {
+  color: var(--nb-success, #4caf6e);
+}
+
+.declining {
+  color: var(--nb-warning-text, #d98e82);
+}
+
+.flat {
+  color: var(--nb-text-muted, #8c8578);
+}
