@@ -23,11 +23,21 @@ groups_bp = Blueprint("groups", __name__)
 
 
 def _replace_group_players(group: Group, raw_names: list[str]) -> Group:
+    """Replaces only the legacy (player_id IS NULL) name rows. Canonical
+    master-roster memberships - added via add_group_members, below - are
+    managed exclusively through their own add/remove endpoints and must
+    survive a save from this whole-list legacy editor, so they're excluded
+    from the clear-and-rebuild rather than wiped by it.
+    """
     names = normalize_and_validate_names(raw_names)
 
-    group.players.clear()
-    for index, name in enumerate(names):
-        group.players.append(GroupPlayer(player_name=name, position=index))
+    for gp in [gp for gp in group.players if gp.player_id is None]:
+        group.players.remove(gp)
+
+    next_position = max((gp.position for gp in group.players), default=-1) + 1
+    for name in names:
+        group.players.append(GroupPlayer(player_name=name, position=next_position))
+        next_position += 1
 
     return group
 

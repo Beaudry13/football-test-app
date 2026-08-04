@@ -112,3 +112,29 @@ def test_duplicate_names_are_rejected_from_csv(client, coach_headers):
     )
 
     assert response.status_code == 422
+
+
+def test_legacy_whole_list_save_does_not_wipe_canonical_roster_members(client, coach_headers):
+    """PUT .../roster (the legacy name-list editor) must not touch canonical
+    player_id memberships added via POST .../roster/members - see the
+    equivalent group-side regression test in test_players.py."""
+    quiz = create_quiz(client, coach_headers)
+    player = client.post(
+        "/api/players", json={"first_name": "Jordan", "last_name": "Lee"}, headers=coach_headers
+    ).get_json()
+    client.post(
+        f"/api/quizzes/{quiz['id']}/roster/members",
+        json={"player_ids": [player["id"]]},
+        headers=coach_headers,
+    )
+
+    replaced = client.put(
+        f"/api/quizzes/{quiz['id']}/roster",
+        json={"players": ["Legacy Name"]},
+        headers=coach_headers,
+    )
+    assert replaced.status_code == 200
+    names_and_ids = {
+        (p["player_name"], p.get("player", {}).get("id")) for p in replaced.get_json()["players"]
+    }
+    assert names_and_ids == {("Legacy Name", None), ("Jordan Lee", player["id"])}

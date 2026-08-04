@@ -17,14 +17,22 @@ rosters_bp = Blueprint("rosters", __name__)
 
 
 def _replace_roster(quiz: Quiz, raw_names: list[str]) -> Roster:
+    """Replaces only the legacy (player_id IS NULL) name rows - see
+    groups.py::_replace_group_players for why canonical rows must survive
+    this whole-list legacy editor's clear-and-rebuild.
+    """
     names = normalize_and_validate_names(raw_names)
 
     if quiz.roster is None:
         quiz.roster = Roster(quiz_id=quiz.id)
 
-    quiz.roster.players.clear()
-    for index, name in enumerate(names):
-        quiz.roster.players.append(RosterPlayer(player_name=name, position=index))
+    for rp in [rp for rp in quiz.roster.players if rp.player_id is None]:
+        quiz.roster.players.remove(rp)
+
+    next_position = max((rp.position for rp in quiz.roster.players), default=-1) + 1
+    for name in names:
+        quiz.roster.players.append(RosterPlayer(player_name=name, position=next_position))
+        next_position += 1
 
     return quiz.roster
 

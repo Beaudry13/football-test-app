@@ -231,3 +231,29 @@ def test_cannot_add_player_to_another_organizations_group(client, coach_headers,
         headers=coach_headers,
     )
     assert response.status_code == 404
+
+
+def test_legacy_whole_list_save_does_not_wipe_canonical_group_members(client, coach_headers):
+    """The pre-existing "Edit members" textarea (PUT .../players, a full
+    replace of the legacy name list) must not touch canonical player_id
+    memberships added via POST .../members - the two editors manage
+    disjoint rows on the same table."""
+    group = create_group(client, coach_headers)
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+    client.post(
+        f"/api/groups/{group['id']}/members", json={"player_ids": [player["id"]]}, headers=coach_headers
+    )
+
+    replaced = client.put(
+        f"/api/groups/{group['id']}/players",
+        json={"players": ["Legacy Name"]},
+        headers=coach_headers,
+    )
+    assert replaced.status_code == 200
+    names_and_ids = {
+        (p["player_name"], p.get("player", {}).get("id")) for p in replaced.get_json()["players"]
+    }
+    assert names_and_ids == {("Legacy Name", None), ("Jordan Lee", player["id"])}
+
+    fetched = client.get(f"/api/groups/{group['id']}", headers=coach_headers).get_json()
+    assert len(fetched["players"]) == 2
