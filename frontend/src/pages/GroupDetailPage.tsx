@@ -7,11 +7,13 @@ import {
   setGroupPlayers,
   uploadGroupPlayersCsv,
 } from '../api/groups';
+import { addGroupMembers, removeGroupMember } from '../api/players';
 import { getErrorMessage } from '../api/client';
 import type { Group } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { PlayerListEditor } from '../components/PlayerListEditor';
+import { PlayerPickerPanel } from '../components/PlayerPickerPanel';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupDetailPage.module.css';
 
@@ -43,6 +45,14 @@ export function GroupDetailPage() {
   const onSave = useCallback((names: string[]) => setGroupPlayers(Number(groupId), names), [groupId]);
   const onUploadCsv = useCallback(
     (file: File) => uploadGroupPlayersCsv(Number(groupId), file),
+    [groupId],
+  );
+  const onAddMember = useCallback(
+    (playerId: number) => addGroupMembers(Number(groupId), [playerId]),
+    [groupId],
+  );
+  const onRemoveMember = useCallback(
+    (playerId: number) => removeGroupMember(Number(groupId), playerId),
     [groupId],
   );
 
@@ -118,12 +128,14 @@ export function GroupDetailPage() {
 
       <ErrorBanner message={error} />
 
+      <PlayerPickerPanel load={load} onAdd={onAddMember} onRemove={onRemoveMember} />
+
       <PlayerListEditor
         load={load}
         onSave={onSave}
         onUploadCsv={onUploadCsv}
-        currentListTitle="Current members"
-        editTitle="Edit members"
+        currentListTitle="Legacy members (no master-roster link)"
+        editTitle="Edit legacy members"
         saveButtonLabel="Save members"
       />
     </div>

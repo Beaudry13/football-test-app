@@ -24,7 +24,15 @@ interface PlayerListEditorProps {
 /** Two-panel player-list editor (current list + bulk textarea + CSV upload)
  * shared by the per-quiz Roster tab and the coach-wide Group editor - both
  * are otherwise identical "one name per line, save replaces the whole
- * list" UIs over different backing entities. */
+ * list" UIs over different backing entities.
+ *
+ * Legacy (free-text, `player_id`-less) entries only - this is the editor
+ * for the pre-master-roster name list. Canonical, master-roster-linked
+ * entries (`player` present) are excluded here and shown/managed instead
+ * by the sibling PlayerPickerPanel, which is rendered alongside this one.
+ * Mixing the two in one textarea would let a coach accidentally re-add a
+ * canonical player's name as a second, legacy, player_id-less row - see
+ * groups.py::_replace_group_players for the backend half of this split. */
 export function PlayerListEditor({
   load,
   onSave,
@@ -44,8 +52,9 @@ export function PlayerListEditor({
   const doLoad = useCallback(async () => {
     try {
       const result = await load();
-      setPlayers(result.players);
-      setNamesText(result.players.map((p) => p.player_name).join('\n'));
+      const legacy = result.players.filter((p) => !p.player);
+      setPlayers(legacy);
+      setNamesText(legacy.map((p) => p.player_name).join('\n'));
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -84,7 +93,7 @@ export function PlayerListEditor({
     setIsSaving(true);
     try {
       const result = await onSave(names);
-      setPlayers(result.players);
+      setPlayers(result.players.filter((p) => !p.player));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -99,8 +108,9 @@ export function PlayerListEditor({
     setIsSaving(true);
     try {
       const result = await onUploadCsv(file);
-      setPlayers(result.players);
-      setNamesText(result.players.map((p) => p.player_name).join('\n'));
+      const legacy = result.players.filter((p) => !p.player);
+      setPlayers(legacy);
+      setNamesText(legacy.map((p) => p.player_name).join('\n'));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
