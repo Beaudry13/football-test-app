@@ -114,7 +114,7 @@ export function ResponseRow({
     try {
       await confirm({
         title: 'Reset Attempt?',
-        body: `${response.player_name}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Quiz fresh. This action cannot be undone.`,
+        body: `${response.display_name}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Quiz fresh. This action cannot be undone.`,
         confirmLabel: 'Reset Attempt',
         action: async () => {
           setIsResetting(true);
@@ -134,11 +134,15 @@ export function ResponseRow({
       <div className={styles.responseHeader} onClick={() => setIsOpen((v) => !v)}>
         <div>
           <Link
+            // The legacy name-based history page is keyed by the historical
+            // snapshot, not the live name - the link target intentionally
+            // stays player_name even though the label below shows the
+            // current canonical name.
             to={`/players/${encodeURIComponent(response.player_name)}/history`}
             className={styles.playerNameLink}
             onClick={(e) => e.stopPropagation()}
           >
-            {response.player_name}
+            {response.display_name}
           </Link>
           <span className={styles.responseMeta}>{new Date(response.submitted_at).toLocaleString()}</span>
         </div>

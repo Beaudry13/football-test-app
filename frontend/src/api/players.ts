@@ -13,7 +13,6 @@ export interface PlayerInput {
   last_name: string;
   jersey_number?: string | null;
   position?: string | null;
-  photo_url?: string | null;
 }
 
 export function listPlayers(params: { q?: string; position?: string; active?: 'true' | 'false' | 'all' } = {}): Promise<Player[]> {
@@ -43,6 +42,12 @@ export function getPlayerHistory(playerId: number): Promise<PlayerHistory> {
 
 export function updatePlayer(playerId: number, input: PlayerInput): Promise<Player> {
   return api.patch<Player>(`/players/${playerId}`, input);
+}
+
+export function uploadPlayerPhoto(playerId: number, file: File): Promise<Player> {
+  const formData = new FormData();
+  formData.append('photo', file);
+  return api.postForm<Player>(`/players/${playerId}/photo`, formData);
 }
 
 export function deactivatePlayer(playerId: number): Promise<Player> {

@@ -49,6 +49,7 @@ const sampleResponse: PlayerResponse = {
   quiz_id: 1,
   access_code_id: 9,
   player_name: 'Jordan Smith',
+  display_name: 'Jordan Smith',
   submitted_at: '2026-01-01T00:05:00Z',
   answers: [],
 };
@@ -60,6 +61,27 @@ function renderRow(overrides: Partial<PlayerResponse> = {}) {
     </MemoryRouter>,
   );
 }
+
+describe('ResponseRow player name display', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows the canonical Player's current display_name, not the historical player_name snapshot", () => {
+    mockAuth({ id: 1 });
+    renderRow({ player_name: 'Chris Smith', display_name: 'Christopher Smith-Jones' });
+
+    expect(screen.getByRole('link', { name: 'Christopher Smith-Jones' })).toBeInTheDocument();
+    expect(screen.queryByText('Chris Smith')).not.toBeInTheDocument();
+  });
+
+  it("still shows a legacy attempt's player_name when no canonical Player is linked", () => {
+    mockAuth({ id: 1 });
+    renderRow({ player_name: 'Jordan Legacy', display_name: 'Jordan Legacy' });
+
+    expect(screen.getByRole('link', { name: 'Jordan Legacy' })).toBeInTheDocument();
+  });
+});
 
 describe('ResponseRow reset attempt', () => {
   beforeEach(() => {

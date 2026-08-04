@@ -4,6 +4,14 @@ Expects `responses` to already be loaded with `answers` (and
 `answers.selected_option`) eagerly - these functions don't query the
 database themselves, to keep them easy to test and to let route handlers
 control exactly what's eager-loaded.
+
+Player identity rule (applies to every name shown below, and matches the
+coach Results tab): use PlayerAttempt.display_name, not the raw
+player_name snapshot - i.e. a canonical attempt's *current* Player name,
+falling back to the historical snapshot only for a legacy attempt (or a
+since-deleted Player). An export is a point-in-time report, not an
+archival record, so it should read the same as the live Results tab it
+was generated from.
 """
 
 import csv
@@ -40,13 +48,13 @@ def build_results_csv(quiz, responses: list) -> str:
     writer.writerow(CSV_HEADER)
 
     questions = sorted(quiz.questions, key=lambda q: q.position)
-    for response in sorted(responses, key=lambda r: r.player_name.lower()):
+    for response in sorted(responses, key=lambda r: r.display_name.lower()):
         answers_by_question = {a.question_id: a for a in response.answers}
         for i, question in enumerate(questions, start=1):
             answer = answers_by_question.get(question.id)
             writer.writerow(
                 [
-                    response.player_name,
+                    response.display_name,
                     response.submitted_at.isoformat(),
                     i,
                     question.question_text,
@@ -89,13 +97,13 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list) -> bytes:
     elements.append(Paragraph("Player scores", styles["Heading2"]))
     if responses:
         score_rows = [["Player", "Submitted At", "Score", "Ungraded"]]
-        for response in sorted(responses, key=lambda r: r.player_name.lower()):
+        for response in sorted(responses, key=lambda r: r.display_name.lower()):
             graded = [a for a in response.answers if a.is_correct is not None]
             correct = sum(1 for a in graded if a.is_correct)
             ungraded = len(response.answers) - len(graded)
             score_rows.append(
                 [
-                    response.player_name,
+                    response.display_name,
                     response.submitted_at.strftime("%Y-%m-%d %H:%M"),
                     f"{correct}/{len(graded)}",
                     str(ungraded),

@@ -77,18 +77,19 @@ def effective_roster_names(access_code: AccessCode) -> list[str]:
 def effective_roster_players(access_code: AccessCode) -> list[dict]:
     """Like `effective_roster_names`, but resolves each entry's canonical
     identity where one exists - `{"player_id", "name", "jersey_number",
-    "position"}` per eligible player. A canonical entry's `name` is always
-    the Player's *current* full_name (fresh, not a stale snapshot); a
-    legacy entry (player_id None) is whatever the coach typed on the
-    Roster/Group, with jersey_number/position both None (nothing else to
-    show for it).
+    "position", "photo_url"}` per eligible player. A canonical entry's
+    `name` is always the Player's *current* full_name (fresh, not a stale
+    snapshot); a legacy entry (player_id None) is whatever the coach typed
+    on the Roster/Group, with jersey_number/position/photo_url all None
+    (nothing else to show for it).
 
-    jersey_number/position are included specifically so the frontend can
-    tell two canonical Players who share a display name apart at a glance
-    (e.g. two "Chris Smith"s) - `name` alone can't, and player_id isn't
-    human-readable. The plain string list from effective_roster_names()
-    can't represent any of this, which is why it stays unchanged for
-    existing callers rather than being replaced outright.
+    jersey_number/position/photo_url are included specifically so the
+    frontend can tell two canonical Players who share a display name apart
+    at a glance (e.g. two "Chris Smith"s) - `name` alone can't, and
+    player_id isn't human-readable. The plain string list from
+    effective_roster_names() can't represent any of this, which is why it
+    stays unchanged for existing callers rather than being replaced
+    outright.
     """
     if access_code.groups:
         seen: dict[str, dict] = {}
@@ -103,6 +104,7 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
                             "name": player.player.full_name,
                             "jersey_number": player.player.jersey_number,
                             "position": player.player.position,
+                            "photo_url": player.player.photo_url,
                         },
                     )
                 else:
@@ -114,6 +116,7 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
                             "name": player.player_name,
                             "jersey_number": None,
                             "position": None,
+                            "photo_url": None,
                         },
                     )
         return list(seen.values())
@@ -130,13 +133,20 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
                     "name": rp.player.full_name,
                     "jersey_number": rp.player.jersey_number,
                     "position": rp.player.position,
+                    "photo_url": rp.player.photo_url,
                 }
             )
         else:
             if rp.player_name.lower() not in seen_names:
                 seen_names.add(rp.player_name.lower())
                 result.append(
-                    {"player_id": None, "name": rp.player_name, "jersey_number": None, "position": None}
+                    {
+                        "player_id": None,
+                        "name": rp.player_name,
+                        "jersey_number": None,
+                        "position": None,
+                        "photo_url": None,
+                    }
                 )
     return result
 

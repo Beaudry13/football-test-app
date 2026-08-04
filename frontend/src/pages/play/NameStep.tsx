@@ -3,6 +3,7 @@ import { startAttempt } from '../../api/play';
 import { ApiError, getErrorMessage } from '../../api/client';
 import type { AttemptState, RosterPlayerOption } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { PlayerAvatar } from '../../components/PlayerAvatar';
 import styles from './PlayPage.module.css';
 
 function optionLabel(option: RosterPlayerOption): string {
@@ -76,6 +77,7 @@ export function NameStep({
             onClick={() => setSelectedIndex(index)}
             disabled={isSubmitting}
           >
+            <PlayerAvatar name={option.name} photoUrl={option.photo_url} size="sm" />
             {optionLabel(option)}
           </button>
         ))}

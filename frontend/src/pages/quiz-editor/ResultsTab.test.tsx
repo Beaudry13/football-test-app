@@ -156,6 +156,7 @@ describe('ResultsTab exports', () => {
       quiz_id: 1,
       access_code_id: 5,
       player_name: 'Jordan Smith',
+      display_name: 'Jordan Smith',
       submitted_at: '2026-01-05T00:00:00Z',
       answers: [
         {
@@ -200,6 +201,7 @@ describe('ResultsTab exports', () => {
       quiz_id: 1,
       access_code_id: 5,
       player_name: 'Jordan Smith',
+      display_name: 'Jordan Smith',
       submitted_at: '2026-01-05T00:00:00Z',
       answers: [
         {

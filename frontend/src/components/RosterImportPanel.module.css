@@ -67,3 +67,18 @@
   font-size: 0.85em;
   color: var(--nb-text-muted, #78766e);
 }
+
+.exactMatch {
+  font-size: 0.85em;
+  font-weight: 700;
+  color: var(--nb-warning-text, #b8492f);
+}
+
+.reviewRow {
+  background: var(--nb-review-bg, rgba(201, 162, 75, 0.12));
+}
+
+.reviewCount {
+  color: var(--nb-warning-text, #b8492f);
+  font-weight: 600;
+}

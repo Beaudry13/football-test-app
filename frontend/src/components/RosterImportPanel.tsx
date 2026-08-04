@@ -6,7 +6,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import nb from '../styles/notebook.module.css';
 import styles from './RosterImportPanel.module.css';
 
-type RowAction = 'create' | 'update' | 'skip';
+type RowAction = 'create' | 'update' | 'skip' | 'review';
 
 interface EditableRow {
   first_name: string;
@@ -76,10 +76,19 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
 
   async function handleConfirm() {
     setError(null);
+
+    const pendingReview = rows.filter((r) => r.action === 'review').length;
+    if (pendingReview > 0) {
+      setError(
+        `${pendingReview} row${pendingReview === 1 ? '' : 's'} still need${pendingReview === 1 ? 's' : ''} review - a possible existing match was found, so each one needs an explicit Create/Update/Skip choice before importing.`,
+      );
+      return;
+    }
+
     setIsBusy(true);
     try {
       const payload: ImportRowInput[] = rows
-        .filter((r) => r.action !== 'skip')
+        .filter((r): r is EditableRow & { action: 'create' | 'update' } => r.action !== 'skip')
         .map((r) => ({
           first_name: r.first_name,
           last_name: r.last_name,
@@ -122,7 +131,11 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
   }
 
   const validCount = rows.filter((r) => r.errors.length === 0).length;
-  const willImportCount = rows.filter((r) => r.action !== 'skip').length;
+  const createCount = rows.filter((r) => r.action === 'create').length;
+  const updateCount = rows.filter((r) => r.action === 'update').length;
+  const skipCount = rows.filter((r) => r.action === 'skip').length;
+  const reviewCount = rows.filter((r) => r.action === 'review').length;
+  const willImportCount = createCount + updateCount;
 
   return (
     <div className={`${nb.card} ${styles.panel}`}>
@@ -183,7 +196,12 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
             {preview.invalid_count > 0 && (
               <span className={styles.invalidCount}>{preview.invalid_count} invalid</span>
             )}
-            <span>{willImportCount} will be imported</span>
+            <span>{createCount} to create</span>
+            <span>{updateCount} to update</span>
+            <span>{skipCount} to skip</span>
+            {reviewCount > 0 && (
+              <span className={styles.reviewCount}>{reviewCount} need review</span>
+            )}
           </div>
 
           <div className={styles.tableWrap}>
@@ -200,7 +218,16 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
               </thead>
               <tbody>
                 {rows.map((row, index) => (
-                  <tr key={index} className={row.errors.length > 0 ? styles.errorRow : ''}>
+                  <tr
+                    key={index}
+                    className={
+                      row.errors.length > 0
+                        ? styles.errorRow
+                        : row.action === 'review'
+                          ? styles.reviewRow
+                          : ''
+                    }
+                  >
                     <td>
                       <input
                         className={nb.input}
@@ -239,8 +266,12 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
                       {row.errors.length > 0 ? (
                         <span className={styles.errorText}>{row.errors[0]}</span>
                       ) : row.possible_duplicates.length > 0 ? (
-                        <span className={styles.dupNote}>
-                          {row.possible_duplicates[0].strong_match ? 'Likely match: ' : 'Same name: '}
+                        <span
+                          className={
+                            row.possible_duplicates[0].strong_match ? styles.exactMatch : styles.dupNote
+                          }
+                        >
+                          {row.possible_duplicates[0].strong_match ? 'Exact match: ' : 'Same name: '}
                           #{row.possible_duplicates[0].jersey_number ?? '—'}{' '}
                           {row.possible_duplicates[0].position ?? ''}
                         </span>
@@ -262,6 +293,11 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
                           });
                         }}
                       >
+                        {row.action === 'review' && (
+                          <option value="review" disabled>
+                            Review required
+                          </option>
+                        )}
                         <option value="create">Create new</option>
                         {row.possible_duplicates.length > 0 && <option value="update">Update match</option>}
                         <option value="skip">Skip</option>
@@ -288,7 +324,8 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
               type="button"
               className={nb.btnPrimary}
               onClick={handleConfirm}
-              disabled={isBusy || willImportCount === 0}
+              disabled={isBusy || willImportCount === 0 || reviewCount > 0}
+              title={reviewCount > 0 ? 'Resolve every "Review required" row before importing.' : undefined}
             >
               {isBusy ? 'Importing…' : `Import ${willImportCount} Player${willImportCount === 1 ? '' : 's'}`}
             </button>

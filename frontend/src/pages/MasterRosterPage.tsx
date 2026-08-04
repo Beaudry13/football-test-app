@@ -12,6 +12,7 @@ import type { Player } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { RosterImportPanel } from '../components/RosterImportPanel';
+import { PlayerAvatar } from '../components/PlayerAvatar';
 import nb from '../styles/notebook.module.css';
 import styles from './MasterRosterPage.module.css';
 
@@ -209,6 +210,7 @@ export function MasterRosterPage() {
           <table className={nb.table}>
             <thead>
               <tr>
+                <th></th>
                 <th>Player</th>
                 <th>#</th>
                 <th>Position</th>
@@ -219,6 +221,9 @@ export function MasterRosterPage() {
             <tbody>
               {filtered.map((player) => (
                 <tr key={player.id} className={player.is_active ? '' : styles.inactiveRow}>
+                  <td>
+                    <PlayerAvatar name={player.full_name} photoUrl={player.photo_url} size="sm" />
+                  </td>
                   <td>
                     <Link to={`/roster/${player.id}`}>{player.full_name}</Link>
                   </td>

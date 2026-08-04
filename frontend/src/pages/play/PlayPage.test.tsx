@@ -11,8 +11,8 @@ const joinedResponse: ValidateCodeResponse = {
   expires_at: '2026-08-02T00:00:00Z',
   roster_players: ['Jordan Smith', 'Alex Lee'],
   roster_players_v2: [
-    { player_id: null, name: 'Jordan Smith', jersey_number: null, position: null },
-    { player_id: null, name: 'Alex Lee', jersey_number: null, position: null },
+    { player_id: null, name: 'Jordan Smith', jersey_number: null, position: null, photo_url: null },
+    { player_id: null, name: 'Alex Lee', jersey_number: null, position: null, photo_url: null },
   ],
   quiz: {
     id: 5,
@@ -51,6 +51,7 @@ const submittedResponse = {
   quiz_id: 5,
   access_code_id: 42,
   player_name: 'Jordan Smith',
+  display_name: 'Jordan Smith',
   submitted_at: '2026-01-01T00:05:00Z',
   answers: [],
 };

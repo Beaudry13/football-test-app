@@ -46,6 +46,24 @@ describe('MasterRosterPage', () => {
     expect(listSpy).toHaveBeenCalledWith({ active: 'true' });
   });
 
+  it('shows a photo thumbnail for a player with one, and initials for a player without', async () => {
+    vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([
+      makePlayer({ id: 1, photo_url: '/uploads/jordan.jpg' }),
+      makePlayer({ id: 2, first_name: 'Alex', last_name: 'Rivera', full_name: 'Alex Rivera', photo_url: null }),
+    ]);
+    const { container } = render(
+      <MemoryRouter>
+        <MasterRosterPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Jordan Lee');
+    const rows = container.querySelectorAll('tbody tr');
+    expect(rows[0].querySelector('img')).not.toBeNull();
+    expect(rows[1].querySelector('img')).toBeNull();
+    expect(rows[1]).toHaveTextContent('AR');
+  });
+
   it('shows an empty state when there are no players yet', async () => {
     vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([]);
     renderPage();

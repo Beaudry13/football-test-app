@@ -1,0 +1,35 @@
+.avatar {
+  display: inline-block;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.placeholder {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #c9a24b;
+  color: #14110b;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.sm {
+  width: 24px;
+  height: 24px;
+  font-size: 0.6rem;
+}
+
+.md {
+  width: 40px;
+  height: 40px;
+  font-size: 0.9rem;
+}
+
+.lg {
+  width: 96px;
+  height: 96px;
+  font-size: 2rem;
+}

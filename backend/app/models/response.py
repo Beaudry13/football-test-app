@@ -79,12 +79,29 @@ class PlayerAttempt(db.Model):
         ),
     )
 
+    @property
+    def display_name(self) -> str:
+        """The name coach-facing Results/Grading views should show: the
+        linked canonical Player's *current* full_name, when this attempt
+        has one and that Player still exists - falling back to the
+        historical `player_name` snapshot for a legacy (player_id IS NULL)
+        attempt, or for a canonical Player that's since been deleted.
+
+        `player_name` itself is never rewritten - it stays the immutable,
+        backward-compatible snapshot taken at attempt time; this property
+        is purely a read-time display choice layered on top of it.
+        """
+        if self.player_id is not None and self.player is not None:
+            return self.player.full_name
+        return self.player_name
+
     def to_dict(self, include_answers: bool = False) -> dict:
         data = {
             "id": self.id,
             "quiz_id": self.quiz_id,
             "access_code_id": self.access_code_id,
             "player_name": self.player_name,
+            "display_name": self.display_name,
             "player_id": self.player_id,
             "status": self.status.value,
             "started_at": self.started_at.isoformat(),

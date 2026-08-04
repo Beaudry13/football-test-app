@@ -130,6 +130,41 @@ def test_two_same_name_players_both_attempt_the_same_activation(client, coach_he
     assert results_lb["answers"][0]["is_correct"] is False
 
 
+def test_roster_players_v2_carries_photo_url_for_same_name_disambiguation(
+    client, coach_headers, quiz_with_question
+):
+    """photo_url rides along on the public player-selection list specifically
+    so a player can tell two same-name Players apart at a glance - a legacy,
+    name-only slot has no Player to photograph, so it's always null."""
+    from tests.conftest import make_image_file
+
+    chris_wr = make_player(client, coach_headers, "Chris", "Smith", "2", "WR")
+    chris_lb = make_player(client, coach_headers, "Chris", "Smith", "42", "LB")
+
+    file_obj, filename = make_image_file()
+    client.post(
+        f"/api/players/{chris_wr['id']}/photo",
+        data={"photo": (file_obj, filename)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    group = client.post("/api/groups", json={"name": "Defense"}, headers=coach_headers).get_json()
+    client.post(
+        f"/api/groups/{group['id']}/members",
+        json={"player_ids": [chris_wr["id"], chris_lb["id"]]},
+        headers=coach_headers,
+    )
+    access_code = activate_with_group(client, coach_headers, quiz_with_question["id"], group["id"])
+
+    validated = client.post("/api/play/validate-code", json={"code": access_code["code"]}).get_json()
+    by_id = {p["player_id"]: p["photo_url"] for p in validated["roster_players_v2"]}
+
+    assert by_id[chris_wr["id"]] is not None
+    assert by_id[chris_wr["id"]].startswith("/uploads/")
+    assert by_id[chris_lb["id"]] is None
+
+
 def test_legacy_name_only_attempt_still_works_unaffected(client, coach_headers, quiz_with_question):
     """No Player records involved at all - the original, pre-master-roster
     flow, which must keep working exactly as before."""
@@ -268,3 +303,139 @@ def test_player_history_is_organization_scoped(client, coach_headers, register_c
 
     response = client.get(f"/api/players/{player['id']}/history", headers=other_headers)
     assert response.status_code == 404
+
+
+def _complete_quiz_as(client, access_code, quiz_id, coach_headers, player_name, player_id, correct=True):
+    question = client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).get_json()["questions"][0]
+    option_id = question["options"][0 if correct else 1]["id"]
+    client.post(
+        "/api/play/start",
+        json={"access_code_id": access_code["id"], "player_name": player_name, "player_id": player_id},
+    )
+    return client.post(
+        "/api/play/submit",
+        json={
+            "access_code_id": access_code["id"],
+            "player_name": player_name,
+            "player_id": player_id,
+            "answers": [{"question_id": question["id"], "selected_option_id": option_id}],
+        },
+    )
+
+
+def test_results_display_name_reflects_a_canonical_players_current_name(
+    client, coach_headers, quiz_with_question
+):
+    """The core of this fix: renaming a Player after they've completed a
+    quiz must update what the coach Results tab shows for that attempt,
+    without touching the attempt's identity or the historical snapshot."""
+    player = make_player(client, coach_headers, "Chris", "Smith", "2", "WR")
+    group = client.post("/api/groups", json={"name": "Defense"}, headers=coach_headers).get_json()
+    client.post(
+        f"/api/groups/{group['id']}/members", json={"player_ids": [player["id"]]}, headers=coach_headers
+    )
+    access_code = activate_with_group(client, coach_headers, quiz_with_question["id"], group["id"])
+
+    submit = _complete_quiz_as(
+        client, access_code, quiz_with_question["id"], coach_headers, "Chris Smith", player["id"]
+    )
+    assert submit.status_code == 201
+    attempt_id = submit.get_json()["id"]
+
+    # Before the rename: display_name and the historical snapshot agree.
+    before = client.get(
+        f"/api/quizzes/{quiz_with_question['id']}/responses", headers=coach_headers
+    ).get_json()[0]
+    assert before["player_name"] == "Chris Smith"
+    assert before["display_name"] == "Chris Smith"
+    assert before["player_id"] == player["id"]
+
+    client.patch(
+        f"/api/players/{player['id']}",
+        json={"first_name": "Christopher", "last_name": "Smith-Jones", "jersey_number": "2", "position": "WR"},
+        headers=coach_headers,
+    )
+
+    after_list = client.get(
+        f"/api/quizzes/{quiz_with_question['id']}/responses", headers=coach_headers
+    ).get_json()[0]
+    assert after_list["display_name"] == "Christopher Smith-Jones"
+    # The historical snapshot never changes, and the attempt is still the
+    # exact same row (same id, same player_id) - only the *display* moved.
+    assert after_list["player_name"] == "Chris Smith"
+    assert after_list["id"] == attempt_id
+    assert after_list["player_id"] == player["id"]
+
+    after_single = client.get(
+        f"/api/quizzes/{quiz_with_question['id']}/responses/{attempt_id}", headers=coach_headers
+    ).get_json()
+    assert after_single["display_name"] == "Christopher Smith-Jones"
+
+    # Grading/scores are untouched by the rename.
+    assert after_single["answers"][0]["is_correct"] is True
+
+    csv_text = client.get(
+        f"/api/quizzes/{quiz_with_question['id']}/export.csv", headers=coach_headers
+    ).get_data(as_text=True)
+    assert "Christopher Smith-Jones" in csv_text
+    assert "Chris Smith" not in csv_text.split("\n", 1)[1]  # not in the data rows (header aside)
+
+
+def test_legacy_name_only_attempt_displays_correctly_in_results(client, coach_headers, quiz_with_question):
+    client.put(
+        f"/api/quizzes/{quiz_with_question['id']}/roster",
+        json={"players": ["Jordan Legacy"]},
+        headers=coach_headers,
+    )
+    access_code = client.post(
+        f"/api/quizzes/{quiz_with_question['id']}/access-codes", headers=coach_headers
+    ).get_json()
+    submit = _complete_quiz_as(
+        client, access_code, quiz_with_question["id"], coach_headers, "Jordan Legacy", None
+    )
+    assert submit.status_code == 201
+
+    response = client.get(
+        f"/api/quizzes/{quiz_with_question['id']}/responses", headers=coach_headers
+    ).get_json()[0]
+    assert response["player_id"] is None
+    assert response["player_name"] == "Jordan Legacy"
+    assert response["display_name"] == "Jordan Legacy"
+
+
+def test_same_name_players_remain_separately_displayed_after_a_rename(
+    client, coach_headers, quiz_with_question
+):
+    chris_wr = make_player(client, coach_headers, "Chris", "Smith", "2", "WR")
+    chris_lb = make_player(client, coach_headers, "Chris", "Smith", "42", "LB")
+    group = client.post("/api/groups", json={"name": "Defense"}, headers=coach_headers).get_json()
+    client.post(
+        f"/api/groups/{group['id']}/members",
+        json={"player_ids": [chris_wr["id"], chris_lb["id"]]},
+        headers=coach_headers,
+    )
+    access_code = activate_with_group(client, coach_headers, quiz_with_question["id"], group["id"])
+
+    _complete_quiz_as(
+        client, access_code, quiz_with_question["id"], coach_headers, "Chris Smith", chris_wr["id"], correct=True
+    )
+    _complete_quiz_as(
+        client, access_code, quiz_with_question["id"], coach_headers, "Chris Smith", chris_lb["id"], correct=False
+    )
+
+    # Rename only the WR - the LB must be completely unaffected.
+    client.patch(
+        f"/api/players/{chris_wr['id']}",
+        json={"first_name": "Christopher", "last_name": "Smith", "jersey_number": "2", "position": "WR"},
+        headers=coach_headers,
+    )
+
+    responses = client.get(
+        f"/api/quizzes/{quiz_with_question['id']}/responses", headers=coach_headers
+    ).get_json()
+    by_player_id = {r["player_id"]: r for r in responses}
+    assert by_player_id[chris_wr["id"]]["display_name"] == "Christopher Smith"
+    assert by_player_id[chris_lb["id"]]["display_name"] == "Chris Smith"
+    # Scores stayed attached to the right player throughout.
+    assert by_player_id[chris_wr["id"]]["answers"][0]["is_correct"] is True
+    assert by_player_id[chris_lb["id"]]["answers"][0]["is_correct"] is False

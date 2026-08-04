@@ -57,7 +57,10 @@ def list_responses(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = (
         PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
-        .options(selectinload(PlayerAttempt.answers))
+        # player eager-loaded alongside answers - display_name resolves it
+        # for every row below, and this is the one place that would
+        # otherwise turn into an N+1 (one lazy load per canonical attempt).
+        .options(selectinload(PlayerAttempt.answers), selectinload(PlayerAttempt.player))
         .order_by(PlayerAttempt.submitted_at.desc())
         .all()
     )
@@ -72,7 +75,7 @@ def get_response(quiz_id: int, response_id: int):
         PlayerAttempt.query.filter_by(
             id=response_id, quiz_id=quiz.id, status=AttemptStatus.SUBMITTED
         )
-        .options(selectinload(PlayerAttempt.answers))
+        .options(selectinload(PlayerAttempt.answers), selectinload(PlayerAttempt.player))
         .first()
     )
     if response is None:
@@ -202,7 +205,10 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
     # would crash rather than just look wrong.
     return (
         PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
-        .options(selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option))
+        .options(
+            selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
+            selectinload(PlayerAttempt.player),
+        )
         .all()
     )
 

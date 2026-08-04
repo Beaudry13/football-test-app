@@ -40,6 +40,15 @@ describe('PlayerPickerPanel', () => {
     expect(screen.getByText('Master Roster players (1)')).toBeInTheDocument();
   });
 
+  it('shows a member photo when present, and initials otherwise', async () => {
+    const jordan = canonicalPlayer({ photo_url: '/uploads/jordan.jpg' });
+    const load = vi.fn().mockResolvedValue({ players: [member(jordan)] });
+    const { container } = render(<PlayerPickerPanel load={load} onAdd={vi.fn()} onRemove={vi.fn()} />);
+
+    await screen.findByText('Jordan Lee (#12 · WR)');
+    expect(container.querySelector('img')).not.toBeNull();
+  });
+
   it('excludes legacy (player_id-less) rows from the canonical member count', async () => {
     const legacyRow: RosterPlayer = { id: 9, player_name: 'Legacy Name', position: 0 };
     const load = vi.fn().mockResolvedValue({ players: [legacyRow] });

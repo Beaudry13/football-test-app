@@ -7,8 +7,13 @@ import { ApiError } from '../../api/client';
 import type { AttemptState, RosterPlayerOption } from '../../api/types';
 
 const rosterPlayers: RosterPlayerOption[] = [
-  { player_id: 501, name: 'Jordan Smith', jersey_number: '7', position: 'QB' },
-  { player_id: null, name: 'Alex Lee', jersey_number: null, position: null },
+  { player_id: 501, name: 'Jordan Smith', jersey_number: '7', position: 'QB', photo_url: null },
+  { player_id: null, name: 'Alex Lee', jersey_number: null, position: null, photo_url: null },
+];
+
+const rosterPlayersWithPhotos: RosterPlayerOption[] = [
+  { player_id: 501, name: 'Jordan Smith', jersey_number: '7', position: 'QB', photo_url: '/uploads/jordan.jpg' },
+  { player_id: 502, name: 'Chris Smith', jersey_number: '9', position: 'WR', photo_url: null },
 ];
 
 describe('NameStep', () => {
@@ -118,6 +123,24 @@ describe('NameStep', () => {
 
     expect(await screen.findByText('Invalid or expired access code')).toBeInTheDocument();
     expect(onStarted).not.toHaveBeenCalled();
+  });
+
+  it("shows a roster player's photo when set, and initials otherwise - helps tell same-name Players apart", () => {
+    const { container } = render(
+      <NameStep
+        quizTitle="Week 1 Prep"
+        rosterPlayers={rosterPlayersWithPhotos}
+        accessCodeId={42}
+        onStarted={vi.fn()}
+        onAlreadySubmitted={vi.fn()}
+      />,
+    );
+
+    const jordanButton = screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' });
+    const chrisButton = screen.getByRole('button', { name: 'Chris Smith (#9 · WR)' });
+    expect(jordanButton.querySelector('img')).not.toBeNull();
+    expect(chrisButton.querySelector('img')).toBeNull();
+    expect(container.querySelectorAll('img')).toHaveLength(1);
   });
 
   it('disables the Continue button until a name is selected', () => {

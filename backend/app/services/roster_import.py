@@ -183,6 +183,31 @@ def build_preview(
         if is_valid:
             valid_count += 1
 
+        # Never pre-select "create" when an existing Player might already
+        # be this same person - that's exactly how re-importing a roster
+        # (e.g. the same CSV twice) used to silently double every row. A
+        # row only defaults to "create" when nothing in the org matches its
+        # name at all. Once *any* match exists, the default becomes
+        # non-creating:
+        #   - an exact/high-confidence match (name + jersey + position all
+        #     agree - "strong_match") defaults to "skip", since that's
+        #     almost certainly the same record being re-submitted.
+        #   - a same-name-only match is genuinely ambiguous (could be the
+        #     same person with a corrected number, or an unrelated
+        #     teammate who happens to share a name) and defaults to
+        #     "review" - a placeholder, frontend-only state (never sent to
+        #     /import/confirm) that forces the coach to look at the row and
+        #     explicitly pick Create/Update/Skip before it counts toward
+        #     the import at all.
+        if not is_valid:
+            default_action = "skip"
+        elif not possible_duplicates:
+            default_action = "create"
+        elif any(d["strong_match"] for d in possible_duplicates):
+            default_action = "skip"
+        else:
+            default_action = "review"
+
         preview_rows.append(
             {
                 "row_number": row_number,
@@ -194,10 +219,7 @@ def build_preview(
                 "is_valid": is_valid,
                 "errors": errors,
                 "possible_duplicates": possible_duplicates,
-                # Safest non-destructive default: never auto-update or
-                # auto-skip based on a guessed match - a coach must
-                # explicitly choose that at confirm time.
-                "default_action": "create" if is_valid else "skip",
+                "default_action": default_action,
             }
         )
 

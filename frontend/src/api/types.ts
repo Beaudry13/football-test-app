@@ -210,7 +210,10 @@ export interface ImportPreviewRow {
     position: string | null;
     strong_match: boolean;
   }[];
-  default_action: 'create' | 'skip';
+  // 'review' is a placeholder state, never sent back to /import/confirm -
+  // it means "an ambiguous same-name match exists; the coach must
+  // explicitly resolve this row" (see roster_import.py::build_preview).
+  default_action: 'create' | 'skip' | 'review';
 }
 
 export interface ImportPreviewResponse {
@@ -264,7 +267,12 @@ export interface PlayerResponse {
   id: number;
   quiz_id: number;
   access_code_id: number;
+  // Historical snapshot, kept for backward compatibility - coach-facing
+  // UI should render `display_name` instead (the canonical Player's
+  // current name when one is linked, falling back to this snapshot for a
+  // legacy or since-deleted Player). See PlayerAttempt.display_name.
   player_name: string;
+  display_name: string;
   submitted_at: string;
   answers?: Answer[];
 }
@@ -348,6 +356,7 @@ export interface RosterPlayerOption {
    * two "Chris Smith"s) - both null for a legacy, name-only entry. */
   jersey_number: string | null;
   position: string | null;
+  photo_url: string | null;
 }
 
 export interface ValidateCodeResponse {

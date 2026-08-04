@@ -3,6 +3,11 @@
 from marshmallow import Schema, fields, validate
 
 
+# photo_url is deliberately absent from both schemas below - it must never
+# be settable to an arbitrary client-supplied string (that would let a
+# coach point a Player at an unvalidated remote URL). The only way it's
+# ever set is POST /players/<id>/photo, which uploads through
+# services/file_storage.py and stores the resulting server-generated URL.
 class PlayerCreateSchema(Schema):
     first_name = fields.Str(required=True, validate=validate.Length(min=1, max=100))
     last_name = fields.Str(required=True, validate=validate.Length(min=1, max=100))
@@ -11,9 +16,6 @@ class PlayerCreateSchema(Schema):
     )
     position = fields.Str(
         required=False, allow_none=True, load_default=None, validate=validate.Length(max=10)
-    )
-    photo_url = fields.Str(
-        required=False, allow_none=True, load_default=None, validate=validate.Length(max=500)
     )
 
 
@@ -25,9 +27,6 @@ class PlayerUpdateSchema(Schema):
     )
     position = fields.Str(
         required=False, allow_none=True, load_default=None, validate=validate.Length(max=10)
-    )
-    photo_url = fields.Str(
-        required=False, allow_none=True, load_default=None, validate=validate.Length(max=500)
     )
 
 

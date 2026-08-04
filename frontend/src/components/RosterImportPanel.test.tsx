@@ -47,7 +47,9 @@ describe('RosterImportPanel', () => {
     expect(await screen.findByDisplayValue('Chris')).toBeInTheDocument();
     expect(screen.getByText('1 row parsed')).toBeInTheDocument();
     expect(screen.getByText('1 valid')).toBeInTheDocument();
-    expect(screen.getByText('1 will be imported')).toBeInTheDocument();
+    expect(screen.getByText('1 to create')).toBeInTheDocument();
+    expect(screen.getByText('0 to update')).toBeInTheDocument();
+    expect(screen.getByText('0 to skip')).toBeInTheDocument();
   });
 
   it('shows an error instead of previewing when nothing was pasted or uploaded', async () => {
@@ -93,7 +95,7 @@ describe('RosterImportPanel', () => {
     expect(select.value).toBe('skip');
   });
 
-  it('surfaces a possible duplicate and offers an Update action', async () => {
+  it('surfaces an exact match, defaults it away from Create, and offers an Update action', async () => {
     const user = userEvent.setup();
     vi.spyOn(playersApi, 'previewImport').mockResolvedValue(
       makePreview({
@@ -117,7 +119,7 @@ describe('RosterImportPanel', () => {
                 strong_match: true,
               },
             ],
-            default_action: 'create',
+            default_action: 'skip',
           },
         ],
       }),
@@ -127,8 +129,61 @@ describe('RosterImportPanel', () => {
     await user.type(screen.getByLabelText('Paste roster data'), 'Chris,Smith,2,WR');
     await user.click(screen.getByRole('button', { name: 'Preview import' }));
 
-    expect(await screen.findByText(/Likely match:/)).toBeInTheDocument();
+    expect(await screen.findByText(/Exact match:/)).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Update match' })).toBeInTheDocument();
+    const select = screen.getAllByRole('combobox')[0] as HTMLSelectElement;
+    expect(select.value).toBe('skip');
+  });
+
+  it('defaults an ambiguous same-name match to "review required" and blocks import until resolved', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(playersApi, 'previewImport').mockResolvedValue(
+      makePreview({
+        rows: [
+          {
+            row_number: 1,
+            first_name: 'Chris',
+            last_name: 'Smith',
+            jersey_number: '99',
+            position: 'TE',
+            full_name_parsed: false,
+            is_valid: true,
+            errors: [],
+            possible_duplicates: [
+              {
+                player_id: 42,
+                first_name: 'Chris',
+                last_name: 'Smith',
+                jersey_number: '2',
+                position: 'WR',
+                strong_match: false,
+              },
+            ],
+            default_action: 'review',
+          },
+        ],
+      }),
+    );
+    const confirmSpy = vi.spyOn(playersApi, 'confirmImport');
+    render(<RosterImportPanel onImported={vi.fn()} />);
+
+    await user.type(screen.getByLabelText('Paste roster data'), 'Chris,Smith,99,TE');
+    await user.click(screen.getByRole('button', { name: 'Preview import' }));
+
+    expect(await screen.findByText(/Same name:/)).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Review required' })).toBeInTheDocument();
+    expect(screen.getByText('1 need review')).toBeInTheDocument();
+
+    // The Import button itself is disabled while any row is unresolved -
+    // a coach cannot accidentally import (or silently skip) a row that
+    // still needs a decision.
+    expect(screen.getByRole('button', { name: 'Import 0 Players' })).toBeDisabled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    // Explicitly resolving it to Create clears the block and lets import proceed.
+    await user.selectOptions(screen.getAllByRole('combobox')[0], 'create');
+    expect(screen.queryByRole('option', { name: 'Review required' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import 1 Player' })).not.toBeDisabled();
   });
 
   it('confirms the import and reports the created/updated summary', async () => {

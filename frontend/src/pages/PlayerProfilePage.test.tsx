@@ -150,4 +150,70 @@ describe('PlayerProfilePage', () => {
 
     await waitFor(() => expect(deactivateSpy).toHaveBeenCalledWith(1));
   });
+
+  describe('player photo', () => {
+    it('uploads a photo and refreshes the profile with the new photo_url', async () => {
+      const user = userEvent.setup();
+      const getHistorySpy = vi
+        .spyOn(playersApi, 'getPlayerHistory')
+        .mockResolvedValueOnce(makeHistory())
+        .mockResolvedValueOnce(makeHistory({ player: makePlayer({ photo_url: '/uploads/new.jpg' }) }));
+      const uploadSpy = vi
+        .spyOn(playersApi, 'uploadPlayerPhoto')
+        .mockResolvedValue(makePlayer({ photo_url: '/uploads/new.jpg' }));
+      renderPage();
+
+      await screen.findByText('Jordan Lee');
+      expect(screen.getByRole('button', { name: 'Add photo' })).toBeInTheDocument();
+      const file = new File(['fake-image-bytes'], 'photo.jpg', { type: 'image/jpeg' });
+      const input = screen.getByLabelText('Upload player photo', { selector: 'input' });
+      await user.upload(input, file);
+
+      await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, file));
+      await waitFor(() => expect(getHistorySpy).toHaveBeenCalledTimes(2));
+      expect(await screen.findByRole('button', { name: 'Replace photo' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Add photo' })).not.toBeInTheDocument();
+    });
+
+    it('shows "Replace photo" once the player already has one, and re-uploads through the same control', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(playersApi, 'getPlayerHistory').mockResolvedValue(
+        makeHistory({ player: makePlayer({ photo_url: '/uploads/existing.jpg' }) }),
+      );
+      const uploadSpy = vi
+        .spyOn(playersApi, 'uploadPlayerPhoto')
+        .mockResolvedValue(makePlayer({ photo_url: '/uploads/replaced.jpg' }));
+      renderPage();
+
+      await screen.findByText('Jordan Lee');
+      expect(screen.getByRole('button', { name: 'Replace photo' })).toBeInTheDocument();
+
+      const file = new File(['fake-image-bytes'], 'new-photo.jpg', { type: 'image/jpeg' });
+      const input = screen.getByLabelText('Upload player photo', { selector: 'input' });
+      await user.upload(input, file);
+
+      await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, file));
+    });
+
+    it('shows an error if the photo upload fails, without disrupting the rest of the page', async () => {
+      // The rejection here stands in for whatever the server refused it for
+      // (bad content, oversized, etc.) - this test is only exercising the
+      // error-handling path, not accept-attribute filtering (the browser's
+      // own file picker already restricts extensions before a file ever
+      // reaches this handler).
+      const user = userEvent.setup();
+      vi.spyOn(playersApi, 'getPlayerHistory').mockResolvedValue(makeHistory());
+      vi.spyOn(playersApi, 'uploadPlayerPhoto').mockRejectedValue(new Error("The uploaded file isn't a valid image"));
+      renderPage();
+
+      await screen.findByText('Jordan Lee');
+      const file = new File(['not-really-an-image'], 'payload.jpg', { type: 'image/jpeg' });
+      const input = screen.getByLabelText('Upload player photo', { selector: 'input' });
+      await user.upload(input, file);
+
+      expect(await screen.findByText("The uploaded file isn't a valid image")).toBeInTheDocument();
+      expect(screen.getByText('Jordan Lee')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add photo' })).toBeInTheDocument();
+    });
+  });
 });

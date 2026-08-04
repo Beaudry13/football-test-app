@@ -142,6 +142,176 @@ def test_cannot_view_or_edit_another_organizations_player(client, coach_headers,
     ).status_code == 404
 
 
+# --- Player photo upload -------------------------------------------------
+
+
+def test_upload_player_photo(client, coach_headers):
+    from tests.conftest import make_image_file
+
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+    assert player["photo_url"] is None
+
+    file_obj, filename = make_image_file()
+    response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (file_obj, filename)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body["photo_url"].startswith("/uploads/")
+
+    fetched = client.get(f"/api/players/{player['id']}", headers=coach_headers).get_json()
+    assert fetched["photo_url"] == body["photo_url"]
+
+
+def test_replace_player_photo_removes_the_old_one(client, coach_headers):
+    import os
+
+    from flask import current_app
+
+    from tests.conftest import make_image_file
+
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+
+    first_file, first_name = make_image_file()
+    first_response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (first_file, first_name)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+    first_url = first_response.get_json()["photo_url"]
+    first_path = os.path.join(current_app.config["UPLOAD_FOLDER"], first_url.rsplit("/", 1)[-1])
+    assert os.path.exists(first_path)
+
+    second_file, second_name = make_image_file(name="new.png")
+    second_response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (second_file, second_name)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+    assert second_response.status_code == 201
+    second_url = second_response.get_json()["photo_url"]
+
+    assert second_url != first_url
+    assert not os.path.exists(first_path)
+
+
+def test_player_photo_persists_after_edit(client, coach_headers):
+    from tests.conftest import make_image_file
+
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+    file_obj, filename = make_image_file()
+    upload_response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (file_obj, filename)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+    photo_url = upload_response.get_json()["photo_url"]
+
+    edit_response = client.patch(
+        f"/api/players/{player['id']}",
+        json={"first_name": "Renamed", "last_name": "Lee"},
+        headers=coach_headers,
+    )
+    assert edit_response.status_code == 200
+    assert edit_response.get_json()["photo_url"] == photo_url
+
+
+def test_player_photo_persists_after_deactivate_and_reactivate(client, coach_headers):
+    from tests.conftest import make_image_file
+
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+    file_obj, filename = make_image_file()
+    upload_response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (file_obj, filename)},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+    photo_url = upload_response.get_json()["photo_url"]
+
+    deactivate_response = client.post(f"/api/players/{player['id']}/deactivate", headers=coach_headers)
+    assert deactivate_response.get_json()["photo_url"] == photo_url
+
+    reactivate_response = client.post(f"/api/players/{player['id']}/reactivate", headers=coach_headers)
+    assert reactivate_response.get_json()["photo_url"] == photo_url
+
+
+def test_upload_player_photo_rejects_cross_organization_player(client, coach_headers, register_coach):
+    from tests.conftest import make_image_file
+
+    player = create_player(client, coach_headers, "Mine", "Player")
+    _, _, other_headers = register_coach(username="coach2", email="coach2@example.com")
+
+    file_obj, filename = make_image_file()
+    response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (file_obj, filename)},
+        headers=other_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 404
+
+
+def test_upload_player_photo_rejects_invalid_file(client, coach_headers):
+    import io
+
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+    fake_executable = io.BytesIO(b"not actually an image")
+
+    response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={"photo": (fake_executable, "payload.exe")},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    fetched = client.get(f"/api/players/{player['id']}", headers=coach_headers).get_json()
+    assert fetched["photo_url"] is None
+
+
+def test_upload_player_photo_requires_a_file(client, coach_headers):
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+
+    response = client.post(
+        f"/api/players/{player['id']}/photo",
+        data={},
+        headers=coach_headers,
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+
+
+def test_photo_url_cannot_be_set_directly_via_create_or_update(client, coach_headers):
+    """photo_url must only ever come from the upload endpoint's own
+    server-generated storage URL - never an arbitrary client-supplied
+    string. Neither schema even recognizes the field, so an attempt to set
+    it directly is rejected outright rather than silently accepted."""
+    create_response = client.post(
+        "/api/players",
+        json={"first_name": "Jordan", "last_name": "Lee", "photo_url": "https://evil.example/x.png"},
+        headers=coach_headers,
+    )
+    assert create_response.status_code == 422
+
+    player = create_player(client, coach_headers, "Jordan", "Lee")
+    update_response = client.patch(
+        f"/api/players/{player['id']}",
+        json={"first_name": "Jordan", "last_name": "Lee", "photo_url": "https://evil.example/x.png"},
+        headers=coach_headers,
+    )
+    assert update_response.status_code == 422
+
+
 # --- Group membership by Player id --------------------------------------
 
 

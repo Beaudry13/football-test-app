@@ -20,6 +20,7 @@ from app.schemas.player import (
     PlayerCreateSchema,
     PlayerUpdateSchema,
 )
+from app.services.file_storage import get_file_storage
 from app.services.roster_import import apply_import, build_preview
 from app.utils.auth import current_coach, get_org_player
 from app.utils.validation import load_json_body
@@ -32,7 +33,6 @@ def _apply_fields(player: Player, data: dict) -> None:
     player.last_name = data["last_name"].strip()
     player.jersey_number = (data.get("jersey_number") or "").strip() or None
     player.position = (data.get("position") or "").strip() or None
-    player.photo_url = (data.get("photo_url") or "").strip() or None
 
 
 @players_bp.get("")
@@ -194,6 +194,30 @@ def update_player(player_id: int):
     _apply_fields(player, data)
     db.session.commit()
     return jsonify(player.to_dict())
+
+
+@players_bp.post("/<int:player_id>/photo")
+@jwt_required()
+def upload_player_photo(player_id: int):
+    """Adds or replaces this Player's photo. Mirrors questions.py's
+    upload_question_image (delete-old-then-save-new, same FileStorage
+    abstraction), which already validates actual image content, enforces
+    the format allowlist, and generates a non-guessable stored filename -
+    nothing extra to enforce here. get_org_player's 404-not-403 rule keeps
+    this cross-org-safe. Photo identity is separate from Player identity:
+    replacing or clearing it never touches history or attempts."""
+    player = get_org_player(player_id)
+
+    if "photo" not in request.files:
+        raise ApiError("No image file provided under the 'photo' field", status_code=400)
+
+    storage = get_file_storage()
+    if player.photo_url:
+        storage.delete_image(player.photo_url)
+
+    player.photo_url = storage.save_image(request.files["photo"])
+    db.session.commit()
+    return jsonify(player.to_dict()), 201
 
 
 @players_bp.post("/<int:player_id>/deactivate")

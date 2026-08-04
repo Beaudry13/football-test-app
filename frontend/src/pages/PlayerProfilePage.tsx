@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { deactivatePlayer, getPlayerHistory, reactivatePlayer, updatePlayer } from '../api/players';
+import {
+  deactivatePlayer,
+  getPlayerHistory,
+  reactivatePlayer,
+  updatePlayer,
+  uploadPlayerPhoto,
+} from '../api/players';
 import { getErrorMessage } from '../api/client';
 import type { PlayerHistory } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
+import { PlayerAvatar } from '../components/PlayerAvatar';
 import nb from '../styles/notebook.module.css';
 import styles from './PlayerProfilePage.module.css';
 
@@ -16,6 +23,8 @@ export function PlayerProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({ first_name: '', last_name: '', jersey_number: '', position: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -77,6 +86,22 @@ export function PlayerProfilePage() {
     }
   }
 
+  async function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setError(null);
+    setIsUploadingPhoto(true);
+    try {
+      await uploadPlayerPhoto(id, file);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  }
+
   return (
     <div>
       {dialog}
@@ -91,18 +116,38 @@ export function PlayerProfilePage() {
         ) : (
           <>
             <div className={styles.headerRow}>
-              <div>
-                <h1 className={nb.heading}>{history.player.full_name}</h1>
-                <p className={styles.subheading}>
-                  {history.player.jersey_number && <>#{history.player.jersey_number} · </>}
-                  {history.player.position ?? 'No position set'}
-                  {!history.player.is_active && (
-                    <>
-                      {' '}
-                      · <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
-                    </>
-                  )}
-                </p>
+              <div className={styles.identity}>
+                <div className={styles.photoColumn}>
+                  <PlayerAvatar name={history.player.full_name} photoUrl={history.player.photo_url} size="lg" />
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className={styles.hiddenFileInput}
+                    onChange={handlePhotoSelected}
+                    aria-label="Upload player photo"
+                  />
+                  <button
+                    className={nb.btnSm}
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                  >
+                    {isUploadingPhoto ? 'Uploading…' : history.player.photo_url ? 'Replace photo' : 'Add photo'}
+                  </button>
+                </div>
+                <div>
+                  <h1 className={nb.heading}>{history.player.full_name}</h1>
+                  <p className={styles.subheading}>
+                    {history.player.jersey_number && <>#{history.player.jersey_number} · </>}
+                    {history.player.position ?? 'No position set'}
+                    {!history.player.is_active && (
+                      <>
+                        {' '}
+                        · <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
+                      </>
+                    )}
+                  </p>
+                </div>
               </div>
               <div className={styles.headerActions}>
                 <button className={nb.btnSm} onClick={() => setIsEditing((v) => !v)}>

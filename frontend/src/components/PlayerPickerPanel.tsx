@@ -3,6 +3,7 @@ import { listPlayers } from '../api/players';
 import { getErrorMessage } from '../api/client';
 import type { Player, RosterPlayer } from '../api/types';
 import { ErrorBanner } from './ErrorBanner';
+import { PlayerAvatar } from './PlayerAvatar';
 import nb from '../styles/notebook.module.css';
 import styles from './PlayerPickerPanel.module.css';
 
@@ -120,7 +121,10 @@ export function PlayerPickerPanel({ load, onAdd, onRemove }: PlayerPickerPanelPr
         <ul className={styles.memberList}>
           {canonicalMembers.map((entry) => (
             <li key={entry.player.id}>
-              <span>{optionLabel(entry.player)}</span>
+              <span className={styles.playerLabel}>
+                <PlayerAvatar name={entry.player.full_name} photoUrl={entry.player.photo_url} size="sm" />
+                {optionLabel(entry.player)}
+              </span>
               <button
                 className={nb.btnSm}
                 onClick={() => handleRemove(entry.player.id)}
@@ -151,7 +155,10 @@ export function PlayerPickerPanel({ load, onAdd, onRemove }: PlayerPickerPanelPr
           <ul className={styles.resultList}>
             {visibleResults.map((player) => (
               <li key={player.id}>
-                <span>{optionLabel(player)}</span>
+                <span className={styles.playerLabel}>
+                  <PlayerAvatar name={player.full_name} photoUrl={player.photo_url} size="sm" />
+                  {optionLabel(player)}
+                </span>
                 <button className={nb.btnSm} onClick={() => handleAdd(player.id)} disabled={pendingId === player.id}>
                   Add
                 </button>

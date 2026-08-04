@@ -101,8 +101,11 @@ def test_duplicate_names_are_allowed_and_flagged_as_possible_matches(client, coa
     assert row["is_valid"] is True
     assert row["possible_duplicates"][0]["player_id"] == existing_id
     assert row["possible_duplicates"][0]["strong_match"] is True
-    # Safest default even with a strong match - never auto-update.
-    assert row["default_action"] == "create"
+    # An exact/high-confidence match must never default to "create" - that
+    # is exactly how re-importing the same roster used to silently double
+    # every row. "skip" is the safest default for a row that's almost
+    # certainly the same person being re-submitted.
+    assert row["default_action"] == "skip"
 
 
 def test_same_name_different_number_is_not_flagged_as_strong_match(client, coach_headers):
@@ -114,6 +117,161 @@ def test_same_name_different_number_is_not_flagged_as_strong_match(client, coach
     body = preview(client, coach_headers, data).get_json()
     dup = body["rows"][0]["possible_duplicates"][0]
     assert dup["strong_match"] is False
+    # Ambiguous (same name, but not a strong match) - not safe to
+    # auto-create (could be the same person with a corrected number) and
+    # not safe to auto-skip (could genuinely be a different person) either,
+    # so it lands in a distinct "review" state the coach must resolve.
+    assert body["rows"][0]["default_action"] == "review"
+
+
+def test_row_with_no_matching_player_defaults_to_create(client, coach_headers):
+    """No existing Player shares this name at all - the only case where
+    defaulting straight to "create" is actually safe."""
+    data = "First Name,Last Name,Jersey Number\nBrand,New,99\n"
+    body = preview(client, coach_headers, data).get_json()
+    row = body["rows"][0]
+    assert row["possible_duplicates"] == []
+    assert row["default_action"] == "create"
+
+
+def test_same_name_different_position_is_not_flagged_as_strong_match(client, coach_headers):
+    client.post(
+        "/api/players",
+        json={"first_name": "Chris", "last_name": "Smith", "jersey_number": "2", "position": "WR"},
+        headers=coach_headers,
+    )
+    data = "First Name,Last Name,Jersey Number,Position\nChris,Smith,2,RB\n"
+    body = preview(client, coach_headers, data).get_json()
+    dup = body["rows"][0]["possible_duplicates"][0]
+    assert dup["strong_match"] is False
+    assert body["rows"][0]["default_action"] == "review"
+
+
+def test_identical_roster_reimport_creates_nothing_through_the_default_workflow(client, coach_headers):
+    """The exact bug this fix exists for: uploading the same roster twice
+    and blindly confirming whatever the preview defaulted to must not
+    double the roster."""
+    data = "First Name,Last Name,Jersey Number,Position\nChris,Smith,2,WR\nJordan,Lee,15,DB\n"
+    first = preview(client, coach_headers, data).get_json()
+    rows = [
+        {"first_name": r["first_name"], "last_name": r["last_name"],
+         "jersey_number": r["jersey_number"], "position": r["position"], "action": "create"}
+        for r in first["rows"]
+    ]
+    confirm(client, coach_headers, rows)
+    assert len(client.get("/api/players", headers=coach_headers).get_json()) == 2
+
+    # Re-import the identical text and blindly submit exactly whatever
+    # default_action the preview assigned this time, changing nothing -
+    # simulating a coach who re-uploads the same file and clicks through.
+    second = preview(client, coach_headers, data).get_json()
+    assert all(r["default_action"] == "skip" for r in second["rows"])
+    rows_2 = [
+        {"first_name": r["first_name"], "last_name": r["last_name"],
+         "jersey_number": r["jersey_number"], "position": r["position"], "action": r["default_action"]}
+        for r in second["rows"]
+    ]
+    response = confirm(client, coach_headers, rows_2)
+    assert response.status_code == 201
+    assert response.get_json()["created"] == 0
+    assert response.get_json()["updated"] == 0
+    assert len(client.get("/api/players", headers=coach_headers).get_json()) == 2
+
+
+def test_explicit_create_new_still_works_despite_a_matching_player(client, coach_headers):
+    """The safe default doesn't remove the coach's ability to say "no,
+    really, this is a separate person" - same name/different number and
+    same name/different position must both remain creatable."""
+    client.post(
+        "/api/players",
+        json={"first_name": "Chris", "last_name": "Smith", "jersey_number": "2", "position": "WR"},
+        headers=coach_headers,
+    )
+
+    data = "First Name,Last Name,Jersey Number,Position\nChris,Smith,42,RB\n"
+    body = preview(client, coach_headers, data).get_json()
+    row = body["rows"][0]
+    assert row["default_action"] == "review"
+
+    response = confirm(
+        client,
+        coach_headers,
+        [{"first_name": row["first_name"], "last_name": row["last_name"],
+          "jersey_number": row["jersey_number"], "position": row["position"], "action": "create"}],
+    )
+    assert response.status_code == 201
+    assert response.get_json()["created"] == 1
+
+    all_players = client.get("/api/players", headers=coach_headers).get_json()
+    assert len(all_players) == 2
+    numbers = {p["jersey_number"] for p in all_players}
+    assert numbers == {"2", "42"}
+
+
+def test_explicit_update_action_on_a_matched_row_updates_the_existing_player(client, coach_headers):
+    existing = client.post(
+        "/api/players",
+        json={"first_name": "Chris", "last_name": "Smith", "jersey_number": "2", "position": "WR"},
+        headers=coach_headers,
+    ).get_json()
+
+    data = "First Name,Last Name,Jersey Number,Position\nChris,Smith,2,WR\n"
+    row = preview(client, coach_headers, data).get_json()["rows"][0]
+    assert row["default_action"] == "skip"  # strong match - confirming the coach must override it
+
+    response = confirm(
+        client,
+        coach_headers,
+        [{"first_name": "Chris", "last_name": "Smith", "jersey_number": "99", "position": "TE",
+          "action": "update", "existing_player_id": existing["id"]}],
+    )
+    assert response.status_code == 201
+    assert response.get_json()["updated"] == 1
+
+    updated = client.get(f"/api/players/{existing['id']}", headers=coach_headers).get_json()
+    assert updated["jersey_number"] == "99"
+    assert updated["position"] == "TE"
+    # No second Player was created - the row updated the existing one in place.
+    assert len(client.get("/api/players", headers=coach_headers).get_json()) == 1
+
+
+def test_explicit_skip_action_imports_nothing_for_that_row(client, coach_headers):
+    data = "First Name,Last Name\nSkip,Me\nKeep,Me\n"
+    body = preview(client, coach_headers, data).get_json()
+    rows = [
+        {"first_name": body["rows"][0]["first_name"], "last_name": body["rows"][0]["last_name"], "action": "skip"},
+        {"first_name": body["rows"][1]["first_name"], "last_name": body["rows"][1]["last_name"], "action": "create"},
+    ]
+    response = confirm(client, coach_headers, rows)
+    assert response.status_code == 201
+    assert response.get_json()["created"] == 1
+
+    all_players = client.get("/api/players", headers=coach_headers).get_json()
+    assert {p["full_name"] for p in all_players} == {"Keep Me"}
+
+
+def test_import_preview_summary_counts_are_accurate_across_action_buckets(client, coach_headers):
+    client.post(
+        "/api/players",
+        json={"first_name": "Chris", "last_name": "Smith", "jersey_number": "2", "position": "WR"},
+        headers=coach_headers,
+    )
+    data = (
+        "First Name,Last Name,Jersey Number,Position\n"
+        "Chris,Smith,2,WR\n"  # exact match -> defaults to skip
+        "Chris,Smith,99,TE\n"  # same name, different number/position -> review
+        "Brand,New,7,QB\n"  # no match -> create
+        ",,,\n"  # blank -> invalid
+    )
+    body = preview(client, coach_headers, data).get_json()
+    assert body["total_rows"] == 3  # the fully-blank line is dropped as noise, not counted
+    assert body["valid_count"] == 3
+    assert body["invalid_count"] == 0
+
+    actions = [r["default_action"] for r in body["rows"]]
+    assert actions.count("skip") == 1
+    assert actions.count("review") == 1
+    assert actions.count("create") == 1
 
 
 def test_malformed_empty_input_rejected(client, coach_headers):
