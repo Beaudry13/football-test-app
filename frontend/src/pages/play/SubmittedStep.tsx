@@ -10,7 +10,18 @@ import styles from './PlayPage.module.css';
 // reveal the real results underneath.
 const CELEBRATION_MS = 1800;
 
-export function SubmittedStep({ code, playerName }: { code: string; playerName: string }) {
+export function SubmittedStep({
+  code,
+  playerName,
+  playerId,
+}: {
+  code: string;
+  playerName: string;
+  /** Set when this player is a canonical master-roster entry - threaded
+   * into the results lookup and bookmark link so two players sharing a
+   * display name never see each other's results. */
+  playerId: number | undefined;
+}) {
   const [results, setResults] = useState<PlayerResultsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   // This step only ever mounts after a real, already-successful submission
@@ -22,10 +33,10 @@ export function SubmittedStep({ code, playerName }: { code: string; playerName: 
   const [showCelebration, setShowCelebration] = useState(true);
 
   useEffect(() => {
-    getPlayerResults(code, playerName)
+    getPlayerResults(code, playerName, playerId)
       .then(setResults)
       .catch((err) => setError(getErrorMessage(err)));
-  }, [code, playerName]);
+  }, [code, playerName, playerId]);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowCelebration(false), CELEBRATION_MS);
@@ -34,7 +45,9 @@ export function SubmittedStep({ code, playerName }: { code: string; playerName: 
 
   if (error) return <ErrorBanner message={error} />;
 
-  const resultsUrl = `/results/${encodeURIComponent(code)}/${encodeURIComponent(playerName)}`;
+  const resultsUrl = `/results/${encodeURIComponent(code)}/${encodeURIComponent(playerName)}${
+    playerId !== undefined ? `?player_id=${playerId}` : ''
+  }`;
 
   return (
     <div className={styles.submittedWrapper}>

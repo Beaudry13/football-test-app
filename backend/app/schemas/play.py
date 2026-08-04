@@ -43,3 +43,8 @@ class SaveAnswerSchema(Schema):
 class PlayerResultsSchema(Schema):
     code = fields.Str(required=True, validate=validate.Length(min=1, max=16))
     player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
+    # When set, disambiguates which of two same-name canonical Players'
+    # results to return - without it, a name-only lookup can't tell two
+    # "Chris Smith"s apart and would resolve to whichever row the query
+    # happens to return first. See routes/play.py::player_results.
+    player_id = fields.Int(required=False, allow_none=True, load_default=None)

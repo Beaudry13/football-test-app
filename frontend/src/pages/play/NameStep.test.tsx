@@ -4,7 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NameStep } from './NameStep';
 import * as playApi from '../../api/play';
 import { ApiError } from '../../api/client';
-import type { AttemptState } from '../../api/types';
+import type { AttemptState, RosterPlayerOption } from '../../api/types';
+
+const rosterPlayers: RosterPlayerOption[] = [
+  { player_id: 501, name: 'Jordan Smith', jersey_number: '7', position: 'QB' },
+  { player_id: null, name: 'Alex Lee', jersey_number: null, position: null },
+];
 
 describe('NameStep', () => {
   beforeEach(() => {
@@ -25,21 +30,46 @@ describe('NameStep', () => {
     render(
       <NameStep
         quizTitle="Week 1 Prep"
-        rosterPlayers={['Jordan Smith', 'Alex Lee']}
+        rosterPlayers={rosterPlayers}
         accessCodeId={42}
         onStarted={onStarted}
         onAlreadySubmitted={onAlreadySubmitted}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Jordan Smith' }));
+    await user.click(screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() =>
-      expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Jordan Smith' }),
+      expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Jordan Smith', player_id: 501 }),
     );
-    expect(onStarted).toHaveBeenCalledWith('Jordan Smith', attempt);
+    expect(onStarted).toHaveBeenCalledWith('Jordan Smith', 501, attempt);
     expect(onAlreadySubmitted).not.toHaveBeenCalled();
+  });
+
+  it('starts an attempt for a legacy (non-canonical) roster entry without a player_id', async () => {
+    const user = userEvent.setup();
+    const attempt: AttemptState = { attempt_id: 6, status: 'in_progress', answers: [] };
+    const startSpy = vi.spyOn(playApi, 'startAttempt').mockResolvedValue(attempt);
+    const onStarted = vi.fn();
+
+    render(
+      <NameStep
+        quizTitle="Week 1 Prep"
+        rosterPlayers={rosterPlayers}
+        accessCodeId={42}
+        onStarted={onStarted}
+        onAlreadySubmitted={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Alex Lee' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() =>
+      expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Alex Lee', player_id: undefined }),
+    );
+    expect(onStarted).toHaveBeenCalledWith('Alex Lee', undefined, attempt);
   });
 
   it('routes to onAlreadySubmitted on a 409 instead of showing an error', async () => {
@@ -53,17 +83,17 @@ describe('NameStep', () => {
     render(
       <NameStep
         quizTitle="Week 1 Prep"
-        rosterPlayers={['Jordan Smith']}
+        rosterPlayers={rosterPlayers}
         accessCodeId={42}
         onStarted={onStarted}
         onAlreadySubmitted={onAlreadySubmitted}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Jordan Smith' }));
+    await user.click(screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
-    await waitFor(() => expect(onAlreadySubmitted).toHaveBeenCalledWith('Jordan Smith'));
+    await waitFor(() => expect(onAlreadySubmitted).toHaveBeenCalledWith('Jordan Smith', 501));
     expect(onStarted).not.toHaveBeenCalled();
     expect(screen.queryByText(/already submitted/)).not.toBeInTheDocument();
   });
@@ -76,14 +106,14 @@ describe('NameStep', () => {
     render(
       <NameStep
         quizTitle="Week 1 Prep"
-        rosterPlayers={['Jordan Smith']}
+        rosterPlayers={rosterPlayers}
         accessCodeId={42}
         onStarted={onStarted}
         onAlreadySubmitted={vi.fn()}
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Jordan Smith' }));
+    await user.click(screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByText('Invalid or expired access code')).toBeInTheDocument();
@@ -94,7 +124,7 @@ describe('NameStep', () => {
     render(
       <NameStep
         quizTitle="Week 1 Prep"
-        rosterPlayers={['Jordan Smith']}
+        rosterPlayers={rosterPlayers}
         accessCodeId={42}
         onStarted={vi.fn()}
         onAlreadySubmitted={vi.fn()}

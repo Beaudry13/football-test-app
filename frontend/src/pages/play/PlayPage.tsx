@@ -18,9 +18,10 @@ type Step =
       code: string;
       joined: ValidateCodeResponse;
       playerName: string;
+      playerId: number | undefined;
       initialAnswers: ResumedAnswer[];
     }
-  | { name: 'submitted'; code: string; playerName: string };
+  | { name: 'submitted'; code: string; playerName: string; playerId: number | undefined };
 
 export function PlayPage() {
   const { code } = useParams<{ code?: string }>();
@@ -64,18 +65,21 @@ export function PlayPage() {
       {step.name === 'name' && (
         <NameStep
           quizTitle={step.joined.quiz.title}
-          rosterPlayers={step.joined.roster_players}
+          rosterPlayers={step.joined.roster_players_v2}
           accessCodeId={step.joined.access_code_id}
-          onStarted={(playerName, attempt) =>
+          onStarted={(playerName, playerId, attempt) =>
             setStep({
               name: 'quiz',
               code: step.code,
               joined: step.joined,
               playerName,
+              playerId,
               initialAnswers: attempt.answers,
             })
           }
-          onAlreadySubmitted={(playerName) => setStep({ name: 'submitted', code: step.code, playerName })}
+          onAlreadySubmitted={(playerName, playerId) =>
+            setStep({ name: 'submitted', code: step.code, playerName, playerId })
+          }
         />
       )}
       {step.name === 'quiz' && (
@@ -83,11 +87,16 @@ export function PlayPage() {
           quiz={step.joined.quiz}
           accessCodeId={step.joined.access_code_id}
           playerName={step.playerName}
+          playerId={step.playerId}
           initialAnswers={step.initialAnswers}
-          onSubmitted={() => setStep({ name: 'submitted', code: step.code, playerName: step.playerName })}
+          onSubmitted={() =>
+            setStep({ name: 'submitted', code: step.code, playerName: step.playerName, playerId: step.playerId })
+          }
         />
       )}
-      {step.name === 'submitted' && <SubmittedStep code={step.code} playerName={step.playerName} />}
+      {step.name === 'submitted' && (
+        <SubmittedStep code={step.code} playerName={step.playerName} playerId={step.playerId} />
+      )}
     </div>
   );
 }

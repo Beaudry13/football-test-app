@@ -23,12 +23,17 @@ export function QuizStep({
   quiz,
   accessCodeId,
   playerName,
+  playerId,
   initialAnswers,
   onSubmitted,
 }: {
   quiz: Quiz;
   accessCodeId: number;
   playerName: string;
+  /** Set when the player picked a canonical master-roster entry - see
+   * NameStep. Threaded through every /play call so two Players sharing a
+   * display name never collide onto the same attempt. */
+  playerId: number | undefined;
   initialAnswers: ResumedAnswer[];
   onSubmitted: () => void;
 }) {
@@ -57,6 +62,7 @@ export function QuizStep({
     saveAnswer({
       access_code_id: accessCodeId,
       player_name: playerName,
+      player_id: playerId,
       question_id: questionId,
       selected_option_id: answer.selected_option_id ?? null,
       answer_text: answer.answer_text ?? null,
@@ -136,6 +142,7 @@ export function QuizStep({
       await submitQuiz({
         access_code_id: accessCodeId,
         player_name: playerName,
+        player_id: playerId,
         answers: questions.map((q) => ({
           question_id: q.id,
           selected_option_id: answers[q.id]?.selected_option_id ?? null,

@@ -10,6 +10,10 @@ const joinedResponse: ValidateCodeResponse = {
   access_code_id: 42,
   expires_at: '2026-08-02T00:00:00Z',
   roster_players: ['Jordan Smith', 'Alex Lee'],
+  roster_players_v2: [
+    { player_id: null, name: 'Jordan Smith', jersey_number: null, position: null },
+    { player_id: null, name: 'Alex Lee', jersey_number: null, position: null },
+  ],
   quiz: {
     id: 5,
     organization_id: 1,
@@ -125,7 +129,7 @@ describe('PlayPage', () => {
         answers: [{ question_id: 10, selected_option_id: 100, answer_text: null }],
       }),
     );
-    await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith'));
+    await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith', undefined));
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
     expect(screen.getByText('Is this cover 2?')).toBeInTheDocument();
     expect(screen.getByText('Correct')).toBeInTheDocument();

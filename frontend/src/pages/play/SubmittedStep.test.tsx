@@ -23,7 +23,7 @@ describe('SubmittedStep', () => {
 
   it('shows the Quiz Complete celebration immediately, then fades it after a few seconds', async () => {
     vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue(results);
-    render(<SubmittedStep code="ABC123" playerName="Jordan Smith" />);
+    render(<SubmittedStep code="ABC123" playerName="Jordan Smith" playerId={undefined} />);
 
     // Present right away - this step only ever mounts after a real,
     // already-successful submission, so there's nothing to "simulate" here.
@@ -40,8 +40,24 @@ describe('SubmittedStep', () => {
 
   it('shows the real error, not a raw one, when results fail to load', async () => {
     vi.spyOn(playApi, 'getPlayerResults').mockRejectedValue(new Error('Could not reach the server.'));
-    render(<SubmittedStep code="ABC123" playerName="Jordan Smith" />);
+    render(<SubmittedStep code="ABC123" playerName="Jordan Smith" playerId={undefined} />);
 
     expect(await screen.findByText('Could not reach the server.')).toBeInTheDocument();
+  });
+
+  it('passes playerId to the results lookup and into the bookmark link, so two same-name players never collide', async () => {
+    const resultsSpy = vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue({
+      ...results,
+      player_name: 'Chris Smith',
+    });
+    render(<SubmittedStep code="ABC123" playerName="Chris Smith" playerId={501} />);
+
+    await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Chris Smith', 501));
+    await vi.advanceTimersByTimeAsync(1800);
+
+    expect(await screen.findByRole('link', { name: 'this link' })).toHaveAttribute(
+      'href',
+      '/results/ABC123/Chris%20Smith?player_id=501',
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { getPlayerResults } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
 import type { PlayerResultsResponse } from '../../api/types';
@@ -13,18 +13,24 @@ import styles from './PlayPage.module.css';
  * SubmittedStep's bookmark link points to), or /results shows a manual lookup form. */
 export function ResultsCheckPage() {
   const params = useParams<{ code?: string; playerName?: string }>();
+  const [searchParams] = useSearchParams();
   const initialPlayerName = params.playerName ? decodeURIComponent(params.playerName) : '';
+  // Set only on the auto-fetch link SubmittedStep generates right after a
+  // canonical player submits - a manually-typed lookup below has no way to
+  // supply this, same pre-existing name-only limitation as before.
+  const playerIdParam = searchParams.get('player_id');
+  const initialPlayerId = playerIdParam ? Number(playerIdParam) : undefined;
   const [code, setCode] = useState(params.code ?? '');
   const [playerName, setPlayerName] = useState(initialPlayerName);
   const [results, setResults] = useState<PlayerResultsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchResults = useCallback(async (codeValue: string, nameValue: string) => {
+  const fetchResults = useCallback(async (codeValue: string, nameValue: string, playerId?: number) => {
     setError(null);
     setIsLoading(true);
     try {
-      setResults(await getPlayerResults(codeValue, nameValue));
+      setResults(await getPlayerResults(codeValue, nameValue, playerId));
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -34,8 +40,12 @@ export function ResultsCheckPage() {
 
   useEffect(() => {
     if (params.code && params.playerName) {
-      fetchResults(params.code, decodeURIComponent(params.playerName));
+      fetchResults(params.code, decodeURIComponent(params.playerName), initialPlayerId);
     }
+    // Only the route params (and the query param riding alongside them on
+    // first load) should re-trigger this - not initialPlayerId's identity,
+    // which is stable per mount anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.code, params.playerName, fetchResults]);
 
   useDocumentTitle(results ? `${results.quiz_title} | Peira` : undefined);

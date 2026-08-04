@@ -45,7 +45,9 @@ describe('ResultsCheckPage', () => {
 
     renderAt('/results/ABC123/Jordan%20Smith');
 
-    await waitFor(() => expect(playApi.getPlayerResults).toHaveBeenCalledWith('ABC123', 'Jordan Smith'));
+    await waitFor(() =>
+      expect(playApi.getPlayerResults).toHaveBeenCalledWith('ABC123', 'Jordan Smith', undefined),
+    );
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
     expect(screen.getByText('Incorrect')).toBeInTheDocument();
     expect(screen.getByText('Correct answer: True', { exact: false })).toBeInTheDocument();
@@ -62,7 +64,7 @@ describe('ResultsCheckPage', () => {
     await user.type(screen.getByPlaceholderText('Your name'), 'Jordan Smith');
     await user.click(screen.getByRole('button', { name: 'View results' }));
 
-    await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith'));
+    await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith', undefined));
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
   });
 

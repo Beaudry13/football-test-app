@@ -76,17 +76,19 @@ def effective_roster_names(access_code: AccessCode) -> list[str]:
 
 def effective_roster_players(access_code: AccessCode) -> list[dict]:
     """Like `effective_roster_names`, but resolves each entry's canonical
-    identity where one exists - `{"player_id": int | None, "name": str}`
-    per eligible player. A canonical entry's `name` is always the Player's
-    *current* full_name (fresh, not a stale snapshot); a legacy entry
-    (player_id None) is whatever the coach typed on the Roster/Group.
+    identity where one exists - `{"player_id", "name", "jersey_number",
+    "position"}` per eligible player. A canonical entry's `name` is always
+    the Player's *current* full_name (fresh, not a stale snapshot); a
+    legacy entry (player_id None) is whatever the coach typed on the
+    Roster/Group, with jersey_number/position both None (nothing else to
+    show for it).
 
-    This is what makes two canonical Players who share a display name
-    distinguishable at join time (NameStep shows both, but only this
-    function's player_id lets the frontend know which is which) - the
-    plain string list from effective_roster_names() cannot represent that
-    at all, which is why it stays unchanged for existing callers rather
-    than being replaced outright.
+    jersey_number/position are included specifically so the frontend can
+    tell two canonical Players who share a display name apart at a glance
+    (e.g. two "Chris Smith"s) - `name` alone can't, and player_id isn't
+    human-readable. The plain string list from effective_roster_names()
+    can't represent any of this, which is why it stays unchanged for
+    existing callers rather than being replaced outright.
     """
     if access_code.groups:
         seen: dict[str, dict] = {}
@@ -95,11 +97,25 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
                 if player.player_id is not None and player.player is not None:
                     key = f"player:{player.player_id}"
                     seen.setdefault(
-                        key, {"player_id": player.player_id, "name": player.player.full_name}
+                        key,
+                        {
+                            "player_id": player.player_id,
+                            "name": player.player.full_name,
+                            "jersey_number": player.player.jersey_number,
+                            "position": player.player.position,
+                        },
                     )
                 else:
                     key = f"name:{player.player_name.lower()}"
-                    seen.setdefault(key, {"player_id": None, "name": player.player_name})
+                    seen.setdefault(
+                        key,
+                        {
+                            "player_id": None,
+                            "name": player.player_name,
+                            "jersey_number": None,
+                            "position": None,
+                        },
+                    )
         return list(seen.values())
 
     quiz = access_code.quiz
@@ -108,11 +124,20 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
     seen_names: set[str] = set()
     for rp in roster_players:
         if rp.player_id is not None and rp.player is not None:
-            result.append({"player_id": rp.player_id, "name": rp.player.full_name})
+            result.append(
+                {
+                    "player_id": rp.player_id,
+                    "name": rp.player.full_name,
+                    "jersey_number": rp.player.jersey_number,
+                    "position": rp.player.position,
+                }
+            )
         else:
             if rp.player_name.lower() not in seen_names:
                 seen_names.add(rp.player_name.lower())
-                result.append({"player_id": None, "name": rp.player_name})
+                result.append(
+                    {"player_id": None, "name": rp.player_name, "jersey_number": None, "position": None}
+                )
     return result
 
 

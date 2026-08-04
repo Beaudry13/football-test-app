@@ -12,16 +12,23 @@ export function validateCode(code: string): Promise<ValidateCodeResponse> {
 export function startAttempt(input: {
   access_code_id: number;
   player_name: string;
+  /** Set when the player picked a canonical master-roster entry - see
+   * NameStep. Never trusted blindly server-side; validated against the
+   * activation's actual effective roster. */
+  player_id?: number;
 }): Promise<AttemptState> {
   return api.post<AttemptState>('/play/start', input, { auth: false });
 }
 
 /** Autosaves one answer against an already-started attempt. Re-derives the
- * attempt server-side from (access_code_id, player_name) rather than
- * trusting a client-held attempt id. */
+ * attempt server-side from (access_code_id, player_name) - or, when set,
+ * (access_code_id, player_id), which is what lets two Players who share a
+ * display name never collide onto the same attempt - rather than trusting
+ * a client-held attempt id. */
 export function saveAnswer(input: {
   access_code_id: number;
   player_name: string;
+  player_id?: number;
   question_id: number;
   selected_option_id?: number | null;
   answer_text?: string | null;
@@ -38,6 +45,7 @@ export interface AnswerSubmission {
 export function submitQuiz(input: {
   access_code_id: number;
   player_name: string;
+  player_id?: number;
   answers: AnswerSubmission[];
 }): Promise<PlayerResponse> {
   return api.post<PlayerResponse>('/play/submit', input, { auth: false });
@@ -53,10 +61,17 @@ export function getQuizTitleByCode(code: string): Promise<{ quiz_title: string |
   });
 }
 
-export function getPlayerResults(code: string, playerName: string): Promise<PlayerResultsResponse> {
+/** `playerId`, when known, disambiguates two same-name canonical Players -
+ * a name-only lookup can't tell them apart and would return whichever
+ * attempt the server happens to find first. */
+export function getPlayerResults(
+  code: string,
+  playerName: string,
+  playerId?: number,
+): Promise<PlayerResultsResponse> {
   return api.post<PlayerResultsResponse>(
     '/play/results',
-    { code, player_name: playerName },
+    { code, player_name: playerName, player_id: playerId },
     { auth: false },
   );
 }

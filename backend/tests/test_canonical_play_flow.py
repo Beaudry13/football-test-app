@@ -71,11 +71,18 @@ def test_two_same_name_players_both_attempt_the_same_activation(client, coach_he
     question_id = client.get(
         f"/api/quizzes/{quiz_with_question['id']}", headers=coach_headers
     ).get_json()["questions"][0]["id"]
-    option_true = client.get(
+    quiz_options = client.get(
         f"/api/quizzes/{quiz_with_question['id']}", headers=coach_headers
-    ).get_json()["questions"][0]["options"][0]["id"]
+    ).get_json()["questions"][0]["options"]
+    option_true = quiz_options[0]["id"]
+    option_false = quiz_options[1]["id"]
 
+    # Deliberately different answers per player - if results ever got
+    # commingled between the two same-name Players, this makes it show up
+    # as a wrong is_correct value below rather than silently passing.
+    per_player_answer = {chris_wr["id"]: option_true, chris_lb["id"]: option_false}
     for player in (chris_wr, chris_lb):
+        selected_option_id = per_player_answer[player["id"]]
         save = client.post(
             "/api/play/answers",
             json={
@@ -83,7 +90,7 @@ def test_two_same_name_players_both_attempt_the_same_activation(client, coach_he
                 "player_name": "Chris Smith",
                 "player_id": player["id"],
                 "question_id": question_id,
-                "selected_option_id": option_true,
+                "selected_option_id": selected_option_id,
             },
         )
         assert save.status_code == 204
@@ -94,7 +101,7 @@ def test_two_same_name_players_both_attempt_the_same_activation(client, coach_he
                 "access_code_id": access_code["id"],
                 "player_name": "Chris Smith",
                 "player_id": player["id"],
-                "answers": [{"question_id": question_id, "selected_option_id": option_true}],
+                "answers": [{"question_id": question_id, "selected_option_id": selected_option_id}],
             },
         )
         assert submit.status_code == 201
@@ -105,6 +112,22 @@ def test_two_same_name_players_both_attempt_the_same_activation(client, coach_he
     ).get_json()
     assert len(responses) == 2
     assert {r["player_id"] for r in responses} == {chris_wr["id"], chris_lb["id"]}
+
+    # /play/results must also disambiguate by player_id, not just /start -
+    # a name-only lookup can't tell two "Chris Smith"s apart and would
+    # silently return whichever attempt the query finds first.
+    results_wr = client.post(
+        "/api/play/results",
+        json={"code": access_code["code"], "player_name": "Chris Smith", "player_id": chris_wr["id"]},
+    ).get_json()
+    results_lb = client.post(
+        "/api/play/results",
+        json={"code": access_code["code"], "player_name": "Chris Smith", "player_id": chris_lb["id"]},
+    ).get_json()
+    assert results_wr["answers"][0]["your_answer"] == "True"
+    assert results_wr["answers"][0]["is_correct"] is True
+    assert results_lb["answers"][0]["your_answer"] == "False"
+    assert results_lb["answers"][0]["is_correct"] is False
 
 
 def test_legacy_name_only_attempt_still_works_unaffected(client, coach_headers, quiz_with_question):

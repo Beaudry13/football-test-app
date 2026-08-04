@@ -47,6 +47,7 @@ describe('JoinStep', () => {
       access_code_id: 1,
       expires_at: '2026-08-02T00:00:00Z',
       roster_players: [],
+      roster_players_v2: [],
       quiz: {
         id: 1,
         organization_id: 1,

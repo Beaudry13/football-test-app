@@ -130,10 +130,29 @@ export interface Question {
   image: QuestionImage | null;
 }
 
+/** A canonical master-roster identity - see Player.id as the only real
+ * identity key. Two players may share every other field. */
+export interface Player {
+  id: number;
+  organization_id: number;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  jersey_number: string | null;
+  position: string | null;
+  photo_url: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RosterPlayer {
   id: number;
   player_name: string;
   position: number;
+  /** Present only when this slot links to a canonical Player (see
+   * Player.id) - undefined/absent means a legacy, name-only slot. */
+  player?: Player;
 }
 
 export interface Roster {
@@ -151,6 +170,72 @@ export interface Group {
   players: RosterPlayer[];
   created_at: string;
   updated_at: string;
+}
+
+export interface PlayerHistoryResult {
+  quiz_id: number;
+  quiz_title: string;
+  attempt_id: number;
+  submitted_at: string | null;
+  score_percent: number | null;
+  graded_answer_count: number;
+  correct_answer_count: number;
+  pending_grading_count: number;
+}
+
+export interface PlayerHistory {
+  player: Player;
+  current_groups: { id: number; name: string }[];
+  assigned_count: number;
+  completed_count: number;
+  completion_percent: number | null;
+  average_score_percent: number | null;
+  recent_results: PlayerHistoryResult[];
+}
+
+export interface ImportPreviewRow {
+  row_number: number;
+  first_name: string;
+  last_name: string;
+  jersey_number: string | null;
+  position: string | null;
+  full_name_parsed: boolean;
+  is_valid: boolean;
+  errors: string[];
+  possible_duplicates: {
+    player_id: number;
+    first_name: string;
+    last_name: string;
+    jersey_number: string | null;
+    position: string | null;
+    strong_match: boolean;
+  }[];
+  default_action: 'create' | 'skip';
+}
+
+export interface ImportPreviewResponse {
+  detected_mapping: Record<string, string | null>;
+  available_columns: string[];
+  total_rows: number;
+  valid_count: number;
+  invalid_count: number;
+  rows: ImportPreviewRow[];
+}
+
+export interface ImportConfirmRow {
+  first_name: string;
+  last_name: string;
+  jersey_number?: string | null;
+  position?: string | null;
+  action: 'create' | 'update' | 'skip';
+  existing_player_id?: number | null;
+}
+
+export interface ImportConfirmResponse {
+  success: boolean;
+  created: number;
+  updated: number;
+  players: Player[];
 }
 
 export interface AccessCode {
@@ -253,11 +338,26 @@ export interface ActiveQuizStatus {
   not_started: string[];
 }
 
+/** One eligible player at join time, canonical-identity-aware. `player_id`
+ * is set for a master-roster entry (submit it back on /start so two
+ * same-name Players never collide) and null for a legacy, name-only one. */
+export interface RosterPlayerOption {
+  player_id: number | null;
+  name: string;
+  /** Disambiguates two canonical Players who share a display name (e.g.
+   * two "Chris Smith"s) - both null for a legacy, name-only entry. */
+  jersey_number: string | null;
+  position: string | null;
+}
+
 export interface ValidateCodeResponse {
   access_code_id: number;
   expires_at: string;
   quiz: Quiz;
   roster_players: string[];
+  /** Additive alongside roster_players (unchanged, kept for compatibility) -
+   * see RosterPlayerOption. */
+  roster_players_v2: RosterPlayerOption[];
 }
 
 /** A player's saved answer as returned by /play/start and /play/answers -

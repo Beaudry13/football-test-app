@@ -60,6 +60,7 @@ describe('QuizStep', () => {
         quiz={quiz}
         accessCodeId={42}
         playerName="Jordan Smith"
+        playerId={501}
         initialAnswers={initialAnswers}
         onSubmitted={vi.fn()}
       />,
@@ -74,7 +75,14 @@ describe('QuizStep', () => {
     const saveSpy = vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
 
     render(
-      <QuizStep quiz={quiz} accessCodeId={42} playerName="Jordan Smith" initialAnswers={[]} onSubmitted={vi.fn()} />,
+      <QuizStep
+        quiz={quiz}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={501}
+        initialAnswers={[]}
+        onSubmitted={vi.fn()}
+      />,
     );
 
     await user.click(screen.getByLabelText('True'));
@@ -83,6 +91,7 @@ describe('QuizStep', () => {
       expect(saveSpy).toHaveBeenCalledWith({
         access_code_id: 42,
         player_name: 'Jordan Smith',
+        player_id: 501,
         question_id: 1,
         selected_option_id: 10,
         answer_text: null,
@@ -109,6 +118,7 @@ describe('QuizStep', () => {
           quiz={quiz}
           accessCodeId={42}
           playerName="Jordan Smith"
+          playerId={501}
           initialAnswers={[]}
           onSubmitted={vi.fn()}
         />,
@@ -126,6 +136,7 @@ describe('QuizStep', () => {
       expect(saveSpy).toHaveBeenCalledWith({
         access_code_id: 42,
         player_name: 'Jordan Smith',
+        player_id: 501,
         question_id: 2,
         selected_option_id: null,
         answer_text: 'I set the edge.',
@@ -150,6 +161,7 @@ describe('QuizStep', () => {
           quiz={quiz}
           accessCodeId={42}
           playerName="Jordan Smith"
+          playerId={501}
           initialAnswers={[]}
           onSubmitted={onSubmitted}
         />,
@@ -167,6 +179,7 @@ describe('QuizStep', () => {
         expect(submitSpy).toHaveBeenCalledWith({
           access_code_id: 42,
           player_name: 'Jordan Smith',
+          player_id: 501,
           answers: [
             { question_id: 1, selected_option_id: null, answer_text: null },
             { question_id: 2, selected_option_id: null, answer_text: 'I set the edge.' },
@@ -190,6 +203,7 @@ describe('QuizStep', () => {
           quiz={requiredQuiz}
           accessCodeId={42}
           playerName="Jordan Smith"
+          playerId={501}
           initialAnswers={[]}
           onSubmitted={vi.fn()}
         />,
@@ -222,6 +236,7 @@ describe('QuizStep', () => {
           quiz={requiredQuiz}
           accessCodeId={42}
           playerName="Jordan Smith"
+          playerId={501}
           initialAnswers={[]}
           onSubmitted={onSubmitted}
         />,
@@ -245,6 +260,7 @@ describe('QuizStep', () => {
           quiz={wizardQuiz}
           accessCodeId={42}
           playerName="Jordan Smith"
+          playerId={501}
           initialAnswers={[]}
           onSubmitted={vi.fn()}
         />,
@@ -274,7 +290,14 @@ describe('QuizStep', () => {
       });
 
       render(
-        <QuizStep quiz={quiz} accessCodeId={42} playerName="Jordan Smith" initialAnswers={[]} onSubmitted={vi.fn()} />,
+        <QuizStep
+          quiz={quiz}
+          accessCodeId={42}
+          playerName="Jordan Smith"
+          playerId={501}
+          initialAnswers={[]}
+          onSubmitted={vi.fn()}
+        />,
       );
 
       await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));

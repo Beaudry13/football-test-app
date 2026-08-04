@@ -335,15 +335,21 @@ def player_results():
     if access_code is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
-    attempt = (
-        PlayerAttempt.query.filter(
-            PlayerAttempt.access_code_id == access_code.id,
-            PlayerAttempt.status == AttemptStatus.SUBMITTED,
-            db.func.lower(PlayerAttempt.player_name) == data["player_name"].strip().lower(),
-        )
-        .options(selectinload(PlayerAttempt.answers))
-        .first()
+    query = PlayerAttempt.query.filter(
+        PlayerAttempt.access_code_id == access_code.id,
+        PlayerAttempt.status == AttemptStatus.SUBMITTED,
     )
+    player_id = data.get("player_id")
+    if player_id is not None:
+        # Disambiguates two same-name canonical Players - a name-only match
+        # below can't tell them apart and would silently return whichever
+        # row the query happens to find first. See PlayerResultsSchema.
+        query = query.filter(PlayerAttempt.player_id == player_id)
+    else:
+        query = query.filter(
+            db.func.lower(PlayerAttempt.player_name) == data["player_name"].strip().lower()
+        )
+    attempt = query.options(selectinload(PlayerAttempt.answers)).first()
     if attempt is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
