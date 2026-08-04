@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   deleteGroup,
@@ -13,7 +13,7 @@ import type { Group } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { PlayerListEditor } from '../components/PlayerListEditor';
-import { PlayerPickerPanel } from '../components/PlayerPickerPanel';
+import { RosterSelectPanel } from '../components/RosterSelectPanel';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupDetailPage.module.css';
 
@@ -24,6 +24,7 @@ export function GroupDetailPage() {
   const [nameValue, setNameValue] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLegacy, setShowLegacy] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   const loadGroup = useCallback(async () => {
@@ -47,13 +48,24 @@ export function GroupDetailPage() {
     (file: File) => uploadGroupPlayersCsv(Number(groupId), file),
     [groupId],
   );
-  const onAddMember = useCallback(
-    (playerId: number) => addGroupMembers(Number(groupId), [playerId]),
-    [groupId],
+  const onAddMany = useCallback(
+    async (playerIds: number[]) => {
+      await addGroupMembers(Number(groupId), playerIds);
+      await loadGroup();
+    },
+    [groupId, loadGroup],
   );
   const onRemoveMember = useCallback(
-    (playerId: number) => removeGroupMember(Number(groupId), playerId),
-    [groupId],
+    async (playerId: number) => {
+      await removeGroupMember(Number(groupId), playerId);
+      await loadGroup();
+    },
+    [groupId, loadGroup],
+  );
+
+  const legacyCount = useMemo(
+    () => (group ? group.players.filter((p) => !p.player).length : 0),
+    [group],
   );
 
   async function handleRename(event: React.FormEvent) {
@@ -128,16 +140,41 @@ export function GroupDetailPage() {
 
       <ErrorBanner message={error} />
 
-      <PlayerPickerPanel load={load} onAdd={onAddMember} onRemove={onRemoveMember} />
+      <RosterSelectPanel members={group.players} onAddMany={onAddMany} onRemove={onRemoveMember} />
 
-      <PlayerListEditor
-        load={load}
-        onSave={onSave}
-        onUploadCsv={onUploadCsv}
-        currentListTitle="Legacy members (no master-roster link)"
-        editTitle="Edit legacy members"
-        saveButtonLabel="Save members"
-      />
+      {legacyCount === 0 ? (
+        <div className={styles.legacySection}>
+          <button type="button" className={nb.btnSm} onClick={() => setShowLegacy((v) => !v)}>
+            {showLegacy ? 'Hide Advanced / Legacy Members' : 'Advanced / Legacy Members'}
+          </button>
+          {showLegacy && (
+            <PlayerListEditor
+              load={load}
+              onSave={onSave}
+              onUploadCsv={onUploadCsv}
+              currentListTitle="Legacy members (no master-roster link)"
+              editTitle="Edit legacy members"
+              saveButtonLabel="Save members"
+            />
+          )}
+        </div>
+      ) : (
+        <div className={styles.legacySection}>
+          <p className={styles.legacyNote}>
+            Legacy members are plain names carried over from before the Master Roster - they aren't
+            connected to a canonical Player, so photos, unified history, and roster-picker selection
+            don't apply to them.
+          </p>
+          <PlayerListEditor
+            load={load}
+            onSave={onSave}
+            onUploadCsv={onUploadCsv}
+            currentListTitle="Legacy members (no master-roster link)"
+            editTitle="Edit legacy members"
+            saveButtonLabel="Save members"
+          />
+        </div>
+      )}
     </div>
   );
 }

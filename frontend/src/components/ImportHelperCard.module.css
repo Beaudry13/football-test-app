@@ -1,0 +1,136 @@
+.card {
+  background: rgba(20, 17, 11, 0.94);
+  border: 1.5px solid var(--nb-accent, #c9a24b);
+  border-radius: 8px;
+  padding: 1.1em 1.3em;
+  margin: 1em 0 1.4em;
+  font-family: 'Inter', sans-serif;
+  color: var(--nb-text, #f3eee2);
+  line-height: 1.5;
+}
+
+.card p {
+  margin: 0.5em 0;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--nb-accent, #c9a24b);
+  color: #14110b;
+  font-weight: 700;
+  font-size: 0.85em;
+  font-style: normal;
+  flex-shrink: 0;
+}
+
+.title {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 1.05em;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--nb-accent-bright, #e4c066);
+  margin: 0;
+}
+
+.promptQuote {
+  margin: 0.6em 0;
+  padding: 0.7em 1em;
+  border-left: 3px solid var(--nb-accent, #c9a24b);
+  background: rgba(201, 162, 75, 0.08);
+  font-style: italic;
+  border-radius: 0 4px 4px 0;
+}
+
+.copyRow {
+  margin: 0.75em 0;
+}
+
+.fallback {
+  margin: 0.5em 0;
+}
+
+.fallbackText {
+  width: 100%;
+  min-height: 90px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  padding: 0.6em;
+  border-radius: 4px;
+  border: 1px solid var(--nb-input-border, rgba(201, 162, 75, 0.55));
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--nb-text, #f3eee2);
+  resize: vertical;
+}
+
+.example {
+  margin-top: 0.75em;
+}
+
+.example summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--nb-accent, #c9a24b);
+  user-select: none;
+}
+
+.exampleBody {
+  margin-top: 0.6em;
+}
+
+.exampleLabel {
+  font-size: 0.85em;
+  color: var(--nb-text-muted, #8c8578);
+  margin: 0.4em 0 0.2em;
+}
+
+.exampleArrow {
+  text-align: center;
+  color: var(--nb-accent, #c9a24b);
+  font-size: 1.1em;
+  margin: 0.3em 0;
+}
+
+.exampleBlock {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--nb-card-border, rgba(201, 162, 75, 0.25));
+  border-radius: 4px;
+  padding: 0.6em 0.8em;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.waysToImport {
+  margin-top: 0.9em;
+  font-size: 0.85em;
+  color: var(--nb-text-muted, #8c8578);
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 1em;
+  }
+
+  .copyRow button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .exampleBlock {
+    font-size: 0.8em;
+  }
+}

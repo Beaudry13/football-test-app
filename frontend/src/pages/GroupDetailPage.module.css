@@ -29,3 +29,13 @@
 .renameForm input {
   max-width: 320px;
 }
+
+.legacySection {
+  margin-top: 1.5em;
+}
+
+.legacyNote {
+  color: var(--nb-text-muted, #78766e);
+  font-size: 0.9em;
+  max-width: 60ch;
+}

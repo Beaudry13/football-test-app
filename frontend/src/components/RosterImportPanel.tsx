@@ -3,6 +3,7 @@ import { confirmImport, downloadImportTemplate, previewImport, type ImportRowInp
 import { getErrorMessage } from '../api/client';
 import type { ImportPreviewResponse } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { ImportHelperCard } from './ImportHelperCard';
 import nb from '../styles/notebook.module.css';
 import styles from './RosterImportPanel.module.css';
 
@@ -149,6 +150,8 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
         Paste rows copied from Excel or Google Sheets, or upload a CSV. First and last name, jersey
         number, and position are recognized automatically from common column headers.
       </p>
+
+      <ImportHelperCard />
 
       <ErrorBanner message={error} />
 
