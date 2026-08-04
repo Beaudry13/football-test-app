@@ -289,12 +289,12 @@ def test_player_history_unifies_activity_from_multiple_groups(client, coach_head
     )
 
     history = client.get(f"/api/players/{player['id']}/history", headers=coach_headers).get_json()
-    assert history["assigned_count"] == 1
-    assert history["completed_count"] == 1
-    assert history["completion_percent"] == 100.0
-    assert history["average_score_percent"] == 100.0
-    assert {g["name"] for g in history["current_groups"]} == {"Safeties", "Special Teams"}
-    assert history["recent_results"][0]["quiz_title"] == "Coverage Quiz"
+    assert history["summary"]["assigned_count"] == 1
+    assert history["summary"]["completed_count"] == 1
+    assert history["summary"]["completion_percent"] == 100.0
+    assert history["summary"]["average_score_percent"] == 100.0
+    assert {g["name"] for g in history["summary"]["current_groups"]} == {"Safeties", "Special Teams"}
+    assert history["history"][0]["quiz_title"] == "Coverage Quiz"
 
 
 def test_player_history_is_organization_scoped(client, coach_headers, register_coach):
