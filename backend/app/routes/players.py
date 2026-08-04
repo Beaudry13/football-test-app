@@ -104,6 +104,87 @@ def get_player(player_id: int):
     return jsonify(player.to_dict())
 
 
+@players_bp.get("/<int:player_id>/history")
+@jwt_required()
+def get_player_history(player_id: int):
+    """The one unified analytics standard for this Player's activity,
+    linked entirely through PlayerAttempt.player_id - the same physical
+    person's attempts across every Group they've ever belonged to (or a
+    direct-roster assignment) all land here, regardless of which one they
+    used to join a given quiz. Mirrors grading.py's player_history() /
+    _build_dashboard_data() definitions exactly (submitted-only for
+    completion/average, auto-graded answers only for score) so a coach
+    never sees this page disagree with the quiz dashboard or the
+    org-wide, name-based legacy history endpoint.
+    """
+    from app.models import Answer, AttemptStatus, Group, GroupPlayer, PlayerAttempt, Quiz
+
+    player = get_org_player(player_id)
+
+    attempts = (
+        PlayerAttempt.query.join(Quiz)
+        .filter(PlayerAttempt.player_id == player.id)
+        .options(
+            db.joinedload(PlayerAttempt.quiz),
+            db.selectinload(PlayerAttempt.answers).selectinload(Answer.question),
+        )
+        .order_by(PlayerAttempt.started_at.desc())
+        .all()
+    )
+
+    assigned_count = len(attempts)
+    submitted = [a for a in attempts if a.status == AttemptStatus.SUBMITTED]
+    completed_count = len(submitted)
+    completion_percent = round(100 * completed_count / assigned_count, 1) if assigned_count else None
+
+    recent_results = []
+    total_correct = 0
+    total_graded = 0
+    for attempt in submitted:
+        auto_graded = [a for a in attempt.answers if a.is_correct is not None]
+        correct = sum(1 for a in auto_graded if a.is_correct)
+        total_correct += correct
+        total_graded += len(auto_graded)
+        pending_grading = sum(
+            1
+            for a in attempt.answers
+            if a.is_correct is None and a.question.question_type.value == "written"
+        )
+        score_percent = round(100 * correct / len(auto_graded), 1) if auto_graded else None
+        recent_results.append(
+            {
+                "quiz_id": attempt.quiz_id,
+                "quiz_title": attempt.quiz.title,
+                "attempt_id": attempt.id,
+                "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
+                "score_percent": score_percent,
+                "graded_answer_count": len(auto_graded),
+                "correct_answer_count": correct,
+                "pending_grading_count": pending_grading,
+            }
+        )
+
+    average_score_percent = round(100 * total_correct / total_graded, 1) if total_graded else None
+
+    group_ids = [
+        row.group_id
+        for row in GroupPlayer.query.filter_by(player_id=player.id).with_entities(GroupPlayer.group_id)
+    ]
+    groups = Group.query.filter(Group.id.in_(group_ids)).all() if group_ids else []
+
+    return jsonify(
+        {
+            "player": player.to_dict(),
+            "current_groups": [{"id": g.id, "name": g.name} for g in groups],
+            "assigned_count": assigned_count,
+            "completed_count": completed_count,
+            "completion_percent": completion_percent,
+            "average_score_percent": average_score_percent,
+            "recent_results": recent_results[:20],
+        }
+    )
+
+
 @players_bp.patch("/<int:player_id>")
 @jwt_required()
 def update_player(player_id: int):

@@ -74,6 +74,48 @@ def effective_roster_names(access_code: AccessCode) -> list[str]:
     return [p.player_name for p in (quiz.roster.players if quiz.roster else [])]
 
 
+def effective_roster_players(access_code: AccessCode) -> list[dict]:
+    """Like `effective_roster_names`, but resolves each entry's canonical
+    identity where one exists - `{"player_id": int | None, "name": str}`
+    per eligible player. A canonical entry's `name` is always the Player's
+    *current* full_name (fresh, not a stale snapshot); a legacy entry
+    (player_id None) is whatever the coach typed on the Roster/Group.
+
+    This is what makes two canonical Players who share a display name
+    distinguishable at join time (NameStep shows both, but only this
+    function's player_id lets the frontend know which is which) - the
+    plain string list from effective_roster_names() cannot represent that
+    at all, which is why it stays unchanged for existing callers rather
+    than being replaced outright.
+    """
+    if access_code.groups:
+        seen: dict[str, dict] = {}
+        for group in access_code.groups:
+            for player in group.players:
+                if player.player_id is not None and player.player is not None:
+                    key = f"player:{player.player_id}"
+                    seen.setdefault(
+                        key, {"player_id": player.player_id, "name": player.player.full_name}
+                    )
+                else:
+                    key = f"name:{player.player_name.lower()}"
+                    seen.setdefault(key, {"player_id": None, "name": player.player_name})
+        return list(seen.values())
+
+    quiz = access_code.quiz
+    roster_players = quiz.roster.players if quiz.roster else []
+    result = []
+    seen_names: set[str] = set()
+    for rp in roster_players:
+        if rp.player_id is not None and rp.player is not None:
+            result.append({"player_id": rp.player_id, "name": rp.player.full_name})
+        else:
+            if rp.player_name.lower() not in seen_names:
+                seen_names.add(rp.player_name.lower())
+                result.append({"player_id": None, "name": rp.player_name})
+    return result
+
+
 def effective_roster_names_for_quiz(quiz: Quiz, active_code: AccessCode | None) -> list[str]:
     """Same "who's eligible" rule as `effective_roster_names`, generalized
     for callers that show a roster-size stat per quiz rather than per

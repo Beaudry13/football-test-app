@@ -31,6 +31,7 @@ from app.schemas.play import (
 )
 from app.services.access_codes import (
     effective_roster_names,
+    effective_roster_players,
     find_access_code_by_code,
     reason_for_invalid,
 )
@@ -113,6 +114,12 @@ def validate_code():
             "expires_at": access_code.expires_at.isoformat(),
             "quiz": quiz.to_dict(include_questions=True, include_correct_answers=False),
             "roster_players": effective_roster_names(access_code),
+            # Additive, not a replacement for roster_players above (kept
+            # unchanged for backward compatibility) - carries player_id
+            # alongside each name so the frontend can distinguish two
+            # canonical Players who share a display name, and submit the
+            # right one back on /start. See effective_roster_players.
+            "roster_players_v2": effective_roster_players(access_code),
         }
     )
 
@@ -130,18 +137,32 @@ def start_attempt():
     if reason is not None:
         raise _invalid_code_error(reason)
 
-    roster_names = set(effective_roster_names(access_code))
-    if data["player_name"] not in roster_names:
-        raise ApiError("Player name is not on this quiz's roster", status_code=422)
+    player_id = data.get("player_id")
+    if player_id is not None:
+        # Never trust a client-supplied player_id as proof of eligibility on
+        # its own - it must actually be one of this activation's effective
+        # roster entries (same check `effective_roster_names` + membership
+        # already enforces for a legacy name). Rejects both a genuinely
+        # unrelated player_id and one belonging to another organization.
+        canonical_ids = {p["player_id"] for p in effective_roster_players(access_code) if p["player_id"]}
+        if player_id not in canonical_ids:
+            raise ApiError("Player is not on this quiz's roster", status_code=422)
+    else:
+        roster_names = set(effective_roster_names(access_code))
+        if data["player_name"] not in roster_names:
+            raise ApiError("Player name is not on this quiz's roster", status_code=422)
 
-    existing = find_attempt(access_code.id, data["player_name"])
+    existing = find_attempt(access_code.id, data["player_name"], player_id)
     if existing is not None:
         if existing.status == AttemptStatus.SUBMITTED:
             raise ApiError(ALREADY_SUBMITTED, status_code=409)
         return jsonify(_attempt_state(existing))
 
     attempt = PlayerAttempt(
-        quiz_id=access_code.quiz_id, access_code_id=access_code.id, player_name=data["player_name"]
+        quiz_id=access_code.quiz_id,
+        access_code_id=access_code.id,
+        player_name=data["player_name"],
+        player_id=player_id,
     )
     db.session.add(attempt)
     try:
@@ -151,7 +172,7 @@ def start_attempt():
         # (e.g. a fast double-tap), not a genuine conflict - converge to
         # whichever one won instead of erroring.
         db.session.rollback()
-        existing = find_attempt(access_code.id, data["player_name"])
+        existing = find_attempt(access_code.id, data["player_name"], player_id)
         if existing is None:
             raise
         if existing.status == AttemptStatus.SUBMITTED:
@@ -180,7 +201,7 @@ def save_answer():
         # expired at final submit instead of the moment it actually does.
         raise _invalid_code_error(reason)
 
-    attempt = find_attempt(access_code.id, data["player_name"])
+    attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
     if attempt is None:
         raise ApiError("Start the quiz before saving an answer", status_code=404)
     if attempt.status == AttemptStatus.SUBMITTED:
@@ -205,7 +226,7 @@ def submit_quiz():
     if reason is not None:
         raise _invalid_code_error(reason)
 
-    attempt = find_attempt(access_code.id, data["player_name"])
+    attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
     if attempt is None:
         raise ApiError("Start the quiz before submitting", status_code=404)
     if attempt.status == AttemptStatus.SUBMITTED:
