@@ -3,6 +3,7 @@
 from app.models.organization import Organization, OrganizationInvite
 from app.models.coach import Coach, CoachRole
 from app.models.folder import Folder
+from app.models.player import Player
 from app.models.group import Group, GroupPlayer
 from app.models.quiz import Quiz
 from app.models.question import Question, QuestionOption, QuestionType
@@ -18,6 +19,7 @@ __all__ = [
     "Coach",
     "CoachRole",
     "Folder",
+    "Player",
     "Group",
     "GroupPlayer",
     "Quiz",

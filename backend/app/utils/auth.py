@@ -23,7 +23,7 @@ from flask_jwt_extended import get_jwt_identity
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Coach, Folder, Group, Quiz
+from app.models import Coach, Folder, Group, Player, Quiz
 
 
 def current_coach() -> Coach:
@@ -86,3 +86,16 @@ def get_org_group(group_id: int) -> Group:
     if group is None or group.organization_id != coach.organization_id:
         raise ApiError("Group not found", status_code=404)
     return group
+
+
+def get_org_player(player_id: int) -> Player:
+    """A master-roster Player in the caller's organization. Org-shared, same
+    as groups/folders - any member may view or edit any player their
+    organization owns. The 404-not-403 rule applies here too: a player id
+    that belongs to another organization must look identical to one that
+    doesn't exist at all."""
+    coach = current_coach()
+    player = db.session.get(Player, player_id)
+    if player is None or player.organization_id != coach.organization_id:
+        raise ApiError("Player not found", status_code=404)
+    return player

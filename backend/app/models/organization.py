@@ -22,6 +22,7 @@ class Organization(TimestampMixin, db.Model):
     quizzes = db.relationship("Quiz", back_populates="organization")
     folders = db.relationship("Folder", back_populates="organization")
     groups = db.relationship("Group", back_populates="organization")
+    players = db.relationship("Player", back_populates="organization")
     invites = db.relationship(
         "OrganizationInvite",
         back_populates="organization",

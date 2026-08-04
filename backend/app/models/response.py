@@ -33,7 +33,24 @@ class PlayerAttempt(db.Model):
     access_code_id = db.Column(
         db.Integer, db.ForeignKey("access_codes.id"), nullable=False, index=True
     )
+    # Display snapshot, not identity, once player_id is set - see player_id
+    # below. Always populated (even for a canonical attempt) so every
+    # existing name-based display path keeps working unchanged.
     player_name = db.Column(db.String(255), nullable=False, index=True)
+    # Canonical identity (nullable - added for the master-roster migration).
+    # NULL means a legacy, name-only attempt exactly as before this column
+    # existed. Uniqueness is enforced by two partial indexes instead of one
+    # plain UniqueConstraint (see the migration): one on
+    # (access_code_id, player_name) WHERE player_id IS NULL, preserving the
+    # original name-collision rule for legacy attempts, and one on
+    # (access_code_id, player_id) WHERE player_id IS NOT NULL, which is what
+    # lets two different canonical Players who happen to share a display
+    # name (e.g. two "Chris Smith"s) both attempt the same activation
+    # without colliding - the old single name-based constraint could not
+    # allow that.
+    player_id = db.Column(
+        db.Integer, db.ForeignKey("players.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     status = db.Column(
         db.Enum(AttemptStatus), nullable=False, default=AttemptStatus.IN_PROGRESS
     )
@@ -43,10 +60,22 @@ class PlayerAttempt(db.Model):
     quiz = db.relationship("Quiz", back_populates="attempts")
     access_code = db.relationship("AccessCode", back_populates="attempts")
     answers = db.relationship("Answer", back_populates="attempt", cascade="all, delete-orphan")
+    player = db.relationship("Player")
 
     __table_args__ = (
-        db.UniqueConstraint(
-            "access_code_id", "player_name", name="uq_one_attempt_per_player_per_activation"
+        db.Index(
+            "uq_legacy_attempt_by_name",
+            "access_code_id",
+            "player_name",
+            unique=True,
+            postgresql_where=db.text("player_id IS NULL"),
+        ),
+        db.Index(
+            "uq_canonical_attempt_by_player",
+            "access_code_id",
+            "player_id",
+            unique=True,
+            postgresql_where=db.text("player_id IS NOT NULL"),
         ),
     )
 
@@ -56,6 +85,7 @@ class PlayerAttempt(db.Model):
             "quiz_id": self.quiz_id,
             "access_code_id": self.access_code_id,
             "player_name": self.player_name,
+            "player_id": self.player_id,
             "status": self.status.value,
             "started_at": self.started_at.isoformat(),
             "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,

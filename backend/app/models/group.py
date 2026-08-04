@@ -48,14 +48,45 @@ class Group(TimestampMixin, db.Model):
 
 
 class GroupPlayer(db.Model):
+    """One membership slot in a Group.
+
+    `player_id` is the canonical link (nullable, added for the master-roster
+    migration): when set, `player_name` is just a display snapshot taken at
+    add-time, not the source of truth - see Player.full_name for the live
+    value. A row with `player_id` NULL is a legacy free-text entry, exactly
+    as this table worked before Player existed; both kinds can coexist in
+    the same group during the transition. A partial unique index (see the
+    migration) prevents the same Player from being added twice to one
+    group, but only applies where player_id IS NOT NULL - legacy name rows
+    keep relying on the application-level dedupe in
+    services/player_names.py, same as always.
+    """
+
     __tablename__ = "group_players"
 
     id = db.Column(db.Integer, primary_key=True)
     group_id = db.Column(db.Integer, db.ForeignKey("groups.id"), nullable=False, index=True)
     player_name = db.Column(db.String(255), nullable=False)
     position = db.Column(db.Integer, nullable=False, default=0)
+    player_id = db.Column(
+        db.Integer, db.ForeignKey("players.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     group = db.relationship("Group", back_populates="players")
+    player = db.relationship("Player")
+
+    __table_args__ = (
+        db.Index(
+            "uq_group_players_group_player",
+            "group_id",
+            "player_id",
+            unique=True,
+            postgresql_where=db.text("player_id IS NOT NULL"),
+        ),
+    )
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "player_name": self.player_name, "position": self.position}
+        data = {"id": self.id, "player_name": self.player_name, "position": self.position}
+        if self.player_id is not None and self.player is not None:
+            data["player"] = self.player.to_dict()
+        return data
