@@ -1,0 +1,77 @@
+.backLink {
+  display: inline-block;
+  margin-bottom: 1em;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--nb-text-muted, #78766e);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--nb-text, #1c1b1a);
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1em;
+  flex-wrap: wrap;
+}
+
+.subheading {
+  color: var(--nb-text-muted, #78766e);
+  margin: -0.25em 0 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.5em;
+}
+
+.editForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin: 1em 0;
+}
+
+.editForm input {
+  flex: 1 1 140px;
+}
+
+.groupsLine {
+  color: var(--nb-text-muted, #78766e);
+  font-size: 0.9em;
+  margin: 1em 0;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1em;
+  margin: 1.5em 0;
+}
+
+.statsGrid > div {
+  text-align: center;
+}
+
+.statValue {
+  font-family: 'Cinzel', serif;
+  font-size: 1.8em;
+  font-weight: 700;
+}
+
+.statLabel {
+  color: var(--nb-text-muted, #78766e);
+  font-size: 0.85em;
+  margin-top: 0.25em;
+}
+
+@media (max-width: 600px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

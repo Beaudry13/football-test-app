@@ -12,6 +12,8 @@ import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
 import { TeamPage } from './pages/TeamPage';
 import { PlayerHistoryPage } from './pages/PlayerHistoryPage';
+import { MasterRosterPage } from './pages/MasterRosterPage';
+import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import { JoinOrgPage } from './pages/JoinOrgPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
@@ -47,6 +49,8 @@ function App() {
 
             <Route element={<NotebookLayout />}>
               <Route path="/team" element={<TeamPage />} />
+              <Route path="/roster" element={<MasterRosterPage />} />
+              <Route path="/roster/:playerId" element={<PlayerProfilePage />} />
               <Route path="/groups" element={<GroupsPage />} />
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />
