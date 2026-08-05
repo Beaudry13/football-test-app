@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { exportResultsCsv, exportResultsPdf, getQuizDashboard, listResponses } from '../../api/grading';
+import {
+  exportResultsCsv,
+  exportResultsDetailedPdf,
+  exportResultsPdf,
+  getQuizDashboard,
+  listResponses,
+} from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
 import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -12,11 +18,13 @@ function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'quiz';
 }
 
+type ExportFormat = 'detailed-pdf' | 'summary-pdf' | 'csv';
+
 export function ResultsTab({ quiz }: { quiz: Quiz }) {
   const [dashboard, setDashboard] = useState<QuizDashboard | null>(null);
   const [responses, setResponses] = useState<PlayerResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -36,11 +44,22 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
   }, [load]);
 
   const handleExport = useCallback(
-    async (format: 'csv' | 'pdf') => {
+    async (format: ExportFormat) => {
       setExporting(format);
       try {
-        const blob = format === 'csv' ? await exportResultsCsv(quiz.id) : await exportResultsPdf(quiz.id);
-        downloadBlob(blob, `${slugify(quiz.title)}-results.${format}`);
+        let blob: Blob;
+        let suffix: string;
+        if (format === 'csv') {
+          blob = await exportResultsCsv(quiz.id);
+          suffix = 'results.csv';
+        } else if (format === 'summary-pdf') {
+          blob = await exportResultsPdf(quiz.id);
+          suffix = 'summary-results.pdf';
+        } else {
+          blob = await exportResultsDetailedPdf(quiz.id);
+          suffix = 'detailed-results.pdf';
+        }
+        downloadBlob(blob, `${slugify(quiz.title)}-${suffix}`);
       } catch (err) {
         setError(getErrorMessage(err));
       } finally {
@@ -72,21 +91,32 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           </div>
 
           <div className={styles.exportRow}>
+            <span className={styles.exportLabel}>Export Results:</span>
+            <button
+              type="button"
+              className={nb.btnPrimary}
+              onClick={() => handleExport('detailed-pdf')}
+              disabled={exporting !== null}
+              title="Every submitted Player, every question, every answer, and grading state - grouped by Player."
+            >
+              {exporting === 'detailed-pdf' ? 'Exporting…' : 'Detailed PDF'}
+            </button>
+            <button
+              type="button"
+              className={nb.btnSm}
+              onClick={() => handleExport('summary-pdf')}
+              disabled={exporting !== null}
+              title="One row per Player - score and grading status only, no per-question detail."
+            >
+              {exporting === 'summary-pdf' ? 'Exporting…' : 'Summary PDF'}
+            </button>
             <button
               type="button"
               className={nb.btnSm}
               onClick={() => handleExport('csv')}
               disabled={exporting !== null}
             >
-              {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
-            </button>
-            <button
-              type="button"
-              className={nb.btnSm}
-              onClick={() => handleExport('pdf')}
-              disabled={exporting !== null}
-            >
-              {exporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
+              {exporting === 'csv' ? 'Exporting…' : 'CSV'}
             </button>
           </div>
 

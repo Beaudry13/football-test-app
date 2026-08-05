@@ -38,3 +38,10 @@ export function exportResultsCsv(quizId: number): Promise<Blob> {
 export function exportResultsPdf(quizId: number): Promise<Blob> {
   return api.getBlob(`/quizzes/${quizId}/export.pdf`);
 }
+
+/** Full per-Player, per-question results PDF - the "Detailed PDF" export.
+ * Distinct from exportResultsPdf above, which stays the lighter-weight
+ * "Summary PDF" (one row per Player, no per-question breakdown). */
+export function exportResultsDetailedPdf(quizId: number): Promise<Blob> {
+  return api.getBlob(`/quizzes/${quizId}/export-detailed.pdf`);
+}
