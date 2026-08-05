@@ -43,6 +43,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
+    HRFlowable,
     Image as RLImage,
     KeepTogether,
     PageBreak,
@@ -64,6 +65,67 @@ RESULT_UNANSWERED = "Unanswered"
 
 _MAX_IMAGE_WIDTH = 4.5 * inch
 _MAX_IMAGE_HEIGHT = 3.5 * inch
+
+# --- PDF theme -------------------------------------------------------------
+#
+# Every color either PDF builder below uses comes from this one dict, so a
+# future organization-branding feature (school primary/secondary/accent
+# colors + logo - not built yet, see the PR description) can swap these
+# values without touching the builders themselves. For this release every
+# value is Peira's own print-friendly palette:
+#
+# - White/warm-white PAGE_BACKGROUND (reportlab's page canvas is already
+#   white by default - nothing here paints a full-page fill, which is the
+#   point: a coach printing a 20-40 page report should never be laying
+#   down a full black or full gold page of ink).
+# - Charcoal PRIMARY_TEXT for all body copy, headings, and table text -
+#   never pure black, but reads as black on ordinary paper.
+# - A restrained gold/bronze ACCENT reserved for small elements only: the
+#   "Peira" wordmark, thin section dividers, and table header text -
+#   never a large filled panel.
+# - Pale cream LIGHT_FILL / slightly deeper HEADER_FILL for the one place
+#   this module fills any area at all (table header rows) - both light
+#   enough to print on plain paper without noticeable ink coverage.
+# - A soft muted-gold BORDER color for table grid lines and the divider
+#   rule, instead of a heavier pure grey or black.
+PDF_THEME = {
+    "background": colors.HexColor("#FFFFFF"),
+    "primary_text": colors.HexColor("#2A2416"),
+    "accent": colors.HexColor("#A6822F"),
+    "secondary_accent": colors.HexColor("#6E6858"),
+    "light_fill": colors.HexColor("#F7F4EC"),
+    "border": colors.HexColor("#D9CFA8"),
+    "header_fill": colors.HexColor("#EFE8D6"),
+}
+
+
+def _pdf_styles() -> dict[str, ParagraphStyle]:
+    """One place every ParagraphStyle used by the PDF builders below is
+    defined, all themed from PDF_THEME - see that dict's docstring. Headings
+    and body text use PRIMARY_TEXT (charcoal, not pure black); only the
+    "Peira" wordmark and small secondary labels ("Player Answer:", "Submitted:",
+    etc.) use the gold ACCENT / muted SECONDARY_ACCENT, matching the "gold
+    reserved for small elements only" requirement."""
+    base = getSampleStyleSheet()
+    normal = ParagraphStyle("PeiraNormal", parent=base["Normal"], textColor=PDF_THEME["primary_text"])
+    return {
+        "title": ParagraphStyle("PeiraTitle", parent=base["Title"], textColor=PDF_THEME["primary_text"]),
+        "heading2": ParagraphStyle("PeiraHeading2", parent=base["Heading2"], textColor=PDF_THEME["primary_text"]),
+        "heading4": ParagraphStyle("PeiraHeading4", parent=base["Heading4"], textColor=PDF_THEME["primary_text"]),
+        "normal": normal,
+        "wordmark": ParagraphStyle("PeiraWordmark", parent=base["Heading2"], textColor=PDF_THEME["accent"]),
+        "label": ParagraphStyle(
+            "PeiraLabel", parent=normal, fontSize=9, textColor=PDF_THEME["secondary_accent"]
+        ),
+        "wrap": ParagraphStyle("PeiraWrap", parent=normal, fontSize=9, leading=12),
+    }
+
+
+def _divider() -> HRFlowable:
+    """A single thin rule in the muted accent border color - the only
+    "dividers" element the branding brief allows, and it costs a fraction
+    of a point of ink, not a filled bar."""
+    return HRFlowable(width="100%", thickness=0.75, color=PDF_THEME["border"], spaceBefore=4, spaceAfter=10)
 
 
 def export_filename_slug(title: str) -> str:
@@ -185,21 +247,23 @@ def build_results_csv(quiz, responses: list) -> str:
 def build_results_pdf(quiz, dashboard_data: dict, responses: list) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, title=f"{quiz.title} - Results")
-    styles = getSampleStyleSheet()
+    styles = _pdf_styles()
     elements = [
-        Paragraph(f"{quiz.title} — Results", styles["Title"]),
-        Paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", styles["Normal"]),
-        Spacer(1, 12),
+        Paragraph("Peira", styles["wordmark"]),
+        Paragraph(f"{quiz.title} — Results", styles["title"]),
+        Paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", styles["normal"]),
+        Spacer(1, 8),
+        _divider(),
         Paragraph(
             f"{dashboard_data['response_count']} of {dashboard_data['roster_size']} players responded "
             f"({round(dashboard_data['response_rate'] * 100)}%)",
-            styles["Normal"],
+            styles["normal"],
         ),
         Spacer(1, 16),
     ]
 
     if dashboard_data["question_breakdown"]:
-        elements.append(Paragraph("Per-question breakdown", styles["Heading2"]))
+        elements.append(Paragraph("Per-question breakdown", styles["heading2"]))
         breakdown_rows = [["Question", "Correct", "Incorrect", "Ungraded"]]
         for q in dashboard_data["question_breakdown"]:
             breakdown_rows.append(
@@ -208,7 +272,7 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list) -> bytes:
         elements.append(_styled_table(breakdown_rows, first_col_width=300))
         elements.append(Spacer(1, 16))
 
-    elements.append(Paragraph("Player scores", styles["Heading2"]))
+    elements.append(Paragraph("Player scores", styles["heading2"]))
     if responses:
         score_rows = [["Player", "Submitted At", "Score", "Ungraded"]]
         for response in sorted(responses, key=lambda r: r.display_name.lower()):
@@ -225,7 +289,7 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list) -> bytes:
             )
         elements.append(_styled_table(score_rows, first_col_width=200))
     else:
-        elements.append(Paragraph("No responses yet.", styles["Normal"]))
+        elements.append(Paragraph("No responses yet.", styles["normal"]))
 
     doc.build(elements)
     return buffer.getvalue()
@@ -236,9 +300,11 @@ def _styled_table(rows: list[list[str]], first_col_width: int) -> Table:
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("BACKGROUND", (0, 0), (-1, 0), PDF_THEME["header_fill"]),
+                ("TEXTCOLOR", (0, 0), (-1, -1), PDF_THEME["primary_text"]),
+                ("TEXTCOLOR", (0, 0), (-1, 0), PDF_THEME["accent"]),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("GRID", (0, 0), (-1, -1), 0.5, PDF_THEME["border"]),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
             ]
@@ -267,9 +333,11 @@ def _detailed_summary_table(rows: list[list], wrap_style: ParagraphStyle) -> Tab
     table.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("BACKGROUND", (0, 0), (-1, 0), PDF_THEME["header_fill"]),
+                ("TEXTCOLOR", (0, 0), (-1, -1), PDF_THEME["primary_text"]),
+                ("TEXTCOLOR", (0, 0), (-1, 0), PDF_THEME["accent"]),
                 ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("GRID", (0, 0), (-1, -1), 0.5, PDF_THEME["border"]),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("FONTSIZE", (0, 0), (-1, -1), 8),
             ]
@@ -309,9 +377,9 @@ def build_detailed_results_pdf(
         topMargin=0.6 * inch,
         bottomMargin=0.6 * inch,
     )
-    styles = getSampleStyleSheet()
-    wrap_style = ParagraphStyle("Wrap", parent=styles["Normal"], fontSize=9, leading=12)
-    label_style = ParagraphStyle("Label", parent=styles["Normal"], fontSize=9, textColor=colors.grey)
+    styles = _pdf_styles()
+    wrap_style = styles["wrap"]
+    label_style = styles["label"]
 
     questions = sorted(quiz.questions, key=lambda q: q.position)
     ordered_responses = sorted(responses, key=_player_sort_key)
@@ -322,13 +390,14 @@ def build_detailed_results_pdf(
     per_response = {r.id: _player_result_counts(questions, r) for r in ordered_responses}
 
     elements: list = [
-        Paragraph("Peira", styles["Heading2"]),
-        Paragraph(organization_name, styles["Normal"]),
-        Paragraph(f"{quiz.title} — Detailed Results", styles["Title"]),
+        Paragraph("Peira", styles["wordmark"]),
+        Paragraph(organization_name, styles["normal"]),
+        Paragraph(f"{quiz.title} — Detailed Results", styles["title"]),
         Paragraph(
-            f"Exported {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}", styles["Normal"]
+            f"Exported {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}", styles["normal"]
         ),
-        Spacer(1, 12),
+        Spacer(1, 8),
+        _divider(),
     ]
 
     total_correct = 0
@@ -369,14 +438,14 @@ def build_detailed_results_pdf(
             f"Total assigned: {dashboard_data['roster_size']} &nbsp;&nbsp;&nbsp; "
             f"Total submitted: {dashboard_data['response_count']} &nbsp;&nbsp;&nbsp; "
             f"Average score: {f'{org_average}%' if org_average is not None else '—'}",
-            styles["Normal"],
+            styles["normal"],
         )
     )
     elements.append(
         Paragraph(
             f"Fully graded: {fully_graded_count} &nbsp;&nbsp;&nbsp; "
             f"Awaiting manual grading: {awaiting_grading_count}",
-            styles["Normal"],
+            styles["normal"],
         )
     )
     elements.append(Spacer(1, 16))
@@ -385,7 +454,7 @@ def build_detailed_results_pdf(
         elements.append(_detailed_summary_table(summary_rows, wrap_style))
     else:
         elements.append(
-            Paragraph("No submitted Player responses are available to export yet.", styles["Normal"])
+            Paragraph("No submitted Player responses are available to export yet.", styles["normal"])
         )
 
     for response in ordered_responses:
@@ -400,16 +469,17 @@ def build_detailed_results_pdf(
         header = f"{header_bits[0]} — {header_bits[1]}" if len(header_bits) > 1 else header_bits[0]
         if player and player.jersey_number:
             header = f"#{player.jersey_number} {header}"
-        elements.append(Paragraph(header, styles["Heading2"]))
+        elements.append(Paragraph(header, styles["heading2"]))
         elements.append(
             Paragraph(f"Submitted: {response.submitted_at.strftime('%B %d, %Y at %I:%M %p')}", label_style)
         )
-        elements.append(Spacer(1, 6))
+        elements.append(Spacer(1, 4))
+        elements.append(_divider())
 
         if score_percent is not None:
-            elements.append(Paragraph(f"Current Score: {score_percent}% of graded questions", styles["Normal"]))
+            elements.append(Paragraph(f"Current Score: {score_percent}% of graded questions", styles["normal"]))
         else:
-            elements.append(Paragraph("Current Score: not available (nothing graded yet)", styles["Normal"]))
+            elements.append(Paragraph("Current Score: not available (nothing graded yet)", styles["normal"]))
         if counts[RESULT_NOT_GRADED] > 0:
             plural = "s" if counts[RESULT_NOT_GRADED] != 1 else ""
             elements.append(Paragraph(f"{counts[RESULT_NOT_GRADED]} response{plural} awaiting grading", label_style))
@@ -417,7 +487,7 @@ def build_detailed_results_pdf(
             Paragraph(
                 f"Correct: {counts[RESULT_CORRECT]} &nbsp;&nbsp; Incorrect: {counts[RESULT_INCORRECT]} &nbsp;&nbsp; "
                 f"Not Graded: {counts[RESULT_NOT_GRADED]} &nbsp;&nbsp; Unanswered: {counts[RESULT_UNANSWERED]}",
-                styles["Normal"],
+                styles["normal"],
             )
         )
         elements.append(Spacer(1, 12))
@@ -427,7 +497,7 @@ def build_detailed_results_pdf(
             result = _grading_result(answer)
 
             block: list = [
-                Paragraph(f"Question {i}", styles["Heading4"]),
+                Paragraph(f"Question {i}", styles["heading4"]),
                 Paragraph(question.question_text, wrap_style),
             ]
 
@@ -455,7 +525,7 @@ def build_detailed_results_pdf(
                 block.append(Paragraph("Coach Feedback:", label_style))
                 block.append(Paragraph(answer.coach_feedback, wrap_style))
 
-            block.append(Paragraph(f"Result: {result}", styles["Normal"]))
+            block.append(Paragraph(f"Result: {result}", styles["normal"]))
             block.append(Spacer(1, 10))
 
             elements.append(KeepTogether(block))
