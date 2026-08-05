@@ -514,7 +514,10 @@ def test_organization_name_and_quiz_title_appear(client, coach_headers):
 
     assert coach["organization"] in text
     assert quiz["title"] in text
-    assert "Peira" in text
+    # The wordmark is set as letterspaced caps in the redesigned masthead
+    # and footer - match case-insensitively so this asserts "the brand is
+    # on the page" rather than one particular capitalization.
+    assert "peira" in text.lower()
 
 
 def test_every_submitted_player_appears_exactly_once(client, coach_headers):
@@ -575,9 +578,13 @@ def test_correct_answer_is_shown_for_an_objective_question(client, coach_headers
     response = client.get(f"/api/quizzes/{quiz['id']}/export-detailed.pdf", headers=coach_headers)
     text = _pdf_text(response.get_data())
 
-    assert "Correct Answer:" in text
+    # Field labels are letterspaced small-caps in the redesigned card
+    # ("CORRECT ANSWER", no colon), and the per-question status now reads
+    # as a chip in the card header rather than a trailing "Result:" line -
+    # same facts, different presentation.
+    assert "CORRECT ANSWER" in text
     assert "True" in text  # the correct option's text
-    assert "Result: Incorrect" in text
+    assert "INCORRECT" in text
 
 
 def test_filename_is_sanitized_and_readable(client, coach_headers):

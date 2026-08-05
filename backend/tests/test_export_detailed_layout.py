@@ -13,10 +13,15 @@ import re
 from datetime import datetime, timezone
 
 from pypdf import PdfReader
+from reportlab.lib.styles import ParagraphStyle
 
 from app.services import export as export_module
 from app.services.export import (
     PDF_THEME,
+    RESULT_CORRECT,
+    RESULT_INCORRECT,
+    RESULT_NOT_GRADED,
+    RESULT_UNANSWERED,
     _brand_mark,
     _format_short_timestamp,
     _pdf_styles,
@@ -37,6 +42,119 @@ def test_summary_column_widths_fit_the_usable_page_width():
     # US Letter minus 1in side margins = 468pt usable width - stay under
     # that with real room to spare, not shrink-to-fit at the wire.
     assert sum(_SUMMARY_COL_WIDTHS) <= 468
+
+
+def test_every_roster_header_label_fits_its_column_without_breaking_mid_word():
+    """A header broken inside a word ("INCORRE / CT") is the single most
+    obvious "auto-generated report" tell, and it's what the first pass of
+    this redesign shipped. Each column must be wide enough for its own
+    longest header WORD, set in the heading face at the table-header size
+    with its letterspacing, plus the cell's 8pt of horizontal padding.
+
+    Multi-word labels ("Not Graded") may wrap at the space, so only the
+    longest single word has to fit."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    headers = [
+        "Player",
+        "#",
+        "Position",
+        "Submitted",
+        "Correct",
+        "Incorrect",
+        "Not Graded",
+        "Unanswered",
+        "Score",
+    ]
+    font = PDF_THEME["heading_font"]
+    size = PDF_THEME["body_sizes"]["table_header"]
+    tracking = PDF_THEME["char_space"]["table"]
+    padding = 8
+
+    for label, width in zip(headers, _SUMMARY_COL_WIDTHS):
+        longest = max(label.upper().split(), key=len)
+        needed = stringWidth(longest, font, size) + tracking * len(longest) + padding
+        assert width >= needed, f"{label!r} column is {width}pt, needs >= {needed:.1f}pt for {longest!r}"
+
+
+def test_submitted_column_fits_the_widest_timestamp_the_formatter_can_emit():
+    """The Submitted/Correct collision this redesign fixed came back the
+    moment the column got narrower than a real timestamp. Measure the
+    widest string _format_short_timestamp can produce (a two-digit day and
+    a two-digit 12-hour clock) rather than trusting a magic number."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    widest = _format_short_timestamp(datetime(2026, 12, 28, 23, 58, tzinfo=timezone.utc))
+    needed = stringWidth(widest, PDF_THEME["body_font"], PDF_THEME["body_sizes"]["small"]) + 8
+
+    assert _SUMMARY_COL_WIDTHS[3] >= needed, f"Submitted column needs >= {needed:.1f}pt for {widest!r}"
+
+
+def test_player_column_is_wide_enough_to_break_a_long_surname_at_its_hyphen():
+    """Below a measured threshold ReportLab gives up on the embedded hyphen
+    and splits inside the word ("Vandermeul / en-Fitzgerald"). Assert the
+    real wrap result rather than the width, so this keeps protecting the
+    behavior even if the font or size changes."""
+    from reportlab.platypus import Paragraph
+
+    style = ParagraphStyle(
+        "ProbeRosterName",
+        fontName=PDF_THEME["heading_font"],
+        fontSize=PDF_THEME["body_sizes"]["small"],
+        leading=PDF_THEME["body_sizes"]["small"] * 1.3,
+        embeddedHyphenation=1,
+    )
+    paragraph = Paragraph("Christopher Vandermeulen-Fitzgerald", style)
+    paragraph.wrap(_SUMMARY_COL_WIDTHS[0] - 8, 200)
+
+    rendered = []
+    for line in paragraph.blPara.lines:
+        words = line[1] if isinstance(line, tuple) else line.words
+        rendered.append(" ".join(w if isinstance(w, str) else w.text for w in words))
+
+    assert all(
+        line.endswith("-") or line == rendered[-1] for line in rendered[:-1]
+    ), f"long surname was split mid-word: {rendered}"
+    assert "Fitzgerald" in rendered[-1]
+
+
+def test_every_grading_result_has_a_chip_style():
+    """The per-question status chip looks its state up in the theme - a
+    missing entry would be a KeyError mid-render, on one Player's page,
+    only for one particular grading state."""
+    for result in (RESULT_CORRECT, RESULT_INCORRECT, RESULT_NOT_GRADED, RESULT_UNANSWERED):
+        fill, text_color = PDF_THEME["result_styles"][result]
+        assert fill is not None and text_color is not None
+
+
+def test_result_chip_fills_stay_light_enough_to_print_cheaply():
+    """Status chips must stay near-white tints. A coach may print dozens of
+    Player pages, and the whole point of the chips is that they cost
+    hairline-level ink - a saturated fill here would quietly turn every
+    question card into a toner sink."""
+    for result, (fill, _text) in PDF_THEME["result_styles"].items():
+        luminance = 0.2126 * fill.red + 0.7152 * fill.green + 0.0722 * fill.blue
+        assert luminance >= 0.9, f"{result} chip fill is too dark to print in quantity ({luminance:.3f})"
+
+
+def test_the_shipped_peira_mark_exists_so_the_masthead_is_not_text_only():
+    """theme["logo_path"] points at a real file shipped with the backend.
+    If this asset ever stops being packaged, _brand_mark() silently falls
+    back to the text wordmark and the report quietly loses its logo - the
+    kind of regression nobody notices until a coach shares a PDF."""
+    from pathlib import Path
+
+    assert PDF_THEME["logo_path"], "PDF_THEME must point at the shipped Peira mark"
+    assert Path(PDF_THEME["logo_path"]).is_file()
+
+
+def test_brand_mark_uses_the_real_logo_when_one_is_configured():
+    styles = _pdf_styles(PDF_THEME)
+
+    mark = _brand_mark(PDF_THEME, styles)
+
+    # An Image, not the Paragraph fallback - the default theme ships a logo.
+    assert mark.__class__.__name__ == "Image"
 
 
 def test_submitted_column_is_wide_enough_for_the_short_timestamp_format():
@@ -149,7 +267,9 @@ def test_footer_shows_quiz_title_and_wordmark(client, coach_headers):
     text = _pdf_text(response.get_data())
 
     assert quiz["title"] in text
-    assert "Peira" in text
+    # Letterspaced caps in the redesigned footer - assert the brand is
+    # present, not one particular capitalization.
+    assert "peira" in text.lower()
 
 
 # --- logo / wordmark fallback ---------------------------------------------------

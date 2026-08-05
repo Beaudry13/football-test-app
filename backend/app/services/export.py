@@ -33,19 +33,32 @@ Player Progress Analytics about what "correct," "graded," or "score" mean:
 
 PDF theming (read this before touching layout code below): every color,
 font, size, and spacing value the PDF builders use comes from a `theme`
-dict (PDF_THEME is the default) - see that dict's docstring. The current
-values are a deliberately restrained, print-friendly Peira placeholder
-palette, not a finished brand design - a broader Peira visual redesign is
-planned, and this module is structured so that redesign (and, later,
-per-organization branding) only ever means constructing a different theme
-dict and passing it in, never rewriting build_results_pdf/
+dict (PDF_THEME is the default) - see that dict's docstring. Per-
+organization branding, when it lands, means constructing a different
+theme dict and passing it in, never rewriting build_results_pdf/
 build_detailed_results_pdf or the helpers they call.
+
+Visual design intent (the brief this layout answers): a coaching report
+that reads as *deliberately designed* the moment a coach opens or shares
+it, while staying cheap to print in quantity. The character comes from
+structure and restraint, not decoration - a real Peira mark in the
+masthead, a gold double rule, letterspaced small-caps eyebrows and
+section headers, separated metric cards with a gold top edge, a
+horizontal-rules-only roster table, question cards with a gold left edge,
+and status chips on near-white fills. Everything that carries ink is a
+hairline or a ~95%-luminance tint; there is no full-bleed dark panel, no
+large gold block, and no watermark anywhere in this module. A coach
+printing 25 Player pages on a department laser printer is the design
+constraint. Status is always carried by a *word* ("Correct", "Not
+Graded"), never by color alone, so the report survives grayscale printing
+and colorblind readers intact.
 """
 
 import csv
 import io
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from xml.sax.saxutils import escape as _xml_escape
 
 from reportlab.lib import colors
@@ -78,6 +91,13 @@ _MAX_IMAGE_HEIGHT = 3.5 * inch
 _LOGO_MAX_WIDTH = 1.4 * inch
 _LOGO_MAX_HEIGHT = 0.5 * inch
 
+# The real Peira mark, shipped with the backend so the PDF never depends on
+# the frontend build or a network fetch. Kept small in the masthead (see
+# _LOGO_MAX_HEIGHT): it's a thin gold serif monogram on transparency, so at
+# report scale it costs essentially no ink. _brand_mark() still degrades to
+# the text wordmark if this file is ever missing from a deploy.
+_PEIRA_MARK_PATH = Path(__file__).resolve().parent.parent / "assets" / "peira-mark.png"
+
 # US Letter, 1in side margins (the SimpleDocTemplate default, which every
 # builder below keeps) - every table/card width is computed from this one
 # constant so they always line up with each other and with the page.
@@ -94,26 +114,28 @@ _CONTENT_WIDTH = 6.5 * inch
 # hex + logo), is a matter of constructing a different dict and passing
 # it in, never editing the layout code itself.
 #
-# Current values are an intentionally restrained, print-friendly Peira
-# placeholder - NOT a finished brand design (a broader Peira visual
-# redesign is planned separately):
-# - White BACKGROUND, charcoal PRIMARY_TEXT/muted SECONDARY_TEXT for body
+# The palette is print-first by construction:
+# - White BACKGROUND, charcoal PRIMARY_TEXT / muted SECONDARY_TEXT for body
 #   copy - never pure black.
-# - A restrained gold/bronze ACCENT + a slightly softer SECONDARY_ACCENT,
-#   used only for small elements: the wordmark, table header text, metric
-#   labels - never a large filled panel.
-# - Pale cream LIGHT_FILL / METRIC_FILL and a slightly deeper HEADER_FILL
-#   for the few places this module fills any area at all (table headers,
-#   metric cards, alternating table rows) - all light enough to print on
-#   plain paper without meaningful ink coverage.
-# - Soft muted-gold BORDER/METRIC_BORDER for grid lines, dividers, and
-#   card outlines, instead of a heavier pure grey or black.
-# - FOOTER_TEXT for the small running footer on every page.
-# - HEADING_FONT/BODY_FONT + HEADING_SIZES/BODY_SIZES/SPACING so
-#   typography and layout rhythm are just as swappable as color.
-# - LOGO_PATH: None today (no finished logo asset exists yet) - see
-#   _brand_mark(), which degrades to WORDMARK_TEXT styled with ACCENT
-#   whenever this is unset or unreadable.
+# - A restrained gold/bronze ACCENT + softer SECONDARY_ACCENT, used only
+#   for hairlines, small-caps labels, the card edge, and the wordmark -
+#   never a large filled panel.
+# - Pale cream LIGHT_FILL / METRIC_FILL, a slightly deeper HEADER_FILL, and
+#   a barely-there ALT_ROW_FILL: every fill in this module sits at ~95%+
+#   luminance, so a full page of them costs a fraction of the toner a
+#   single dark header bar would.
+# - Muted-gold BORDER / METRIC_BORDER for rules and card outlines, plus a
+#   lighter HAIRLINE for in-table row separators, instead of pure grey.
+# - RESULT_STYLES: per-status (fill, text) pairs for the per-question
+#   chips. Deliberately near-white tints, and always paired with the status
+#   WORD, so the report is unambiguous in grayscale.
+# - HEADING_FONT / BODY_FONT + HEADING_SIZES / BODY_SIZES / SPACING /
+#   CHAR_SPACE so typography and layout rhythm are as swappable as color.
+#   CHAR_SPACE drives the letterspaced small-caps used for eyebrows,
+#   section headers, table headers and metric labels - the single biggest
+#   reason this reads as designed rather than as default ReportLab.
+# - LOGO_PATH: the real shipped Peira mark. See _brand_mark(), which still
+#   degrades to WORDMARK_TEXT styled with ACCENT if it's unset/unreadable.
 PDF_THEME = {
     "background": colors.HexColor("#FFFFFF"),
     "primary_text": colors.HexColor("#2A2416"),
@@ -121,19 +143,39 @@ PDF_THEME = {
     "accent": colors.HexColor("#A6822F"),
     "secondary_accent": colors.HexColor("#8A6D1F"),
     "light_fill": colors.HexColor("#F7F4EC"),
-    "alt_row_fill": colors.HexColor("#FBF9F3"),
+    "alt_row_fill": colors.HexColor("#FBFAF6"),
     "border": colors.HexColor("#D9CFA8"),
-    "header_fill": colors.HexColor("#EFE8D6"),
+    "hairline": colors.HexColor("#E7E1CE"),
+    "header_fill": colors.HexColor("#F7F4EC"),
     "header_text": colors.HexColor("#5C4A1A"),
-    "metric_fill": colors.HexColor("#F7F4EC"),
-    "metric_border": colors.HexColor("#D9CFA8"),
+    "metric_fill": colors.HexColor("#FBF9F3"),
+    "metric_border": colors.HexColor("#E2D9BC"),
     "footer_text": colors.HexColor("#8C8578"),
+    "result_styles": {
+        RESULT_CORRECT: (colors.HexColor("#EDF3EE"), colors.HexColor("#2F5D3F")),
+        RESULT_INCORRECT: (colors.HexColor("#FBF0EE"), colors.HexColor("#8C2F26")),
+        RESULT_NOT_GRADED: (colors.HexColor("#FBF5E8"), colors.HexColor("#7A5A12")),
+        RESULT_UNANSWERED: (colors.HexColor("#F4F3F0"), colors.HexColor("#5E5A50")),
+    },
     "heading_font": "Helvetica-Bold",
     "body_font": "Helvetica",
-    "heading_sizes": {"title": 18, "h2": 14, "h3": 11, "h4": 10.5},
-    "body_sizes": {"normal": 10, "label": 8.5, "small": 7.5, "footer": 7.5},
+    "heading_sizes": {"display": 21, "title": 18, "h2": 13, "h3": 11, "h4": 9.5, "metric": 16, "jersey": 15},
+    "body_sizes": {
+        "normal": 10,
+        "label": 8.5,
+        "small": 7.5,
+        "footer": 7.5,
+        "eyebrow": 7,
+        "chip": 7.5,
+        # Table headers run narrower than any other letterspaced label, so
+        # they get their own slightly smaller size/tracking pair - see
+        # _SUMMARY_COL_WIDTHS, whose widths are measured against these.
+        "table_header": 6.5,
+    },
     "spacing": {"xs": 2, "sm": 4, "md": 8, "lg": 12, "xl": 16},
-    "logo_path": None,
+    "char_space": {"eyebrow": 1.5, "label": 0.7, "table": 0.5},
+    "rule": {"strong": 1.8, "thin": 0.5, "hair": 0.4, "edge": 2.5},
+    "logo_path": str(_PEIRA_MARK_PATH),
     "wordmark_text": "Peira",
 }
 
@@ -153,12 +195,24 @@ def _pdf_styles(theme: dict) -> dict[str, ParagraphStyle]:
         textColor=theme["primary_text"],
     )
     return {
+        # The quiz title on page 1 - the largest thing in the report.
+        "display": ParagraphStyle(
+            "PeiraDisplay",
+            parent=base["Title"],
+            fontName=theme["heading_font"],
+            fontSize=theme["heading_sizes"]["display"],
+            leading=theme["heading_sizes"]["display"] * 1.12,
+            textColor=theme["primary_text"],
+            alignment=0,
+            spaceAfter=0,
+        ),
         "title": ParagraphStyle(
             "PeiraTitle",
             parent=base["Title"],
             fontName=theme["heading_font"],
             fontSize=theme["heading_sizes"]["title"],
             textColor=theme["primary_text"],
+            alignment=0,
         ),
         "heading2": ParagraphStyle(
             "PeiraHeading2",
@@ -188,6 +242,43 @@ def _pdf_styles(theme: dict) -> dict[str, ParagraphStyle]:
             fontName=theme["heading_font"],
             fontSize=theme["heading_sizes"]["h2"],
             textColor=theme["accent"],
+            charSpace=theme["char_space"]["eyebrow"],
+            spaceAfter=0,
+        ),
+        # Letterspaced small-caps. Used for the report kicker, section
+        # headers, table headers and metric labels - one typographic device,
+        # applied consistently, is what separates this from a default
+        # ReportLab export while costing no extra ink.
+        "eyebrow": ParagraphStyle(
+            "PeiraEyebrow",
+            parent=normal,
+            fontName=theme["heading_font"],
+            fontSize=theme["body_sizes"]["eyebrow"],
+            leading=theme["body_sizes"]["eyebrow"] * 1.4,
+            textColor=theme["accent"],
+            charSpace=theme["char_space"]["eyebrow"],
+            spaceAfter=0,
+        ),
+        # Same device in a muted tone, for the "PLAYER ANSWER" /
+        # "CORRECT ANSWER" / "COACH FEEDBACK" field labels inside a card.
+        "fieldLabel": ParagraphStyle(
+            "PeiraFieldLabel",
+            parent=normal,
+            fontName=theme["heading_font"],
+            fontSize=theme["body_sizes"]["eyebrow"],
+            leading=theme["body_sizes"]["eyebrow"] * 1.4,
+            textColor=theme["secondary_text"],
+            charSpace=theme["char_space"]["label"],
+            spaceBefore=theme["spacing"]["sm"],
+            spaceAfter=1,
+        ),
+        "metaRight": ParagraphStyle(
+            "PeiraMetaRight",
+            parent=normal,
+            fontSize=theme["body_sizes"]["small"],
+            leading=theme["body_sizes"]["small"] * 1.5,
+            textColor=theme["secondary_text"],
+            alignment=2,
         ),
         "label": ParagraphStyle(
             "PeiraLabel",
@@ -204,18 +295,6 @@ def _pdf_styles(theme: dict) -> dict[str, ParagraphStyle]:
             leading=(theme["body_sizes"]["normal"] - 1) * 1.35,
         ),
     }
-
-
-def _divider(theme: dict) -> HRFlowable:
-    """A single thin rule in the theme's border color - a low-ink way to
-    separate sections without a filled bar."""
-    return HRFlowable(
-        width="100%",
-        thickness=0.75,
-        color=theme["border"],
-        spaceBefore=theme["spacing"]["xs"],
-        spaceAfter=theme["spacing"]["md"],
-    )
 
 
 def _brand_mark(theme: dict, styles: dict[str, ParagraphStyle]):
@@ -238,61 +317,241 @@ def _brand_mark(theme: dict, styles: dict[str, ParagraphStyle]):
     return Paragraph(_xml_escape(theme.get("wordmark_text", "Peira")), styles["wordmark"])
 
 
+def _masthead(theme: dict, styles: dict[str, ParagraphStyle], right_lines: list[str]) -> list:
+    """The report's letterhead: the Peira mark + wordmark on the left, small
+    right-aligned context (organization, export timestamp) on the right,
+    closed by a gold double rule.
+
+    The double rule - one heavy-ish line with a hairline just beneath - is
+    the single most recognizable "this was designed" cue available at
+    almost zero ink cost, and it's the same device the section headers and
+    footer echo further down the page."""
+    mark = _brand_mark(theme, styles)
+    wordmark = Paragraph(_xml_escape(theme.get("wordmark_text", "Peira")).upper(), styles["eyebrow"])
+    # Mark and wordmark stacked, so the lockup stays intact whether the
+    # mark resolved to the real image or fell back to a text wordmark.
+    left = Table([[mark], [wordmark]], colWidths=[2.4 * inch])
+    left.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (0, 0), theme["spacing"]["xs"]),
+                ("BOTTOMPADDING", (0, 1), (0, 1), 0),
+                ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+            ]
+        )
+    )
+
+    right = Paragraph("<br/>".join(_xml_escape(line) for line in right_lines), styles["metaRight"])
+    row = Table([[left, right]], colWidths=[2.6 * inch, _CONTENT_WIDTH - 2.6 * inch])
+    row.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("VALIGN", (0, 0), (0, 0), "BOTTOM"),
+                ("VALIGN", (1, 0), (1, 0), "BOTTOM"),
+            ]
+        )
+    )
+    return [row, Spacer(1, theme["spacing"]["sm"]), *_double_rule(theme)]
+
+
+def _double_rule(theme: dict) -> list:
+    """Gold rule + hairline beneath it. Two thin strokes, no fill - the
+    report's signature divider."""
+    return [
+        HRFlowable(width="100%", thickness=theme["rule"]["strong"], color=theme["accent"], spaceBefore=0, spaceAfter=1.6),
+        HRFlowable(width="100%", thickness=theme["rule"]["hair"], color=theme["accent"], spaceBefore=0, spaceAfter=0),
+    ]
+
+
+def _section_header(theme: dict, styles: dict[str, ParagraphStyle], text: str) -> Table:
+    """A letterspaced small-caps section title sitting on a gold rule, with
+    a short heavier tick under the label itself. Reads as a designed header
+    band without filling any area."""
+    label = Paragraph(_xml_escape(text).upper(), styles["eyebrow"])
+    table = Table([[label]], colWidths=[_CONTENT_WIDTH])
+    table.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
+                ("LINEBELOW", (0, 0), (0, 0), theme["rule"]["thin"], theme["accent"]),
+            ]
+        )
+    )
+    return table
+
+
+def _result_chip(theme: dict, result: str) -> Table:
+    """The per-question status, as a small tinted chip rather than a run of
+    body text. The status WORD is always present - the tint is a secondary
+    cue only, so nothing is lost in grayscale or to a colorblind reader,
+    and every fill here is near-white so a 25-page print stays cheap."""
+    fill, text_color = theme["result_styles"][result]
+    style = ParagraphStyle(
+        "PeiraChip",
+        fontName=theme["heading_font"],
+        fontSize=theme["body_sizes"]["chip"],
+        leading=theme["body_sizes"]["chip"] * 1.25,
+        textColor=text_color,
+        alignment=1,
+        charSpace=theme["char_space"]["label"],
+    )
+    table = Table([[Paragraph(_xml_escape(result).upper(), style)]], colWidths=[1.15 * inch])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), fill),
+                ("BOX", (0, 0), (-1, -1), theme["rule"]["hair"], text_color),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 1),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 1),
+                ("LEFTPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"]),
+                ("RIGHTPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"]),
+            ]
+        )
+    )
+    return table
+
+
+# Width of the white gutter between metric cards. Real separation (rather
+# than dividing lines inside one continuous strip) is what makes the metric
+# row read as a designed panel set instead of a bordered table.
+_METRIC_GUTTER = 6
+
+
 def _metric_block(theme: dict, items: list[tuple[str, str]]) -> Table:
-    """Compact metric cards in a single row (e.g. "22" over "TOTAL
-    SUBMITTED") - replaces a plain run-on sentence of numbers with
-    something scannable at a glance. Entirely themed, so a future reskin
-    only ever touches the theme dict."""
+    """A row of separated metric cards - a big value over a letterspaced
+    small-caps label ("22" over "TOTAL SUBMITTED"), each on a pale cream
+    fill with a gold top edge and a hairline outline, divided by real white
+    gutters.
+
+    The gold edge is a 1.8pt line, not a filled band: it gives each card a
+    clear identity for a few hundredths of a milliliter of toner. Entirely
+    themed, so a reskin only ever touches the theme dict."""
     label_style = ParagraphStyle(
         "MetricLabel",
-        fontName=theme["body_font"],
-        fontSize=theme["body_sizes"]["small"],
+        fontName=theme["heading_font"],
+        fontSize=theme["body_sizes"]["eyebrow"],
+        leading=theme["body_sizes"]["eyebrow"] * 1.3,
         textColor=theme["secondary_accent"],
         alignment=1,
-        spaceBefore=theme["spacing"]["xs"],
+        charSpace=theme["char_space"]["label"],
+        spaceBefore=theme["spacing"]["xs"] + 1,
     )
     value_style = ParagraphStyle(
         "MetricValue",
         fontName=theme["heading_font"],
-        fontSize=theme["heading_sizes"]["h3"],
+        fontSize=theme["heading_sizes"]["metric"],
+        leading=theme["heading_sizes"]["metric"] * 1.1,
         textColor=theme["primary_text"],
         alignment=1,
     )
-    col_width = _CONTENT_WIDTH / len(items)
-    row = [
-        [Paragraph(_xml_escape(value), value_style), Paragraph(_xml_escape(label.upper()), label_style)]
-        for label, value in items
-    ]
-    table = Table([row], colWidths=[col_width] * len(items))
+
+    # Interleave zero-width-content gutter columns between the real cards.
+    count = len(items)
+    total_gutter = _METRIC_GUTTER * (count - 1)
+    card_width = (_CONTENT_WIDTH - total_gutter) / count
+    col_widths: list[float] = []
+    row: list = []
+    card_columns: list[int] = []
+    for index, (label, value) in enumerate(items):
+        if index:
+            row.append("")
+            col_widths.append(_METRIC_GUTTER)
+        card_columns.append(len(row))
+        col_widths.append(card_width)
+        row.append(
+            [
+                Paragraph(_xml_escape(value), value_style),
+                Paragraph(_xml_escape(label.upper()), label_style),
+            ]
+        )
+
+    table = Table([row], colWidths=col_widths)
     style = [
-        ("BACKGROUND", (0, 0), (-1, -1), theme["metric_fill"]),
-        ("BOX", (0, 0), (-1, -1), 0.75, theme["metric_border"]),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"] + 3),
         ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"] + 3),
+        ("LEFTPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"]),
+        ("RIGHTPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"]),
     ]
-    for i in range(1, len(items)):
-        style.append(("LINEBEFORE", (i, 0), (i, 0), 0.5, theme["metric_border"]))
+    for column in card_columns:
+        style.extend(
+            [
+                ("BACKGROUND", (column, 0), (column, 0), theme["metric_fill"]),
+                ("BOX", (column, 0), (column, 0), theme["rule"]["hair"], theme["metric_border"]),
+                ("LINEABOVE", (column, 0), (column, 0), theme["rule"]["strong"], theme["accent"]),
+            ]
+        )
     table.setStyle(TableStyle(style))
     return table
 
 
-def _question_card(theme: dict, flowables: list) -> Table:
-    """Wraps one question's flowables in a single thin-bordered, padded
-    cell so it reads as a distinct block on the page - without a heavy
-    fill or color. A one-cell Table rather than KeepTogether so the
-    padding/border are real layout, not just visual grouping."""
-    table = Table([[flowables]], colWidths=[_CONTENT_WIDTH])
+def _question_card(theme: dict, rows: list[list]) -> Table:
+    """Wraps one question in a padded, hairline-outlined block with a solid
+    gold left edge - the device that makes each question read as its own
+    card at a glance without a fill or a heavy border.
+
+    `rows` is a list of flowable-groups, one per table row, rather than a
+    single cell: a one-row table cannot be split, so a question with a long
+    written answer plus an image could exceed a page and overflow. Splitting
+    between rows lets ReportLab break a very tall question across a page
+    boundary at a sensible seam instead. Both the outline and the gold edge
+    are drawn per-row, so a split card still looks intentional on both
+    halves."""
+    table = Table([[group] for group in rows], colWidths=[_CONTENT_WIDTH])
     table.setStyle(
         TableStyle(
             [
-                ("BOX", (0, 0), (-1, -1), 0.75, theme["border"]),
                 ("BACKGROUND", (0, 0), (-1, -1), theme["background"]),
-                ("LEFTPADDING", (0, 0), (-1, -1), theme["spacing"]["md"] + 2),
+                ("LINEBEFORE", (0, 0), (0, -1), theme["rule"]["edge"], theme["accent"]),
+                ("LINEABOVE", (0, 0), (0, 0), theme["rule"]["hair"], theme["border"]),
+                ("LINEBELOW", (0, -1), (0, -1), theme["rule"]["hair"], theme["border"]),
+                ("LINEAFTER", (0, 0), (0, -1), theme["rule"]["hair"], theme["border"]),
+                ("LEFTPADDING", (0, 0), (-1, -1), theme["spacing"]["md"] + 3),
                 ("RIGHTPADDING", (0, 0), (-1, -1), theme["spacing"]["md"] + 2),
-                ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["md"]),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["md"]),
+                ("TOPPADDING", (0, 0), (0, 0), theme["spacing"]["md"]),
+                # Real separation between the prompt block and the answer
+                # fields beneath it - without this the question text and the
+                # "PLAYER ANSWER" label sit on top of each other and the card
+                # reads as one undifferentiated run of text.
+                ("TOPPADDING", (0, 1), (0, -1), theme["spacing"]["sm"] + 1),
+                ("BOTTOMPADDING", (0, 0), (0, -2), theme["spacing"]["xs"]),
+                ("BOTTOMPADDING", (0, -1), (0, -1), theme["spacing"]["md"]),
+            ]
+        )
+    )
+    return table
+
+
+def _question_card_header(theme: dict, styles: dict[str, ParagraphStyle], number: int, result: str) -> Table:
+    """A question card's top line: "QUESTION 3" in letterspaced gold caps on
+    the left, the status chip hard right. Putting the status here rather
+    than in a trailing line of body text is what lets a coach scan a Player
+    page for the misses without reading it."""
+    label = Paragraph(f"QUESTION {number}", styles["eyebrow"])
+    chip = _result_chip(theme, result)
+    inner_width = _CONTENT_WIDTH - (theme["spacing"]["md"] + 3) - (theme["spacing"]["md"] + 2)
+    table = Table([[label, chip]], colWidths=[inner_width - 1.15 * inch, 1.15 * inch])
+    table.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
+                ("VALIGN", (0, 0), (0, 0), "MIDDLE"),
+                ("ALIGN", (1, 0), (1, 0), "RIGHT"),
             ]
         )
     )
@@ -441,15 +700,50 @@ def _make_footer(theme: dict, quiz_title: str):
         canvas.rect(0, 0, page_width, page_height, stroke=0, fill=1)
 
         footer_y = 0.4 * inch
-        canvas.setStrokeColor(theme["border"])
-        canvas.setLineWidth(0.5)
-        canvas.line(doc.leftMargin, footer_y + 12, page_width - doc.rightMargin, footer_y + 12)
+        left = doc.leftMargin
+        right = page_width - doc.rightMargin
+
+        # The masthead's double rule, echoed at the foot of every page - a
+        # gold hairline over a lighter one. Two strokes, no fill.
+        canvas.setStrokeColor(theme["accent"])
+        canvas.setLineWidth(theme["rule"]["hair"])
+        canvas.line(left, footer_y + 13, right, footer_y + 13)
+        canvas.setStrokeColor(theme["hairline"])
+        canvas.setLineWidth(theme["rule"]["hair"])
+        canvas.line(left, footer_y + 11.4, right, footer_y + 11.4)
+
+        # "PEIRA" in letterspaced gold caps, then a small diamond, then the
+        # quiz title in muted grey - the wordmark stays the strongest thing
+        # in the footer without being large.
+        wordmark = theme.get("wordmark_text", "Peira").upper()
+        char_space = theme["char_space"]["eyebrow"]
+        # Letterspacing on the canvas has to go through a text object -
+        # Canvas itself has no setCharSpace, only TextObject does.
+        text_object = canvas.beginText(left, footer_y)
+        text_object.setFont(theme["heading_font"], theme["body_sizes"]["footer"])
+        text_object.setFillColor(theme["accent"])
+        text_object.setCharSpace(char_space)
+        text_object.textOut(wordmark)
+        canvas.drawText(text_object)
+        wordmark_width = canvas.stringWidth(
+            wordmark, theme["heading_font"], theme["body_sizes"]["footer"]
+        ) + (char_space * len(wordmark))
+
+        diamond_x = left + wordmark_width + 6
+        diamond_y = footer_y + 2.4
+        canvas.setFillColor(theme["accent"])
+        path = canvas.beginPath()
+        path.moveTo(diamond_x, diamond_y + 2.2)
+        path.lineTo(diamond_x + 2.2, diamond_y)
+        path.lineTo(diamond_x, diamond_y - 2.2)
+        path.lineTo(diamond_x - 2.2, diamond_y)
+        path.close()
+        canvas.drawPath(path, stroke=0, fill=1)
 
         canvas.setFont(theme["body_font"], theme["body_sizes"]["footer"])
         canvas.setFillColor(theme["footer_text"])
-        left_text = f"{theme.get('wordmark_text', 'Peira')} · {quiz_title}"
-        canvas.drawString(doc.leftMargin, footer_y, left_text[:100])
-        canvas.drawRightString(page_width - doc.rightMargin, footer_y, f"Page {canvas.getPageNumber()}")
+        canvas.drawString(diamond_x + 6, footer_y, quiz_title[:90])
+        canvas.drawRightString(right, footer_y, f"Page {canvas.getPageNumber()}")
         canvas.restoreState()
 
     return _draw
@@ -461,12 +755,16 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict |
     doc = SimpleDocTemplate(buffer, pagesize=letter, title=f"{quiz.title} - Results")
     styles = _pdf_styles(theme)
     elements = [
-        _brand_mark(theme, styles),
-        Paragraph(_xml_escape(quiz.title), styles["title"]),
-        Paragraph("Results", styles["heading3"]),
-        Paragraph(f"Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", styles["label"]),
-        Spacer(1, theme["spacing"]["sm"]),
-        _divider(theme),
+        *_masthead(
+            theme,
+            styles,
+            [f"Generated {datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p UTC')}"],
+        ),
+        Spacer(1, theme["spacing"]["lg"]),
+        Paragraph("RESULTS", styles["eyebrow"]),
+        Spacer(1, theme["spacing"]["xs"]),
+        Paragraph(_xml_escape(quiz.title), styles["display"]),
+        Spacer(1, theme["spacing"]["lg"]),
         _metric_block(
             theme,
             [
@@ -479,7 +777,7 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict |
     ]
 
     if dashboard_data["question_breakdown"]:
-        elements.append(Paragraph("Per-question breakdown", styles["heading2"]))
+        elements.append(_section_header(theme, styles, "Per-question breakdown"))
         breakdown_rows = [["Question", "Correct", "Incorrect", "Ungraded"]]
         for q in dashboard_data["question_breakdown"]:
             breakdown_rows.append(
@@ -488,7 +786,7 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict |
         elements.append(_styled_table(theme, breakdown_rows, first_col_width=300))
         elements.append(Spacer(1, theme["spacing"]["xl"]))
 
-    elements.append(Paragraph("Player scores", styles["heading2"]))
+    elements.append(_section_header(theme, styles, "Player scores"))
     if responses:
         score_rows = [["Player", "Submitted", "Score", "Ungraded"]]
         for response in sorted(responses, key=lambda r: r.display_name.lower()):
@@ -512,67 +810,229 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict |
     return buffer.getvalue()
 
 
-def _styled_table(theme: dict, rows: list[list[str]], first_col_width: int) -> Table:
-    table = Table(rows, colWidths=[first_col_width] + [None] * (len(rows[0]) - 1))
-    style = [
+def _table_base_style(theme: dict) -> list:
+    """The shared look for every data table in this module: no vertical
+    rules and no outer box, a letterspaced small-caps header row on a pale
+    cream fill closed by a gold rule, hairline separators between body
+    rows, barely-there alternating row tint, and a gold rule under the last
+    row to close the block.
+
+    Dropping the full GRID is the single biggest visual upgrade here - a
+    boxed grid is what makes a table look like default ReportLab output,
+    and horizontal-only rules both read as more considered and use
+    meaningfully less ink on a 25-row roster."""
+    return [
         ("BACKGROUND", (0, 0), (-1, 0), theme["header_fill"]),
         ("TEXTCOLOR", (0, 0), (-1, -1), theme["primary_text"]),
         ("TEXTCOLOR", (0, 0), (-1, 0), theme["header_text"]),
         ("FONTNAME", (0, 0), (-1, 0), theme["heading_font"]),
         ("FONTNAME", (0, 1), (-1, -1), theme["body_font"]),
-        ("GRID", (0, 0), (-1, -1), 0.5, theme["border"]),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("FONTSIZE", (0, 0), (-1, -1), theme["body_sizes"]["normal"] - 1),
-        ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 2),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 2),
+        ("LINEABOVE", (0, 0), (-1, 0), theme["rule"]["thin"], theme["accent"]),
+        ("LINEBELOW", (0, 0), (-1, 0), theme["rule"]["strong"], theme["accent"]),
+        ("LINEBELOW", (0, 1), (-1, -2), theme["rule"]["hair"], theme["hairline"]),
+        ("LINEBELOW", (0, -1), (-1, -1), theme["rule"]["thin"], theme["accent"]),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [theme["background"], theme["alt_row_fill"]]),
+    ]
+
+
+def _header_cells(theme: dict, header: list[str]) -> list:
+    """Table header labels as letterspaced small caps - the same device as
+    the section headers and metric labels, so the whole report speaks one
+    typographic language."""
+    style = ParagraphStyle(
+        "PeiraTableHeader",
+        fontName=theme["heading_font"],
+        fontSize=theme["body_sizes"]["table_header"],
+        leading=theme["body_sizes"]["table_header"] * 1.35,
+        textColor=theme["header_text"],
+        charSpace=theme["char_space"]["table"],
+        # A header label must never be broken inside a word - "INCORRE /
+        # CT" is exactly the kind of unfinished detail that makes a report
+        # look auto-generated. Column widths are sized so this never has to
+        # overflow (see _SUMMARY_COL_WIDTHS); multi-word labels like
+        # "Not Graded" still wrap normally at the space.
+        splitLongWords=0,
+    )
+    centered = ParagraphStyle("PeiraTableHeaderCenter", parent=style, alignment=1)
+    return [
+        Paragraph(_xml_escape(str(label)).upper(), style if i == 0 else centered)
+        for i, label in enumerate(header)
+    ]
+
+
+def _styled_table(theme: dict, rows: list[list[str]], first_col_width: int) -> Table:
+    """A two-part table: a wrapping text column on the left, numeric columns
+    on the right.
+
+    The first column's cells are Paragraphs, not raw strings: a raw string
+    cell cannot wrap, so a long question prompt used to run straight across
+    the numeric columns and collide with the counts. Remaining width is
+    divided evenly across the numeric columns rather than left to
+    ReportLab's `None` auto-sizing, so the layout is deterministic
+    regardless of content."""
+    body_style = ParagraphStyle(
+        "PeiraTableCell",
+        fontName=theme["body_font"],
+        fontSize=theme["body_sizes"]["normal"] - 1,
+        leading=(theme["body_sizes"]["normal"] - 1) * 1.3,
+        textColor=theme["primary_text"],
+    )
+    column_count = len(rows[0])
+    numeric_width = (_CONTENT_WIDTH - first_col_width) / (column_count - 1)
+
+    header = _header_cells(theme, rows[0])
+    body = [
+        [Paragraph(_xml_escape(str(row[0])), body_style), *row[1:]]
+        for row in rows[1:]
+    ]
+    table = Table(
+        [header, *body],
+        colWidths=[first_col_width] + [numeric_width] * (column_count - 1),
+        repeatRows=1,
+    )
+    style = _table_base_style(theme) + [
+        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+        ("FONTSIZE", (0, 1), (-1, -1), theme["body_sizes"]["normal"] - 1),
+        ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
         ("LEFTPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
         ("RIGHTPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [theme["background"], theme["alt_row_fill"]]),
     ]
     table.setStyle(TableStyle(style))
     return table
 
 
-# Explicit widths (points) for the 9-column page-1 roster table - sums to
-# well under the 468pt (6.5in) usable width, with generous room for the
-# shortened "Aug 5, 12:06 AM"-style Submitted timestamp (see
-# _format_short_timestamp) so it can never collide with the Correct column
-# again. Player/Position wrap as Paragraphs so a long name/position never
-# overflows its column instead of being clipped.
-_SUMMARY_COL_WIDTHS = [78, 24, 38, 70, 36, 42, 48, 48, 36]
+# Explicit widths (points) for the 9-column page-1 roster table. Sums to
+# exactly the 468pt (6.5in) usable width - every column here is at its
+# measured minimum or above, and the leftovers all went to Player.
+#
+# Every width here is measured, not guessed: each column is at least wide
+# enough for its own letterspaced header word plus 8pt of cell padding, so
+# no header can break mid-word ("INCORRE / CT"), and the Submitted column
+# still clears the widest "Aug 4, 11:34 PM"-style timestamp (55.9pt) that
+# _format_short_timestamp can produce, which is what fixed the original
+# Submitted/Correct collision. Player is deliberately the widest column:
+# it carries real names, wraps as a Paragraph, and its 100pt of usable
+# space is the measured minimum at which a long double-barrelled surname
+# breaks at its own hyphen ("Christopher Vandermeulen- / Fitzgerald")
+# rather than mid-word ("Vandermeul / en-Fitzgerald"). Any narrower and
+# ReportLab splits inside the word regardless of embeddedHyphenation.
+_SUMMARY_COL_WIDTHS = [108, 16, 44, 69, 44, 52, 40, 61, 34]
 
 
 def _detailed_summary_table(theme: dict, rows: list[list], wrap_style: ParagraphStyle) -> Table:
-    header = rows[0]
-    body = [
-        [
-            Paragraph(_xml_escape(str(cell)), wrap_style) if i in (0, 2) else cell
-            for i, cell in enumerate(row)
-        ]
-        for row in rows[1:]
-    ]
+    """The page-1 roster table. Same horizontal-rules-only treatment as
+    every other table here, plus two roster-specific touches: the Player
+    name is set in the heading face so a coach can find a name by shape,
+    and the Score column is emphasized as the column the eye goes to."""
+    header = _header_cells(theme, rows[0])
+    name_style = ParagraphStyle(
+        "PeiraRosterName",
+        parent=wrap_style,
+        fontName=theme["heading_font"],
+        fontSize=theme["body_sizes"]["small"],
+        leading=theme["body_sizes"]["small"] * 1.3,
+        # A double-barrelled surname should break at its own hyphen
+        # ("Vandermeulen- / Fitzgerald"), not at an arbitrary letter
+        # ("Vande / rmeulen-Fitzgerald"). embeddedHyphenation makes
+        # ReportLab treat an existing hyphen as a legal break point, which
+        # it otherwise ignores.
+        embeddedHyphenation=1,
+    )
+    cell_style = ParagraphStyle(
+        "PeiraRosterCell",
+        parent=wrap_style,
+        fontSize=theme["body_sizes"]["small"],
+        leading=theme["body_sizes"]["small"] * 1.3,
+        textColor=theme["secondary_text"],
+    )
+    body = []
+    for row in rows[1:]:
+        cells = []
+        for i, cell in enumerate(row):
+            if i == 0:
+                cells.append(Paragraph(_xml_escape(str(cell)), name_style))
+            elif i == 2:
+                cells.append(Paragraph(_xml_escape(str(cell)), cell_style))
+            else:
+                cells.append(cell)
+        body.append(cells)
+
     table = Table([header, *body], colWidths=_SUMMARY_COL_WIDTHS, repeatRows=1)
-    style = [
-        ("BACKGROUND", (0, 0), (-1, 0), theme["header_fill"]),
-        ("TEXTCOLOR", (0, 0), (-1, -1), theme["primary_text"]),
-        ("TEXTCOLOR", (0, 0), (-1, 0), theme["header_text"]),
-        ("FONTNAME", (0, 0), (-1, 0), theme["heading_font"]),
-        ("FONTNAME", (0, 1), (-1, -1), theme["body_font"]),
-        ("GRID", (0, 0), (-1, -1), 0.5, theme["border"]),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    style = _table_base_style(theme) + [
         # Player/Position/Submitted stay left-aligned (text); jersey # and
         # every numeric count/score column are centered for scannability.
         ("ALIGN", (1, 0), (1, -1), "CENTER"),
         ("ALIGN", (4, 0), (8, -1), "CENTER"),
-        ("FONTSIZE", (0, 0), (-1, -1), theme["body_sizes"]["small"]),
-        ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 1),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 1),
+        ("FONTSIZE", (0, 1), (-1, -1), theme["body_sizes"]["small"]),
+        # Score is the column a coach scans first - give it the heading face.
+        ("FONTNAME", (8, 1), (8, -1), theme["heading_font"]),
+        ("TEXTCOLOR", (8, 1), (8, -1), theme["primary_text"]),
+        ("TOPPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), theme["spacing"]["sm"]),
         ("LEFTPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 2),
         ("RIGHTPADDING", (0, 0), (-1, -1), theme["spacing"]["xs"] + 2),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [theme["background"], theme["alt_row_fill"]]),
     ]
     table.setStyle(TableStyle(style))
+    return table
+
+
+def _player_page_header(theme: dict, styles: dict[str, ParagraphStyle], response, player) -> Table:
+    """A Player detail page's masthead: the jersey number in a bordered
+    cream square, the Player's name set large beside it, position and
+    submission time beneath. Gives every Player page a clear identity
+    instead of opening on an undifferentiated bold line of text."""
+    # Keep the "#" prefix: in the box it reads unambiguously as a jersey
+    # number rather than a bare figure, and it survives text extraction
+    # (screen readers, copy-paste, search) where the visual box is lost.
+    jersey_text = f"#{player.jersey_number}" if player and player.jersey_number else "—"
+    jersey_style = ParagraphStyle(
+        "PeiraJersey",
+        fontName=theme["heading_font"],
+        fontSize=theme["heading_sizes"]["jersey"],
+        leading=theme["heading_sizes"]["jersey"] * 1.1,
+        textColor=theme["accent"],
+        alignment=1,
+    )
+    jersey = Table([[Paragraph(_xml_escape(jersey_text), jersey_style)]], colWidths=[0.5 * inch], rowHeights=[0.5 * inch])
+    jersey.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, -1), theme["metric_fill"]),
+                ("BOX", (0, 0), (-1, -1), theme["rule"]["thin"], theme["accent"]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+
+    meta_bits = []
+    if player and player.position:
+        meta_bits.append(player.position)
+    meta_bits.append(f"Submitted {_format_short_timestamp(response.submitted_at)}")
+    identity = [
+        Paragraph(_xml_escape(response.display_name), styles["title"]),
+        Paragraph(_xml_escape("  ·  ".join(meta_bits)), styles["label"]),
+    ]
+
+    table = Table([[jersey, identity]], colWidths=[0.5 * inch + 10, _CONTENT_WIDTH - 0.5 * inch - 10])
+    table.setStyle(
+        TableStyle(
+            [
+                ("LEFTPADDING", (0, 0), (0, 0), 0),
+                ("RIGHTPADDING", (0, 0), (0, 0), 10),
+                ("LEFTPADDING", (1, 0), (1, 0), 0),
+                ("RIGHTPADDING", (1, 0), (1, 0), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+        )
+    )
     return table
 
 
@@ -627,15 +1087,19 @@ def build_detailed_results_pdf(
 
     # --- Page 1: report header + summary metrics + roster table ---
     elements: list = [
-        _brand_mark(theme, styles),
-        Paragraph(_xml_escape(organization_name), styles["label"]),
-        Paragraph(_xml_escape(quiz.title), styles["title"]),
-        Paragraph("Detailed Results", styles["heading3"]),
-        Paragraph(
-            f"Exported {datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')}", styles["label"]
+        *_masthead(
+            theme,
+            styles,
+            [
+                organization_name,
+                f"Exported {datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p UTC')}",
+            ],
         ),
-        Spacer(1, theme["spacing"]["sm"]),
-        _divider(theme),
+        Spacer(1, theme["spacing"]["lg"]),
+        Paragraph("DETAILED RESULTS", styles["eyebrow"]),
+        Spacer(1, theme["spacing"]["xs"]),
+        Paragraph(_xml_escape(quiz.title), styles["display"]),
+        Spacer(1, theme["spacing"]["lg"]),
     ]
 
     total_correct = 0
@@ -686,8 +1150,7 @@ def build_detailed_results_pdf(
     elements.append(Spacer(1, theme["spacing"]["xl"]))
 
     if ordered_responses:
-        elements.append(Paragraph("Player Summary", styles["heading2"]))
-        elements.append(Spacer(1, theme["spacing"]["xs"]))
+        elements.append(_section_header(theme, styles, "Player Summary"))
         elements.append(_detailed_summary_table(theme, summary_rows, wrap_style))
     else:
         elements.append(
@@ -701,18 +1164,12 @@ def build_detailed_results_pdf(
         score_percent = _score_percent(counts[RESULT_CORRECT], counts[RESULT_CORRECT] + counts[RESULT_INCORRECT])
         player = response.player
 
-        header_bits = [_xml_escape(response.display_name)]
-        if player and player.position:
-            header_bits.append(_xml_escape(player.position))
-        header = f"{header_bits[0]} — {header_bits[1]}" if len(header_bits) > 1 else header_bits[0]
-        if player and player.jersey_number:
-            header = f"#{_xml_escape(player.jersey_number)} {header}"
-        elements.append(Paragraph(header, styles["heading2"]))
-        elements.append(
-            Paragraph(f"Submitted: {_format_short_timestamp(response.submitted_at)}", label_style)
-        )
+        elements.append(Paragraph("PLAYER REPORT", styles["eyebrow"]))
         elements.append(Spacer(1, theme["spacing"]["xs"]))
-        elements.append(_divider(theme))
+        elements.append(_player_page_header(theme, styles, response, player))
+        elements.append(Spacer(1, theme["spacing"]["sm"]))
+        elements.extend(_double_rule(theme))
+        elements.append(Spacer(1, theme["spacing"]["md"]))
 
         elements.append(
             _metric_block(
@@ -735,12 +1192,17 @@ def build_detailed_results_pdf(
             elements.append(Paragraph(f"{counts[RESULT_NOT_GRADED]} response{plural} awaiting grading", label_style))
         elements.append(Spacer(1, theme["spacing"]["lg"]))
 
+        # Each question renders as a card built from row-groups (see
+        # _question_card): the header row carries "QUESTION n" + the status
+        # chip, then the prompt, then any image, then the answer fields.
+        # Every field the old layout printed is still here - the status just
+        # moved from a trailing "Result:" line up into the header chip.
         for i, question in enumerate(questions, start=1):
             answer = answers_by_question.get(question.id)
             result = _grading_result(answer)
 
-            block: list = [
-                Paragraph(f"Question {i}", styles["heading4"]),
+            prompt_group: list = [
+                _question_card_header(theme, styles, i, result),
                 Paragraph(_xml_escape(question.question_text), wrap_style),
             ]
 
@@ -748,32 +1210,35 @@ def build_detailed_results_pdf(
             if question.image is not None:
                 image_flowable = _load_image_flowable(load_image_bytes, question.image.image_url)
             if question.image is not None and image_flowable is None:
-                block.append(Spacer(1, theme["spacing"]["xs"]))
-                block.append(Paragraph("[Image unavailable]", label_style))
+                prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
+                prompt_group.append(Paragraph("[Image unavailable]", label_style))
             elif image_flowable is not None:
-                block.append(Spacer(1, theme["spacing"]["sm"]))
-                block.append(image_flowable)
+                prompt_group.append(Spacer(1, theme["spacing"]["sm"]))
+                prompt_group.append(image_flowable)
 
-            block.append(Spacer(1, theme["spacing"]["sm"]))
-            block.append(Paragraph("Player Answer:", label_style))
-            block.append(
-                Paragraph(_xml_escape(_answer_text(question, answer)) or "No answer submitted.", wrap_style)
-            )
+            answer_group: list = [
+                Paragraph("PLAYER ANSWER", styles["fieldLabel"]),
+                Paragraph(_xml_escape(_answer_text(question, answer)) or "No answer submitted.", wrap_style),
+            ]
 
             if question.question_type.value != "written":
                 correct_option = next((o for o in question.options if o.is_correct_answer), None)
                 if correct_option is not None:
-                    block.append(Paragraph("Correct Answer:", label_style))
-                    block.append(Paragraph(_xml_escape(correct_option.option_text), wrap_style))
+                    answer_group.append(Paragraph("CORRECT ANSWER", styles["fieldLabel"]))
+                    answer_group.append(Paragraph(_xml_escape(correct_option.option_text), wrap_style))
+
+            rows = [prompt_group, answer_group]
 
             if answer is not None and answer.coach_feedback:
-                block.append(Paragraph("Coach Feedback:", label_style))
-                block.append(Paragraph(_xml_escape(answer.coach_feedback), wrap_style))
+                rows.append(
+                    [
+                        Paragraph("COACH FEEDBACK", styles["fieldLabel"]),
+                        Paragraph(_xml_escape(answer.coach_feedback), wrap_style),
+                    ]
+                )
 
-            block.append(Paragraph(f"Result: {result}", styles["normal"]))
-
-            elements.append(_question_card(theme, block))
-            elements.append(Spacer(1, theme["spacing"]["sm"]))
+            elements.append(_question_card(theme, rows))
+            elements.append(Spacer(1, theme["spacing"]["md"]))
 
     footer = _make_footer(theme, quiz.title)
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
