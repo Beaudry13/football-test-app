@@ -10,7 +10,7 @@
 
 .summaryRow strong {
   color: var(--nb-text, #1c1b1a);
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
 }
 
 .controlsRow {

@@ -1,7 +1,7 @@
 .backLink {
   display: inline-block;
   margin-bottom: 1em;
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
   color: var(--nb-text-muted, #78766e);
@@ -81,7 +81,7 @@
 }
 
 .statValue {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 1.8em;
   font-weight: 700;
 }

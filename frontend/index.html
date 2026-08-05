@@ -27,13 +27,15 @@
       name="twitter:description"
       content="Peira helps coaches create, distribute, and analyze football knowledge assessments so players can master their assignments, prepare with confidence, and play faster."
     />
-    <!-- Cinzel (display/headers, coach-facing dark theme) + Inter (body,
-         both themes). Loaded globally here since a per-page @import would
-         duplicate the request on every visit. -->
+    <!-- Playfair Display (display/headers, coach-facing dark theme) + Inter
+         (body, both themes). Loaded globally here since a per-page @import
+         would duplicate the request on every visit. Cinzel/Caveat were the
+         prior design direction's headline fonts and are no longer used
+         anywhere in the app - see frontend/src/styles/tokens.css. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
   </head>

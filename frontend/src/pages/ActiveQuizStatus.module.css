@@ -24,7 +24,7 @@
 }
 
 .title {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.03em;

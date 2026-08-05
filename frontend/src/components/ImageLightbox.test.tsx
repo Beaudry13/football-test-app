@@ -28,15 +28,18 @@ describe('ImageLightbox', () => {
     render(<ImageLightbox src="/photo.png" alt="Film still" onClose={onClose} />);
     // Not .parentElement - PinchZoomPan wraps the image in its own surface/content divs, so the
     // true backdrop is a couple of levels further up than the image's immediate parent.
+    // Modal (components/ui/Modal.tsx) dismisses on mousedown, not click - same as every other
+    // modal in the app, and deliberately so: a text-selection drag that starts inside the panel
+    // and releases outside would otherwise fire a spurious click on the backdrop.
     const backdrop = screen.getByAltText('Film still').closest('[class*="backdrop"]');
-    fireEvent.click(backdrop!);
+    fireEvent.mouseDown(backdrop!);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('does not close when clicking the image itself', () => {
     const onClose = vi.fn();
     render(<ImageLightbox src="/photo.png" alt="Film still" onClose={onClose} />);
-    fireEvent.click(screen.getByAltText('Film still'));
+    fireEvent.mouseDown(screen.getByAltText('Film still'));
     expect(onClose).not.toHaveBeenCalled();
   });
 

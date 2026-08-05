@@ -1,0 +1,38 @@
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+  border-radius: var(--radius-sm, 8px);
+  padding: 0.75em 1em;
+  margin-bottom: 1em;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.icon {
+  flex-shrink: 0;
+  margin-top: 0.15em;
+}
+
+.error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+/* Themes name this token differently (tokens.css: --color-warning /
+   index.css's light theme: --color-warning-text) - fall through to
+   whichever one the ancestor theme actually defines. */
+.warning {
+  background: var(--color-warning-bg, rgba(224, 140, 64, 0.15));
+  color: var(--color-warning, var(--color-warning-text, #e0a356));
+}
+
+.info {
+  background: var(--color-accent-bg, rgba(201, 162, 75, 0.12));
+  color: var(--nb-text, var(--color-text));
+}

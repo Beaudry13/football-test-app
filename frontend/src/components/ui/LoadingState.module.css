@@ -1,0 +1,27 @@
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  color: var(--nb-text-muted, var(--color-text-muted));
+  font-size: 0.95em;
+}
+
+.section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  padding: 3em 1em;
+  color: var(--nb-text-muted, var(--color-text-muted));
+  font-size: 0.95em;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -45,6 +45,6 @@
 
 .searching {
   font-size: 0.85em;
-  color: var(--nb-muted, #6b6555);
+  color: var(--nb-text-muted);
   white-space: nowrap;
 }

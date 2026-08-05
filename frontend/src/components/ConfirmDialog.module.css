@@ -1,23 +1,9 @@
-.backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1em;
-  background: rgba(10, 9, 6, 0.72);
-}
-
-.dialog {
-  width: 100%;
-  max-width: 420px;
-  margin: 0;
-}
+/* Backdrop/panel chrome now lives in components/ui/Modal.module.css -
+   this file only styles this dialog's own content. */
 
 .title {
-  font-family: 'Cinzel', serif;
-  font-size: 1.15em;
+  font-family: var(--font-heading);
+  font-size: 1.2em;
   font-weight: 700;
   margin: 0 0 0.5em;
 }
@@ -25,7 +11,7 @@
 .body {
   font-size: 0.95em;
   line-height: 1.5;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted, #8b8b86);
   margin-bottom: 1.25em;
 }
 

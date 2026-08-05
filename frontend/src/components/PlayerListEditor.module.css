@@ -40,7 +40,7 @@
 }
 
 .textarea:focus {
-  border-color: var(--nb-accent, #4f46e5);
+  border-color: var(--nb-accent);
 }
 
 .hint {

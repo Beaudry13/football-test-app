@@ -102,7 +102,7 @@
 
 .questionText {
   display: block;
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 19px;
   font-weight: 700;
   color: var(--color-text);
@@ -245,7 +245,7 @@
 }
 
 .celebrationText {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   color: var(--color-text);
   font-size: 18px;
   font-weight: 700;

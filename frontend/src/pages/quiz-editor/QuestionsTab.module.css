@@ -22,7 +22,7 @@
 }
 
 .questionNumber {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 0.85em;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -48,7 +48,7 @@
 }
 
 .correctOption {
-  color: var(--nb-success, #1f8a4c);
+  color: var(--nb-success);
   font-weight: 600;
 }
 

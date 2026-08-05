@@ -1,16 +1,26 @@
-/* Public marketing homepage - dark gold-on-black theme, same as the coach
-   dashboard (NotebookPage supplies the shared gradient/texture shell), but
-   this page's own layout (full-bleed hero/sections, not the dashboard's
-   content column) lives here. */
+/* Public marketing homepage - flat dark theme, same tokens as the coach
+   dashboard (see styles/notebook.module.css / styles/tokens.css), but this
+   page's own layout (full-bleed hero/sections, not the dashboard's content
+   column) lives here. Buttons here deliberately don't reuse
+   notebook.module.css's .btnPrimary/.btnSecondary - marketing CTAs are
+   pill-shaped and larger than the app's inline UI buttons - but they pull
+   every color/font value from the same tokens those classes use. */
 
 .header {
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  top: var(--space-4);
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28px 56px;
-  border-bottom: 1px solid rgba(201, 162, 75, 0.35);
+  gap: var(--space-4);
+  margin: var(--space-4) var(--space-6) 0;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
 }
 
 .brand {
@@ -21,45 +31,42 @@
 .navActions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .navBtnOutline,
 .navBtnFilled {
-  padding: 14px 30px;
-  border-radius: 2px;
-  border: 1.5px solid var(--nb-accent);
-  font-family: 'Inter', sans-serif;
+  padding: 10px 22px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  font-family: var(--font-body);
   font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
+  transition: filter var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .navBtnOutline {
-  background: rgba(201, 162, 75, 0.1);
+  background: transparent;
   color: var(--nb-text);
 }
 
 .navBtnOutline:hover {
-  background: rgba(201, 162, 75, 0.18);
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
 }
 
 .navBtnFilled {
-  padding: 14px 32px;
-  border: 1.5px solid var(--nb-accent);
-  background: linear-gradient(180deg, var(--nb-accent-bright) 0%, var(--nb-accent) 55%, var(--nb-accent-deep) 100%);
-  color: #14110b;
+  border: none;
+  background: var(--nb-accent);
+  color: var(--color-accent-contrast);
   font-weight: 800;
-  box-shadow: 0 4px 18px rgba(201, 162, 75, 0.35);
 }
 
 .navBtnFilled:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(201, 162, 75, 0.45);
+  filter: brightness(1.1);
 }
 
 .hero {
@@ -67,7 +74,7 @@
   z-index: 1;
   max-width: 900px;
   margin: 0 auto;
-  padding: 110px 32px 60px;
+  padding: 80px 32px 60px;
   text-align: center;
 }
 
@@ -80,7 +87,7 @@
 }
 
 .heroHeading {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 56px;
   font-weight: 700;
   line-height: 1.15;
@@ -105,38 +112,37 @@
 
 .heroBtnFilled,
 .heroBtnOutline {
-  padding: 21px 48px;
-  border-radius: 2px;
-  border: 2px solid var(--nb-accent);
-  font-family: 'Inter', sans-serif;
+  padding: 17px 40px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-body);
   font-weight: 700;
-  font-size: 17px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 15px;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
+  transition: filter var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .heroBtnFilled {
-  background: linear-gradient(180deg, var(--nb-accent-bright) 0%, var(--nb-accent) 55%, var(--nb-accent-deep) 100%);
-  color: #14110b;
+  border: none;
+  background: var(--nb-accent);
+  color: var(--color-accent-contrast);
   font-weight: 800;
-  box-shadow: 0 6px 24px rgba(201, 162, 75, 0.4);
 }
 
 .heroBtnFilled:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(201, 162, 75, 0.5);
+  filter: brightness(1.1);
 }
 
 .heroBtnOutline {
-  background: rgba(201, 162, 75, 0.1);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
   color: var(--nb-text);
 }
 
 .heroBtnOutline:hover {
-  background: rgba(201, 162, 75, 0.18);
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
 }
 
 .whatIsPeira {
@@ -146,9 +152,9 @@
   margin: 40px auto 0;
   padding: 48px 40px;
   text-align: center;
-  background: #14110b;
-  border: 1px solid rgba(201, 162, 75, 0.5);
-  border-radius: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .whatIsPeiraMark {
@@ -158,7 +164,7 @@
 }
 
 .whatIsPeiraHeading {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   color: var(--nb-text);
   font-size: 24px;
   margin: 0 0 12px;
@@ -190,7 +196,7 @@
 }
 
 .howItWorksHeading {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   text-align: center;
   font-size: 30px;
   color: var(--nb-text);
@@ -217,7 +223,7 @@
 }
 
 .stepNumeral {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 44px;
   font-weight: 700;
   color: var(--nb-accent);
@@ -225,7 +231,7 @@
 }
 
 .stepTitle {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 18px;
   font-weight: 600;
   color: var(--nb-text);

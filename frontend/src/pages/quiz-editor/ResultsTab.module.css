@@ -10,10 +10,10 @@
 }
 
 .statValue {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 2.2em;
   font-weight: 700;
-  color: var(--nb-accent, #4f46e5);
+  color: var(--nb-accent);
 }
 
 .statLabel {
@@ -74,7 +74,7 @@
 }
 
 .playerNameLink:hover {
-  color: var(--nb-accent, #4f46e5);
+  color: var(--nb-accent);
   text-decoration: underline;
 }
 
@@ -119,14 +119,14 @@
 }
 
 .gradingRow textarea:focus {
-  border-color: var(--nb-accent, #4f46e5);
+  border-color: var(--nb-accent);
 }
 
 /* !important because these combine with notebook.module.css's .btnSm in
    JSX - CSS Module import order isn't guaranteed, so specificity alone
    can't be relied on to make this file's rule win. */
 .gradeCorrect {
-  border-color: var(--nb-success, #1f8a4c) !important;
+  border-color: var(--nb-success) !important;
 }
 
 .gradeIncorrect {

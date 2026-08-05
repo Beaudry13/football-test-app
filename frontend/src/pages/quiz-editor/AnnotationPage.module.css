@@ -11,7 +11,7 @@
 }
 
 .backLink {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
   color: var(--nb-text-muted, #78766e);
@@ -46,5 +46,5 @@
 
 .savedNote {
   font-size: 0.85em;
-  color: var(--nb-success, #1f8a4c);
+  color: var(--nb-success);
 }

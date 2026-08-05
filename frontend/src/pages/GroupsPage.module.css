@@ -44,7 +44,7 @@
 }
 
 .groupInfo h3 {
-  font-family: 'Cinzel', serif;
+  font-family: var(--font-heading);
   font-size: 24px;
   font-weight: 700;
   color: var(--nb-text, #1c1b1a);

@@ -1,11 +1,25 @@
-/* Shared "Peira" dark design system for coach-facing pages - gold-on-black,
-   per the provided design handoff (Desktop\claude\Website redesign
-   request.zip -> design_handoff_peira/). Import this alongside a page's own
-   CSS module rather than redeclaring these values per page.
+/* Shared "Peira" dark design system for coach-facing pages - flat modern
+   dark UI, gold accent, per the current design handoff (Desktop\claude\
+   Website redesign request (1).zip -> design_handoff_peira/), which
+   explicitly supersedes the earlier ornate Cinzel/gold-on-cream direction.
+   Import this alongside a page's own CSS module rather than redeclaring
+   these values per page.
 
    The --nb-* custom properties are defined on .page (see NotebookPage.tsx)
    and cascade to everything below it in the DOM - every class here relies
-   on being rendered inside a .page ancestor.
+   on being rendered inside a .page ancestor. Every --nb-* value below is
+   an alias of a canonical token from styles/tokens.css (never a raw
+   literal) - see that file's header comment for why, and for how future
+   per-organization branding plugs in without touching this file's class
+   definitions.
+
+   Cards no longer flip to a light/cream fill with inverted text (the old
+   design's "card" was a cream card floating on a black page); the new
+   direction keeps cards a slightly-lighter dark surface with the same
+   light text as the page, so --nb-text/--nb-text-muted/etc. are defined
+   ONCE on .page and never redefined per-card - simpler, and it's why
+   nothing below ever needs a "read this token differently inside a card"
+   comment anymore.
 
    Deliberately NOT touching frontend/src/index.css's globals (.btn, .card,
    .field, .badge, --color-primary, ...): those are still used by the
@@ -14,71 +28,66 @@
    leak this dark theme there too. */
 
 .page {
-  --nb-bg: #121009;
-  --nb-text: #f3eee2;
-  --nb-text-muted: #8c8578;
-  --nb-text-muted2: #6e6858;
-  --nb-text-faint: #6e6858;
-  --nb-accent: #c9a24b;
-  --nb-accent-bright: #e4c066;
-  --nb-accent-deep: #a6822f;
-  --nb-accent-hover: #e4c066;
-  --nb-card-border: rgba(201, 162, 75, 0.25);
-  --nb-input-border: rgba(201, 162, 75, 0.55);
-  --nb-delete-border: rgba(180, 70, 60, 0.45);
-  --nb-delete-bg-hover: rgba(180, 70, 60, 0.12);
-  --nb-success: #4caf6e;
-  --nb-success-bg: rgba(76, 175, 110, 0.15);
-  --nb-warning-text: #d98e82;
-  --nb-warning-bg: rgba(217, 142, 130, 0.15);
+  --nb-bg: var(--color-bg);
+  --nb-text: var(--color-text);
+  --nb-text-muted: var(--color-text-muted);
+  --nb-text-muted2: var(--color-text-muted-2);
+  --nb-text-faint: var(--color-text-muted-2);
+  --nb-accent: var(--color-accent);
+  --nb-accent-bright: var(--color-accent-bright);
+  --nb-accent-deep: var(--color-accent);
+  --nb-accent-hover: var(--color-accent-bright);
+  --nb-card-border: var(--color-border);
+  --nb-input-border: var(--color-border-strong);
+  --nb-delete-border: var(--color-danger-border);
+  --nb-delete-bg-hover: var(--color-danger-bg);
+  --nb-success: var(--color-success);
+  --nb-success-bg: var(--color-success-bg);
+  --nb-warning-text: var(--color-danger);
+  --nb-warning-bg: var(--color-danger-bg);
 
   /* Shared global components (e.g. ErrorBanner's plain ".error-banner"
      class in index.css) read --color-* custom properties, not --nb-*.
      Those only have :root (light-theme) values by default - overriding
      them here means anything rendered inside a coach page (dark theme)
      picks up dark-appropriate colors too, via ordinary CSS custom-property
-     inheritance, without needing a notebook-specific ErrorBanner variant. */
+     inheritance, without needing a notebook-specific ErrorBanner variant.
+     --color-danger/-bg are already the token defaults at :root, but
+     index.css's :root block redefines them for the light player theme -
+     re-asserting the dark-appropriate value here keeps that page-local
+     override from leaking into a coach page. */
   --color-danger: var(--nb-warning-text);
   --color-danger-bg: var(--nb-warning-bg);
 
   position: relative;
-  overflow: hidden;
   min-height: 100vh;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   color: var(--nb-text);
   background-color: var(--nb-bg);
-  background-image: linear-gradient(160deg, #16130d 0%, #0d0c09 55%, #14110b 100%);
 }
 
-/* Mouse-tracked spotlight + line-art texture overlays. NotebookPage.tsx sets
-   the background/mask inline since they change on every mousemove. */
-.spotlight,
-.dotGrid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.dotGrid {
-  opacity: 0.16;
-  background-image: url('../assets/coach-texture.svg');
-  background-size: 360px 360px;
-}
-
-/* --- Header (NotebookHeader.tsx) ------------------------------------- */
+/* --- Header (NotebookHeader.tsx) --------------------------------------
+   Floating pill nav bar per the current handoff: translucent dark fill +
+   backdrop blur, thin border, sits inset from the page edges and sticks
+   to the top on scroll (position: sticky rather than fixed, so it never
+   needs a compensating top-padding hack on the content below it). */
 
 .header {
-  position: relative;
-  z-index: 1;
+  position: sticky;
+  top: var(--space-4);
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1em;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  padding: 30px 48px;
-  background: var(--nb-bg);
-  border-bottom: 1px solid rgba(201, 162, 75, 0.35);
+  margin: var(--space-4) var(--space-6) 0;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border);
 }
 
 /* Wraps a <PeiraLogo/> (see components/brand/PeiraLogo.tsx), which styles
@@ -92,68 +101,78 @@
 .nav {
   display: flex;
   align-items: center;
-  gap: 36px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .navLink {
-  font-family: 'Inter', sans-serif;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-body);
   font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
   color: var(--nb-text-muted);
   text-decoration: none;
+  transition: background-color var(--duration-base) var(--ease-standard),
+    color var(--duration-base) var(--ease-standard);
 }
 
-.navLinkActive {
+.navLink:hover {
   color: var(--nb-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.navLinkActive,
+.navLinkActive:hover {
+  color: var(--nb-text);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .navDivider {
   width: 1px;
   height: 18px;
-  background: rgba(201, 162, 75, 0.3);
+  background: var(--color-border-strong);
 }
 
 .whatIsPeira {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0 var(--space-2);
   font: inherit;
-  color: var(--nb-text-muted2, #6e6858);
+  color: var(--nb-text-muted2, var(--color-text-muted-2));
   font-size: 12px;
   cursor: pointer;
   text-decoration: underline;
 }
 
 .whatIsPeira:hover {
-  color: var(--nb-text-muted, #8c8578);
+  color: var(--nb-text-muted, var(--color-text-muted));
 }
 
 .coachName {
-  font-family: 'Inter', sans-serif;
-  font-size: 14px;
+  font-family: var(--font-body);
+  font-size: 13px;
   color: var(--nb-text-muted);
+  padding: 0 var(--space-1);
 }
 
 .logoutButton {
-  padding: 9px 20px;
-  border-radius: 2px;
-  border: 1px solid rgba(201, 162, 75, 0.5);
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
   background: transparent;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-weight: 600;
   font-size: 13px;
-  letter-spacing: 0.04em;
   color: var(--nb-text);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .logoutButton:hover {
   border-color: var(--nb-accent);
-  background: rgba(201, 162, 75, 0.08);
+  background: var(--color-accent-bg);
 }
 
 /* --- Content wrapper ---------------------------------------------------- */
@@ -163,44 +182,43 @@
   z-index: 1;
   max-width: 1080px;
   margin: 0 auto;
-  padding: 64px 48px 80px;
+  padding: var(--space-7) var(--space-6) var(--space-8);
 }
 
 /* Narrower variant for single-form pages (Login/Register/Join). */
 .contentNarrow {
   position: relative;
   z-index: 1;
-  max-width: 460px;
+  max-width: 440px;
   margin: 0 auto;
-  padding: 64px 48px 80px;
+  padding: var(--space-7) var(--space-6) var(--space-8);
 }
 
 /* --- Typography ----------------------------------------------------------- */
 
 .heading {
-  font-family: 'Cinzel', serif;
-  font-size: 40px;
+  font-family: var(--font-heading);
+  font-size: 32px;
   font-weight: 700;
   margin: 0;
-  letter-spacing: 0.03em;
   color: var(--nb-text);
 }
 
 .subheading {
-  font-family: 'Cinzel', serif;
-  font-weight: 600;
-  font-size: 20px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 19px;
   color: var(--nb-text);
   margin: 0 0 0.5em;
 }
 
 .countBadge {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--nb-text-muted2);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 /* --- Form controls -------------------------------------------------------- */
@@ -213,36 +231,33 @@
 }
 
 .fieldLabel {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-weight: 600;
   font-size: 14px;
   color: var(--nb-text);
 }
 
 .input {
-  padding: 16px 18px;
-  border-radius: 3px;
-  border: 1.5px solid var(--nb-input-border);
-  /* Light cream, dark text - not dark-on-dark - per the design handoff's
-     literal input styling (Quiz Dashboard Redesign.dc.html), even though
-     these inputs sit on the dark page chrome. */
-  background: #f3eee0;
-  color: #14110b;
-  font-family: 'Inter', sans-serif;
+  padding: 13px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--nb-input-border);
+  background: var(--color-surface-input);
+  color: var(--nb-text);
+  font-family: var(--font-body);
   font-size: 15px;
   outline: none;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--duration-base) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard);
   width: 100%;
 }
 
 .input:focus {
-  border-color: var(--nb-accent-bright);
-  background: #f8f3e7;
+  border-color: var(--nb-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-bg);
 }
 
 .input::placeholder {
-  color: rgba(20, 17, 11, 0.45);
+  color: var(--nb-text-muted2);
 }
 
 textarea.input {
@@ -254,151 +269,127 @@ textarea.input {
 /* --- Buttons -------------------------------------------------------------- */
 
 .btnPrimary {
-  padding: 0 28px;
-  min-height: 48px;
-  border-radius: 2px;
-  border: 1px solid var(--nb-accent);
-  background: linear-gradient(180deg, var(--nb-accent-bright) 0%, var(--nb-accent) 55%, var(--nb-accent-deep) 100%);
-  color: #14110b;
-  font-family: 'Inter', sans-serif;
+  padding: 0 24px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--nb-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-body);
   font-weight: 700;
   font-size: 14px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(201, 162, 75, 0.25);
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: filter var(--duration-fast) var(--ease-standard);
 }
 
 .btnPrimary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(201, 162, 75, 0.4);
+  filter: brightness(1.1);
 }
 
 .btnPrimary:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(201, 162, 75, 0.3);
+  filter: brightness(0.95);
 }
 
 .btnPrimary:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
 }
 
 .btnSecondary {
-  padding: 0 28px;
-  min-height: 48px;
-  border-radius: 2px;
-  border: 1px solid rgba(201, 162, 75, 0.4);
+  padding: 0 24px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
   background: transparent;
   color: var(--nb-text);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-weight: 600;
   font-size: 14px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .btnSecondary:hover:not(:disabled) {
   border-color: var(--nb-accent);
-  background: rgba(201, 162, 75, 0.06);
+  background: var(--color-accent-bg);
 }
 
 .btnSecondary:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
 }
 
 /* Smaller variant used inline on cards/rows (Duplicate, Delete, Rename...). */
 .btnSm {
-  padding: 9px 18px;
-  border-radius: 2px;
-  font-family: 'Inter', sans-serif;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
   font-weight: 600;
   font-size: 13px;
-  letter-spacing: 0.03em;
   cursor: pointer;
   background: transparent;
-  border: 1px solid rgba(201, 162, 75, 0.35);
+  border: 1px solid var(--color-border-strong);
   color: var(--nb-text);
-  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .btnSm:hover:not(:disabled) {
   border-color: var(--nb-accent);
-  background: rgba(201, 162, 75, 0.06);
-  transform: translateY(-1px);
+  background: var(--color-accent-bg);
 }
 
 .btnSm:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
 }
 
-/* Combine with .btnSm (or use standalone) for destructive actions. */
+/* Combine with .btnSm (or use standalone) for destructive actions - matches
+   the handoff's Danger button spec exactly (fill/border/text all derived
+   from the same danger token trio). */
 .btnDanger {
+  background: var(--color-danger-bg);
   border-color: var(--nb-delete-border);
   color: var(--nb-warning-text);
 }
 
 .btnDanger:hover:not(:disabled) {
-  /* Re-assert the reddish border on hover - .btnSm's own hover rule would
-     otherwise win (equal specificity, later property wins) and darken it
-     to text color instead. */
+  /* Re-assert on hover - .btnSm's own hover rule would otherwise win
+     (equal specificity, later property wins) and repaint it gold. */
   border-color: var(--nb-delete-border);
   background: var(--nb-delete-bg-hover);
-  box-shadow: 0 2px 6px rgba(217, 142, 130, 0.15);
-  transform: translateY(-1px);
 }
 
 /* --- Cards ------------------------------------------------------------ */
 
 .card {
   position: relative;
-  border-radius: 3px;
-  border: 1.5px solid var(--nb-accent);
-  /* Light cream card floating on the dark page chrome, per the design
-     handoff's literal card styling - not a dark/near-transparent panel.
-     Everything nested inside reads dark-on-light, so the shared --nb-*
-     text/status tokens are redefined here too - anything below using
-     var(--nb-text) etc. (card titles, tables, badges, buttons) picks this
-     up automatically via ordinary custom-property inheritance, the same
-     trick .page uses for the dark theme itself. */
-  background: #f3eee0;
-  --nb-text: #14110b;
-  --nb-text-muted: #6e6858;
-  --nb-warning-text: #b8492f;
-  --nb-delete-border: rgba(184, 73, 47, 0.55);
-  --nb-delete-bg-hover: rgba(184, 73, 47, 0.12);
-  --nb-success: #2e6b3e;
-  --nb-success-bg: rgba(58, 122, 74, 0.16);
-  /* Not just defining the custom property above - applying it as .card's
-     own `color` too, so anything using `color: inherit` (e.g. the
-     quiz/group title <a> wrapping an <h3>) actually resolves to the new
-     dark value instead of silently inheriting the page-level light one
-     from further up the tree. */
+  border-radius: var(--radius-md);
+  border: 1px solid var(--nb-card-border);
+  background: var(--color-surface);
   color: var(--nb-text);
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  padding: 1.25em;
+  padding: 1.1em 1.25em;
 }
 
 /* Combine with .card in JSX: className={`${styles.card} ${styles.cardHoverable}`} */
 .cardHoverable {
-  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s, background 0.2s;
+  transition: border-color var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
 }
 
 .cardHoverable:hover {
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  transform: translateY(-2px);
-  border-color: var(--nb-accent-bright);
-  background: #f8f3e7;
+  border-color: var(--color-border-strong);
+  background: #1b1c20;
 }
 
 /* Left accent stripe used on list-row cards (quiz/group cards). Parent
-   needs position:relative (.cardHoverable/.card already set it). */
+   needs position:relative (.cardHoverable/.card already set it). Flat
+   gold, no gradient, per the current handoff. */
 .accentStripe {
   position: absolute;
   left: 0;
@@ -406,14 +397,14 @@ textarea.input {
   bottom: 12px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: linear-gradient(180deg, var(--nb-accent-bright), var(--nb-accent-deep));
+  background: var(--nb-accent);
 }
 
 .empty {
   text-align: center;
   padding: 3em 1em;
   color: var(--nb-text-muted);
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
 }
 
@@ -427,27 +418,30 @@ textarea.input {
 .table th,
 .table td {
   text-align: left;
-  padding: 0.6em;
+  padding: 0.65em 0.6em;
   border-bottom: 1px solid var(--nb-card-border);
-  font-size: 0.92em;
-  font-family: 'Inter', sans-serif;
+  font-size: 0.9em;
+  font-family: var(--font-body);
   color: var(--nb-text);
 }
 
 .table th {
   color: var(--nb-text-muted);
   font-weight: 600;
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* --- Badges -------------------------------------------------------------- */
 
 .badge {
   display: inline-block;
-  padding: 0.2em 0.6em;
-  border-radius: 999px;
-  font-size: 0.78em;
+  padding: 0.25em 0.65em;
+  border-radius: var(--radius-pill);
+  font-size: 0.76em;
   font-weight: 600;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
 }
 
 /* Combine with .badge in JSX: className={`${styles.badge} ${styles.badgeSuccess}`} */
@@ -462,6 +456,6 @@ textarea.input {
 }
 
 .badgeNeutral {
-  background: rgba(201, 162, 75, 0.12);
+  background: var(--color-accent-bg);
   color: var(--nb-text-muted);
 }

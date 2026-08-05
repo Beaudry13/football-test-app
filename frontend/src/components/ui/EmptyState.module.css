@@ -1,0 +1,19 @@
+.empty {
+  text-align: center;
+  padding: 2.75em 1.5em;
+  color: var(--nb-text-muted, var(--color-text-muted));
+}
+
+.icon {
+  color: var(--nb-text-muted2, var(--color-text-muted-2));
+  margin-bottom: 0.6em;
+}
+
+.message {
+  font-size: 0.95em;
+  margin: 0;
+}
+
+.action {
+  margin-top: 1em;
+}

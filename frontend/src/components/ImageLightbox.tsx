@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import type { AnnotationLayer } from '../api/types';
 import { AnnotationViewer } from './annotation/AnnotationViewer';
 import { PinchZoomPan } from './PinchZoomPan';
+import { Modal } from './ui/Modal';
 import styles from './ImageLightbox.module.css';
 
 interface ImageLightboxProps {
@@ -25,18 +25,8 @@ export function ImageLightbox({ src, alt, onClose, annotations, canvasWidth = nu
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  return createPortal(
-    <div className={styles.backdrop} onClick={onClose}>
-      <button
-        className={styles.closeButton}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        aria-label="Close"
-      >
-        ×
-      </button>
+  return (
+    <Modal onDismiss={onClose} ariaLabel={alt} size="bare" showCloseButton closeLabel="Close">
       <PinchZoomPan>
         {annotations && annotations.length > 0 ? (
           <AnnotationViewer
@@ -51,7 +41,6 @@ export function ImageLightbox({ src, alt, onClose, annotations, canvasWidth = nu
           <img className={styles.image} src={src} alt={alt} onClick={(e) => e.stopPropagation()} />
         )}
       </PinchZoomPan>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

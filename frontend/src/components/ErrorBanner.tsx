@@ -1,4 +1,6 @@
+import { Alert } from './ui/Alert';
+
 export function ErrorBanner({ message }: { message: string | null }) {
   if (!message) return null;
-  return <div className="error-banner">{message}</div>;
+  return <Alert variant="error">{message}</Alert>;
 }

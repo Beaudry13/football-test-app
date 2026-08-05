@@ -4,8 +4,8 @@ import peiraMark from '../../assets/peira-mark.png';
  * transparent background) - see frontend/src/assets/peira-mark.png. It's a
  * photorealistic textured image, not something a hand-drawn SVG could
  * faithfully reproduce, so it's rendered as-is rather than redrawn; only
- * the "PEIRA" wordmark stays real text (Cinzel, same as the rest of the
- * site), so its color/letter-spacing stays tunable in CSS and it stays
+ * the "PEIRA" wordmark stays real text (Playfair Display, same as the rest
+ * of the site), so its color/letter-spacing stays tunable in CSS and it stays
  * screen-reader-friendly. The mark's own gold tone reads fine on both the
  * dark coach theme and the light player theme, so unlike before it doesn't
  * need a separate per-variant recolor - `variant` now only affects the
@@ -35,7 +35,7 @@ export function PeiraLogo({ variant = 'dark', markOnly = false, size = 40, class
       {!markOnly && (
         <span
           style={{
-            fontFamily: "'Cinzel', serif",
+            fontFamily: 'var(--font-heading)',
             fontWeight: 700,
             fontSize: size * 0.6,
             letterSpacing: '0.12em',

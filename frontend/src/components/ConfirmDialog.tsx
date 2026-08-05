@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Modal } from './ui/Modal';
 import nb from '../styles/notebook.module.css';
 import styles from './ConfirmDialog.module.css';
 
@@ -113,42 +114,38 @@ export function useConfirmDialog() {
   }, [handleCancel, pending]);
 
   const dialog = pending ? (
-    <div className={styles.backdrop} onMouseDown={handleCancel}>
-      <div
-        ref={dialogRef}
-        className={`${nb.card} ${styles.dialog}`}
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-body"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <h2 id="confirm-dialog-title" className={styles.title}>
-          {pending.title}
-        </h2>
-        <div id="confirm-dialog-body" className={styles.body}>
-          {pending.body}
-        </div>
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={`${nb.btnSm} ${styles.cancelButton}`}
-            onClick={handleCancel}
-            disabled={isBusy}
-          >
-            {pending.cancelLabel ?? 'Cancel'}
-          </button>
-          <button
-            type="button"
-            className={`${nb.btnSm} ${nb.btnDanger} ${styles.confirmButton}`}
-            onClick={handleConfirm}
-            disabled={isBusy}
-          >
-            {isBusy ? 'Working…' : pending.confirmLabel}
-          </button>
-        </div>
+    <Modal
+      ref={dialogRef}
+      onDismiss={handleCancel}
+      role="alertdialog"
+      labelledBy="confirm-dialog-title"
+      describedBy="confirm-dialog-body"
+    >
+      <h2 id="confirm-dialog-title" className={styles.title}>
+        {pending.title}
+      </h2>
+      <div id="confirm-dialog-body" className={styles.body}>
+        {pending.body}
       </div>
-    </div>
+      <div className={styles.actions}>
+        <button
+          type="button"
+          className={`${nb.btnSm} ${styles.cancelButton}`}
+          onClick={handleCancel}
+          disabled={isBusy}
+        >
+          {pending.cancelLabel ?? 'Cancel'}
+        </button>
+        <button
+          type="button"
+          className={`${nb.btnSm} ${nb.btnDanger} ${styles.confirmButton}`}
+          onClick={handleConfirm}
+          disabled={isBusy}
+        >
+          {isBusy ? 'Working…' : pending.confirmLabel}
+        </button>
+      </div>
+    </Modal>
   ) : null;
 
   return { confirm, dialog };

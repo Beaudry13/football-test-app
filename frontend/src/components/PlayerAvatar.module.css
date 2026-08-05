@@ -5,13 +5,19 @@
   flex-shrink: 0;
 }
 
+/* Renders in both the coach dark theme and the player light theme (this
+   avatar shows up in NameStep, a player-facing page) - the accent gold
+   itself reads fine against either, so it's pulled straight from
+   styles/tokens.css (a :root-level token, always in scope) rather than
+   from the coach-only --nb-* aliases, which aren't defined outside a
+   .page ancestor. */
 .placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #c9a24b;
-  color: #14110b;
-  font-family: 'Cinzel', serif;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-heading);
   font-weight: 700;
   letter-spacing: 0.02em;
 }

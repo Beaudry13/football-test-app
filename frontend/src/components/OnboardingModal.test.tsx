@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { OnboardingModal } from './OnboardingModal';
 import nb from '../styles/notebook.module.css';
-import modalStyles from './OnboardingModal.module.css';
+import modalStyles from './ui/Modal.module.css';
 
 /** Mirrors how NotebookHeader actually uses this: a real focusable trigger
  * that mounts/unmounts the modal, so focus-in/focus-out behavior is
@@ -34,12 +34,12 @@ describe('OnboardingModal', () => {
     expect(screen.getByRole('dialog', { name: 'Welcome to Peira' })).toBeInTheDocument();
   });
 
-  it('renders a solid dedicated panel class, not the shared translucent card surface', async () => {
+  it('renders the shared Modal panel class, not the translucent notebook card surface', async () => {
     const user = renderHarness();
     await user.click(screen.getByRole('button', { name: 'What is Peira?' }));
 
     const panel = screen.getByRole('dialog');
-    expect(panel.className).toContain(modalStyles.card);
+    expect(panel.className).toContain(modalStyles.panel);
     expect(panel.className).not.toContain(nb.card);
   });
 
@@ -123,6 +123,6 @@ describe('OnboardingModal', () => {
     await user.click(screen.getByRole('button', { name: 'What is Peira?' }));
     await user.click(screen.getByRole('button', { name: 'Begin' }));
 
-    expect(document.querySelector(`.${modalStyles.scrim}`)).not.toBeInTheDocument();
+    expect(document.querySelector(`.${modalStyles.backdrop}`)).not.toBeInTheDocument();
   });
 });

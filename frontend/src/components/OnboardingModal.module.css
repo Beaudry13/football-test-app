@@ -1,51 +1,6 @@
-.scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(8, 7, 4, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  overflow-y: auto;
-}
-
-.card {
-  position: relative;
-  max-width: 460px;
-  width: 100%;
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  background: #14110b;
-  border: 1px solid rgba(201, 162, 75, 0.5);
-  border-radius: 6px;
-  padding: 40px 36px;
-  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.6);
-  text-align: center;
-}
-
-.closeButton {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(201, 162, 75, 0.4);
-  border-radius: 50%;
-  background: rgba(201, 162, 75, 0.1);
-  color: var(--nb-text, #f3eee2);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.closeButton:hover {
-  background: rgba(201, 162, 75, 0.22);
-  border-color: rgba(201, 162, 75, 0.7);
-}
+/* Scrim/panel/close-button chrome now lives in
+   components/ui/Modal.module.css - this file only styles this modal's own
+   content. */
 
 .mark {
   display: flex;
@@ -54,15 +9,15 @@
 }
 
 .heading {
-  font-family: 'Cinzel', serif;
-  color: var(--nb-text, #f3eee2);
+  font-family: var(--font-heading);
+  color: var(--nb-text, var(--color-text));
   font-size: 26px;
+  font-weight: 700;
   margin: 0 0 12px;
-  letter-spacing: 0.06em;
 }
 
 .body {
-  color: #aba492;
+  color: var(--nb-text-muted, var(--color-text-muted));
   font-size: 14.5px;
   line-height: 1.7;
   margin: 0 0 20px;
@@ -73,6 +28,6 @@
 }
 
 .emphasis {
-  color: var(--nb-accent-bright, #e4c066);
+  color: var(--nb-accent-bright, var(--color-accent-bright));
   font-style: normal;
 }
