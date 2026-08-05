@@ -13,6 +13,31 @@
    24 files already built against --nb-* repaint automatically without a
    mass rename.
 
+   NAMING NOTE - read before adding a new token here: frontend/src/index.css
+   (the separate, older light "player" theme) already owns a set of
+   generically-named custom properties at :root - --color-bg, --color-
+   surface, --color-border, --color-text, --color-text-muted, --color-
+   danger(-bg), --color-success(-bg), --color-warning-bg, --radius-sm,
+   --radius-md. A same-named :root declaration in THIS file would silently
+   collide with those (same selector, same specificity - whichever file's
+   <link>/import comes second in the cascade wins GLOBALLY, for every
+   consumer, not just contextually - this bit us once already). So every
+   token below whose bare name would collide with one of index.css's is
+   prefixed --peira-* instead (--peira-bg, --peira-surface, --peira-border,
+   --peira-text, --peira-text-muted, --peira-danger(-bg), --peira-
+   success(-bg), --peira-warning-bg, --peira-radius-sm/md). Tokens with no
+   equivalent in index.css (--color-accent, --font-heading, --radius-pill,
+   --space-*, ...) don't need the prefix and keep their plain names.
+
+   notebook.module.css's `.page` selector locally re-declares the plain
+   --color-bg/--radius-sm/etc. names (sourced from the --peira-* tokens
+   here) at CLASS specificity, which beats index.css's bare :root rule for
+   anything actually rendered inside `.page` - so ordinary (non-portaled)
+   coach-page content can keep reading the plain generic names and just
+   works. Content that portals to document.body (components/ui/Modal.tsx,
+   and anything rendered inside it) escapes `.page`'s DOM subtree entirely,
+   so it reads the --peira-* names directly instead - see Modal.module.css.
+
    FUTURE ORG BRANDING (not built yet - see plan): an organization's
    primary/secondary/accent color and logo would later override a subset
    of these same custom-property names via a scoped inline <style> block
@@ -27,43 +52,43 @@
    not read from this file. See index.css's own header comment. */
 
 :root {
-  /* --- Color: surfaces -------------------------------------------------- */
-  --color-bg: #121212;
-  --color-surface: #17181b;
+  /* --- Color: surfaces (collide with index.css - --peira-* prefixed) ------ */
+  --peira-bg: #121212;
+  --peira-surface: #17181b;
   --color-surface-input: #1a1b1e;
   --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --color-border: rgba(255, 255, 255, 0.1);
+  --peira-border: rgba(255, 255, 255, 0.1);
   --color-border-strong: rgba(255, 255, 255, 0.14);
 
-  /* --- Color: text -------------------------------------------------------- */
-  --color-text: #f5f3ee;
+  /* --- Color: text (collide with index.css - --peira-* prefixed) ---------- */
+  --peira-text: #f5f3ee;
   --color-text-secondary: #edeae2;
-  --color-text-muted: #8b8b86;
+  --peira-text-muted: #8b8b86;
   --color-text-muted-2: #6b6b66;
   --color-text-muted-3: #9c9994;
 
-  /* --- Color: accent (gold, flat - never a gradient) ----------------------- */
+  /* --- Color: accent (gold, flat - never a gradient; no index.css equivalent) */
   --color-accent: #c9a24b;
   --color-accent-bright: #e4c066;
   --color-accent-contrast: #121212;
   --color-accent-bg: rgba(201, 162, 75, 0.12);
 
-  /* --- Color: status -------------------------------------------------------- */
-  --color-success: #4fbe72;
-  --color-success-bg: rgba(58, 164, 92, 0.15);
+  /* --- Color: status (collide with index.css - --peira-* prefixed) -------- */
+  --peira-success: #4fbe72;
+  --peira-success-bg: rgba(58, 164, 92, 0.15);
   --color-warning: #e0a356;
-  --color-warning-bg: rgba(224, 140, 64, 0.15);
-  --color-danger: #e07a7a;
-  --color-danger-bg: rgba(224, 90, 90, 0.08);
+  --peira-warning-bg: rgba(224, 140, 64, 0.15);
+  --peira-danger: #e07a7a;
+  --peira-danger-bg: rgba(224, 90, 90, 0.08);
   --color-danger-border: rgba(224, 90, 90, 0.3);
 
-  /* --- Typography ------------------------------------------------------------ */
+  /* --- Typography (no index.css equivalent) -------------------------------- */
   --font-heading: 'Playfair Display', serif;
   --font-body: 'Inter', sans-serif;
 
-  /* --- Radius ------------------------------------------------------------- */
-  --radius-sm: 7px;
-  --radius-md: 10px;
+  /* --- Radius (sm/md collide with index.css - --peira-* prefixed) --------- */
+  --peira-radius-sm: 7px;
+  --peira-radius-md: 10px;
   --radius-pill: 999px;
 
   /* --- Shadow (flat design - used sparingly: floating nav, modals, hover lift) */

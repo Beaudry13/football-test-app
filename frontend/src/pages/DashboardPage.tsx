@@ -10,6 +10,9 @@ import { useConfirmDialog } from '../components/ConfirmDialog';
 import { QuizCard } from '../components/QuizCard';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
+import { Icon } from '../components/ui/Icon';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
@@ -237,16 +240,16 @@ export function DashboardPage() {
               'Creating…'
             ) : (
               <>
-                <span aria-hidden="true">＋</span> New folder
+                <Icon name="add" size={14} /> New folder
               </>
             )}
           </button>
         </form>
 
         {quizzes === null ? (
-          <p>Loading…</p>
+          <LoadingState />
         ) : quizzes.length === 0 && !hasFolders ? (
-          <div className={`${nb.card} ${nb.empty}`}>No Quizzes yet. Create your first one above.</div>
+          <EmptyState message="No Quizzes yet. Create your first one above." />
         ) : !hasFolders ? (
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
@@ -259,7 +262,9 @@ export function DashboardPage() {
                 <div key={folder.id} className={styles.folderSection}>
                   <div className={styles.folderHeader}>
                     <button className={styles.folderToggle} onClick={() => toggleFolder(folder.id)}>
-                      <span className={styles.folderCollapseIcon}>{isCollapsed ? '▸' : '▾'}</span>
+                      <span className={styles.folderCollapseIcon}>
+                        <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={16} />
+                      </span>
                       {folder.name} <span className={styles.folderCount}>({folderQuizzes.length})</span>
                     </button>
                     <div className={styles.folderActions}>

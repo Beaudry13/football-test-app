@@ -28,36 +28,47 @@
    leak this dark theme there too. */
 
 .page {
-  --nb-bg: var(--color-bg);
-  --nb-text: var(--color-text);
-  --nb-text-muted: var(--color-text-muted);
+  /* --nb-* aliases, sourced from the --peira-* tokens (styles/tokens.css)
+     that exist specifically to avoid colliding with index.css's same-
+     named :root properties - see that file's NAMING NOTE. */
+  --nb-bg: var(--peira-bg);
+  --nb-text: var(--peira-text);
+  --nb-text-muted: var(--peira-text-muted);
   --nb-text-muted2: var(--color-text-muted-2);
   --nb-text-faint: var(--color-text-muted-2);
   --nb-accent: var(--color-accent);
   --nb-accent-bright: var(--color-accent-bright);
   --nb-accent-deep: var(--color-accent);
   --nb-accent-hover: var(--color-accent-bright);
-  --nb-card-border: var(--color-border);
+  --nb-card-border: var(--peira-border);
   --nb-input-border: var(--color-border-strong);
   --nb-delete-border: var(--color-danger-border);
-  --nb-delete-bg-hover: var(--color-danger-bg);
-  --nb-success: var(--color-success);
-  --nb-success-bg: var(--color-success-bg);
-  --nb-warning-text: var(--color-danger);
-  --nb-warning-bg: var(--color-danger-bg);
+  --nb-delete-bg-hover: var(--peira-danger-bg);
+  --nb-success: var(--peira-success);
+  --nb-success-bg: var(--peira-success-bg);
+  --nb-warning-text: var(--peira-danger);
+  --nb-warning-bg: var(--peira-danger-bg);
 
-  /* Shared global components (e.g. ErrorBanner's plain ".error-banner"
-     class in index.css) read --color-* custom properties, not --nb-*.
-     Those only have :root (light-theme) values by default - overriding
-     them here means anything rendered inside a coach page (dark theme)
-     picks up dark-appropriate colors too, via ordinary CSS custom-property
-     inheritance, without needing a notebook-specific ErrorBanner variant.
-     --color-danger/-bg are already the token defaults at :root, but
-     index.css's :root block redefines them for the light player theme -
-     re-asserting the dark-appropriate value here keeps that page-local
-     override from leaking into a coach page. */
-  --color-danger: var(--nb-warning-text);
-  --color-danger-bg: var(--nb-warning-bg);
+  /* Re-declare the plain generic names locally, at class specificity, so
+     anything inside .page that reads var(--color-bg)/var(--radius-sm)/etc.
+     directly (ErrorBanner's ".error-banner" class in index.css, and every
+     components/ui/* primitive's non---nb- fallback) resolves to the dark
+     value instead of index.css's light :root default - without needing a
+     coach-specific variant of any of those. Content portaled outside
+     .page's DOM subtree (components/ui/Modal.tsx) doesn't inherit this -
+     it reads the --peira-* names directly instead, see Modal.module.css. */
+  --color-bg: var(--peira-bg);
+  --color-surface: var(--peira-surface);
+  --color-border: var(--peira-border);
+  --color-text: var(--peira-text);
+  --color-text-muted: var(--peira-text-muted);
+  --color-danger: var(--peira-danger);
+  --color-danger-bg: var(--peira-danger-bg);
+  --color-success: var(--peira-success);
+  --color-success-bg: var(--peira-success-bg);
+  --color-warning-bg: var(--peira-warning-bg);
+  --radius-sm: var(--peira-radius-sm);
+  --radius-md: var(--peira-radius-md);
 
   position: relative;
   min-height: 100vh;

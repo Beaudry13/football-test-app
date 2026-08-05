@@ -19,18 +19,25 @@
   background: rgba(0, 0, 0, 0.9);
 }
 
+/* Always renders through a portal to document.body (see Modal.tsx),
+   outside .page's DOM subtree - so it can't rely on the plain generic
+   names .page locally re-declares (those only cascade to actual DOM
+   descendants of .page) and reads the --peira-* tokens directly instead.
+   Every modal in this app (confirm dialogs, onboarding, the image
+   lightbox) is always dark regardless of which theme's page opened it,
+   so this is correct even when triggered from a player-light page. */
 .panel {
   position: relative;
   width: 100%;
   max-width: 420px;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background: var(--peira-surface);
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-md);
   box-shadow: var(--shadow-lg);
   padding: var(--space-6);
-  color: var(--color-text);
+  color: var(--peira-text);
 }
 
 .panelMd {
@@ -68,7 +75,7 @@
   border: 1px solid var(--color-border-strong);
   border-radius: 50%;
   background: var(--color-accent-bg);
-  color: var(--color-text);
+  color: var(--peira-text);
   cursor: pointer;
   transition: background-color var(--duration-base) var(--ease-standard),
     border-color var(--duration-base) var(--ease-standard);

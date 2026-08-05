@@ -15,10 +15,11 @@
    document.body), outside both the coach dark-theme (.page) and player
    light-theme trees - it can't rely on either theme's context-scoped
    alias custom properties, only on the plain :root-level tokens from
-   styles/tokens.css (always in scope, portal or not). Since the lightbox
-   itself is always a dark fullscreen overlay regardless of which theme's
-   page opened it, reaching for those tokens directly here is correct,
-   not a workaround. */
+   styles/tokens.css (always in scope, portal or not - see that file's
+   NAMING NOTE for why this reads --peira-text specifically, not the
+   collision-prone --color-text). Since the lightbox itself is always a
+   dark fullscreen overlay regardless of which theme's page opened it,
+   reaching for those tokens directly here is correct, not a workaround. */
 .resetButton {
   position: absolute;
   bottom: 1.25em;
@@ -29,7 +30,7 @@
   border-radius: var(--radius-pill);
   border: none;
   background: rgba(20, 20, 20, 0.75);
-  color: var(--color-text);
+  color: var(--peira-text);
   font-size: 0.9em;
   font-weight: 600;
   cursor: pointer;
