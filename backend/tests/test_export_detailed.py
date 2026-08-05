@@ -8,6 +8,7 @@ can silently mutate a PlayerAttempt or Answer row.
 """
 
 import io
+import re
 
 from pypdf import PdfReader
 
@@ -336,10 +337,13 @@ def test_counts_correct_incorrect_not_graded_and_unanswered(client, coach_header
     response = client.get(f"/api/quizzes/{quiz['id']}/export-detailed.pdf", headers=coach_headers)
     text = _pdf_text(response.get_data())
 
-    assert "Correct: 1" in text
-    assert "Incorrect: 1" in text
-    assert "Not Graded: 1" in text
-    assert "Unanswered: 1" in text
+    # The counts render as stacked value/label metric cards, not one fused
+    # sentence - assert each count sits next to its own label. \b keeps
+    # "INCORRECT" from also satisfying the "CORRECT" check.
+    assert re.search(r"1\s*CORRECT\b", text) is not None
+    assert re.search(r"1\s*INCORRECT\b", text) is not None
+    assert re.search(r"1\s*NOT GRADED\b", text) is not None
+    assert re.search(r"1\s*UNANSWERED\b", text) is not None
 
 
 def test_score_is_percent_of_graded_questions_only(client, coach_headers):
@@ -365,8 +369,9 @@ def test_score_is_percent_of_graded_questions_only(client, coach_headers):
     text = _pdf_text(response.get_data())
 
     # 1 correct / 1 graded (the written answer is pending, excluded from
-    # the denominator) = 100%, clearly labeled as based on graded questions.
-    assert "100.0% of graded questions" in text
+    # the denominator) = 100%, shown as a metric-card value plus the
+    # caption clarifying grading is still in progress.
+    assert "100.0%" in text
     assert "1 response awaiting grading" in text
 
 
