@@ -10,7 +10,12 @@
   --color-text-muted: #6e6858;
   --color-primary: #c9a24b;
   --color-primary-hover: #a6822f;
-  --color-primary-contrast: #ffffff;
+  /* Dark, not white: white on this gold measured 2.40:1 - well under the
+     4.5:1 floor - on the player's PRIMARY action button ("Continue",
+     "Submit"), the single most important control in the flow. #121212
+     clears it on both the base (7.81:1) and hover (5.22:1) fills, and
+     matches the coach theme's own on-gold text color. */
+  --color-primary-contrast: #121212;
   --color-primary-bg: #fbf3de;
   --color-danger: #b3261e;
   --color-danger-bg: #fdecea;
@@ -101,11 +106,15 @@ textarea {
   font-size: inherit;
 }
 
+/* 44px floor on the player side (vs the coach side's 32px): this flow is
+   used one-handed on a phone during a meeting, so its controls get the
+   full recommended mobile touch target rather than the denser desktop one. */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4em;
+  min-height: 44px;
   padding: 0.55em 1.1em;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
@@ -171,6 +180,7 @@ textarea {
 .field input[type='number'],
 .field textarea,
 .field select {
+  min-height: 44px;
   padding: 0.55em 0.7em;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);

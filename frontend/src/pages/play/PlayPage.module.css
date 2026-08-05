@@ -25,7 +25,10 @@
   max-width: 1300px;
 }
 
+/* Sits outside .field, so it doesn't inherit index.css's 44px input floor -
+   set it here so the very first control a player touches is full size. */
 .codeInput {
+  min-height: 44px;
   font-size: 1.6em;
   text-align: center;
   letter-spacing: 0.15em;

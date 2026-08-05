@@ -462,6 +462,25 @@ textarea.input {
   border-collapse: collapse;
 }
 
+/* Data tables are the one thing that genuinely can't reflow into a phone
+   width without losing the row-to-row comparison coaches read them for -
+   so below 700px the CARD scrolls horizontally instead, keeping every
+   column intact and reachable. Without this, .card's overflow:hidden
+   silently CLIPS the wider columns (measured: a 538px roster table cut
+   off inside a 272px card at 320px wide) - the data was unreachable, not
+   just awkward. -webkit-overflow-scrolling keeps momentum scrolling on
+   iOS. */
+@media (max-width: 700px) {
+  .card:has(.table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    min-width: 32em;
+  }
+}
+
 .table th,
 .table td {
   text-align: left;
