@@ -26,7 +26,7 @@
   font-size: 0.85em;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--nb-accent, #c9a24b);
+  color: var(--nb-accent);
   white-space: nowrap;
 }
 
@@ -40,7 +40,7 @@
   margin: 0;
   padding: 0;
   font-size: 0.9em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
 }
 
 .optionsList li {
@@ -57,7 +57,7 @@
   height: 60px;
   object-fit: cover;
   border-radius: 6px;
-  border: 1px solid var(--nb-card-border, #e7e3d8);
+  border: 1px solid var(--nb-card-border);
   flex-shrink: 0;
 }
 
@@ -78,7 +78,7 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 1em;
   line-height: 1;
   padding: 0.2em;

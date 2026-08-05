@@ -4,6 +4,8 @@ import { getActiveStatus } from '../api/quizzes';
 import { getQuizDashboard } from '../api/grading';
 import { usePolling } from '../hooks/usePolling';
 import type { ActiveQuizStatus as ActiveQuizStatusEntry, QuestionBreakdown } from '../api/types';
+import { Icon } from '../components/ui/Icon';
+import { LoadingState } from '../components/ui/LoadingState';
 import nb from '../styles/notebook.module.css';
 import styles from './ActiveQuizStatus.module.css';
 
@@ -75,7 +77,24 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
   return (
     <div className={`${nb.card} ${nb.cardHoverable} ${styles.card}`}>
       <div className={nb.accentStripe} />
-      <div className={styles.cardHeader} onClick={() => setIsOpen((v) => !v)}>
+      {/* role=button rather than a real <button>: this header contains a
+          <Link> to the quiz, and nesting an <a> inside a <button> is invalid
+          HTML. Keyboard support (Enter/Space) and aria-expanded are wired up
+          by hand to keep the accordion reachable without a mouse. */}
+      <div
+        className={styles.cardHeader}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        aria-label={`${isOpen ? 'Collapse' : 'Expand'} live status for ${entry.quiz_title}`}
+        onClick={() => setIsOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen((v) => !v);
+          }
+        }}
+      >
         <div>
           <Link
             to={`/quizzes/${entry.quiz_id}?tab=results`}
@@ -91,7 +110,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
         <div className={styles.counts}>
           <span className={`${nb.badge} ${nb.badgeSuccess}`}>{entry.submitted.length} submitted</span>
           <span className={`${nb.badge} ${nb.badgeWarning}`}>{pendingCount} pending</span>
-          <span>{isOpen ? '▲' : '▼'}</span>
+          <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size={16} />
         </div>
       </div>
 
@@ -99,7 +118,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
         <>
           <div className={styles.statusLists}>
             <div className={styles.statusColumn}>
-              <h4 className={styles.columnHeading}>Submitted ({entry.submitted.length})</h4>
+              <h3 className={styles.columnHeading}>Submitted ({entry.submitted.length})</h3>
               {entry.submitted.length === 0 ? (
                 <p className={styles.emptyNote}>No one yet.</p>
               ) : (
@@ -112,7 +131,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
             </div>
 
             <div className={styles.statusColumn}>
-              <h4 className={styles.columnHeading}>Pending ({pendingCount})</h4>
+              <h3 className={styles.columnHeading}>Pending ({pendingCount})</h3>
               {pendingCount === 0 ? (
                 <p className={styles.emptyNote}>Everyone has submitted.</p>
               ) : (
@@ -143,9 +162,9 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
           </div>
 
           <div className={styles.breakdownSection}>
-            <h4 className={styles.columnHeading}>Answer breakdown</h4>
+            <h3 className={styles.columnHeading}>Answer breakdown</h3>
             {breakdown == null ? (
-              <p className={styles.emptyNote}>Loading…</p>
+              <LoadingState variant="inline" />
             ) : breakdown.length === 0 ? (
               <p className={styles.emptyNote}>No questions on this Quiz.</p>
             ) : (
@@ -191,9 +210,7 @@ export function ActiveQuizStatusSection() {
 
   return (
     <div className={styles.section}>
-      <h2 className={nb.heading} style={{ fontSize: '1.5em' }}>
-        Live now
-      </h2>
+      <h2 className={nb.headingSm}>Live now</h2>
       <div className={styles.cardList}>
         {entries.map((entry) => (
           <ActiveQuizCard key={entry.access_code_id} entry={entry} />

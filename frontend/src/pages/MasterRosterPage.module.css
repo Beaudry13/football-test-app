@@ -9,7 +9,7 @@
 }
 
 .subheading {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin: -0.5em 0 1.5em;
   max-width: 60ch;
 }
@@ -32,7 +32,7 @@
   align-items: center;
   gap: 0.4em;
   font-size: 0.9em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
 }
 
 .addForm {

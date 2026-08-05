@@ -8,6 +8,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from '../../components/annotation/AnnotationCanvas';
 import nb from '../../styles/notebook.module.css';
 import styles from './AnnotationPage.module.css';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 const MAX_UPLOAD_DIMENSION = 1920;
 const SKIP_RESIZE_UNDER_BYTES = 5 * 1024 * 1024;
@@ -170,7 +171,7 @@ export function AnnotationPage() {
     return (
       <div>
         <ErrorBanner message={error} />
-        {!error && <p>Loading…</p>}
+        {!error && <LoadingState />}
       </div>
     );
   }

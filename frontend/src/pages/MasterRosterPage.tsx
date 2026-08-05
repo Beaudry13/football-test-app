@@ -15,6 +15,8 @@ import { RosterImportPanel } from '../components/RosterImportPanel';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import nb from '../styles/notebook.module.css';
 import styles from './MasterRosterPage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 
 const EMPTY_FORM: PlayerInput = { first_name: '', last_name: '', jersey_number: '', position: '' };
 
@@ -199,13 +201,15 @@ export function MasterRosterPage() {
         </form>
 
         {players === null ? (
-          <p>Loading…</p>
+          <LoadingState />
         ) : filtered.length === 0 ? (
-          <div className={`${nb.card} ${nb.empty}`}>
-            {players.length === 0
-              ? 'No players yet. Add one above, or import a roster.'
-              : 'No players match your search.'}
-          </div>
+          <EmptyState
+            message={
+              players.length === 0
+                ? 'No players yet. Add one above, or import a roster.'
+                : 'No players match your search.'
+            }
+          />
         ) : (
           <table className={nb.table}>
             <thead>

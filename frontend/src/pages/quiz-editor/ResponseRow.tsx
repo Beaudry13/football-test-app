@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/AuthContext';
 import type { Answer, PlayerResponse, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { Icon } from '../../components/ui/Icon';
 import nb from '../../styles/notebook.module.css';
 import styles from './ResultsTab.module.css';
 
@@ -131,7 +132,24 @@ export function ResponseRow({
   return (
     <div className={nb.card}>
       {dialog}
-      <div className={styles.responseHeader} onClick={() => setIsOpen((v) => !v)}>
+      {/* role=button rather than a real <button>: this header contains a
+          <Link> to the player's history, and nesting an <a> inside a
+          <button> is invalid HTML. Keyboard support and aria-expanded are
+          wired by hand so the accordion works without a mouse. */}
+      <div
+        className={styles.responseHeader}
+        role="button"
+        tabIndex={0}
+        aria-expanded={isOpen}
+        aria-label={`${isOpen ? 'Collapse' : 'Expand'} answers for ${response.display_name}`}
+        onClick={() => setIsOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsOpen((v) => !v);
+          }
+        }}
+      >
         <div>
           <Link
             // The legacy name-based history page is keyed by the historical
@@ -160,7 +178,7 @@ export function ResponseRow({
               {isResetting ? 'Resetting…' : 'Reset attempt'}
             </button>
           )}
-          <span>{isOpen ? '▲' : '▼'}</span>
+          <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size={16} />
         </div>
       </div>
       <ErrorBanner message={error} />

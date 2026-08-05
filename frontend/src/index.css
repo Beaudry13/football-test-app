@@ -28,6 +28,41 @@
   box-sizing: border-box;
 }
 
+/* --- Global accessibility baselines (both themes) -----------------------
+   These live here rather than in a theme file because they must hold on
+   every surface - coach dark, player light, and portaled modals alike. */
+
+/* One visible focus ring for the whole app. :focus-visible (not :focus) so
+   it appears for keyboard/AT navigation without ringing every mouse click.
+   currentColor keeps it legible on any background without needing a
+   per-theme override. */
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Respect the OS "reduce motion" setting: the design system's transitions
+   are all short and decorative (hover lifts, spinner, modal fade), so
+   there's nothing to preserve for users who ask for less movement. The
+   spinner keeps a slow rotation rather than freezing, so a pending state
+   still reads as pending. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [class*='spinner'] {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+}
+
 html,
 body,
 #root {

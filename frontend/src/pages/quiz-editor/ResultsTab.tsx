@@ -13,6 +13,8 @@ import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
 import nb from '../../styles/notebook.module.css';
 import styles from './ResultsTab.module.css';
+import { LoadingState } from '../../components/ui/LoadingState';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'quiz';
@@ -165,11 +167,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
 
       <h3 className={nb.subheading}>Player responses</h3>
       {responses === null ? (
-        <p>Loading…</p>
+        <LoadingState />
       ) : responses.length === 0 ? (
-        <div className={`${nb.card} ${nb.empty}`}>
-          No responses yet. Share the access code to start collecting them.
-        </div>
+        <EmptyState message="No responses yet. Share the access code to start collecting them." />
       ) : (
         <div className={styles.responseList}>
           {responses.map((response) => (

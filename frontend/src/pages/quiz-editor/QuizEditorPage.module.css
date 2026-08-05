@@ -7,12 +7,12 @@
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   text-decoration: none;
 }
 
 .backLink:hover {
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
 }
 
 .titleRow {
@@ -27,7 +27,7 @@
   font-family: var(--font-heading);
   font-size: 40px;
   font-weight: 700;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 0.1em 0.2em;
@@ -37,7 +37,7 @@
 
 .titleInput:hover,
 .titleInput:focus {
-  border-color: var(--nb-input-border, #dad5c8);
+  border-color: var(--nb-input-border);
   background: rgba(255, 255, 255, 0.6);
   outline: none;
 }
@@ -47,8 +47,8 @@
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 0.3em;
-  color: var(--nb-text-muted, #78766e);
-  font-family: 'Inter', sans-serif;
+  color: var(--nb-text-muted);
+  font-family: var(--font-body);
   resize: vertical;
   min-height: 2.5em;
   background: transparent;
@@ -56,7 +56,7 @@
 
 .descriptionInput:hover,
 .descriptionInput:focus {
-  border-color: var(--nb-input-border, #dad5c8);
+  border-color: var(--nb-input-border);
   background: rgba(255, 255, 255, 0.6);
   outline: none;
 }
@@ -66,14 +66,14 @@
   align-items: center;
   gap: 0.5em;
   font-size: 0.9em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin-bottom: 1.5em;
 }
 
 .tabs {
   display: flex;
   gap: 1.5em;
-  border-bottom: 2px solid var(--nb-card-border, #e7e3d8);
+  border-bottom: 2px solid var(--nb-card-border);
   margin-bottom: 1.5em;
 }
 
@@ -85,12 +85,12 @@
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   border-bottom: 3px solid transparent;
   margin-bottom: -2px;
 }
 
 .tabActive {
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   border-bottom-color: var(--nb-accent);
 }

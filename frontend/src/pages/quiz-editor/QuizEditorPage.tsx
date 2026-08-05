@@ -10,6 +10,7 @@ import { AccessCodesTab } from './AccessCodesTab';
 import { ResultsTab } from './ResultsTab';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuizEditorPage.module.css';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 const TABS = [
   { key: 'questions', label: 'Questions' },
@@ -75,7 +76,7 @@ export function QuizEditorPage() {
     return (
       <div>
         <ErrorBanner message={error} />
-        {!error && <p>Loading…</p>}
+        {!error && <LoadingState />}
       </div>
     );
   }

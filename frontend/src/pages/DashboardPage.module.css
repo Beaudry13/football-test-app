@@ -41,12 +41,14 @@
   color: inherit;
 }
 
-.quizInfo h3 {
+/* Sized like a card title, not like a page-level h2 - the heading LEVEL is
+   chosen for document structure (see QuizCard.tsx), the size for layout. */
+.quizInfo h2 {
   font-family: var(--font-heading);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   margin: 0;
 }
 
@@ -56,7 +58,7 @@
 }
 
 .quizMeta {
-  color: var(--nb-text-faint, #a6a192);
+  color: var(--nb-text-faint);
   font-size: 13px;
   margin-top: 4px;
 }
@@ -68,12 +70,12 @@
 }
 
 .quizStat {
-  color: var(--nb-accent-deep, #a6822f);
+  color: var(--nb-accent-deep);
   font-size: 12.5px;
 }
 
 .quizStat b {
-  color: var(--nb-accent-bright, #e4c066);
+  color: var(--nb-accent-bright);
 }
 
 .actions {
@@ -158,7 +160,7 @@ button.actionDelete:hover:not(:disabled) {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   cursor: pointer;
 }
 
@@ -167,19 +169,19 @@ button.actionDelete:hover:not(:disabled) {
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
 }
 
 .folderCollapseIcon {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   width: 1em;
   display: inline-block;
 }
 
 .folderCount {
   font-weight: 400;
-  color: var(--nb-text-muted2, #8a8577);
-  font-family: 'Inter', sans-serif;
+  color: var(--nb-text-muted2);
+  font-family: var(--font-body);
   font-size: 0.6em;
 }
 
@@ -190,25 +192,25 @@ button.actionDelete:hover:not(:disabled) {
 }
 
 .emptyFolder {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 0.9em;
   padding: 0.5em 0;
 }
 
 .subfolderSection {
   padding: 0.75em 1em;
-  border: 1px dashed var(--nb-card-border, #e7e3d8);
+  border: 1px dashed var(--nb-card-border);
   border-radius: 4px;
 }
 
 .subListHeading {
   margin: 0 0 0.5em;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.8em;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--nb-text-muted2, #8a8577);
+  color: var(--nb-text-muted2);
 }
 
 .subfolderList {
@@ -219,9 +221,9 @@ button.actionDelete:hover:not(:disabled) {
 }
 
 .subfolderLink {
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   text-decoration: none;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
 }
 

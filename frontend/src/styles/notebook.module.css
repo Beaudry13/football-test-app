@@ -116,7 +116,15 @@
   flex-wrap: wrap;
 }
 
+/* min-height 32px on every nav control: the handoff's pill nav is visually
+   compact, but a 7px-padded 13px link measures ~30px tall, under the 32px
+   floor this design system holds interactive controls to. Padding stays as
+   spec'd; the extra height comes from centering inside the min-height, so
+   the pill looks identical and just gains a couple of forgiving pixels. */
 .navLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
   padding: 7px 14px;
   border-radius: var(--radius-pill);
   font-family: var(--font-body);
@@ -146,6 +154,9 @@
 }
 
 .whatIsPeira {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
   background: none;
   border: none;
   padding: 0 var(--space-2);
@@ -210,6 +221,16 @@
 .heading {
   font-family: var(--font-heading);
   font-size: 32px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--nb-text);
+}
+
+/* Section heading one step down from .heading - for a titled block inside
+   a page that already has its own h1 (e.g. the dashboard's "Live now"). */
+.headingSm {
+  font-family: var(--font-heading);
+  font-size: 24px;
   font-weight: 700;
   margin: 0;
   color: var(--nb-text);

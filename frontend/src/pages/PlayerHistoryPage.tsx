@@ -6,6 +6,8 @@ import type { PlayerHistoryEntry } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import nb from '../styles/notebook.module.css';
 import styles from './PlayerHistoryPage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 
 export function PlayerHistoryPage() {
   const { playerName: encodedName } = useParams<{ playerName: string }>();
@@ -39,12 +41,9 @@ export function PlayerHistoryPage() {
       <ErrorBanner message={error} />
 
       {history === null ? (
-        <p>Loading…</p>
+        <LoadingState />
       ) : history.length === 0 ? (
-        <div className={`${nb.card} ${nb.empty}`}>
-          No Quiz history found for this name yet. Names must match exactly, including spelling and
-          spacing.
-        </div>
+        <EmptyState message="No Quiz history found for this name yet. Names must match exactly, including spelling and spacing." />
       ) : (
         <>
           <div className={nb.card} style={{ marginBottom: '1.5em' }}>

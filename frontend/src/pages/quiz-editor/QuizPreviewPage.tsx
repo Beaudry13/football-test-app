@@ -7,6 +7,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionInput, type PlayerAnswer } from '../play/QuestionInput';
 import playStyles from '../play/PlayPage.module.css';
 import styles from './QuizPreviewPage.module.css';
+import { LoadingState } from '../../components/ui/LoadingState';
 
 /** Read-only walkthrough of the exact player-facing rendering (same
  * QuestionInput component, same PlayPage.module.css classes, same image
@@ -42,7 +43,7 @@ export function QuizPreviewPage() {
     return (
       <div className={styles.page}>
         <ErrorBanner message={error} />
-        {!error && <p>Loading…</p>}
+        {!error && <LoadingState />}
       </div>
     );
   }

@@ -16,6 +16,7 @@ import { PlayerListEditor } from '../components/PlayerListEditor';
 import { RosterSelectPanel } from '../components/RosterSelectPanel';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupDetailPage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
 
 export function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -105,7 +106,7 @@ export function GroupDetailPage() {
     return (
       <div>
         <ErrorBanner message={error} />
-        {!error && <p>Loading…</p>}
+        {!error && <LoadingState />}
       </div>
     );
   }

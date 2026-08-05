@@ -198,7 +198,7 @@ describe('ResultsTab exports', () => {
     vi.spyOn(gradingApi, 'listResponses').mockResolvedValue([response]);
     renderResultsTab(quizWithQuestion);
 
-    await user.click(await screen.findByText('▼'));
+    await user.click(await screen.findByRole('button', { name: /Expand answers for/ }));
 
     expect(await screen.findByText('Graded by coach_amy')).toBeInTheDocument();
   });
@@ -243,7 +243,7 @@ describe('ResultsTab exports', () => {
     vi.spyOn(gradingApi, 'listResponses').mockResolvedValue([response]);
     renderResultsTab(quizWithQuestion);
 
-    await user.click(await screen.findByText('▼'));
+    await user.click(await screen.findByRole('button', { name: /Expand answers for/ }));
 
     expect(await screen.findByText('I set the edge.')).toBeInTheDocument();
     expect(screen.queryByText(/Graded by/)).not.toBeInTheDocument();

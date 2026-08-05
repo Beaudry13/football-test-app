@@ -18,7 +18,7 @@
 
 .statLabel {
   font-size: 0.85em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
 }
 
 .exportRow {
@@ -29,7 +29,7 @@
 }
 
 .exportLabel {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 0.9em;
   margin-right: 0.25em;
 }
@@ -62,14 +62,14 @@
 }
 
 .responseMeta {
-  color: var(--nb-text-faint, #a6a192);
+  color: var(--nb-text-faint);
   margin-left: 0.75em;
   font-size: 0.85em;
 }
 
 .playerNameLink {
   font-weight: 700;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   text-decoration: none;
 }
 
@@ -86,7 +86,7 @@
 
 .answerRow {
   padding: 0.75em 0;
-  border-top: 1px solid var(--nb-card-border, #e7e3d8);
+  border-top: 1px solid var(--nb-card-border);
 }
 
 .answerQuestion {
@@ -109,11 +109,11 @@
   flex: 1;
   min-width: 200px;
   padding: 14px 16px;
-  border: 1px solid var(--nb-input-border, #dad5c8);
+  border: 1px solid var(--nb-input-border);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.92);
-  color: var(--nb-text, #1c1b1a);
-  font-family: 'Inter', sans-serif;
+  color: var(--nb-text);
+  font-family: var(--font-body);
   font-size: 15px;
   outline: none;
 }
@@ -130,10 +130,10 @@
 }
 
 .gradeIncorrect {
-  border-color: var(--nb-warning-text, #d98e82) !important;
+  border-color: var(--nb-warning-text) !important;
 }
 
 .gradedBy {
   font-size: 0.85em;
-  color: var(--nb-text-faint, #a6a192);
+  color: var(--nb-text-faint);
 }

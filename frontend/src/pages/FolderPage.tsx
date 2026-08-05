@@ -13,6 +13,8 @@ import { NotebookHeader } from '../components/notebook/NotebookHeader';
 import nb from '../styles/notebook.module.css';
 import dashboardStyles from './DashboardPage.module.css';
 import styles from './FolderPage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 
 /** A single subfolder's own page: breadcrumb back to its parent, rename,
  * delete, and the quizzes assigned directly to it. Folders are at most one
@@ -146,7 +148,7 @@ export function FolderPage() {
         <NotebookHeader />
         <div className={nb.content}>
           <ErrorBanner message={error} />
-          {!error && <p>Loading…</p>}
+          {!error && <LoadingState />}
         </div>
       </NotebookPage>
     );
@@ -194,7 +196,7 @@ export function FolderPage() {
         </div>
 
         {folderQuizzes.length === 0 ? (
-          <div className={`${nb.card} ${nb.empty}`}>No Quizzes in this folder yet.</div>
+          <EmptyState message="No Quizzes in this folder yet." />
         ) : (
           <div className={dashboardStyles.list}>
             {folderQuizzes.map((quiz) => (

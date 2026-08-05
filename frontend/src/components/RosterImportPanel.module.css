@@ -10,7 +10,7 @@
 }
 
 .hint {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 0.9em;
   margin: 0.25em 0 1em;
 }
@@ -41,11 +41,11 @@
   flex-wrap: wrap;
   margin: 0.75em 0;
   font-size: 0.9em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
 }
 
 .invalidCount {
-  color: var(--nb-warning-text, #b8492f);
+  color: var(--nb-warning-text);
   font-weight: 600;
 }
 
@@ -59,19 +59,19 @@
 }
 
 .errorText {
-  color: var(--nb-warning-text, #b8492f);
+  color: var(--nb-warning-text);
   font-size: 0.85em;
 }
 
 .dupNote {
   font-size: 0.85em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
 }
 
 .exactMatch {
   font-size: 0.85em;
   font-weight: 700;
-  color: var(--nb-warning-text, #b8492f);
+  color: var(--nb-warning-text);
 }
 
 .reviewRow {
@@ -79,6 +79,6 @@
 }
 
 .reviewCount {
-  color: var(--nb-warning-text, #b8492f);
+  color: var(--nb-warning-text);
   font-weight: 600;
 }

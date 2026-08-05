@@ -31,7 +31,7 @@
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   margin: 1.5em 0 0.5em;
 }
 
@@ -58,11 +58,11 @@
 
 .inviteNote {
   font-size: 0.85em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin-top: 0.5em;
 }
 
 .you {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-weight: 400;
 }

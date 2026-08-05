@@ -8,10 +8,14 @@
   margin: 0 0 0.5em;
 }
 
+/* Reads --peira-*, not --nb-*: this dialog renders inside components/ui/
+   Modal, which portals to document.body - outside .page's subtree, where
+   the --nb-* aliases don't exist. (Before the token work this line carried
+   a literal hex fallback, which is what was actually painting.) */
 .body {
   font-size: 0.95em;
   line-height: 1.5;
-  color: var(--nb-text-muted, #8b8b86);
+  color: var(--peira-text-muted);
   margin-bottom: 1.25em;
 }
 

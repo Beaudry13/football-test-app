@@ -60,11 +60,22 @@
   --peira-border: rgba(255, 255, 255, 0.1);
   --color-border-strong: rgba(255, 255, 255, 0.14);
 
-  /* --- Color: text (collide with index.css - --peira-* prefixed) ---------- */
+  /* --- Color: text (collide with index.css - --peira-* prefixed) ----------
+     Every text token here clears WCAG AA (4.5:1 for small text) against all
+     three surfaces it can land on - the page (--peira-bg), a card
+     (--peira-surface), and the translucent nav pill. --color-text-muted-2
+     is DELIBERATELY lighter than the design handoff's #6b6b66: that value
+     measured 3.31-3.50:1 depending on surface, i.e. it failed AA on every
+     one of them, and it's used for the small secondary copy that's hardest
+     to read in the first place (quiz meta lines, counts, captions).
+     #85857f is the nearest tone that clears AA on all three (4.78:1 worst
+     case) while still reading as clearly-muted next to --peira-text-muted.
+     Accessibility wins over an exact brand hex - the same rule that will
+     later constrain per-organization colors. */
   --peira-text: #f5f3ee;
   --color-text-secondary: #edeae2;
   --peira-text-muted: #8b8b86;
-  --color-text-muted-2: #6b6b66;
+  --color-text-muted-2: #85857f;
   --color-text-muted-3: #9c9994;
 
   /* --- Color: accent (gold, flat - never a gradient; no index.css equivalent) */

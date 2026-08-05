@@ -14,6 +14,7 @@ import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { QuestionEditor } from './QuestionEditor';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
+import { EmptyState } from '../../components/ui/EmptyState';
 
 const TYPE_LABELS: Record<string, string> = {
   true_false: 'True / False',
@@ -79,7 +80,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
 
       <div className={styles.list}>
         {questions.length === 0 && !isAdding && (
-          <div className={`${nb.card} ${nb.empty}`}>No questions yet. Add your first one below.</div>
+          <EmptyState message="No questions yet. Add your first one below." />
         )}
 
         {questions.map((question, index) =>

@@ -9,7 +9,7 @@
 }
 
 .description {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin: 0 0 1.5em;
 }
 
@@ -47,12 +47,12 @@
   font-family: var(--font-heading);
   font-size: 24px;
   font-weight: 700;
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   margin: 0;
 }
 
 .groupMeta {
-  color: var(--nb-text-faint, #a6a192);
+  color: var(--nb-text-faint);
   font-size: 13px;
   margin-top: 4px;
 }

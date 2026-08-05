@@ -2,14 +2,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: 1.5em;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9em;
-  color: var(--nb-text-muted, #6b6555);
+  color: var(--nb-text-muted);
   margin-bottom: 0.75em;
 }
 
 .summaryRow strong {
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
   font-family: var(--font-heading);
 }
 
@@ -36,9 +36,9 @@
 }
 
 .viewFilterActive {
-  background: var(--nb-accent, #c9a24b);
+  background: var(--nb-accent);
   color: #14110b;
-  border-color: var(--nb-accent, #c9a24b);
+  border-color: var(--nb-accent);
 }
 
 .selectionRow {
@@ -49,12 +49,12 @@
   gap: 0.75em;
   padding: 0.6em 0;
   margin-bottom: 0.5em;
-  border-top: 1px solid var(--nb-card-border, #e7e3d8);
-  border-bottom: 1px solid var(--nb-card-border, #e7e3d8);
+  border-top: 1px solid var(--nb-card-border);
+  border-bottom: 1px solid var(--nb-card-border);
 }
 
 .selectedCount {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.9em;
 }
 

@@ -15,6 +15,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import nb from '../styles/notebook.module.css';
 import styles from './TeamPage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
 
 function joinLink(code: string): string {
   return `${window.location.origin}/join/${code}`;
@@ -135,7 +136,7 @@ export function TeamPage() {
     return (
       <div>
         <ErrorBanner message={error} />
-        {!error && <p>Loading…</p>}
+        {!error && <LoadingState />}
       </div>
     );
   }

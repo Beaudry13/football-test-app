@@ -57,7 +57,7 @@
 }
 
 .columnHeading {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body);
   font-size: 0.85em;
   font-weight: 600;
   color: var(--nb-text-muted);

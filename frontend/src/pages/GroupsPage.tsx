@@ -7,6 +7,8 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupsPage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 
 export function GroupsPage() {
   const navigate = useNavigate();
@@ -90,9 +92,9 @@ export function GroupsPage() {
       </form>
 
       {groups === null ? (
-        <p>Loading…</p>
+        <LoadingState />
       ) : groups.length === 0 ? (
-        <div className={`${nb.card} ${nb.empty}`}>No groups yet. Create your first one above.</div>
+        <EmptyState message="No groups yet. Create your first one above." />
       ) : (
         <div className={styles.list}>
           {groups.map((group) => (

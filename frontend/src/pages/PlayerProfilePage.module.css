@@ -4,12 +4,12 @@
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   text-decoration: none;
 }
 
 .backLink:hover {
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
 }
 
 .headerRow {
@@ -43,7 +43,7 @@
 }
 
 .subheading {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin: -0.25em 0 0;
 }
 
@@ -64,7 +64,7 @@
 }
 
 .groupsLine {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 0.9em;
   margin: 1em 0;
 }
@@ -87,7 +87,7 @@
 }
 
 .statLabel {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 0.85em;
   margin-top: 0.25em;
 }

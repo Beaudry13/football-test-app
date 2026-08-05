@@ -6,6 +6,7 @@ import { ErrorBanner } from './ErrorBanner';
 import { PlayerAvatar } from './PlayerAvatar';
 import nb from '../styles/notebook.module.css';
 import styles from './RosterSelectPanel.module.css';
+import { LoadingState } from './ui/LoadingState';
 
 type ViewFilter = 'all' | 'not_in_group' | 'in_group';
 
@@ -219,7 +220,7 @@ export function RosterSelectPanel({
       </div>
 
       {allPlayers === null ? (
-        <p>Loading…</p>
+        <LoadingState />
       ) : visiblePlayers.length === 0 ? (
         <div className={nb.empty}>No players match your search and filters.</div>
       ) : (

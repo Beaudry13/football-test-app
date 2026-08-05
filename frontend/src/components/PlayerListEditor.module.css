@@ -18,8 +18,8 @@
 
 .playerList li {
   padding: 0.4em 0;
-  border-bottom: 1px solid var(--nb-card-border, #e7e3d8);
-  font-family: 'Inter', sans-serif;
+  border-bottom: 1px solid var(--nb-card-border);
+  font-family: var(--font-body);
 }
 
 .playerList li:last-child {
@@ -30,11 +30,11 @@
   width: 100%;
   min-height: 220px;
   padding: 14px 16px;
-  border: 1px solid var(--nb-input-border, #dad5c8);
+  border: 1px solid var(--nb-input-border);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.92);
-  color: var(--nb-text, #1c1b1a);
-  font-family: 'Inter', sans-serif;
+  color: var(--nb-text);
+  font-family: var(--font-body);
   font-size: 15px;
   outline: none;
 }

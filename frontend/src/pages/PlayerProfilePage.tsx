@@ -14,6 +14,8 @@ import { useConfirmDialog } from '../components/ConfirmDialog';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import nb from '../styles/notebook.module.css';
 import styles from './PlayerProfilePage.module.css';
+import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 
 export function PlayerProfilePage() {
   const { playerId } = useParams<{ playerId: string }>();
@@ -112,7 +114,7 @@ export function PlayerProfilePage() {
         <ErrorBanner message={error} />
 
         {history === null ? (
-          <p>Loading…</p>
+          <LoadingState />
         ) : (
           <>
             <div className={styles.headerRow}>
@@ -230,7 +232,7 @@ export function PlayerProfilePage() {
 
             <h2 className={nb.subheading}>Recent Results</h2>
             {history.recent_results.length === 0 ? (
-              <div className={`${nb.card} ${nb.empty}`}>No completed Quizzes yet.</div>
+              <EmptyState message="No completed Quizzes yet." />
             ) : (
               <table className={nb.table}>
                 <thead>

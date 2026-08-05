@@ -32,7 +32,7 @@
 
 .expiry {
   font-size: 0.9em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin-top: 0.5em;
 }
 
@@ -68,6 +68,6 @@
 
 .activateHint {
   font-size: 0.85em;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   margin-top: 0.75em;
 }

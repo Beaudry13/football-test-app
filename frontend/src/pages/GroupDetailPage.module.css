@@ -11,12 +11,12 @@
   font-family: var(--font-heading);
   font-weight: 700;
   font-size: 20px;
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   text-decoration: none;
 }
 
 .backLink:hover {
-  color: var(--nb-text, #1c1b1a);
+  color: var(--nb-text);
 }
 
 .renameForm {
@@ -35,7 +35,7 @@
 }
 
 .legacyNote {
-  color: var(--nb-text-muted, #78766e);
+  color: var(--nb-text-muted);
   font-size: 0.9em;
   max-width: 60ch;
 }
