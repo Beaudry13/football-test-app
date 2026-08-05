@@ -82,6 +82,14 @@ class FileStorage(ABC):
     def delete_image(self, image_url: str) -> None:
         """Remove a previously stored image. No-op if it doesn't exist."""
 
+    @abstractmethod
+    def load_image_bytes(self, image_url: str) -> bytes | None:
+        """Read back a previously stored image's raw bytes (e.g. to embed in
+        a PDF export). Read-only - never writes, never raises; returns None
+        for a missing file or any read failure so a caller (like the export
+        builder) can degrade cleanly instead of failing the whole request
+        over one bad image."""
+
 
 class LocalFileStorage(FileStorage):
     def __init__(self, upload_folder: str, allowed_extensions: set[str], max_dimension: int, jpeg_quality: int):
@@ -105,6 +113,14 @@ class LocalFileStorage(FileStorage):
         path = self.upload_folder / stored_name
         if path.exists():
             path.unlink()
+
+    def load_image_bytes(self, image_url: str) -> bytes | None:
+        stored_name = image_url.rsplit("/", 1)[-1]
+        path = self.upload_folder / stored_name
+        try:
+            return path.read_bytes()
+        except OSError:
+            return None
 
 
 class S3FileStorage(FileStorage):
@@ -157,6 +173,17 @@ class S3FileStorage(FileStorage):
         # delete_object is idempotent - no error if the key is already gone.
         stored_name = image_url.rsplit("/", 1)[-1]
         self.client.delete_object(Bucket=self.bucket_name, Key=stored_name)
+
+    def load_image_bytes(self, image_url: str) -> bytes | None:
+        stored_name = image_url.rsplit("/", 1)[-1]
+        try:
+            obj = self.client.get_object(Bucket=self.bucket_name, Key=stored_name)
+            return obj["Body"].read()
+        except Exception:
+            # Broad on purpose: botocore raises its own ClientError hierarchy
+            # for "not found" alongside network/credential errors, none of
+            # which should ever fail a PDF export over one image.
+            return None
 
 
 def get_file_storage() -> FileStorage:

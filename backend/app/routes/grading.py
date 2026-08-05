@@ -21,10 +21,16 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Quiz
+from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.access_codes import effective_roster_names_for_quiz
-from app.services.export import build_results_csv, build_results_pdf, export_filename_slug
+from app.services.export import (
+    build_detailed_results_pdf,
+    build_results_csv,
+    build_results_pdf,
+    export_filename_slug,
+)
+from app.services.file_storage import get_file_storage
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_json_body
 
@@ -251,6 +257,53 @@ def export_results_pdf(quiz_id: int):
         pdf_bytes,
         mimetype="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{slug}-results.pdf"'},
+    )
+
+
+@grading_bp.get("/quizzes/<int:quiz_id>/export-detailed.pdf")
+@jwt_required()
+def export_results_detailed_pdf(quiz_id: int):
+    """Full per-Player, per-question results PDF - read-only, same
+    authorization/data-loading as export.pdf/export.csv above (see
+    services/export.py's module docstring for the grading-result
+    definitions this shares with every other analytics surface).
+
+    Re-fetches the quiz with questions/options/image eager-loaded:
+    get_visible_quiz's plain db.session.get leaves those lazy, and this
+    route (unlike list_quizzes or the lighter summary export) walks every
+    question's options and image for every Player, which turned an N+1
+    over questions into ~50 queries even at just 20 questions/quiz in
+    performance testing - eager-loading here (not in the shared
+    get_visible_quiz helper, which many lighter routes also use) keeps
+    that fix scoped to where it's actually needed.
+    """
+    quiz = get_visible_quiz(quiz_id)
+    quiz = (
+        Quiz.query.filter_by(id=quiz.id)
+        .options(
+            selectinload(Quiz.questions).selectinload(Question.options),
+            selectinload(Quiz.questions).selectinload(Question.image),
+        )
+        .first()
+    )
+    responses = _load_responses_for_export(quiz)
+    dashboard_data = _build_dashboard_data(quiz, responses)
+    storage = get_file_storage()
+    pdf_bytes = build_detailed_results_pdf(
+        quiz,
+        dashboard_data,
+        responses,
+        organization_name=quiz.organization.name,
+        load_image_bytes=storage.load_image_bytes,
+    )
+    slug = export_filename_slug(quiz.title)
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{slug}-detailed-results-{date_str}.pdf"'
+        },
     )
 
 
