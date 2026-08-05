@@ -16,6 +16,7 @@ import nb from '../styles/notebook.module.css';
 import styles from './PlayerProfilePage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Icon } from '../components/ui/Icon';
 
 export function PlayerProfilePage() {
   const { playerId } = useParams<{ playerId: string }>();
@@ -108,7 +109,7 @@ export function PlayerProfilePage() {
     <div>
       {dialog}
       <Link to="/roster" className={styles.backLink}>
-          ← Master Roster
+          <Icon name="back" size={14} /> Master Roster
         </Link>
 
         <ErrorBanner message={error} />

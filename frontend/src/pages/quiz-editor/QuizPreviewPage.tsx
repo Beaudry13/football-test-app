@@ -8,6 +8,7 @@ import { QuestionInput, type PlayerAnswer } from '../play/QuestionInput';
 import playStyles from '../play/PlayPage.module.css';
 import styles from './QuizPreviewPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { Icon } from '../../components/ui/Icon';
 
 /** Read-only walkthrough of the exact player-facing rendering (same
  * QuestionInput component, same PlayPage.module.css classes, same image
@@ -51,7 +52,7 @@ export function QuizPreviewPage() {
   const questions = quiz.questions ?? [];
   const backLink = (
     <Link to={`/quizzes/${quiz.id}`} className={styles.backLink}>
-      ← Back to editor
+      <Icon name="back" size={14} /> Back to editor
     </Link>
   );
 

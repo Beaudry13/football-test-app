@@ -226,6 +226,21 @@
   color: var(--nb-text);
 }
 
+/* Visually hidden, still announced by screen readers. For giving a page a
+   real <h1> when its visible title is an editable input (the quiz editor),
+   or naming something conveyed visually by an icon alone. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Section heading one step down from .heading - for a titled block inside
    a page that already has its own h1 (e.g. the dashboard's "Live now"). */
 .headingSm {

@@ -135,7 +135,7 @@ export function RosterSelectPanel({
 
   return (
     <div className={nb.card}>
-      <h3 className={nb.subheading}>Add Players from Master Roster</h3>
+      <h2 className={nb.subheading}>Add Players from Master Roster</h2>
       <ErrorBanner message={error} />
 
       <div className={styles.summaryRow}>

@@ -101,7 +101,7 @@ export function GroupsPage() {
             <div key={group.id} className={`${nb.card} ${nb.cardHoverable} ${styles.groupCard}`}>
               <div className={nb.accentStripe} />
               <Link to={`/groups/${group.id}`} className={styles.groupInfo} style={{ flex: 1 }}>
-                <h3>{group.name}</h3>
+                <h2>{group.name}</h2>
                 <div className={styles.groupMeta}>
                   {group.players.length} player{group.players.length === 1 ? '' : 's'}
                 </div>

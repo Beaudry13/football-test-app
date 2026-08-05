@@ -9,6 +9,7 @@ import { AnnotationCanvas, type AnnotationCanvasHandle } from '../../components/
 import nb from '../../styles/notebook.module.css';
 import styles from './AnnotationPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { Icon } from '../../components/ui/Icon';
 
 const MAX_UPLOAD_DIMENSION = 1920;
 const SKIP_RESIZE_UNDER_BYTES = 5 * 1024 * 1024;
@@ -180,7 +181,7 @@ export function AnnotationPage() {
     <div>
       <div className={styles.header}>
         <Link to={`/quizzes/${quizId}`} className={styles.backLink}>
-          ← Back to Quiz
+          <Icon name="back" size={14} /> Back to Quiz
         </Link>
         {question.image && (
           <div>
@@ -207,7 +208,7 @@ export function AnnotationPage() {
         />
       ) : (
         <div className={`${nb.card} ${styles.uploadCard}`}>
-          <h3 className={nb.subheading}>Add a film still</h3>
+          <h2 className={nb.subheading}>Add a film still</h2>
           <p>Draw routes, circle players, and add callouts on a screenshot.</p>
           <p className={styles.pasteHint}>
             Copy a screenshot (e.g. Windows Snipping Tool or Cmd+Shift+4), then paste it anywhere on this

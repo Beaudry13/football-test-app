@@ -129,9 +129,9 @@ export function PlayerListEditor({
       <ErrorBanner message={error} />
       <div className={styles.layout}>
         <div className={nb.card}>
-          <h3 className={nb.subheading}>
+          <h2 className={nb.subheading}>
             {currentListTitle} ({players.length})
-          </h3>
+          </h2>
           {players.length === 0 ? (
             <div className={nb.empty}>No players yet. Add names in the box on the right.</div>
           ) : (
@@ -160,7 +160,7 @@ export function PlayerListEditor({
         </div>
 
         <div className={nb.card}>
-          <h3 className={nb.subheading}>{editTitle}</h3>
+          <h2 className={nb.subheading}>{editTitle}</h2>
           <p>One player name per line. Saving replaces the full list.</p>
           <textarea
             className={styles.textarea}

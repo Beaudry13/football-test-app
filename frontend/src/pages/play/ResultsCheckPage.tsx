@@ -73,7 +73,7 @@ export function ResultsCheckPage() {
         <PeiraLogo variant="light" markOnly size={28} />
       </div>
       <form className={`card ${styles.panel}`} onSubmit={handleSubmit}>
-        <h2>Check your results</h2>
+        <h1>Check your results</h1>
         <p>Enter the access code and the name you played under.</p>
         <ErrorBanner message={error} />
         <div className="field">

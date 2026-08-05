@@ -11,6 +11,7 @@ import { ResultsTab } from './ResultsTab';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuizEditorPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { Icon } from '../../components/ui/Icon';
 
 const TABS = [
   { key: 'questions', label: 'Questions' },
@@ -84,14 +85,21 @@ export function QuizEditorPage() {
   return (
     <div>
       <Link to="/dashboard" className={styles.backLink}>
-        ← All Quizzes
+        <Icon name="back" size={14} /> All Quizzes
       </Link>
 
       <ErrorBanner message={error} />
 
+      {/* The visible title is an inline-editable input, so the page would
+          otherwise have no <h1> at all and the field no accessible name.
+          A visually-hidden heading gives the document real structure
+          without changing the editing UI. */}
+      <h1 className={nb.srOnly}>{quiz.title}</h1>
+
       <div className={styles.titleRow}>
         <input
           className={styles.titleInput}
+          aria-label="Quiz title"
           value={quiz.title}
           onChange={(e) => setQuiz({ ...quiz, title: e.target.value })}
           onBlur={(e) => handleFieldSave('title', e.target.value)}

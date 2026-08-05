@@ -47,10 +47,21 @@
   padding: 0.15em 0;
 }
 
+/* The green + the checkmark icon are both redundant reinforcement - the
+   visually-hidden "Correct answer:" label (see QuestionsTab.tsx) is what
+   actually conveys correctness, so this never relies on color alone. */
 .correctOption {
   color: var(--nb-success);
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.15em;
 }
+
+.optionBullet {
+  color: var(--nb-text-muted);
+}
+
 
 .thumb {
   width: 90px;
@@ -74,14 +85,27 @@
   justify-content: center;
 }
 
+/* 32px square: these were 22x22 icon-only buttons, under the design
+   system's minimum target size. The column stays visually compact because
+   the icon itself is unchanged - only the hit area grew. */
 .reorderActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
   border: none;
   background: none;
   cursor: pointer;
   color: var(--nb-text-muted);
-  font-size: 1em;
   line-height: 1;
-  padding: 0.2em;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+
+.reorderActions button:hover:not(:disabled) {
+  color: var(--nb-text);
+  background: var(--color-accent-bg);
 }
 
 .reorderActions button:disabled {

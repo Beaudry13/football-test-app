@@ -141,7 +141,7 @@ export function RosterImportPanel({ onImported }: { onImported: () => void }) {
   return (
     <div className={`${nb.card} ${styles.panel}`}>
       <div className={styles.panelHeader}>
-        <h3 className={nb.subheading}>Import Roster</h3>
+        <h2 className={nb.subheading}>Import Roster</h2>
         <button type="button" className={nb.btnSm} onClick={handleDownloadTemplate}>
           Download template
         </button>

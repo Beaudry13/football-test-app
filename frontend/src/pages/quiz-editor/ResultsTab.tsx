@@ -124,9 +124,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
 
           {dashboard.missing_players.length > 0 && (
             <div className={`${nb.card} ${styles.missingCard}`}>
-              <h3 className={nb.subheading}>
+              <h2 className={nb.subheading}>
                 Haven't submitted yet ({dashboard.missing_players.length})
-              </h3>
+              </h2>
               <div className={styles.missingList}>
                 {dashboard.missing_players.map((name) => (
                   <span key={name} className={`${nb.badge} ${nb.badgeWarning}`}>
@@ -139,7 +139,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
 
           {dashboard.question_breakdown.length > 0 && (
             <div className={`${nb.card} ${styles.breakdownCard}`}>
-              <h3 className={nb.subheading}>Per-question breakdown</h3>
+              <h2 className={nb.subheading}>Per-question breakdown</h2>
               <table className={nb.table}>
                 <thead>
                   <tr>
@@ -165,7 +165,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
         </>
       )}
 
-      <h3 className={nb.subheading}>Player responses</h3>
+      <h2 className={nb.subheading}>Player responses</h2>
       {responses === null ? (
         <LoadingState />
       ) : responses.length === 0 ? (

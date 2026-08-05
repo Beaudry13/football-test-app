@@ -154,7 +154,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
 
       {codes && codes.length > 0 && (
         <div className={`${nb.card} ${styles.historyCard}`}>
-          <h3 className={nb.subheading}>Activation history</h3>
+          <h2 className={nb.subheading}>Activation history</h2>
           <table className={nb.table}>
             <thead>
               <tr>

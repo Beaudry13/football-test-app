@@ -12,6 +12,7 @@ import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { QuestionEditor } from './QuestionEditor';
+import { Icon } from '../../components/ui/Icon';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -114,7 +115,20 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   <ul className={styles.optionsList}>
                     {question.options.map((option) => (
                       <li key={option.id} className={option.is_correct_answer ? styles.correctOption : ''}>
-                        {option.is_correct_answer ? '✓ ' : '· '}
+                        {/* The checkmark is decorative - "Correct answer:" is
+                            announced by the visually-hidden label instead, so
+                            correctness is never conveyed by the icon (or its
+                            color) alone. */}
+                        {option.is_correct_answer ? (
+                          <>
+                            <span className={nb.srOnly}>Correct answer: </span>
+                            <Icon name="check" size={13} />{' '}
+                          </>
+                        ) : (
+                          <span className={styles.optionBullet} aria-hidden="true">
+                            ·{' '}
+                          </span>
+                        )}
                         {option.option_text}
                       </li>
                     ))}
@@ -140,14 +154,14 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               </div>
               <div className={styles.reorderActions}>
                 <button onClick={() => handleMove(index, -1)} disabled={index === 0} aria-label="Move up">
-                  ▲
+                  <Icon name="chevronUp" size={14} />
                 </button>
                 <button
                   onClick={() => handleMove(index, 1)}
                   disabled={index === questions.length - 1}
                   aria-label="Move down"
                 >
-                  ▼
+                  <Icon name="chevronDown" size={14} />
                 </button>
               </div>
             </div>

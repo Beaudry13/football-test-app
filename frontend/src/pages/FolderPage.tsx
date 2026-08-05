@@ -15,6 +15,7 @@ import dashboardStyles from './DashboardPage.module.css';
 import styles from './FolderPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Icon } from '../components/ui/Icon';
 
 /** A single subfolder's own page: breadcrumb back to its parent, rename,
  * delete, and the quizzes assigned directly to it. Folders are at most one
@@ -135,7 +136,7 @@ export function FolderPage() {
         <div className={nb.content}>
           <ErrorBanner message="This folder no longer exists." />
           <Link to="/dashboard" className={styles.backLink}>
-            ← Back to Dashboard
+            <Icon name="back" size={14} /> Back to Dashboard
           </Link>
         </div>
       </NotebookPage>
@@ -163,7 +164,7 @@ export function FolderPage() {
       <div className={nb.content}>
         <div className={styles.header}>
           <Link to={parent ? `/folders/${parent.id}` : '/dashboard'} className={styles.backLink}>
-            ← Back to {parent ? parent.name : 'Dashboard'}
+            <Icon name="back" size={14} /> Back to {parent ? parent.name : 'Dashboard'}
           </Link>
           <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={handleDelete}>
             Delete folder

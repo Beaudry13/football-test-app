@@ -8,6 +8,7 @@ import nb from '../styles/notebook.module.css';
 import styles from './PlayerHistoryPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Icon } from '../components/ui/Icon';
 
 export function PlayerHistoryPage() {
   const { playerName: encodedName } = useParams<{ playerName: string }>();
@@ -32,7 +33,7 @@ export function PlayerHistoryPage() {
   return (
     <div>
       <Link to="/dashboard" className={styles.backLink}>
-        ← All Quizzes
+        <Icon name="back" size={14} /> All Quizzes
       </Link>
 
       <h1 className={nb.heading}>{playerName}</h1>
@@ -47,7 +48,7 @@ export function PlayerHistoryPage() {
       ) : (
         <>
           <div className={nb.card} style={{ marginBottom: '1.5em' }}>
-            <h3 className={nb.subheading}>
+            <h2 className={nb.subheading}>
               {history.length} Quiz{history.length === 1 ? '' : 'zes'} taken
               {accuracy !== null && <> · {accuracy}% correct overall</>}
               {totalPending > 0 && (
@@ -58,7 +59,7 @@ export function PlayerHistoryPage() {
                   </span>
                 </>
               )}
-            </h3>
+            </h2>
             {totalPending > 0 && (
               <p className={styles.pendingNote}>
                 The overall average above doesn't include these yet - it'll shift once they're graded.

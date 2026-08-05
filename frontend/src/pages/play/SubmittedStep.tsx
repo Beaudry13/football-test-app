@@ -3,6 +3,8 @@ import { getPlayerResults } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
 import type { PlayerResultsResponse } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { Icon } from '../../components/ui/Icon';
+import { LoadingState } from '../../components/ui/LoadingState';
 import { ResultsView } from './ResultsView';
 import styles from './PlayPage.module.css';
 
@@ -54,13 +56,13 @@ export function SubmittedStep({
       {showCelebration && (
         <div className={styles.celebrationOverlay}>
           <div className={styles.celebrationBadge}>
-            <span aria-hidden="true">✓</span>
+            <Icon name="check" size={30} strokeWidth={3} />
           </div>
           <span className={styles.celebrationText}>Quiz Complete</span>
         </div>
       )}
       {!results ? (
-        <p>Loading your results…</p>
+        <LoadingState label="Loading your results…" />
       ) : (
         <div>
           <ResultsView results={results} />

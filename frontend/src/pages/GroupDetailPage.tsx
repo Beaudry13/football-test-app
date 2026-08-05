@@ -17,6 +17,7 @@ import { RosterSelectPanel } from '../components/RosterSelectPanel';
 import nb from '../styles/notebook.module.css';
 import styles from './GroupDetailPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
+import { Icon } from '../components/ui/Icon';
 
 export function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -116,7 +117,7 @@ export function GroupDetailPage() {
       {dialog}
       <div className={styles.header}>
         <Link to="/groups" className={styles.backLink}>
-          ← Back to groups
+          <Icon name="back" size={14} /> Back to groups
         </Link>
         <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={handleDelete}>
           Delete group

@@ -336,7 +336,7 @@ describe('DashboardPage', () => {
 
     // The breadcrumb goes to the parent folder's own page, not the
     // dashboard - "Back to Fall Camp" should actually land on Fall Camp.
-    await user.click(screen.getByText('← Back to Fall Camp'));
+    await user.click(screen.getByRole('link', { name: /Back to Fall Camp/ }));
     expect(await screen.findByRole('heading', { name: 'Fall Camp' })).toBeInTheDocument();
   });
 

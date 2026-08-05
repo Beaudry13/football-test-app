@@ -62,7 +62,7 @@ describe('PlayerHistoryPage', () => {
     expect(screen.getByText('3 / 4')).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
 
-    const summary = screen.getByRole('heading', { level: 3 });
+    const summary = screen.getByRole('heading', { level: 2 });
     expect(summary.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 Quizzes taken · 75% correct overall');
   });
 
@@ -96,7 +96,7 @@ describe('PlayerHistoryPage', () => {
     expect(await screen.findByText('2 / 2')).toBeInTheDocument();
     expect(screen.getByText('1 to grade')).toBeInTheDocument();
     // 2/2 graded is 100%, unaffected by the still-ungraded answer.
-    const summary = screen.getByRole('heading', { level: 3 });
+    const summary = screen.getByRole('heading', { level: 2 });
     expect(summary.textContent).toContain('100% correct overall');
     expect(screen.getByText(/pending grading$/)).toBeInTheDocument();
     expect(screen.getByText(/doesn't include these yet/)).toBeInTheDocument();

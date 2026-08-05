@@ -43,7 +43,7 @@
   color: inherit;
 }
 
-.groupInfo h3 {
+.groupInfo h2 {
   font-family: var(--font-heading);
   font-size: 24px;
   font-weight: 700;

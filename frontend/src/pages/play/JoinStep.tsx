@@ -42,7 +42,7 @@ export function JoinStep({
 
   return (
     <form className={`card ${styles.panel}`} onSubmit={handleSubmit}>
-      <h2>Join a Quiz</h2>
+      <h1>Join a Quiz</h1>
       <p>Enter the code your coach shared with you.</p>
       <ErrorBanner message={error} />
       <div className="field">

@@ -111,7 +111,7 @@ export function PlayerPickerPanel({ load, onAdd, onRemove }: PlayerPickerPanelPr
 
   return (
     <div className={nb.card}>
-      <h3 className={nb.subheading}>Master Roster players ({canonicalMembers.length})</h3>
+      <h2 className={nb.subheading}>Master Roster players ({canonicalMembers.length})</h2>
       <p>
         Add players from the org's master roster - their stats and history stay unified across every
         group and quiz they're on.

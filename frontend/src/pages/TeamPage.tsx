@@ -171,7 +171,7 @@ export function TeamPage() {
       )}
 
       <div className={`${nb.card} ${styles.card}`}>
-        <h3 className={nb.subheading}>Coaches ({org.members.length})</h3>
+        <h2 className={nb.subheading}>Coaches ({org.members.length})</h2>
         <table className={nb.table}>
           <thead>
             <tr>
@@ -226,7 +226,7 @@ export function TeamPage() {
 
       {isAdmin && (
         <div className={`${nb.card} ${styles.card}`}>
-          <h3 className={nb.subheading}>Invite a coach</h3>
+          <h2 className={nb.subheading}>Invite a coach</h2>
           <p>
             Generate a link and send it however you like. It works once, and expires after 14 days.
           </p>

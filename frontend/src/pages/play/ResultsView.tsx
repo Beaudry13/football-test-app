@@ -11,7 +11,7 @@ export function ResultsView({ results }: { results: PlayerResultsResponse }) {
   return (
     <div className={styles.panel}>
       <div className={`card ${styles.summaryStat}`}>
-        <h2>{results.quiz_title}</h2>
+        <h1>{results.quiz_title}</h1>
         <p>Results for {results.player_name}</p>
       </div>
 

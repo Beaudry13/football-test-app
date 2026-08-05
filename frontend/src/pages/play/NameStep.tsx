@@ -66,7 +66,7 @@ export function NameStep({
 
   return (
     <div className={`card ${styles.panel}`}>
-      <h2>{quizTitle}</h2>
+      <h1>{quizTitle}</h1>
       <p>Select your name from the roster.</p>
       <ErrorBanner message={error} />
       <div className={styles.nameGrid}>
