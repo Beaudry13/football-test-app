@@ -746,26 +746,237 @@ backgrounding mid-drawing, airplane mode mid-drawing, a 60-player load pass.
 
 ---
 
-## 10. Decisions I need from you
+## 10. Product decisions (locked)
 
-Listed because each changes the build, and I'd rather ask than assume.
-
-1. **Eraser semantics** — whole-stroke delete (recommended, simple) or
-   partial pixel erase (much harder)? §2 Q5.
-2. **One finger when zoomed in** — always draw (recommended), or pan? §2 Q4.
-3. **Dark chrome on the drawing board** — accept the deliberate exception to
-   the light player theme, or keep it light? §6.
-4. **Should a `draw_on_image` question be able to have no image?** I've
-   assumed no, and that it's a validation error.
-5. **Pen colour** — single fixed colour in V1 (recommended, and it keeps
-   player strokes visually distinct from coach annotations), or a small
-   palette?
-6. **Does the coach need to see the player's strokes without their own
-   pre-annotations?** A toggle is cheap now, awkward to retrofit.
+| # | Decision | Consequence |
+|---|---|---|
+| 1 | **Eraser deletes whole strokes.** No pixel erasing. | Everything stays vector, undoable, and editable. `canvas.findTarget()` does the hit-test and is zoom-correct for free. |
+| 2 | **One finger always draws.** A dedicated **Pan tool** replaces intent-guessing. | No accidental panning mid-stroke. Single-finger pan exists only while Pan is selected; two-finger drag still pans in any tool. |
+| 3 | **Dark "film room" workspace.** | The one intentional exception to the light player theme. Dark background, floating toolbar, minimal chrome. |
+| 4 | **A `draw_on_image` question always requires an image.** | Validation error at authoring time, not a broken quiz for 60 players. |
+| 5 | **Single fixed player pen colour in V1.** | Player strokes are instantly distinguishable from coach gold annotations, with no picker to build. |
+| 6 | **Coach view ships with three modes: Image Only / Coach Version / Player Submission.** | Built properly in Phase 5 rather than retrofitted. See §12. |
 
 ---
 
-## 11. Recommendation
+## 11. The drawing engine as a core capability
+
+Version 1 exposes drawing only through Draw on Image questions. But the
+engine is expected to power assignments, player corrections, scouting
+reports, recruiting evaluations, install packets and coach feedback later.
+The architecture below is what stops that becoming a second drawing system.
+
+### 11.1 The rule: the engine knows nothing about quizzes
+
+`components/drawing/` must not import anything from `api/`, `pages/play/`,
+or any model type. It takes an image and strokes, and it emits strokes and a
+preview. That is the entire contract:
+
+```ts
+<DrawingBoard
+  image={{ url, width, height }}
+  initial={DrawingDocument | null}
+  mode="edit" | "view"
+  onCommit={(doc: DrawingDocument, preview: Blob) => Promise<void>}
+  onCancel={() => void}
+/>
+```
+
+Everything quiz-specific — which Answer row this belongs to, the access
+code, the SUBMITTED lock, the autosave endpoint — lives in a thin adapter
+*outside* the engine. Draw on Image supplies a quiz-answer adapter; a
+future scouting report supplies its own, and touches no engine code.
+
+Concretely, this splits the Phase 3 work into:
+
+```
+components/drawing/          ← the engine. Reusable. No app knowledge.
+  DrawingBoard.tsx
+  DrawingCanvas.tsx
+  DrawingToolbar.tsx
+  drawingGestures.ts         ← already built and unit-tested (Phase 0)
+  useBodyScrollLock.ts       ← already built (Phase 0)
+  drawingDocument.ts         ← the versioned format, below
+
+pages/play/                  ← the quiz adapter. Knows about answers.
+  DrawingAnswerInput.tsx
+  drawingAnswerAdapter.ts
+```
+
+### 11.2 A versioned document format
+
+Every consumer stores the same envelope, whatever table it lives in:
+
+```ts
+interface DrawingDocument {
+  version: 1;                 // bump if the stroke representation changes
+  canvasWidth: number;        // the coordinate space (see §3.1)
+  canvasHeight: number;
+  sourceImageUrl: string;     // what was actually drawn on
+  strokes: FabricObject[];    // Fabric object array, same as question_images.annotations
+}
+```
+
+`version` costs one integer now and is the only thing that makes a future
+format change survivable — if we ever move to `perfect-freehand` (§2 Q5),
+old documents stay renderable because the renderer can branch on it.
+
+### 11.3 Share the engine and the format — **not** the table
+
+The tempting move is a single generic `drawings` table with a polymorphic
+owner (`owner_type` + `owner_id`) so any future feature can point at it.
+
+**I'd argue against it.** A polymorphic owner cannot have a real foreign
+key, which means: no `ON DELETE CASCADE` (so deleting an attempt silently
+orphans drawings), no referential integrity, and every query needs a
+discriminator the database can't enforce. This codebase currently gets
+cascade cleanup for free everywhere, including the coach's "reset attempt"
+action.
+
+The cheaper trade is to let each owner have its own small table with a real
+FK — `answer_drawings` now, `scouting_note_drawings` later — all storing the
+same `DrawingDocument` shape and rendered by the same engine. Duplicating
+six columns across a handful of future tables is a much smaller cost than
+losing integrity on all of them.
+
+So: **one engine, one format, one renderer, one storage *pattern* — but a
+real foreign key per owner.**
+
+### 11.4 What else falls out of this for free
+
+- The **coach annotation editor** (`AnnotationCanvas.tsx`) is a second
+  drawing system that already exists. It is not in scope to merge now, but
+  once the engine is proven, folding it in is a natural follow-up — and the
+  engine should be designed so that's possible, which mainly means not
+  hard-coding "one fixed pen colour" into the engine itself. Make colour a
+  *config value the adapter supplies*; the Draw on Image adapter supplies
+  exactly one.
+- `useBodyScrollLock` is immediately reusable by `ImageLightbox`, which has
+  no scroll lock today.
+
+---
+
+## 12. Coach view: three modes
+
+Per decision 6, built properly in Phase 5 rather than retrofitted.
+
+| Mode | Renders | Why a coach wants it |
+|---|---|---|
+| **Image Only** | source image | See the raw look the player got, with nothing on top |
+| **Coach Version** | image + coach annotations | Re-read your own question/key |
+| **Player Submission** | image + coach annotations + player strokes | The default for grading |
+
+Implementation is one extension to `AnnotationViewer`: accept an ordered
+list of object layers rather than a single `annotations` array, and let the
+caller decide which layers to pass. The mode switch is then pure client
+state — no extra requests, no extra storage, and it composes to more layers
+later (e.g. a coach marking up a player's submission) without another
+change.
+
+---
+
+## 13. Confidence rating (not V1 — but the data model should not preclude it)
+
+The eventual question — "How confident are you?" → Very Confident /
+Somewhat Confident / Guessing — is deliberately **not** being built now.
+Three notes so it stays cheap later:
+
+**It does not belong on `answer_drawings`.** Confidence is not
+drawing-specific; a coach would plausibly want it on a written or
+multiple-choice answer too. Putting it on the drawing table would guarantee
+a migration and a data backfill the day it's wanted elsewhere.
+
+**It belongs on `answers`** as a nullable enum column, added when it's
+built: `confidence` ∈ {`VERY_CONFIDENT`, `SOMEWHAT_CONFIDENT`, `GUESSING`},
+NULL meaning "not asked" or "not answered". Nullable-with-meaning is the
+same pattern `is_correct` already uses for Not Graded, so it reads
+consistently.
+
+**The design constraint to hold now** is simply: keep `answers` the owner of
+answer-level metadata, and resist pushing per-type metadata into per-type
+tables. `answer_drawings` holds *the drawing*; it should not accumulate
+things that are really properties of the answer. Hold that line and
+confidence is a one-column migration.
+
+**Why it's worth wanting.** The analytic value isn't the rating on its own,
+it's confidence × correctness:
+
+| | Correct | Incorrect |
+|---|---|---|
+| **Very Confident** | genuinely known | **confidently wrong — the highest-value coaching signal there is** |
+| **Guessing** | lucky — not yet learned | honestly not known |
+
+A player who is confidently wrong will play fast and be wrong at speed. A
+player who is guessing correctly looks fine in every current metric.
+Today's analytics cannot tell those apart from a player who genuinely knows
+it. That's the reason to keep the door open.
+
+One hard constraint when it does land: **confidence must never enter the
+score.** `_score_percent` stays `correct / (correct + incorrect)`, and the
+CORRECT / INCORRECT / NOT_GRADED / UNANSWERED vocabulary stays untouched —
+otherwise the export, the analytics service and the Results tab immediately
+disagree with each other, which is exactly the class of bug the shared
+vocabulary in `export.py` and `player_analytics.py` exists to prevent.
+
+---
+
+## 14. Phase 0 spike — status
+
+The harness lives at `frontend/src/spike/`, on the route `/spike/drawing`,
+registered only under `import.meta.env.DEV`. Verified absent from the
+production bundle. Delete the route and the directory once Phase 0 is
+signed off.
+
+### Settled without a phone
+
+| Question | Result |
+|---|---|
+| **Can `PencilBrush` be driven manually?** (the architecture-deciding one) | **Yes.** `onMouseDown(pointer, {e})` / `onMouseMove` / `onMouseUp({e})` are public in Fabric 7.4.0, alongside `decimate` and `convertPointsToSVGPath`. Confirmed in a live browser: a driven stroke produced a real 12-point Fabric path. |
+| **Zoom-correct pointer mapping** | `canvas.getScenePoint(e)` inverse-transforms through the viewport automatically, and `zoomToPoint()` does focal zoom. **This removes the custom inverse-transform math the design had budgeted for** — and confirms Decision A (zoom inside Fabric, not via CSS transform). Note `getPointer()` is gone in v7; most tutorials still use it. |
+| **Gesture arbitration logic** | Extracted as a pure module, **17 unit tests passing**, covering the two-finger race, buffer replay, pinch/pan, the Pan tool, whole-stroke erase, and stray/out-of-order events. |
+| **iOS-safe scroll lock** | Implemented and verified: with the page scrolled to 400px, opening the board sets `position: fixed`, `top: -400px`, `overflow: hidden`, `overscroll-behavior: none`, and restores scroll on close. |
+| **Memory / render scale** | Device-aware scale confirmed working: on a dpr-2 375px viewport it chose 1.5x → **10.4 MB** backing store instead of the ~20 MB a naive desktop port would allocate. |
+| **Local draft persistence** | IndexedDB write confirmed; restore-on-load path exercised. |
+
+### Only a real phone can settle these
+
+Everything below is why the gate stays open. Desktop mobile emulation does
+not reproduce any of it:
+
+- **Multi-touch pinch arbitration in practice.** The logic is unit-tested,
+  but synthetic pointer events in a desktop browser cannot honestly stand in
+  for two fingers. (A portaled overlay also sits outside React's root
+  container, so natively-dispatched events don't reach React's delegated
+  handlers at all — a test-harness artifact, not a product bug, but it means
+  synthetic multi-touch proves nothing here either way.)
+- **iOS Safari rubber-banding, `gesturestart`, and dynamic viewport.**
+- **Drawing latency and FPS under a real finger**, especially on a cheap
+  Android.
+- **Memory pressure** — whether Safari kills the tab after sustained drawing.
+- **Backgrounding and refresh behaviour**, including airplane mode.
+- **Whether the dark workspace actually feels right outdoors.**
+
+### The device protocol
+
+Serve the dev server on the LAN (`npm run dev -- --host`), open
+`http://<your-ip>:5173/spike/drawing` on the phone, and work the checklist
+printed on the page. **Everything you need is on-screen in the HUD** —
+there are no devtools on a phone, which is why the telemetry panel is the
+real deliverable of this spike.
+
+The two numbers that decide the gate:
+
+- **`stray marks` must stay 0.** Anything above zero means a pinch painted
+  ink — the arbitration is losing the race on real hardware and the grace
+  window needs tuning.
+- **`fps` must hold up while drawing.** It turns red below 40.
+
+Also watch `est. memory` on the cheapest phone you can find, and confirm
+`dvh` reports `yes` on the iPhone.
+
+---
+
+## 15. Recommendation
 
 **Proceed — but gate on Phase 0.**
 

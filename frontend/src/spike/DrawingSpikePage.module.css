@@ -1,0 +1,191 @@
+/* Phase 0 spike styling. Dark "film room" workspace per product decision 3 -
+   this is the one intentional exception to the light player theme, and the
+   spike exists partly to confirm that choice feels right on a real phone
+   outdoors. */
+
+.host {
+  max-width: 40em;
+  margin: 0 auto;
+  padding: 1.5em 1.25em 4em;
+}
+
+.checklist {
+  line-height: 1.7;
+  padding-left: 1.2em;
+}
+
+.checklist li {
+  margin-bottom: 0.35em;
+}
+
+.spacerNote {
+  font-size: 0.9em;
+  color: var(--color-text-muted);
+}
+
+/* Deliberate dead space: the scroll lock cannot be proven on a page that
+   doesn't scroll in the first place. */
+.spacer {
+  height: 120vh;
+}
+
+.openButton {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-size: 1.05em;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* --- fullscreen board ---------------------------------------------------
+   A CSS overlay, NOT the Fullscreen API: iOS Safari does not support
+   requestFullscreen() on non-video elements, so the API route works on
+   Android and silently fails for most players. Portaled to document.body so
+   no ancestor overflow/transform/stacking context can trap it. */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #0d0f0e;
+  color: #f5f3ee;
+  /* dvh accounts for the mobile address bar; the vh line above is the
+     fallback for browsers without dvh, and must stay first. */
+  height: 100vh;
+  height: 100dvh;
+  overscroll-behavior: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  padding: max(0.5em, env(safe-area-inset-top)) 0.75em 0.5em;
+  background: rgba(20, 20, 20, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.title {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #cfcbc2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barButton {
+  min-height: 44px;
+  padding: 0 0.85em;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: transparent;
+  color: #f5f3ee;
+  font-size: 0.85em;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.done {
+  border-color: #c9a24b;
+  color: #121212;
+  background: #c9a24b;
+}
+
+/* The drawing surface owns every pointer event. touch-action:none here is
+   what stops the browser claiming a gesture for scroll/zoom before our
+   handlers ever see it. */
+.surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.canvas {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.loading {
+  position: absolute;
+  color: #8b8b86;
+  font-size: 0.9em;
+}
+
+/* --- telemetry HUD ------------------------------------------------------
+   The actual deliverable of this spike. There are no devtools on a phone,
+   so every number we need has to be legible on the glass. */
+.hud {
+  padding: 0.5em 0.75em;
+  background: rgba(0, 0, 0, 0.72);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+
+.hudRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1em;
+}
+
+.hudLabel {
+  color: #8b8b86;
+}
+
+.hudValue {
+  color: #d8d4ca;
+  text-align: right;
+}
+
+.hudValueWarn {
+  color: #ff6b5e;
+  font-weight: 700;
+  text-align: right;
+}
+
+.toolBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  padding: 0.5em 0.75em max(0.5em, env(safe-area-inset-bottom));
+  background: rgba(20, 20, 20, 0.92);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tool {
+  flex: 1 1 auto;
+  min-width: 4.5em;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--radius-sm, 8px);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f3ee;
+  font-size: 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toolActive {
+  border-color: #c9a24b;
+  background: rgba(201, 162, 75, 0.22);
+  color: #e4c066;
+}

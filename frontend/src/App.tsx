@@ -20,6 +20,7 @@ import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { PlayPage } from './pages/play/PlayPage';
 import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
+import { DrawingSpikePage } from './spike/DrawingSpikePage';
 
 function App() {
   return (
@@ -38,6 +39,14 @@ function App() {
           <Route path="/play/:code" element={<PlayPage />} />
           <Route path="/results" element={<ResultsCheckPage />} />
           <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
+
+          {/* Phase 0 spike harness for the Draw on Image feature
+              (docs/DESIGN-draw-on-image.md). Registered only in dev, so it
+              cannot reach production: `vite build` statically replaces
+              import.meta.env.DEV with false and drops the whole branch,
+              along with the spike module, at tree-shake time. Delete this
+              route and src/spike/ once Phase 0 is signed off. */}
+          {import.meta.env.DEV && <Route path="/spike/drawing" element={<DrawingSpikePage />} />}
 
           <Route element={<ProtectedRoute />}>
             {/* Preview and Dashboard are deliberately NOT nested in
