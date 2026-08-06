@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
@@ -20,6 +21,20 @@ import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { PlayPage } from './pages/play/PlayPage';
 import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
+
+/** Phase 0 Draw-on-Image spike, development only.
+ *
+ * Both halves of the guard matter. `lazy(() => import(...))` keeps the spike
+ * (and the drawing engine it pulls in) out of the main chunk; wrapping it in
+ * `import.meta.env.DEV` - which Vite statically replaces with `false` for a
+ * production build - lets Rollup drop the branch and the dynamic import with
+ * it, so no spike chunk is emitted at all. Verified by grepping dist/ after a
+ * build; see docs/DRAW_ON_IMAGE_PHASE_0.md.
+ *
+ * The route is also absent from every nav surface. Nothing links here. */
+const DrawingSpikePage = import.meta.env.DEV
+  ? lazy(() => import('./pages/spike/DrawingSpikePage'))
+  : null;
 
 function App() {
   return (
@@ -61,6 +76,17 @@ function App() {
               />
             </Route>
           </Route>
+
+          {DrawingSpikePage && (
+            <Route
+              path="/spike/drawing"
+              element={
+                <Suspense fallback={null}>
+                  <DrawingSpikePage />
+                </Suspense>
+              }
+            />
+          )}
 
           <Route path="*" element={<NotFoundRedirect />} />
         </Routes>

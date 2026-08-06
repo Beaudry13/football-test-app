@@ -7,12 +7,18 @@ import {
   ChevronUp,
   Copy,
   Download,
+  Eraser,
   Flame,
   Folder,
+  Hand,
   Info,
   Loader2,
+  Maximize,
+  Pencil,
   Plus,
+  Redo2,
   Trash2,
+  Undo2,
   X,
   type LucideProps,
 } from 'lucide-react';
@@ -39,6 +45,15 @@ const ICONS = {
   download: Download,
   add: Plus,
   spinner: Loader2,
+  // Drawing board tools (see components/drawing/). `eraser` is deliberately
+  // separate from `delete`: one removes a stroke from a drawing, the other
+  // destroys a record, and they must never look alike.
+  pen: Pencil,
+  pan: Hand,
+  eraser: Eraser,
+  undo: Undo2,
+  redo: Redo2,
+  fitView: Maximize,
 } as const;
 
 export type IconName = keyof typeof ICONS;
