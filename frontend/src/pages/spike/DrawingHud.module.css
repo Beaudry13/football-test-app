@@ -1,0 +1,101 @@
+/* Dev-only instrumentation. Sits over the board's top-left corner, sized so
+   it never covers more than a corner of the image on a phone. */
+
+.hud {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgb(6 8 10 / 82%);
+  border: 1px solid rgb(0 229 255 / 25%);
+  color: #d6e2ea;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  /* The HUD must never eat a touch meant for the canvas underneath - only
+     its own buttons and slider opt back in. */
+  pointer-events: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  min-width: 62px;
+}
+
+.label {
+  color: #6f8494;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.value {
+  color: #e8f2f7;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ok {
+  color: #4ade80;
+}
+
+.bad {
+  color: #ff6b6b;
+}
+
+.warn {
+  color: #fbbf24;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  pointer-events: auto;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #9fb0bd;
+}
+
+.slider input {
+  width: 110px;
+}
+
+.tallyButton,
+.resetButton {
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: rgb(255 255 255 / 8%);
+  color: #e8f2f7;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tallyButton {
+  border-color: rgb(255 107 107 / 45%);
+  color: #ff9d9d;
+}

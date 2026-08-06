@@ -152,6 +152,9 @@ class Answer(db.Model):
     question = db.relationship("Question", back_populates="answers")
     selected_option = db.relationship("QuestionOption")
     graded_by = db.relationship("Coach")
+    drawing = db.relationship(
+        "AnswerDrawing", back_populates="answer", uselist=False, cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -169,4 +172,9 @@ class Answer(db.Model):
             "coach_feedback": self.coach_feedback,
             "graded_at": self.graded_at.isoformat() if self.graded_at else None,
             "graded_by_username": self.graded_by.username if self.graded_by else None,
+            # Metadata only by default - the stroke blob is large and every
+            # bulk answer load (analytics, dashboard, CSV) only needs to
+            # know whether a drawing exists. Callers that actually render it
+            # ask for the strokes explicitly.
+            "drawing": self.drawing.to_dict() if self.drawing else None,
         }
