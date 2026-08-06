@@ -5,6 +5,7 @@ import { getErrorMessage } from '../../api/client';
 import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionInput, type PlayerAnswer } from '../play/QuestionInput';
+import { QuizProgress } from '../play/QuizProgress';
 import playStyles from '../play/PlayPage.module.css';
 import styles from './QuizPreviewPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -97,9 +98,7 @@ export function QuizPreviewPage() {
             const isLast = currentIndex === questions.length - 1;
             return (
               <div className={playStyles.quizPanel}>
-                <div className={playStyles.progress}>
-                  Question {currentIndex + 1} of {questions.length}
-                </div>
+                <QuizProgress currentIndex={currentIndex} total={questions.length} />
                 <QuestionInput
                   question={question}
                   index={currentIndex}
