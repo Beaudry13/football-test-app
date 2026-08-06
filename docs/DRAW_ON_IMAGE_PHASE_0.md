@@ -4,7 +4,9 @@ Architecture and mobile-interaction validation for the Draw on Image question
 type. **No production behavior changed, no migration was run, and the spike
 route does not exist in a production build.**
 
-Branch: `feature/draw-on-image-phase-0`
+- **Branch:** `feature/draw-on-image-phase-0` (local only - not pushed, not merged)
+- **Implementation commit:** `fc1c6dc`
+- **Base:** `07b9965` on `master`
 
 ---
 
