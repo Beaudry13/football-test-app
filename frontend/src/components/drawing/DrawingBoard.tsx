@@ -167,8 +167,11 @@ export function DrawingBoard({
             // Nothing was ever drawn or pushed. This is the stray mark that
             // did not happen.
             break;
+          case 'pinchBegin':
+            engine.beginPinch();
+            break;
           case 'transform':
-            engine.zoomBy(command.scaleBy, command.focal.x, command.focal.y);
+            engine.zoomFromPinchStart(command.scaleFromStart, command.focal.x, command.focal.y);
             engine.panBy(command.panBy.x, command.panBy.y);
             break;
           case 'pan':

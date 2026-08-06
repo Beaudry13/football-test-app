@@ -68,6 +68,8 @@ export class DrawingEngine {
    * CSS pixels and has to cross this boundary before it means anything to
    * Fabric, whose viewportTransform lives in backing-store space. */
   private renderScale = 1;
+  /** Zoom at the moment the current pinch started. See beginPinch. */
+  private pinchBaseZoom = 1;
 
   constructor(canvasElement: HTMLCanvasElement, document: DrawingDocument, callbacks: EngineCallbacks) {
     this.document = document;
@@ -279,11 +281,18 @@ export class DrawingEngine {
 
   // --- viewport ----------------------------------------------------------
 
+  /** Records the zoom a pinch is starting from. Every scale during that
+   * gesture is applied against this reading rather than against the previous
+   * frame, so per-frame rounding cannot accumulate into visible drift. */
+  beginPinch(): void {
+    this.pinchBaseZoom = this.canvas.getZoom();
+  }
+
   /** Focal point arrives in CSS pixels; zoomToPoint expects backing-store
    * pixels. Skipping the conversion makes the image drift away from the
    * fingers as you pinch on any device where render scale is not 1. */
-  zoomBy(factor: number, focalX: number, focalY: number): void {
-    const next = clamp(this.canvas.getZoom() * factor, MIN_ZOOM, MAX_ZOOM);
+  zoomFromPinchStart(scaleFromStart: number, focalX: number, focalY: number): void {
+    const next = clamp(this.pinchBaseZoom * scaleFromStart, MIN_ZOOM, MAX_ZOOM);
     this.canvas.zoomToPoint(new Point(focalX * this.renderScale, focalY * this.renderScale), next);
     this.canvas.requestRenderAll();
     this.callbacks.onZoomChange?.(next);

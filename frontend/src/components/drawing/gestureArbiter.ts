@@ -72,22 +72,48 @@ export type ArbiterCommand =
   | { type: 'strokeDiscard'; reason: 'secondPointer' | 'cancel' | 'reset' }
   /** A stroke that HAD been committed must be abandoned without finalizing. */
   | { type: 'strokeAbort'; reason: 'cancel' | 'reset' }
-  /** Pinch: scale about `focal`, then translate by `panBy`. Both come from the
-   * same two-finger move, and the host applies them in that order. */
-  | { type: 'transform'; scaleBy: number; focal: ArbiterPoint; panBy: { x: number; y: number } }
+  /** Two fingers have taken over. The host records its current zoom here;
+   * every subsequent `transform` is expressed relative to that reading. */
+  | { type: 'pinchBegin' }
+  /** Pinch: set the zoom to `scaleFromStart` times whatever it was at
+   * `pinchBegin`, about `focal`, then translate by `panBy`.
+   *
+   * Absolute against the gesture's start rather than a per-frame multiplier.
+   * A multiplier compounds its own rounding error every frame, so a long
+   * pinch-in-and-back-out does not land where it began - the "zoom drift"
+   * the device gate watches for. Anchoring to the start distance means the
+   * error cannot accumulate no matter how many frames the gesture lasts. */
+  | {
+      type: 'transform';
+      scaleFromStart: number;
+      focal: ArbiterPoint;
+      panBy: { x: number; y: number };
+    }
   | { type: 'pan'; by: { x: number; y: number } }
   | { type: 'eraseAt'; point: ArbiterPoint };
 
 export interface ArbiterConfig {
   /** How long the first finger is buffered before its stroke commits.
    *
-   * 60ms sits above the observed 30-80ms two-finger spread's lower half
-   * without being perceptible as lag: the stroke is replayed from the true
-   * origin, so the only thing the player can notice is ink appearing 60ms
-   * late, not ink appearing in the wrong place. Tunable from the spike HUD
-   * so the real-device gate can settle the number on actual hardware rather
-   * than from a desk. */
+   * 120ms comfortably clears the observed 30-80ms two-finger spread. It is
+   * only ever felt by a finger that presses and holds still, because any
+   * real movement promotes immediately via commitDistancePx below - so the
+   * conservative value costs nothing on an actual stroke. Tunable from the
+   * spike HUD so the real-device gate can settle it on hardware rather than
+   * from a desk. */
   graceMs: number;
+  /** Movement that promotes a pending stroke immediately, without waiting
+   * out the grace window.
+   *
+   * A finger that has travelled this far is unambiguously drawing: two
+   * fingers landing for a pinch arrive at rest, they do not sweep. Without
+   * this, a fast deliberate stroke would have its ink withheld for the full
+   * grace window and the pen would feel laggy - the subtler failure mode
+   * that a stray-mark count alone would never catch.
+   *
+   * 6px exceeds the jitter of a stationary fingertip without being reachable
+   * by accident. */
+  commitDistancePx: number;
   /** Below this two-finger distance a pinch's scale factor is ignored - two
    * fingers touching almost the same spot produce a wild ratio from a pixel
    * of jitter. Pan still applies. */
@@ -95,7 +121,8 @@ export interface ArbiterConfig {
 }
 
 export const DEFAULT_ARBITER_CONFIG: ArbiterConfig = {
-  graceMs: 60,
+  graceMs: 120,
+  commitDistancePx: 6,
   minPinchDistancePx: 24,
 };
 
@@ -140,7 +167,9 @@ export class GestureArbiter {
   private strokeStartedAt = 0;
   private strokePointCount = 0;
 
-  private pinchDistance = 0;
+  /** Finger separation when the pinch began. Every scale is measured against
+   * this, never against the previous frame - see the `transform` command. */
+  private pinchStartDistance = 0;
   private pinchMidpoint: { x: number; y: number } = { x: 0, y: 0 };
   /** At least one finger has moved since the last transform was emitted. */
   private pinchDirty = false;
@@ -246,9 +275,14 @@ export class GestureArbiter {
       case 'pending': {
         if (sample.id !== this.activePointer) return [];
         this.buffer.push(toPoint(sample));
-        // The move itself is what usually carries us past the deadline; the
-        // host's tick() covers the finger-held-still case.
-        if (sample.t >= this.graceDeadline) return this.commitBuffer();
+
+        // Either signal promotes: travelled far enough to be unambiguous, or
+        // survived the grace window. Distance is checked first because it is
+        // the one that keeps a fast stroke feeling immediate.
+        const origin = this.buffer[0];
+        const movedFar =
+          Math.hypot(sample.x - origin.x, sample.y - origin.y) >= this.config.commitDistancePx;
+        if (movedFar || sample.t >= this.graceDeadline) return this.commitBuffer();
         return [];
       }
 
@@ -387,6 +421,7 @@ export class GestureArbiter {
     this.pinchDirty = false;
     this.metrics.pinchGestures += 1;
     this.syncPinchBaseline();
+    commands.push({ type: 'pinchBegin' });
     return commands;
   }
 
@@ -400,7 +435,7 @@ export class GestureArbiter {
   private syncPinchBaseline(): void {
     const [a, b] = [...this.pointers.values()];
     if (!a || !b) return;
-    this.pinchDistance = Math.hypot(a.x - b.x, a.y - b.y);
+    this.pinchStartDistance = Math.hypot(a.x - b.x, a.y - b.y);
     this.pinchMidpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 
@@ -411,15 +446,19 @@ export class GestureArbiter {
     const distance = Math.hypot(a.x - b.x, a.y - b.y);
     const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 
-    const usable = this.pinchDistance >= this.config.minPinchDistancePx && distance > 0;
-    const scaleBy = usable ? distance / this.pinchDistance : 1;
-    const panBy = { x: midpoint.x - this.pinchMidpoint.x, y: midpoint.y - this.pinchMidpoint.y };
+    // Measured against the START of the gesture, so rounding cannot compound
+    // across frames. Two fingers closer together than the threshold produce a
+    // wild ratio from a pixel of jitter, so scale is pinned at 1 and only the
+    // pan is honoured.
+    const usable = this.pinchStartDistance >= this.config.minPinchDistancePx && distance > 0;
+    const scaleFromStart = usable ? distance / this.pinchStartDistance : 1;
 
-    this.pinchDistance = distance;
+    // Pan stays a per-frame delta: it is a translation, which does not
+    // compound, and the midpoint moves independently of the spread.
+    const panBy = { x: midpoint.x - this.pinchMidpoint.x, y: midpoint.y - this.pinchMidpoint.y };
     this.pinchMidpoint = midpoint;
 
-    if (scaleBy === 1 && panBy.x === 0 && panBy.y === 0) return [];
-    return [{ type: 'transform', scaleBy, focal: { ...midpoint, t: 0 }, panBy }];
+    return [{ type: 'transform', scaleFromStart, focal: { ...midpoint, t: 0 }, panBy }];
   }
 
   /** Replays the buffer into the brush: begin at the true first touch, then

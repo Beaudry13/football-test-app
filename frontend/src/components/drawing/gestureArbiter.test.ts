@@ -31,6 +31,7 @@ describe('GestureArbiter - single-finger drawing', () => {
   it('does not draw anything during the grace window', () => {
     const arbiter = new GestureArbiter();
     expect(types(down(arbiter, 1, 10, 10, 0))).toEqual([]);
+    // Under commitDistancePx, so neither promotion signal has fired.
     expect(types(move(arbiter, 1, 12, 12, 10))).toEqual([]);
     expect(arbiter.getState()).toBe('pending');
   });
@@ -38,19 +39,36 @@ describe('GestureArbiter - single-finger drawing', () => {
   it('commits the stroke once the grace window expires', () => {
     const arbiter = new GestureArbiter();
     down(arbiter, 1, 10, 10, 0);
-    const commands = move(arbiter, 1, 20, 20, GRACE + 1);
-    // Two buffered samples: the touch-down and the move that crossed the
-    // deadline. Both are replayed, the first as the stroke's origin.
+    // Held within commitDistancePx so only the clock can promote it.
+    const commands = move(arbiter, 1, 12, 12, GRACE + 1);
     expect(types(commands)).toEqual(['strokeBegin', 'strokeExtend']);
     expect(arbiter.getState()).toBe('drawing');
+  });
+
+  it('promotes immediately once the finger moves far enough, without waiting out the grace', () => {
+    const arbiter = new GestureArbiter();
+    down(arbiter, 1, 100, 100, 0);
+    // Well inside the grace window, but 30px of travel is unambiguously a
+    // stroke - two fingers landing for a pinch arrive at rest, they do not
+    // sweep. Waiting here is what makes a fast pen feel laggy.
+    const commands = move(arbiter, 1, 130, 100, 10);
+    expect(types(commands)).toEqual(['strokeBegin', 'strokeExtend']);
+    expect(arbiter.getState()).toBe('drawing');
+  });
+
+  it('does not promote on jitter below the commit distance', () => {
+    const arbiter = new GestureArbiter();
+    down(arbiter, 1, 100, 100, 0);
+    expect(types(move(arbiter, 1, 103, 102, 10))).toEqual([]);
+    expect(arbiter.getState()).toBe('pending');
   });
 
   it('replays the stroke from the TRUE first touch point, not the commit point', () => {
     const arbiter = new GestureArbiter();
     down(arbiter, 1, 100, 200, 0);
-    move(arbiter, 1, 104, 205, 20);
-    move(arbiter, 1, 110, 210, 40);
-    const commands = move(arbiter, 1, 120, 220, GRACE + 1);
+    move(arbiter, 1, 102, 201, 20);
+    move(arbiter, 1, 104, 203, 40);
+    const commands = move(arbiter, 1, 106, 205, GRACE + 1);
 
     // The stroke must start where the finger landed. Starting at the commit
     // point is the "stroke lags several millimeters behind the finger" bug.
@@ -115,7 +133,7 @@ describe('GestureArbiter - the two-finger race', () => {
     move(arbiter, 1, 103, 101, 20);
     const commands = down(arbiter, 2, 200, 200, 45);
 
-    expect(types(commands)).toEqual(['strokeDiscard']);
+    expect(types(commands)).toEqual(['strokeDiscard', 'pinchBegin']);
     expect(arbiter.getState()).toBe('pinch');
     expect(arbiter.getMetrics().discardedBySecondPointer).toBe(1);
   });
@@ -143,7 +161,7 @@ describe('GestureArbiter - the two-finger race', () => {
       down(arbiter, 1, 100, 100, 0);
       move(arbiter, 1, 101, 100, delay - 5);
       const commands = down(arbiter, 2, 300, 300, delay);
-      expect(types(commands), `second finger at ${delay}ms`).toEqual(['strokeDiscard']);
+      expect(types(commands), `second finger at ${delay}ms`).toEqual(['strokeDiscard', 'pinchBegin']);
     }
   });
 
@@ -156,7 +174,7 @@ describe('GestureArbiter - the two-finger race', () => {
 
     // Past the window with real movement, this is a real stroke - throwing it
     // away would lose the player's work.
-    expect(types(commands)).toEqual(['strokeEnd']);
+    expect(types(commands)).toEqual(['strokeEnd', 'pinchBegin']);
     expect(arbiter.getState()).toBe('pinch');
     expect(arbiter.getMetrics().suspectedStrays).toBe(0);
   });
@@ -167,7 +185,7 @@ describe('GestureArbiter - the two-finger race', () => {
     arbiter.tick(GRACE + 1);
     const commands = down(arbiter, 2, 300, 300, GRACE + 20);
 
-    expect(types(commands)).toEqual(['strokeEnd']);
+    expect(types(commands)).toEqual(['strokeEnd', 'pinchBegin']);
     // Committed, immediately interrupted, almost no points: the signature of
     // a grace window that is too short for this device.
     expect(arbiter.getMetrics().suspectedStrays).toBe(1);
@@ -184,7 +202,7 @@ describe('GestureArbiter - pinch zoom and two-finger pan', () => {
 
     const transform = commands.find((c) => c.type === 'transform');
     expect(transform).toBeDefined();
-    expect(transform).toMatchObject({ scaleBy: 2 });
+    expect(transform).toMatchObject({ scaleFromStart: 2 });
   });
 
   it('holds the transform until the frame tick rather than emitting per move', () => {
@@ -219,7 +237,7 @@ describe('GestureArbiter - pinch zoom and two-finger pan', () => {
     const commands = arbiter.tick(48);
 
     const transform = commands.find((c) => c.type === 'transform');
-    expect(transform).toMatchObject({ scaleBy: 1, panBy: { x: 30, y: 40 } });
+    expect(transform).toMatchObject({ scaleFromStart: 1, panBy: { x: 30, y: 40 } });
   });
 
   it('ignores the scale factor when the fingers are too close to be a reliable pinch', () => {
@@ -230,7 +248,7 @@ describe('GestureArbiter - pinch zoom and two-finger pan', () => {
     const commands = arbiter.tick(40);
 
     const transform = commands.find((c) => c.type === 'transform');
-    expect(transform).toMatchObject({ scaleBy: 1 });
+    expect(transform).toMatchObject({ scaleFromStart: 1 });
   });
 
   it('does not let the finger left behind after a pinch start a new stroke', () => {
@@ -287,7 +305,7 @@ describe('GestureArbiter - pan tool', () => {
     down(arbiter, 2, 100, 0, 20);
     expect(arbiter.getState()).toBe('pinch');
     move(arbiter, 2, 200, 0, 40);
-    expect(arbiter.tick(40).find((c) => c.type === 'transform')).toMatchObject({ scaleBy: 2 });
+    expect(arbiter.tick(40).find((c) => c.type === 'transform')).toMatchObject({ scaleFromStart: 2 });
   });
 
   it('abandons an in-flight pen stroke when the tool changes mid-stroke', () => {
