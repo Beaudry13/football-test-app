@@ -3,6 +3,7 @@ import { resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
 import { AnnotationViewer } from '../../components/annotation/AnnotationViewer';
 import { ImageLightbox } from '../../components/ImageLightbox';
+import { renderArrows } from '../../utils/typography';
 import styles from './PlayPage.module.css';
 
 export interface PlayerAnswer {
@@ -72,7 +73,9 @@ export function QuestionInput({
         <span className={styles.questionNumber} aria-hidden="true">
           {index + 1}
         </span>
-        <strong className={styles.questionText}>{question.question_text}</strong>
+        {/* renderArrows is display-only - the coach's stored text keeps the
+            literal "->" they typed. See utils/typography.ts. */}
+        <strong className={styles.questionText}>{renderArrows(question.question_text)}</strong>
       </div>
       {isUnanswered && <div className={styles.questionRequiredNote}>Please answer this question.</div>}
 
@@ -102,7 +105,7 @@ export function QuestionInput({
                 checked={answer?.selected_option_id === option.id}
                 onChange={() => onChange({ selected_option_id: option.id })}
               />
-              <span className={styles.optionText}>{option.option_text}</span>
+              <span className={styles.optionText}>{renderArrows(option.option_text)}</span>
             </label>
           ))}
         </div>
