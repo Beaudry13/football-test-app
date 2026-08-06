@@ -51,23 +51,41 @@
    deliberately SEPARATE, lighter palette for phone readability - it does
    not read from this file. See index.css's own header comment. */
 
-/* --- Glyph override for Playfair Display's ampersand ---------------------
-   Playfair Display draws "&" as an ornate italic Et-ligature. It is the
-   font's signature glyph and it looks right in a display headline, but in
-   the middle of a sentence a reader has to stop and decode it - and Peira's
-   headings are full of ordinary football phrases ("Cover 2 & 3 checks",
-   "Jets & Motions"), not decorative titles.
+/* --- Plain-sans overrides for Playfair Display's awkward symbols ---------
+   Playfair Display is a DISPLAY serif: its personality lives in glyphs that
+   are a feature in a decorative title and a distraction in a football
+   sentence. Peira's headings are things like "Cover 2 & 3 checks" and
+   "WR -> flat", not book jackets.
 
-   This declares a font family that contains EXACTLY ONE character. Listed
-   ahead of Playfair in --font-heading, the browser resolves "&" here and
-   every other character falls straight through to Playfair, so nothing else
-   about the type changes.
+   This declares a font family containing only the codepoints listed in
+   unicode-range. Listed ahead of Playfair in --font-heading, the browser
+   resolves those characters here and every other character falls straight
+   through to Playfair, so nothing else about the type changes.
+
+   What is overridden and why (all measured at 100px/700):
+
+   U+0026  &  Playfair draws an ornate italic Et-ligature. Beautiful in a
+              headline, but a reader has to stop and decode it mid-sentence.
+   U+002D  -  Playfair's hyphen is 48.11px against a normal 33.31px - 48%
+              wider - and sits high. Beside ">" it reads as a long floating
+              dash with a gap rather than part of an arrow.
+   U+003E  >  Overridden together with the hyphen; matching the two to one
+              font is the whole point, since "->" is what coaches actually
+              type for an arrow.
+   U+2192  →  NOT PRESENT IN PLAYFAIR AT ALL. Measured identical to every
+              fallback, meaning the browser silently substitutes whatever
+              system serif it likes - so a typed arrow renders differently
+              on different devices. Pinning it here makes it consistent.
+
+   Note the hyphen override also applies to ordinary hyphenated words in
+   headings ("Man-to-Man"). That is deliberate and, given Playfair's
+   overlong hyphen, an improvement rather than a cost.
 
    local() only, deliberately - no download, no network request, no layout
    shift. The stack walks the default UI sans of each platform (Segoe UI on
    Windows, Helvetica Neue on iOS/macOS, Roboto on Android) before the
    universal Arial/Helvetica fallbacks, so it resolves on effectively any
-   device to a plain, conventional ampersand.
+   device.
 
    To pull another glyph out of Playfair later, add its codepoint to
    unicode-range below - that is the only edit required. */
@@ -79,7 +97,7 @@
     local('Roboto'),
     local('Helvetica'),
     local('Arial');
-  unicode-range: U+0026; /* & */
+  unicode-range: U+0026, U+002D, U+003E, U+2192; /* &  -  >  → */
   font-display: swap;
 }
 
@@ -127,7 +145,7 @@
 
   /* --- Typography (no index.css equivalent) -------------------------------- */
   /* 'Peira Plain Symbols' MUST come first - see the @font-face above. It
-     covers a single codepoint (&), so it changes nothing else. */
+     covers only &, -, > and →, so it changes nothing else. */
   --font-heading: 'Peira Plain Symbols', 'Playfair Display', serif;
   --font-body: 'Inter', sans-serif;
 
