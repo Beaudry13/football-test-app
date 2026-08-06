@@ -6,6 +6,21 @@ step needs something from the one before it.
 
 Budget about 30-45 minutes the first time through.
 
+## Live URLs
+
+The deployment that's already up, so nobody has to go dig through two
+dashboards to find it:
+
+| | URL |
+| --- | --- |
+| Frontend (Netlify) | https://football-test-app.netlify.app/ |
+| Backend (Render) | https://football-quiz-backend-d2f5.onrender.com |
+| Backend health check | https://football-quiz-backend-d2f5.onrender.com/api/health |
+
+The rest of this document is the from-scratch walkthrough; the steps below
+use `your-site-name.netlify.app` as a placeholder for the frontend URL
+above, since a fresh deploy gets its own name.
+
 ## 0. Push to GitHub
 
 Both Render and Netlify deploy from a git repo, not a local folder. If this
