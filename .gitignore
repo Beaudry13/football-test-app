@@ -17,6 +17,7 @@ backend/uploads/*
 .vscode/
 .idea/
 .DS_Store
+.claude/
 
 # Test artifacts
 .pytest_cache/
