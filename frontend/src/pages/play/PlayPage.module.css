@@ -25,14 +25,22 @@
   max-width: 1300px;
 }
 
-/* Sits outside .field, so it doesn't inherit index.css's 44px input floor -
-   set it here so the very first control a player touches is full size. */
+/* Sits outside .field, so it inherits none of index.css's input styling -
+   not the 44px floor, and not the border/fill either, which left it drawing
+   the browser's DEFAULT grey border on a cream page: off-palette, and the
+   first control a player ever touches. Everything .field would have given
+   it is restated here deliberately. */
 .codeInput {
   min-height: 44px;
   font-size: 1.6em;
   text-align: center;
   letter-spacing: 0.15em;
   text-transform: uppercase;
+  padding: 0.55em 0.7em;
+  border: 1px solid var(--color-control-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
 }
 
 .nameGrid {
@@ -42,13 +50,16 @@
   margin: 1em 0;
 }
 
+/* --color-control-border, not --color-border: this is a tappable control,
+   and a player picking their name off a grid needs to see where each
+   button actually ends. See index.css. */
 .nameButton {
   display: flex;
   align-items: center;
   gap: 0.5em;
   padding: 0.7em;
   min-height: 44px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   cursor: pointer;
@@ -153,13 +164,15 @@
   margin-top: 0.75em;
 }
 
+/* Same reasoning as .nameButton - a multiple-choice option is a control,
+   and its edge is what tells a player where the tap target is. */
 .optionRow {
   display: flex;
   align-items: center;
   gap: 0.6em;
   padding: 0.6em 0.75em;
   min-height: 44px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }

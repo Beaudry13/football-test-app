@@ -56,9 +56,35 @@
   --peira-bg: #121212;
   --peira-surface: #17181b;
   --color-surface-input: #1a1b1e;
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --peira-border: rgba(255, 255, 255, 0.1);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
+  /* --- Borders --------------------------------------------------------
+     These alphas are measured, not chosen by eye. On a dark surface a
+     low-alpha white border looks fine in a mockup and effectively
+     disappears on a real screen - the first pass shipped input borders at
+     0.14, which composites to only 1.54:1 against the field it outlines,
+     against the 3:1 that WCAG 1.4.11 requires for a UI component boundary.
+     Coaches reported the text boxes were hard to see, and they were right.
+
+     The border is the ONLY lever available here. Darkening or lightening
+     the field's fill cannot help: every candidate fill between #0d0e10 and
+     #1a1b1e sits within 1.01-1.09:1 of the card behind it, because two
+     near-black surfaces simply cannot separate. So the outline has to do
+     all of the work.
+
+     --color-border-strong is for anything a coach can TYPE IN or CLICK
+     (inputs, selects, textareas, toolbar buttons). 0.34 puts it at
+     3.09:1 over the input fill and 3.14:1 over a card - just past the
+     floor, without the harsh boxed-in look that higher values give.
+
+     --peira-border is for non-interactive CONTAINERS (cards, dividers,
+     table rules). WCAG sets no minimum for those, so it stays lighter than
+     a control border on purpose - the hierarchy is the point. 0.18 is
+     still roughly a third more visible than the 0.10 it replaces.
+
+     If you lower either value, re-measure. Do not eyeball it on a good
+     monitor in a dark room; that is how it got to 1.54:1. */
+  --color-border-subtle: rgba(255, 255, 255, 0.12);
+  --peira-border: rgba(255, 255, 255, 0.18);
+  --color-border-strong: rgba(255, 255, 255, 0.34);
 
   /* --- Color: text (collide with index.css - --peira-* prefixed) ----------
      Every text token here clears WCAG AA (4.5:1 for small text) against all
