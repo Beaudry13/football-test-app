@@ -187,9 +187,17 @@ Split the migration, and rehearse on a scratch database first.
 
 ## Conventions
 
-- **Branch off `master`.** Never commit directly to it.
-- **Batch work locally; do not push or deploy without being asked.** Pushing
-  `master` triggers a Render deploy and a Netlify deploy automatically.
+- **Approval is the gate, on every commit and every push.** Finish the work,
+  summarise it, run lint and tests and report the *actual* results including
+  failures — then wait. Do not commit or push until told to.
+- **Where the work goes depends on its size.** Ordinary changes (a fix, a
+  styling pass, a small feature) go straight onto `master` — the owner wants
+  one linear history and reviews each change before it lands. Large
+  multi-phase features that will sit unfinished for a while get their own
+  branch, so `master` is never carrying half a feature.
+- **Pushing `master` deploys.** It triggers Render and Netlify automatically;
+  there is no separate deploy step to catch a mistake. Pushing a *feature*
+  branch does not deploy and is a safe way to back work up.
 - Commit messages explain *why*, not just what. Comments in this codebase
   are unusually load-bearing — they record the reasoning behind
   non-obvious choices. Match that density; don't strip them.
@@ -220,18 +228,24 @@ comes back in `access-control-allow-origin`.
 
 ## Work in flight
 
-**`design/draw-on-image`** — a new "Draw on Image" question type, at the
-design + Phase 0 spike stage. Nothing is implemented; no schema change, no
-new dependency.
+**`feature/draw-on-image-consolidated`** — Draw on Image, at the design +
+Phase 0 spike stage with the data layer written but not deployed. This branch
+supersedes `design/draw-on-image` and `feature/draw-on-image`, which had
+diverged from each other; both can be deleted once this merges.
 
-- Read `docs/DESIGN-draw-on-image.md` first. Product decisions are locked in
-  its §10.
-- `frontend/src/spike/` is a **throwaway harness**, on the dev-only route
-  `/spike/drawing` (guarded by `import.meta.env.DEV`, verified absent from
-  the production bundle). Delete the route and the directory once Phase 0 is
-  signed off.
-- `drawingGestures.ts` and `useBodyScrollLock.ts` are the two pieces
-  intended to graduate into the real feature.
+- Read `docs/DESIGN-draw-on-image.md` first — product decisions are locked in
+  its §10 — then `docs/DRAW_ON_IMAGE_PHASE_0.md` for the spike results.
+- **Drawing is a per-question boolean (`questions.allow_drawing`), NOT a
+  question type.** The design doc originally locked a `draw_on_image` type;
+  §3.3 and §10 record why that was reversed. The enum route is a one-way door
+  (Postgres cannot remove an enum value) and cannot express "multiple choice
+  *and* a drawing" on one question.
+- `frontend/src/components/drawing/` is the real engine and must stay free of
+  quiz knowledge (§11.1). `frontend/src/pages/spike/` is a **throwaway
+  harness** on the dev-only route `/spike/drawing`, guarded by
+  `import.meta.env.DEV` and verified absent from the production bundle.
+  Delete the route and that directory once Phase 0 is signed off.
+- Migration `b7e4c1d92f08` is written but **has never been run anywhere**.
 - **The gate is open.** Phase 0 needs a real iPhone and a real Android;
-  desktop mobile emulation cannot settle it. Do not start Phase 1+ until
-  those results exist.
+  desktop emulation cannot settle the grace window or sustained FPS. Do not
+  start Phase 1+ until those results exist.

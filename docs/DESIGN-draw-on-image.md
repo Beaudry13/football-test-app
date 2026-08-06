@@ -395,7 +395,25 @@ preview file in R2. `file_storage.delete_image` exists; the deletion path
 needs an explicit hook, or previews leak on every attempt reset. Small, but
 easy to forget — it's called out in Phase 1.
 
-### 3.3 Enum change — read this before writing the migration
+### 3.3 Enum change — SUPERSEDED, kept for the reasoning
+
+> **This section no longer describes what was built.** It proposed adding a
+> `DRAW_ON_IMAGE` member to the `questiontype` enum. The implementation
+> (`b7e4c1d92f08_add_draw_on_image.py`) instead added a **boolean
+> `questions.allow_drawing`**, and §10 decision 4 has been corrected to
+> match.
+>
+> Three reasons the boolean won:
+>
+> 1. **The downgrade is clean.** Trap 2 below is real and unavoidable —
+>    Postgres cannot remove an enum value, so the enum route is a one-way
+>    door in the production schema. A boolean column drops cleanly.
+> 2. **Trap 1 disappears** rather than being worked around.
+> 3. **It composes.** A multiple-choice question can ask for a drawing *and*
+>    an option; a separate question type cannot express that at all.
+>
+> The analysis below is left intact because the traps it documents still
+> apply to `attemptstatus` and `coachrole`, and to any future enum change.
 
 `question_type` is a **native Postgres enum**, created in the initial schema
 as `sa.Enum('TRUE_FALSE','MULTIPLE_CHOICE','WRITTEN', name='questiontype')`,
@@ -753,7 +771,7 @@ backgrounding mid-drawing, airplane mode mid-drawing, a 60-player load pass.
 | 1 | **Eraser deletes whole strokes.** No pixel erasing. | Everything stays vector, undoable, and editable. `canvas.findTarget()` does the hit-test and is zoom-correct for free. |
 | 2 | **One finger always draws.** A dedicated **Pan tool** replaces intent-guessing. | No accidental panning mid-stroke. Single-finger pan exists only while Pan is selected; two-finger drag still pans in any tool. |
 | 3 | **Dark "film room" workspace.** | The one intentional exception to the light player theme. Dark background, floating toolbar, minimal chrome. |
-| 4 | **A `draw_on_image` question always requires an image.** | Validation error at authoring time, not a broken quiz for 60 players. |
+| 4 | **Drawing is a per-question toggle (`allow_drawing`), not a question type — and it always requires an image.** | The coach opts a question in explicitly; adding an image never implies drawing. Enabling it without an image is a validation error at authoring time, not a broken quiz for 60 players. Corrected from the original "a `draw_on_image` question type" — see §3.3 for why. |
 | 5 | **Single fixed player pen colour in V1.** | Player strokes are instantly distinguishable from coach gold annotations, with no picker to build. |
 | 6 | **Coach view ships with three modes: Image Only / Coach Version / Player Submission.** | Built properly in Phase 5 rather than retrofitted. See §12. |
 

@@ -225,7 +225,23 @@ answer" is how one of them gets missed and a player's work reads as blank.
 
 ---
 
-## 9. PostgreSQL enum migration plan
+## 9. PostgreSQL enum migration plan — SUPERSEDED
+
+> **Do not follow this section.** It was written before the prior
+> `feature/draw-on-image` work was found, and it recommends the wrong thing.
+>
+> The shipped design is a **boolean `questions.allow_drawing`** plus an
+> `answer_drawings` table (`b7e4c1d92f08_add_draw_on_image.py`), not a new
+> `questiontype` enum member. The boolean has a clean, reversible downgrade;
+> the enum route below is explicitly a one-way door in the production
+> schema, since Postgres cannot remove an enum value. It also composes — a
+> multiple-choice question can carry a drawing as well as an option, which a
+> distinct question type cannot express.
+>
+> The analysis is kept because its two traps still apply to any future
+> change to `questiontype`, `attemptstatus` or `coachrole`.
+
+### The superseded plan
 
 `question_type` **is** a native Postgres enum (`questiontype`), created in
 `migrations/versions/c614749e6a09_initial_schema.py:67`. Critically, it stores
