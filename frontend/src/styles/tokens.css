@@ -51,6 +51,38 @@
    deliberately SEPARATE, lighter palette for phone readability - it does
    not read from this file. See index.css's own header comment. */
 
+/* --- Glyph override for Playfair Display's ampersand ---------------------
+   Playfair Display draws "&" as an ornate italic Et-ligature. It is the
+   font's signature glyph and it looks right in a display headline, but in
+   the middle of a sentence a reader has to stop and decode it - and Peira's
+   headings are full of ordinary football phrases ("Cover 2 & 3 checks",
+   "Jets & Motions"), not decorative titles.
+
+   This declares a font family that contains EXACTLY ONE character. Listed
+   ahead of Playfair in --font-heading, the browser resolves "&" here and
+   every other character falls straight through to Playfair, so nothing else
+   about the type changes.
+
+   local() only, deliberately - no download, no network request, no layout
+   shift. The stack walks the default UI sans of each platform (Segoe UI on
+   Windows, Helvetica Neue on iOS/macOS, Roboto on Android) before the
+   universal Arial/Helvetica fallbacks, so it resolves on effectively any
+   device to a plain, conventional ampersand.
+
+   To pull another glyph out of Playfair later, add its codepoint to
+   unicode-range below - that is the only edit required. */
+@font-face {
+  font-family: 'Peira Plain Symbols';
+  src:
+    local('Segoe UI'),
+    local('Helvetica Neue'),
+    local('Roboto'),
+    local('Helvetica'),
+    local('Arial');
+  unicode-range: U+0026; /* & */
+  font-display: swap;
+}
+
 :root {
   /* --- Color: surfaces (collide with index.css - --peira-* prefixed) ------ */
   --peira-bg: #121212;
@@ -94,7 +126,9 @@
   --color-danger-border: rgba(224, 90, 90, 0.3);
 
   /* --- Typography (no index.css equivalent) -------------------------------- */
-  --font-heading: 'Playfair Display', serif;
+  /* 'Peira Plain Symbols' MUST come first - see the @font-face above. It
+     covers a single codepoint (&), so it changes nothing else. */
+  --font-heading: 'Peira Plain Symbols', 'Playfair Display', serif;
   --font-body: 'Inter', sans-serif;
 
   /* --- Radius (sm/md collide with index.css - --peira-* prefixed) --------- */
