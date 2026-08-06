@@ -117,9 +117,12 @@ describe('PlayPage', () => {
     await waitFor(() =>
       expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Jordan Smith' }),
     );
-    expect(
-      await screen.findByText((_, element) => element?.textContent === '1. Is this cover 2?'),
-    ).toBeInTheDocument();
+    // The number is rendered as its own badge alongside the question rather
+    // than as a "1." prefix inside the text, so these are asserted
+    // separately - which is also less brittle than matching the combined
+    // textContent of a presentational wrapper.
+    expect(await screen.findByText('Is this cover 2?')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
     await user.click(screen.getByLabelText('True'));
     await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
 

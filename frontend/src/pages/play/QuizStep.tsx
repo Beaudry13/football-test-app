@@ -176,10 +176,31 @@ export function QuizStep({
 
     return (
       <div className={styles.quizPanel}>
-        <div className={styles.progress}>
-          Question {currentIndex + 1} of {questions.length}
+        {/* A bar, not just a count. "Question 7 of 20" tells a player where
+            they are only after they do the arithmetic; a filled track tells
+            them how much is left at a glance, which is what actually keeps
+            someone going on a phone. */}
+        <div className={styles.progressBlock}>
+          <div className={styles.progressRow}>
+            <span className={styles.progress}>
+              Question {currentIndex + 1} of {questions.length}
+            </span>
+            {saveIndicator}
+          </div>
+          <div
+            className={styles.progressTrack}
+            role="progressbar"
+            aria-valuemin={1}
+            aria-valuemax={questions.length}
+            aria-valuenow={currentIndex + 1}
+            aria-label={`Question ${currentIndex + 1} of ${questions.length}`}
+          >
+            <div
+              className={styles.progressFill}
+              style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
+            />
+          </div>
         </div>
-        {saveIndicator}
         <ErrorBanner message={error} />
         <QuestionInput
           question={question}

@@ -64,9 +64,16 @@ export function QuestionInput({
           )}
         </>
       )}
-      <strong className={styles.questionText}>
-        {index + 1}. {question.question_text}
-      </strong>
+      {/* The number is a separate badge rather than "1." run into the text:
+          at a glance a player should be able to find where they are without
+          reading the question, and an inline number disappears into the
+          sentence on a small screen. */}
+      <div className={styles.questionHeader}>
+        <span className={styles.questionNumber} aria-hidden="true">
+          {index + 1}
+        </span>
+        <strong className={styles.questionText}>{question.question_text}</strong>
+      </div>
       {isUnanswered && <div className={styles.questionRequiredNote}>Please answer this question.</div>}
 
       {question.question_type === 'written' ? (
@@ -84,13 +91,18 @@ export function QuestionInput({
                 answer?.selected_option_id === option.id ? styles.optionRowActive : ''
               }`}
             >
+              {/* Still a real <input type="radio"> - it is styled with
+                  appearance:none rather than replaced by a div, so keyboard
+                  navigation, screen readers and form semantics all keep
+                  working exactly as before. */}
               <input
                 type="radio"
+                className={styles.optionRadio}
                 name={`question-${question.id}`}
                 checked={answer?.selected_option_id === option.id}
                 onChange={() => onChange({ selected_option_id: option.id })}
               />
-              {option.option_text}
+              <span className={styles.optionText}>{option.option_text}</span>
             </label>
           ))}
         </div>
