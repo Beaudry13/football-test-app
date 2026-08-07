@@ -10,6 +10,7 @@ from app.models.question import Question, QuestionOption, QuestionType
 from app.models.question_image import QuestionImage
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
+from app.models.answer_drawing import AnswerDrawing
 from app.models.response import Answer, AttemptStatus, PlayerAttempt
 from app.models.grade_audit_log import GradeAuditLog
 
@@ -33,5 +34,6 @@ __all__ = [
     "PlayerAttempt",
     "AttemptStatus",
     "Answer",
+    "AnswerDrawing",
     "GradeAuditLog",
 ]

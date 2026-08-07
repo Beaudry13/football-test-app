@@ -311,3 +311,183 @@ def test_can_still_delete_a_question_nobody_has_answered_yet(client, coach_heade
     )
 
     assert response.status_code == 204
+
+
+# --- Draw on Image: the per-question toggle -----------------------------
+#
+# The toggle is a boolean on the question rather than a new question type, so
+# it composes (a multiple-choice question can also ask for a drawing) and its
+# migration is reversible - see docs/DESIGN-draw-on-image.md §3.3.
+
+
+def _written_question(client, headers, quiz):
+    return client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={"question_text": "Draw your run fit", "question_type": "written", "options": []},
+        headers=headers,
+    ).get_json()
+
+
+def _upload_image(client, headers, quiz, question):
+    file_obj, filename = make_image_file()
+    return client.post(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image",
+        data={"image": (file_obj, filename)},
+        headers=headers,
+        content_type="multipart/form-data",
+    )
+
+
+def test_questions_default_to_drawing_disabled(client, coach_headers):
+    """Every question that predates this feature, and every one created by a
+    client that doesn't send the field, must be unchanged."""
+    quiz = create_quiz(client, coach_headers)
+    question = _written_question(client, coach_headers, quiz)
+
+    assert question["allow_drawing"] is False
+
+
+def test_cannot_enable_drawing_without_an_image(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = _written_question(client, coach_headers, quiz)
+
+    response = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": True},
+        headers=coach_headers,
+    )
+
+    # Caught at authoring time by one coach, rather than at play time by a
+    # whole roster staring at a board with nothing behind it.
+    assert response.status_code == 422
+    assert "image" in response.get_json()["error"].lower()
+
+
+def test_cannot_enable_drawing_at_creation_time(client, coach_headers):
+    """A question being created cannot have an image yet - the upload targets
+    an existing question - so the API says so instead of silently dropping
+    the field."""
+    quiz = create_quiz(client, coach_headers)
+
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={
+            "question_text": "Draw your run fit",
+            "question_type": "written",
+            "options": [],
+            "allow_drawing": True,
+        },
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_coach_can_enable_drawing_once_an_image_exists(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = _written_question(client, coach_headers, quiz)
+    assert _upload_image(client, coach_headers, quiz, question).status_code == 201
+
+    response = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": True},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["allow_drawing"] is True
+
+
+def test_editing_a_question_leaves_its_drawing_setting_alone(client, coach_headers):
+    """An absent field means "leave alone", never "turn off" - otherwise
+    renaming a question would silently disable drawing on it."""
+    quiz = create_quiz(client, coach_headers)
+    question = _written_question(client, coach_headers, quiz)
+    _upload_image(client, coach_headers, quiz, question)
+    client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": True},
+        headers=coach_headers,
+    )
+
+    renamed = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"question_text": "Draw your leverage instead"},
+        headers=coach_headers,
+    ).get_json()
+
+    assert renamed["question_text"] == "Draw your leverage instead"
+    assert renamed["allow_drawing"] is True
+
+
+def test_coach_can_turn_drawing_back_off(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    question = _written_question(client, coach_headers, quiz)
+    _upload_image(client, coach_headers, quiz, question)
+    client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": True},
+        headers=coach_headers,
+    )
+
+    response = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": False},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["allow_drawing"] is False
+
+
+def test_deleting_the_image_disables_drawing(client, coach_headers):
+    """Removing the image removes the thing there was to draw on. Leaving the
+    toggle set would hold the question in a state the update route refuses to
+    create."""
+    quiz = create_quiz(client, coach_headers)
+    question = _written_question(client, coach_headers, quiz)
+    _upload_image(client, coach_headers, quiz, question)
+    client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": True},
+        headers=coach_headers,
+    )
+
+    delete_response = client.delete(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}/image", headers=coach_headers
+    )
+    assert delete_response.status_code in (200, 204)
+
+    quiz_after = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()
+    question_after = next(q for q in quiz_after["questions"] if q["id"] == question["id"])
+    assert question_after["allow_drawing"] is False
+
+
+def test_drawing_composes_with_multiple_choice(client, coach_headers):
+    """The whole reason this is a flag and not a question type: a coach can
+    ask for a drawing AND an option on the same question."""
+    quiz = create_quiz(client, coach_headers)
+    question = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        json={
+            "question_text": "Which coverage, and draw your drop",
+            "question_type": "multiple_choice",
+            "options": [
+                {"option_text": "Cover 2", "is_correct_answer": True},
+                {"option_text": "Cover 3", "is_correct_answer": False},
+            ],
+        },
+        headers=coach_headers,
+    ).get_json()
+    _upload_image(client, coach_headers, quiz, question)
+
+    response = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
+        json={"allow_drawing": True},
+        headers=coach_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["allow_drawing"] is True
+    assert len(body["options"]) == 2

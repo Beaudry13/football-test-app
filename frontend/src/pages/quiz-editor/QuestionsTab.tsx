@@ -43,6 +43,19 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
     await reload();
   }
 
+  /** Sends only `allow_drawing`, so flipping the toggle can never disturb the
+   * question's text, type or options - the PATCH schema treats an absent
+   * field as "leave alone". */
+  async function handleToggleDrawing(questionId: number, allowDrawing: boolean) {
+    setError(null);
+    try {
+      await updateQuestion(quiz.id, questionId, { allow_drawing: allowDrawing });
+      await reload();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
   async function handleDelete(questionId: number, number: number) {
     setError(null);
     try {
@@ -144,6 +157,21 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   >
                     {question.image ? 'Edit image' : 'Add image'}
                   </Link>
+                  {/* Sits with the image controls, and only appears once an
+                      image exists: drawing is a property of the image, and
+                      offering it on a question with nothing to draw on would
+                      be an invitation the API rejects anyway. Adding an image
+                      never turns this on by itself - the coach opts in. */}
+                  {question.image && (
+                    <label className={styles.drawingToggle}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(question.allow_drawing)}
+                        onChange={(e) => void handleToggleDrawing(question.id, e.target.checked)}
+                      />
+                      <span>Let players draw on this image</span>
+                    </label>
+                  )}
                   <button
                     className={`${nb.btnSm} ${nb.btnDanger}`}
                     onClick={() => handleDelete(question.id, index + 1)}

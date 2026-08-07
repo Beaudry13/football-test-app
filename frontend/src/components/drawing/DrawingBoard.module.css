@@ -1,0 +1,138 @@
+/* The drawing board is a deliberate exception to the light Player theme.
+ *
+ * A coach reviewing film works in a dark room, and every drawing tool a
+ * player has used (Telestrator broadcasts, Hudl, John Madden's telestrator
+ * for that matter) puts the image on black. Surrounding a football still
+ * with white chrome makes the image the smaller half of the screen; charcoal
+ * makes it the only thing you see. The controls float rather than sit in a
+ * bar for the same reason - maximum glass for the image.
+ *
+ * Not driven by tokens.css on purpose: those tokens define the Peira product
+ * surface, and this is a workspace inside it. Wiring the board to them would
+ * mean an org theme could turn the film room lavender.
+ */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #0b0d0f;
+  /* Respects the iPhone notch/home indicator without hardcoding a device. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  /* dvh, not vh: Safari's vh includes the collapsing URL bar, which would
+     leave the toolbar off-screen until the player scrolls - and the page is
+     scroll-locked, so they cannot. */
+  height: 100dvh;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.surface {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  /* touch-action is set inline as well - this is the CSS backstop for
+     browsers that apply the stylesheet before React attaches the prop. */
+  touch-action: none;
+}
+
+.canvas {
+  display: block;
+  /* The subtle lift separates the image from the surround without a border
+     competing with the player's cyan strokes. */
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 8%), 0 18px 50px rgb(0 0 0 / 60%);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgb(18 21 24 / 92%);
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  backdrop-filter: blur(8px);
+}
+
+.toolGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  /* 56px: comfortably above the 44px minimum touch target, because these are
+     pressed with a thumb while the other hand holds the phone. */
+  min-width: 56px;
+  min-height: 56px;
+  padding: 6px 10px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 6%);
+  color: #e8edf2;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.toolButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.toolButtonActive {
+  background: #00e5ff;
+  border-color: #00e5ff;
+  color: #04252b;
+}
+
+.doneButton {
+  min-height: 56px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 10px;
+  background: #00e5ff;
+  color: #04252b;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveState {
+  color: #9fb0bd;
+  font-size: 12px;
+  padding-right: 4px;
+}
+
+@media (min-width: 700px) {
+  .toolButton {
+    flex-direction: row;
+    gap: 8px;
+    font-size: 13px;
+  }
+}
+
+/* An animation-averse player still needs the board; nothing here animates by
+   default, but the backdrop blur is dropped since it is the one effect that
+   can read as motion sickness on scroll-adjacent surfaces. */
+@media (prefers-reduced-motion: reduce) {
+  .toolbar {
+    backdrop-filter: none;
+  }
+}

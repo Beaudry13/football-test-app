@@ -77,3 +77,79 @@ describe('QuestionInput image rendering', () => {
     expect(viewer.dataset.imageUrl).toContain('/uploads/x.png');
   });
 });
+
+// --- Draw on Image ------------------------------------------------------
+//
+// DrawingBoard constructs a real Fabric Canvas, which jsdom cannot back with
+// a 2D context - the same reason AnnotationViewer is stubbed above. These
+// tests cover QuestionInput's decision logic: whether the entry point is
+// offered at all, and that an ordinary image question is untouched.
+vi.mock('../../components/drawing/DrawingBoard', () => ({
+  DrawingBoard: (props: { imageUrl: string }) => (
+    <div data-testid="drawing-board" data-image-url={props.imageUrl} />
+  ),
+}));
+
+const imagedQuestion: Question = {
+  ...baseQuestion,
+  image: {
+    id: 7,
+    question_id: 1,
+    image_url: '/uploads/still.png',
+    annotations: [],
+    canvas_width: 1400,
+    updated_at: '2026-08-07T00:00:00Z',
+  },
+};
+
+describe('QuestionInput drawing entry point', () => {
+  it('offers no drawing on an ordinary image question', () => {
+    // The backward-compatibility guarantee: an existing question with an
+    // image must behave exactly as it did before this feature.
+    render(<QuestionInput question={imagedQuestion} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /draw your answer/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('drawing-board')).not.toBeInTheDocument();
+  });
+
+  it('offers no drawing when the toggle is on but the image is gone', () => {
+    // An image deleted between load and render, or a stale payload. Degrading
+    // to an ordinary question beats opening a board with nothing behind it.
+    const orphaned: Question = { ...baseQuestion, allow_drawing: true, image: null };
+    render(<QuestionInput question={orphaned} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /draw your answer/i })).not.toBeInTheDocument();
+  });
+
+  it('offers the board once the coach enables it on an image question', () => {
+    const enabled: Question = { ...imagedQuestion, allow_drawing: true };
+    render(<QuestionInput question={enabled} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /draw your answer/i })).toBeInTheDocument();
+  });
+
+  it('does not open the board until the player asks for it', () => {
+    // Opening on render would fabricate an empty document, which the submit
+    // guard would then have to distinguish from a real answer.
+    const enabled: Question = { ...imagedQuestion, allow_drawing: true };
+    render(<QuestionInput question={enabled} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.queryByTestId('drawing-board')).not.toBeInTheDocument();
+  });
+
+  it('invites an edit, and reports the mark count, once something is drawn', () => {
+    const enabled: Question = { ...imagedQuestion, allow_drawing: true };
+    const answer = {
+      drawing: {
+        format: 'peira.drawing' as const,
+        version: 1,
+        source: { image_id: '7', image_version: null, natural_width: 1600, natural_height: 1000 },
+        coordinate_width: 1400,
+        coordinate_height: 875,
+        strokes: [
+          { id: 'a', tool: 'pen' as const, layer: 'player' as const, points: [0, 0, 5, 5], color: '#00E5FF', width: 6, order: 0 },
+        ],
+      },
+    };
+    render(<QuestionInput question={enabled} index={0} answer={answer} onChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /edit your drawing/i })).toBeInTheDocument();
+    expect(screen.getByText(/1 mark/)).toBeInTheDocument();
+  });
+});

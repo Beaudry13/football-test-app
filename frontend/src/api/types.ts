@@ -128,6 +128,14 @@ export interface Question {
   position: number;
   options: QuestionOption[];
   image: QuestionImage | null;
+  /** "Let players draw their answer on this question's image."
+   *
+   * Deliberately a flag on any question rather than a question type, so it
+   * composes - a multiple-choice question can ask for a drawing as well as an
+   * option. Only meaningful alongside `image`; the API rejects enabling it
+   * otherwise. Optional here so a response from a backend that predates the
+   * column still parses. */
+  allow_drawing?: boolean;
 }
 
 /** A canonical master-roster identity - see Player.id as the only real
