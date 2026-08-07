@@ -1,4 +1,7 @@
-export type QuestionType = 'true_false' | 'multiple_choice' | 'written';
+/** `written` is labelled "Short Answer" in the coach UI. The stored value
+ * keeps its original name - renaming it would mean a second irreversible
+ * Postgres enum change plus a data migration, to alter one word. */
+export type QuestionType = 'true_false' | 'multiple_choice' | 'written' | 'draw_response';
 
 export type CoachRole = 'admin' | 'member';
 
@@ -128,14 +131,11 @@ export interface Question {
   position: number;
   options: QuestionOption[];
   image: QuestionImage | null;
-  /** "Let players draw their answer on this question's image."
-   *
-   * Deliberately a flag on any question rather than a question type, so it
-   * composes - a multiple-choice question can ask for a drawing as well as an
-   * option. Only meaningful alongside `image`; the API rejects enabling it
-   * otherwise. Optional here so a response from a backend that predates the
-   * column still parses. */
-  allow_drawing?: boolean;
+  /** True for a `draw_response` question that has no image yet. Such a
+   * question is answerable by nobody, so the API refuses to activate a quiz
+   * containing one - the check lands at activation rather than creation
+   * because an image can only be uploaded to a question that already exists. */
+  needs_image?: boolean;
 }
 
 /** A canonical master-roster identity - see Player.id as the only real
@@ -260,6 +260,19 @@ export interface AccessCode {
   groups: { id: number; name: string }[];
 }
 
+/** A player's submitted drawing, as the coach-facing routes return it. */
+export interface AnswerDrawing {
+  id: number;
+  answer_id: number;
+  /** The whole versioned envelope - see components/drawing/types.ts. Typed
+   * loosely here because api/types.ts must not depend on the drawing engine;
+   * the viewer narrows it at the point of use. */
+  document: unknown;
+  revision: number;
+  preview_url: string | null;
+  updated_at: string | null;
+}
+
 export interface Answer {
   id: number;
   question_id: number;
@@ -269,6 +282,8 @@ export interface Answer {
   coach_feedback: string | null;
   graded_at: string | null;
   graded_by_username: string | null;
+  /** Present on a `draw_response` answer the player actually drew on. */
+  drawing?: AnswerDrawing | null;
 }
 
 export interface PlayerResponse {

@@ -7,6 +7,9 @@ import type { Answer, PlayerResponse, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/ui/Icon';
+import { DrawingViewer } from '../../components/drawing/DrawingViewer';
+import { resolveMediaUrl } from '../../api/client';
+import type { DrawingDocument } from '../../components/drawing/types';
 import nb from '../../styles/notebook.module.css';
 import styles from './ResultsTab.module.css';
 
@@ -27,7 +30,11 @@ function AnswerRow({
   if (!question) return null;
 
   const selectedOption = question.options.find((o) => o.id === answer.selected_option_id);
-  const needsManualGrading = question.question_type === 'written';
+  // Both types are judged by a person rather than scored from an option. The
+  // grading UI itself is Phase 4; this only decides what the coach is shown.
+  const needsManualGrading =
+    question.question_type === 'written' || question.question_type === 'draw_response';
+  const isDrawResponse = question.question_type === 'draw_response';
 
   async function handleGrade(isCorrect: boolean) {
     setError(null);
@@ -45,9 +52,23 @@ function AnswerRow({
   return (
     <div className={styles.answerRow}>
       <div className={styles.answerQuestion}>{question.question_text}</div>
-      <div className={styles.answerValue}>
-        {selectedOption ? selectedOption.option_text : answer.answer_text || <em>No answer</em>}
-      </div>
+      {isDrawResponse ? (
+        answer.drawing && question.image ? (
+          <DrawingViewer
+            imageUrl={resolveMediaUrl(question.image.image_url)}
+            document={answer.drawing.document as DrawingDocument}
+            alt={`Drawing submitted for: ${question.question_text}`}
+          />
+        ) : (
+          <div className={styles.answerValue}>
+            <em>{question.image ? 'Nothing drawn' : 'This question is missing its image'}</em>
+          </div>
+        )
+      ) : (
+        <div className={styles.answerValue}>
+          {selectedOption ? selectedOption.option_text : answer.answer_text || <em>No answer</em>}
+        </div>
+      )}
 
       <ErrorBanner message={error} />
 

@@ -1,20 +1,29 @@
 """A player's drawing on top of a question's image.
 
-Mirrors QuestionImage deliberately - same 1:1 shape, same opaque JSON
-stroke blob, same pinned coordinate space - so there is one storage idea in
-this codebase for "vector marks over a picture", not two.
+Why a separate table rather than columns on Answer: `answers` is the hottest
+table in the app (every autosave upserts it; analytics, the dashboard, CSV and
+the PDF all bulk-load it) and should stay narrow. A drawing is large and rare,
+so it lives beside the answer and is fetched only where it is actually
+rendered.
 
-Why a separate table rather than columns on Answer: `answers` is the
-hottest table in the app (every autosave upserts it; analytics, the
-dashboard, CSV and the PDF all bulk-load it) and should stay narrow. A
-drawing is large and rare, so it lives beside the answer and is fetched
-only where it's actually rendered.
+WHY ONE JSON COLUMN AND NOT A COLUMN PER FIELD
+----------------------------------------------
+The client's DrawingDocument is already a versioned envelope: it carries its
+own `format` and `version`, the coordinate space the strokes were authored in,
+and an immutable reference to the source image including the version of that
+image. Splitting those back out into columns here would store the same facts
+twice, and the copy outside the envelope is the one that drifts silently when
+the format gains a field.
 
-`strokes` is a Fabric object array in exactly the format
-question_images.annotations already uses, which is what lets the coach-side
-viewer render coach annotations and player strokes as two layers on one
-canvas with no second renderer.
+So the envelope is stored whole, and this table adds only what genuinely does
+not belong inside it: a link to the answer, a concurrency counter, and a
+pointer to external storage for the flattened preview.
+
+See docs/DESIGN-draw-response-phase-3.md §5, and
+frontend/src/components/drawing/types.ts for the document itself.
 """
+
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.extensions import db
 
@@ -32,30 +41,21 @@ class AnswerDrawing(db.Model):
         unique=True,
         index=True,
     )
-    strokes = db.Column(db.JSON, nullable=False, default=list)
 
-    # The coordinate space the strokes were authored in. NOT nullable -
-    # unlike question_images.canvas_width there is no legacy data to
-    # accommodate here, and a stroke array without its space is
-    # unrenderable. See frontend canvasSizing.ts for why this must never be
-    # changed in place for an existing row.
-    canvas_width = db.Column(db.Integer, nullable=False)
-    canvas_height = db.Column(db.Integer, nullable=False)
+    # The whole DrawingDocument. JSONB rather than JSON so it stays queryable
+    # (how many strokes, which region) without a schema change.
+    document = db.Column(JSONB, nullable=False)
 
-    # A snapshot of the image the player actually drew on. A coach can
-    # replace a question's image after players have answered; without this
-    # there would be no way to tell that the strokes now float over a
-    # different picture.
-    source_image_url = db.Column(db.String(1024), nullable=False)
+    # Bumped on every write. The client sends the revision it last saw and is
+    # refused with a 409 if it is behind, so a phone that spent five minutes
+    # out of signal cannot silently overwrite a drawing the player has since
+    # redone somewhere else. Autosave makes that race routine rather than
+    # exotic - this is the same reasoning as the upsert in attempts.py.
+    revision = db.Column(db.Integer, nullable=False, default=1, server_default="1")
 
-    # Flattened composite (image + any coach annotations + player strokes).
-    # A CACHE, never the record: where preview and strokes disagree the
-    # strokes win, and the coach-facing view always renders from strokes.
-    # This exists so the PDF export can embed a drawing with one call to
-    # the image machinery that already exists, instead of needing a
-    # server-side Fabric renderer (which does not exist for Python).
-    # Nullable and tolerated as missing - a drawing with no preview must
-    # degrade to a placeholder, never fail a 50-page report.
+    # Phase 6, for the PDF export. Stays NULL until then. Unlike the fields
+    # that were folded into `document`, this genuinely is a column: it points
+    # at an object in external storage, not at anything the envelope knows.
     preview_url = db.Column(db.String(1024), nullable=True)
 
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
@@ -65,20 +65,26 @@ class AnswerDrawing(db.Model):
 
     answer = db.relationship("Answer", back_populates="drawing")
 
-    def to_dict(self, include_strokes: bool = False) -> dict:
-        """`include_strokes` defaults to False on purpose: the stroke blob is
-        large, and the bulk answer loads (analytics, dashboard, CSV) only
-        need to know a drawing EXISTS. Only the player's resume and the
-        coach's grading view ask for the strokes themselves."""
-        data = {
+    def to_dict(self) -> dict:
+        return {
             "id": self.id,
             "answer_id": self.answer_id,
-            "canvas_width": self.canvas_width,
-            "canvas_height": self.canvas_height,
-            "source_image_url": self.source_image_url,
+            "document": self.document,
+            "revision": self.revision,
             "preview_url": self.preview_url,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
-        if include_strokes:
-            data["strokes"] = self.strokes
-        return data
+
+
+def document_has_strokes(document: dict | None) -> bool:
+    """Whether a stored document represents a real answer.
+
+    An envelope with no strokes is not an answer - it is just the image the
+    player was shown. Defined here, next to the storage, so the submit guard
+    and the answer-presence rule cannot disagree about it. Mirrors
+    `hasDrawnAnswer` in the frontend's drawingDocument.ts.
+    """
+    if not isinstance(document, dict):
+        return False
+    strokes = document.get("strokes")
+    return isinstance(strokes, list) and len(strokes) > 0

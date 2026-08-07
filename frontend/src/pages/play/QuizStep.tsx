@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { saveAnswer, submitQuiz } from '../../api/play';
+import { saveAnswer, saveDrawing, submitQuiz } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
-import type { Quiz, ResumedAnswer } from '../../api/types';
+import type { Question, Quiz, ResumedAnswer } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { hasDrawnAnswer } from '../../components/drawing/drawingDocument';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
@@ -9,6 +9,10 @@ import { QuizProgress } from './QuizProgress';
 import styles from './PlayPage.module.css';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
+/** Longer than the text debounce. A drawing payload is orders of magnitude
+ * larger, and a player mid-stroke produces changes continuously rather than in
+ * the bursts typing produces. */
+const DRAWING_AUTOSAVE_DEBOUNCE_MS = 1500;
 
 function seedAnswers(initialAnswers: ResumedAnswer[]): Record<number, PlayerAnswer> {
   const seeded: Record<number, PlayerAnswer> = {};
@@ -47,6 +51,15 @@ export function QuizStep({
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [unansweredIds, setUnansweredIds] = useState<Set<number>>(new Set());
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  /** The revision the server last confirmed, per question.
+   *
+   * A ref rather than state, and read at SEND time rather than at schedule
+   * time. The save is debounced, so the `answer` captured when the timer was
+   * set is already stale by the time it fires - the previous save's response
+   * has landed in between. Reading a captured revision sent `null` on the
+   * second save of every session, which the server correctly refused as a
+   * conflict, and the player saw "Couldn't save" on their first real stroke. */
+  const drawingRevisions = useRef<Record<number, number>>({});
 
   /** Namespaces drawing drafts in localStorage. Keyed by access code and
    * player, so two team-mates handing one phone back and forth never see each
@@ -54,16 +67,18 @@ export function QuizStep({
   const drawingScope = `${accessCodeId}:${playerId ?? playerName}`;
 
   /** The one place the player flow decides whether a question has been
-   * answered. A drawing counts: without this clause a player could spend a
-   * minute drawing their run fit and still be told the question is blank.
-   * hasDrawnAnswer is shared with the engine so "a document with no strokes
-   * is not an answer" is defined once. */
-  function isAnswered(answer: PlayerAnswer | undefined): boolean {
-    return (
-      answer?.selected_option_id !== undefined ||
-      Boolean(answer?.answer_text?.trim()) ||
-      hasDrawnAnswer(answer?.drawing)
-    );
+   * answered, mirroring services/attempts.py::is_answered on the server. The
+   * two must agree, or a player is told they may submit and is then refused.
+   *
+   * Asks what the question's TYPE requires rather than scanning for whatever
+   * content happens to be present. That distinction is what keeps the planned
+   * combined-response work possible: a Draw Response question may later also
+   * require a written explanation, and a "has any content" rule would call it
+   * answered the moment either half arrived. */
+  function isAnswered(question: Question, answer: PlayerAnswer | undefined): boolean {
+    if (question.question_type === 'draw_response') return hasDrawnAnswer(answer?.drawing);
+    if (question.question_type === 'written') return Boolean(answer?.answer_text?.trim());
+    return answer?.selected_option_id !== undefined;
   }
 
   useEffect(() => {
@@ -94,11 +109,53 @@ export function QuizStep({
     // saving, and hitting Submit will 409 too and can be routed from there.
   }
 
+  /** Sends a drawing to its own endpoint.
+   *
+   * QuestionInput has already written the local draft before this runs, so a
+   * failure here costs the player nothing - the draft is the resilience layer
+   * and the server is the authority, in that order. */
+  function performDrawingSave(questionId: number, answer: PlayerAnswer) {
+    if (!answer.drawing) return;
+
+    const knownRevision = drawingRevisions.current[questionId];
+    // Nothing drawn and nothing ever saved: opening the board creates an empty
+    // document, and persisting that would write a row purely so the next save
+    // could conflict with it. An empty document with a revision IS saved -
+    // that is a player deliberately erasing their answer.
+    if (!hasDrawnAnswer(answer.drawing) && knownRevision === undefined) return;
+
+    setSaveStatus('saving');
+    saveDrawing({
+      access_code_id: accessCodeId,
+      player_name: playerName,
+      player_id: playerId,
+      question_id: questionId,
+      document: answer.drawing,
+      // Read now, not from the captured `answer` - see drawingRevisions.
+      base_revision: knownRevision ?? null,
+    })
+      .then((result) => {
+        setSaveStatus('saved');
+        drawingRevisions.current[questionId] = result.revision;
+      })
+      .catch((err) => {
+        setSaveStatus('error');
+        // 409 means this drawing was changed elsewhere - another device, or a
+        // tab left open. The local copy is kept and submit still carries it
+        // (submit is authoritative), so the player is never stranded; they
+        // are just told rather than left with a silent "Saved" that was not.
+        if (getErrorMessage(err).toLowerCase().includes('another device')) {
+          setError('This drawing was changed on another device. Yours will be used when you submit.');
+        }
+      });
+  }
+
   function updateAnswer(questionId: number, answer: PlayerAnswer) {
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
+    const changedQuestion = questions.find((q) => q.id === questionId);
     // Clears a stale highlight the instant the player fixes it, rather than
     // only re-checking on the next submit attempt.
-    if (isAnswered(answer)) {
+    if (changedQuestion && isAnswered(changedQuestion, answer)) {
       setUnansweredIds((prev) => {
         if (!prev.has(questionId)) return prev;
         const next = new Set(prev);
@@ -112,15 +169,15 @@ export function QuizStep({
       delete debounceTimers.current[questionId];
     }
 
-    // A drawing-only change has nothing the server can accept yet: the save
-    // route takes selected_option_id and answer_text, and answer_drawings has
-    // no endpoint until Phase 3. Firing a request per stroke would post an
-    // empty answer repeatedly and, worse, flip the indicator to "Saved" for
-    // work that is only in localStorage. QuestionInput persists the draft;
-    // this stays quiet until there is somewhere real to send it.
-    const isDrawingOnlyChange =
-      answer.selected_option_id === undefined && !answer.answer_text && answer.drawing !== undefined;
-    if (isDrawingOnlyChange) return;
+    // A drawing goes to its own endpoint: a much larger payload, a longer
+    // debounce, and a revision the text path has no concept of.
+    if (answer.drawing !== undefined) {
+      debounceTimers.current[questionId] = setTimeout(() => {
+        delete debounceTimers.current[questionId];
+        performDrawingSave(questionId, answer);
+      }, DRAWING_AUTOSAVE_DEBOUNCE_MS);
+      return;
+    }
 
     if (answer.selected_option_id !== undefined) {
       // A radio/option pick is the final value until changed again -
@@ -145,35 +202,12 @@ export function QuizStep({
     Object.values(debounceTimers.current).forEach(clearTimeout);
     debounceTimers.current = {};
 
-    // Phase 2 keeps drawings on the device: submitQuiz carries only
-    // selected_option_id and answer_text, and the server's own
-    // require_all_answers check (routes/play.py) counts a question answered
-    // only if one of those two has content. So a question answered ONLY by a
-    // drawing passes the client guard above and is then rejected by the
-    // server with a generic "answer all questions" the player cannot act on.
-    //
-    // Caught here, with a message that says what is actually wrong, rather
-    // than letting a player discover it after drawing for a minute. Removed
-    // in Phase 3, when the drawing reaches the server and genuinely counts.
+    // The Phase 2 guard that used to sit here is gone: it existed only because
+    // a drawing could not reach the server, so a drawing-only answer passed
+    // the client check and was then refused by one. Both sides now agree, via
+    // isAnswered above and services/attempts.py::is_answered below it.
     if (quiz.require_all_answers) {
-      const drawingOnly = questions.filter((q) => {
-        const answer = answers[q.id];
-        return (
-          hasDrawnAnswer(answer?.drawing) &&
-          answer?.selected_option_id === undefined &&
-          !answer?.answer_text?.trim()
-        );
-      });
-      if (drawingOnly.length > 0) {
-        setUnansweredIds(new Set(drawingOnly.map((q) => q.id)));
-        setError(
-          'Drawings are saved on this device but cannot be submitted yet. ' +
-            'Ask your coach to turn off "require all answers" for this Peira.',
-        );
-        return;
-      }
-
-      const missing = questions.filter((q) => !isAnswered(answers[q.id]));
+      const missing = questions.filter((q) => !isAnswered(q, answers[q.id]));
       if (missing.length > 0) {
         setUnansweredIds(new Set(missing.map((q) => q.id)));
         setError('Please answer all questions before submitting.');
@@ -200,6 +234,11 @@ export function QuizStep({
           question_id: q.id,
           selected_option_id: answers[q.id]?.selected_option_id ?? null,
           answer_text: answers[q.id]?.answer_text ?? null,
+          // Re-sent as the same safety net the text answers already get: an
+          // autosave may have failed on a flaky connection, and submit is the
+          // player's last chance to be heard. The server treats submit as
+          // authoritative, so this never 409s against their own autosave.
+          drawing: answers[q.id]?.drawing ?? null,
         })),
       });
       onSubmitted();

@@ -24,20 +24,12 @@ class QuestionCreateSchema(Schema):
     question_type = fields.Str(required=True, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False, load_default=list)
     position = fields.Int(required=False, load_default=None)
-    # Defaults off, so every question created before this field existed - and
-    # every one created by a client that doesn't send it - behaves exactly as
-    # it did.
-    allow_drawing = fields.Bool(required=False, load_default=False)
 
 
 class QuestionUpdateSchema(Schema):
     question_text = fields.Str(required=False, validate=validate.Length(min=1))
     question_type = fields.Str(required=False, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False)
-    # No load_default: absence must mean "leave it alone", not "turn it off".
-    # A PATCH that only renames a question would otherwise silently disable
-    # drawing on it.
-    allow_drawing = fields.Bool(required=False)
 
 
 class QuestionReorderSchema(Schema):
@@ -49,23 +41,15 @@ class AnnotationsUpdateSchema(Schema):
     canvas_width = fields.Int(required=False, allow_none=True, load_default=None)
 
 
-DRAWING_NEEDS_IMAGE = "Add an image to this question before letting players draw on it"
-
-
-def validate_drawing_requires_image(allow_drawing: bool, has_image: bool) -> None:
-    """A drawing answer is drawn *on* something. Enabling the toggle without
-    an image would produce a question a player is invited to answer and then
-    physically cannot - caught at authoring time, by one coach, rather than
-    at play time by a whole roster."""
-    if allow_drawing and not has_image:
-        raise ApiError(DRAWING_NEEDS_IMAGE, status_code=422)
-
-
 def validate_options_for_type(question_type: str, options: list[dict]) -> None:
     """Raises ApiError(422) - same status as marshmallow validation failures,
     since this is the same class of error (semantically invalid payload),
     just enforced in Python because it's a cross-field business rule."""
-    if question_type == QuestionType.WRITTEN.value:
+    if question_type in (QuestionType.WRITTEN.value, QuestionType.DRAW_RESPONSE.value):
+        # Neither is answered by picking from a list. A Draw Response question
+        # may still HAVE option rows - one converted from multiple choice by
+        # migration d2b5f8a41c32 keeps them, inert - but it never requires
+        # them, and authoring one never creates them.
         return
 
     if question_type == QuestionType.TRUE_FALSE.value:

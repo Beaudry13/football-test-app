@@ -182,8 +182,8 @@ describe('QuizStep', () => {
           player_name: 'Jordan Smith',
           player_id: 501,
           answers: [
-            { question_id: 1, selected_option_id: null, answer_text: null },
-            { question_id: 2, selected_option_id: null, answer_text: 'I set the edge.' },
+            { question_id: 1, selected_option_id: null, answer_text: null, drawing: null },
+            { question_id: 2, selected_option_id: null, answer_text: 'I set the edge.', drawing: null },
           ],
         }),
       );
@@ -319,7 +319,22 @@ describe('QuizStep', () => {
 // silent failure for the player and the coach alike, so it is tested through
 // the real submit guard rather than by unit-testing the predicate.
 vi.mock('../../components/drawing/DrawingBoard', () => ({
-  DrawingBoard: () => <div data-testid="drawing-board" />,
+  // The real board builds a Fabric canvas jsdom cannot back. This stands in
+  // for the one interaction these tests need: the player drawing another
+  // stroke, which is what drives autosave.
+  DrawingBoard: (props: { document: unknown; onChange: (d: unknown) => void }) => (
+    <div data-testid="drawing-board">
+      <button
+        type="button"
+        onClick={() => {
+          const doc = props.document as { strokes: unknown[] };
+          props.onChange({ ...doc, strokes: [...doc.strokes, { ...(doc.strokes[0] as object) }] });
+        }}
+      >
+        add stroke
+      </button>
+    </div>
+  ),
 }));
 
 const DRAWN_DOCUMENT = {
@@ -342,9 +357,8 @@ const drawingQuiz: Quiz = {
       id: 5,
       quiz_id: 1,
       question_text: 'Draw your run fit.',
-      question_type: 'written',
+      question_type: 'draw_response',
       position: 0,
-      allow_drawing: true,
       image: {
         id: 7,
         question_id: 5,
@@ -387,37 +401,10 @@ describe('QuizStep drawing answers', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it('explains why a drawing-only answer cannot be submitted while all answers are required', async () => {
-    // The server counts a question answered only if it carries an option or
-    // text, so a drawing-only submission would 422 with a message the player
-    // cannot act on. Caught client-side with one that names the real cause.
-    window.localStorage.setItem(
-      'peira.drawing.draft:42:Jordan Smith:5',
-      JSON.stringify(DRAWN_DOCUMENT),
-    );
-    const submit = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({} as never);
-
-    render(
-      <QuizStep
-        quiz={drawingQuiz}
-        accessCodeId={42}
-        playerName="Jordan Smith"
-        playerId={undefined}
-        initialAnswers={[]}
-        onSubmitted={vi.fn()}
-      />,
-    );
-    await screen.findByRole('button', { name: /edit your drawing/i });
-    await userEvent.click(screen.getByRole('button', { name: 'Submit Quiz' }));
-
-    expect(submit).not.toHaveBeenCalled();
-    expect(await screen.findByText(/cannot be submitted yet/i)).toBeInTheDocument();
-  });
-
   it('accepts a restored drawing as a real answer and lets the player submit', async () => {
-    // Seeded the way a returning player's draft would be: QuestionInput
-    // restores it on mount, which is also what proves the draft survives a
-    // refresh while the backend cannot store drawings yet.
+    // Seeded the way a returning player's draft would be. localStorage stays
+    // the resilience layer even though the server is now authoritative: it is
+    // what survives a dead network, and it is what QuestionInput restores.
     window.localStorage.setItem(
       'peira.drawing.draft:42:Jordan Smith:5',
       JSON.stringify(DRAWN_DOCUMENT),
@@ -427,7 +414,7 @@ describe('QuizStep drawing answers', () => {
 
     render(
       <QuizStep
-        quiz={{ ...drawingQuiz, require_all_answers: false }}
+        quiz={drawingQuiz}
         accessCodeId={42}
         playerName="Jordan Smith"
         playerId={undefined}
@@ -443,5 +430,130 @@ describe('QuizStep drawing answers', () => {
 
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(screen.queryByText(/please answer all questions/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('QuizStep drawing autosave', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.localStorage.clear();
+  });
+
+  function renderWithDraft() {
+    window.localStorage.setItem(
+      'peira.drawing.draft:42:Jordan Smith:5',
+      JSON.stringify(DRAWN_DOCUMENT),
+    );
+    return render(
+      <QuizStep
+        quiz={drawingQuiz}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={undefined}
+        initialAnswers={[]}
+        onSubmitted={vi.fn()}
+      />,
+    );
+  }
+
+  it('autosaves a restored drawing to the server, debounced', async () => {
+    const save = vi.spyOn(playApi, 'saveDrawing').mockResolvedValue({
+      revision: 1,
+      updated_at: '2026-08-07T00:00:00Z',
+    });
+    renderWithDraft();
+    await screen.findByRole('button', { name: /edit your drawing/i });
+
+    // Nothing yet - the drawing debounce is deliberately long, since a player
+    // mid-stroke changes the document continuously.
+    expect(save).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        access_code_id: 42,
+        player_name: 'Jordan Smith',
+        question_id: 5,
+        // First save has no revision to check against.
+        base_revision: null,
+      }),
+    );
+  });
+
+  it('sends the revision the server last confirmed on the next save', async () => {
+    const save = vi
+      .spyOn(playApi, 'saveDrawing')
+      .mockResolvedValue({ revision: 4, updated_at: '2026-08-07T00:00:00Z' });
+    renderWithDraft();
+    await screen.findByRole('button', { name: /edit your drawing/i });
+    await vi.advanceTimersByTimeAsync(1500);
+
+    // A second change, now that the server has answered with revision 4.
+    await userEvent.click(screen.getByRole('button', { name: /edit your drawing/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'add stroke' }));
+    await vi.advanceTimersByTimeAsync(1500);
+
+    const lastCall = save.mock.calls.at(-1)?.[0];
+    expect(lastCall?.base_revision).toBe(4);
+  });
+
+  it('does not save an empty document, so opening the board writes nothing', async () => {
+    // Opening the board creates a 0-stroke document. Persisting it wrote a
+    // row purely so the player's first real stroke could conflict with it -
+    // found in end-to-end testing, where every drawing showed "Couldn't save".
+    const save = vi.spyOn(playApi, 'saveDrawing').mockResolvedValue({
+      revision: 1,
+      updated_at: '2026-08-07T00:00:00Z',
+    });
+    render(
+      <QuizStep
+        quiz={drawingQuiz}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={undefined}
+        initialAnswers={[]}
+        onSubmitted={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /draw your answer/i }));
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('keeps the drawing and warns the player when another device won the race', async () => {
+    // A 409 must never discard the player's work: submit is authoritative and
+    // will still carry it. They are told, not silently overwritten.
+    vi.spyOn(playApi, 'saveDrawing').mockRejectedValue(
+      new Error('This drawing was updated on another device'),
+    );
+    renderWithDraft();
+    await screen.findByRole('button', { name: /edit your drawing/i });
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(await screen.findByText(/changed on another device/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit your drawing/i })).toBeInTheDocument();
+  });
+
+  it('carries the drawing document in the submit payload', async () => {
+    // The safety net: one failed autosave must not cost the player the answer.
+    vi.spyOn(playApi, 'saveDrawing').mockRejectedValue(new Error('network down'));
+    const submit = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({} as never);
+    renderWithDraft();
+    await screen.findByRole('button', { name: /edit your drawing/i });
+    await vi.advanceTimersByTimeAsync(1500);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    const payload = submit.mock.calls[0][0];
+    expect(payload.answers[0].drawing).toMatchObject({ format: 'peira.drawing' });
   });
 });

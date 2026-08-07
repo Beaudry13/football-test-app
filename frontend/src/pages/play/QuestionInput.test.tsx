@@ -111,16 +111,36 @@ describe('QuestionInput drawing entry point', () => {
     expect(screen.queryByTestId('drawing-board')).not.toBeInTheDocument();
   });
 
-  it('offers no drawing when the toggle is on but the image is gone', () => {
-    // An image deleted between load and render, or a stale payload. Degrading
-    // to an ordinary question beats opening a board with nothing behind it.
-    const orphaned: Question = { ...baseQuestion, allow_drawing: true, image: null };
+  it('offers no drawing when the type is Draw Response but the image is gone', () => {
+    // The API refuses to activate a quiz whose Draw Response question has no
+    // image, so a player should never meet this - but an image deleted
+    // mid-session must degrade to a clear message, not an empty board.
+    const orphaned: Question = { ...baseQuestion, question_type: 'draw_response', image: null };
     render(<QuestionInput question={orphaned} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /draw your answer/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/missing its image/i)).toBeInTheDocument();
+  });
+
+  it('shows no options or text box on a Draw Response question', () => {
+    // It is answered by the board and nothing else. The combined-response
+    // work will add these back behind their own per-question requirements.
+    const enabled: Question = { ...imagedQuestion, question_type: 'draw_response' };
+    render(<QuestionInput question={enabled} index={0} answer={undefined} onChange={vi.fn()} />);
+
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('leaves a multiple-choice question completely untouched', () => {
+    // The backward-compatibility guarantee, restated for the type model.
+    render(<QuestionInput question={imagedQuestion} index={0} answer={undefined} onChange={vi.fn()} />);
+
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /draw your answer/i })).not.toBeInTheDocument();
   });
 
   it('offers the board once the coach enables it on an image question', () => {
-    const enabled: Question = { ...imagedQuestion, allow_drawing: true };
+    const enabled: Question = { ...imagedQuestion, question_type: 'draw_response' };
     render(<QuestionInput question={enabled} index={0} answer={undefined} onChange={vi.fn()} />);
     expect(screen.getByRole('button', { name: /draw your answer/i })).toBeInTheDocument();
   });
@@ -128,13 +148,13 @@ describe('QuestionInput drawing entry point', () => {
   it('does not open the board until the player asks for it', () => {
     // Opening on render would fabricate an empty document, which the submit
     // guard would then have to distinguish from a real answer.
-    const enabled: Question = { ...imagedQuestion, allow_drawing: true };
+    const enabled: Question = { ...imagedQuestion, question_type: 'draw_response' };
     render(<QuestionInput question={enabled} index={0} answer={undefined} onChange={vi.fn()} />);
     expect(screen.queryByTestId('drawing-board')).not.toBeInTheDocument();
   });
 
   it('invites an edit, and reports the mark count, once something is drawn', () => {
-    const enabled: Question = { ...imagedQuestion, allow_drawing: true };
+    const enabled: Question = { ...imagedQuestion, question_type: 'draw_response' };
     const answer = {
       drawing: {
         format: 'peira.drawing' as const,

@@ -1,5 +1,6 @@
 import { api } from './client';
 import type { AttemptState, PlayerResponse, PlayerResultsResponse, ValidateCodeResponse } from './types';
+import type { DrawingDocument } from '../components/drawing/types';
 
 export function validateCode(code: string): Promise<ValidateCodeResponse> {
   return api.post<ValidateCodeResponse>('/play/validate-code', { code }, { auth: false });
@@ -36,10 +37,41 @@ export function saveAnswer(input: {
   return api.post<void>('/play/answers', input, { auth: false });
 }
 
+export interface SaveDrawingResult {
+  revision: number;
+  updated_at: string;
+}
+
+/** Autosaves a Draw Response answer.
+ *
+ * `base_revision` is the revision the server last returned. Sending a stale
+ * one gets a 409 rather than overwriting: two devices, or one that spent a
+ * while out of signal, would otherwise silently cost the player minutes of
+ * work with no undo. A first save sends null.
+ *
+ * Deliberately a separate call from saveAnswer - a drawing payload is orders
+ * of magnitude larger, debounced differently, and carries a revision the text
+ * path has no concept of. */
+export function saveDrawing(input: {
+  access_code_id: number;
+  player_name: string;
+  player_id?: number;
+  question_id: number;
+  document: DrawingDocument;
+  base_revision?: number | null;
+}): Promise<SaveDrawingResult> {
+  return api.put<SaveDrawingResult>('/play/drawing', input, { auth: false });
+}
+
 export interface AnswerSubmission {
   question_id: number;
   answer_text?: string | null;
   selected_option_id?: number | null;
+  /** Re-sent at submit as the same safety net the text answers get, so one
+   * failed autosave on a flaky connection does not cost the player their
+   * answer. The server treats submit as authoritative and will not 409 it
+   * against the player's own earlier autosave. */
+  drawing?: DrawingDocument | null;
 }
 
 export function submitQuiz(input: {

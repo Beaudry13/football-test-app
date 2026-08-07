@@ -14,8 +14,7 @@ import styles from './PlayPage.module.css';
 export interface PlayerAnswer {
   selected_option_id?: number;
   answer_text?: string;
-  /** Present only on questions with `allow_drawing`. Phase 2 keeps this
-   * client-side; the backend cannot store it yet. */
+  /** Present only on `draw_response` questions. */
   drawing?: DrawingDocument;
 }
 
@@ -44,11 +43,13 @@ export function QuestionInput({
   const image = question.image;
   const hasAnnotations = (image?.annotations.length ?? 0) > 0;
 
-  // Drawing needs both halves: the toggle AND something to draw on. The API
-  // enforces that pairing, but a question edited by an older client, or an
-  // image deleted between load and render, must degrade to an ordinary
-  // question rather than opening an empty board.
-  const canDraw = Boolean(question.allow_drawing && image);
+  // A Draw Response question is answered by drawing, but it still needs
+  // something to draw on. The API refuses to activate a quiz whose Draw
+  // Response question has no image, so a player should never meet this - and
+  // if one slips through (an image deleted mid-session), it degrades to a
+  // question with a clear message rather than an empty board.
+  const isDrawResponse = question.question_type === 'draw_response';
+  const canDraw = isDrawResponse && image !== null;
   const drawing = answer?.drawing;
   const storageKey = drawingScope ? draftKey(drawingScope, question.id) : null;
 
@@ -143,6 +144,12 @@ export function QuestionInput({
 
       {/* Rendered only for questions the coach opted in. Everything below is
           untouched for every other question, including image questions. */}
+      {isDrawResponse && !image && (
+        <div className={styles.questionRequiredNote}>
+          This question is missing its image. Tell your coach - you cannot answer it yet.
+        </div>
+      )}
+
       {canDraw && (
         <div className={styles.drawingRow}>
           <button type="button" className={styles.drawButton} onClick={() => void openBoard()}>
@@ -169,7 +176,11 @@ export function QuestionInput({
         />
       )}
 
-      {question.question_type === 'written' ? (
+      {/* Draw Response is answered by the board above and nothing else. The
+          future combined-response work will add an explanation box or choices
+          here behind their own per-question requirements; until then the
+          absence is deliberate, not an oversight. */}
+      {isDrawResponse ? null : question.question_type === 'written' ? (
         <textarea
           className={styles.writtenAnswer}
           value={answer?.answer_text ?? ''}

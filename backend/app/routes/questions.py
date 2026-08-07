@@ -16,7 +16,6 @@ from app.schemas.question import (
     QuestionCreateSchema,
     QuestionReorderSchema,
     QuestionUpdateSchema,
-    validate_drawing_requires_image,
     validate_options_for_type,
 )
 from app.services.file_storage import get_file_storage
@@ -67,11 +66,6 @@ def create_question(quiz_id: int):
     quiz = get_editable_quiz(quiz_id)
     data = load_json_body(QuestionCreateSchema())
     validate_options_for_type(data["question_type"], data["options"])
-    # A question being created cannot have an image yet - it is uploaded
-    # against an existing question - so this always rejects. Kept rather than
-    # dropped so the API tells a caller why instead of silently ignoring the
-    # field it sent.
-    validate_drawing_requires_image(data["allow_drawing"], has_image=False)
 
     next_position = data["position"]
     if next_position is None:
@@ -101,10 +95,6 @@ def update_question(quiz_id: int, question_id: int):
     if "options" in data:
         validate_options_for_type(question_type, data["options"])
         _reject_if_already_answered(question, "change this question's answer options")
-
-    if "allow_drawing" in data:
-        validate_drawing_requires_image(data["allow_drawing"], has_image=question.image is not None)
-        question.allow_drawing = data["allow_drawing"]
 
     if "question_text" in data:
         question.question_text = data["question_text"]
@@ -203,9 +193,5 @@ def delete_question_image(quiz_id: int, question_id: int):
 
     get_file_storage().delete_image(question.image.image_url)
     db.session.delete(question.image)
-    # Removing the image removes the thing there was to draw on. Leaving the
-    # toggle set would hold the question in a state the update route refuses
-    # to create, and would offer players a board with no image behind it.
-    question.allow_drawing = False
     db.session.commit()
     return "", 204

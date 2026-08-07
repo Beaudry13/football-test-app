@@ -12,6 +12,7 @@ from flask_jwt_extended import jwt_required
 from app.errors import ApiError
 from app.extensions import db
 from app.models import AccessCode, Group
+from app.models.question import QuestionType
 from app.schemas.access_code import ActivateQuizSchema
 from app.services.access_codes import generate_unique_code
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
@@ -46,6 +47,42 @@ def activate_quiz(quiz_id: int):
 
     if not quiz.questions:
         raise ApiError("Cannot activate a quiz with no questions", status_code=422)
+
+    # A Draw Response question with no image is answerable by nobody. The type
+    # cannot demand an image at creation - the upload targets an existing
+    # question, so requiring one up front would make the type impossible to
+    # create - so the check lands here, at the moment it actually protects
+    # someone: a roster of players about to receive the quiz.
+    #
+    # Enforced in the API rather than only in the editor, because the editor is
+    # not the only way to reach this route, and because an image deleted after
+    # the question was authored puts a quiz back into this state without the
+    # coach touching the question at all.
+    missing_images = [
+        index + 1
+        for index, question in enumerate(quiz.questions)
+        if question.question_type is QuestionType.DRAW_RESPONSE and question.image is None
+    ]
+    if missing_images:
+        listed = ", ".join(str(n) for n in missing_images)
+        # Agreement kept across the whole sentence. A coach reads this message
+        # at the moment they are blocked from publishing, and "Question 1 needs
+        # an image ... draw on them" reads as a bug in the product.
+        if len(missing_images) == 1:
+            message = (
+                f"Question {listed} needs an image before players can draw on it. "
+                "Add one, or change the question type."
+            )
+        else:
+            message = (
+                f"Questions {listed} need images before players can draw on them. "
+                "Add them, or change the question types."
+            )
+        raise ApiError(
+            message,
+            status_code=422,
+            details={"questions_needing_images": missing_images},
+        )
 
     has_roster_players = quiz.roster is not None and bool(quiz.roster.players)
     has_group_players = any(g.players for g in groups)

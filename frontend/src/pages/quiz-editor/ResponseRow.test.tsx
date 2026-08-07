@@ -149,3 +149,140 @@ describe('ResponseRow reset attempt', () => {
     expect(screen.getByRole('button', { name: 'Reset attempt' })).not.toBeDisabled();
   });
 });
+
+
+// --- Draw Response in Results ------------------------------------------
+//
+// Phase 3's other half: the drawing has to reach the coach's screen, clearly
+// attributed to the player who drew it. The viewer builds a Fabric
+// StaticCanvas jsdom cannot back, so it is stubbed - these cover which
+// component ResponseRow chooses and what it hands over, not the rendering.
+vi.mock('../../components/drawing/DrawingViewer', () => ({
+  DrawingViewer: (props: { imageUrl: string; alt: string }) => (
+    <div data-testid="drawing-viewer" data-image-url={props.imageUrl} aria-label={props.alt} />
+  ),
+}));
+
+const DRAWN_DOC = {
+  format: 'peira.drawing',
+  version: 1,
+  source: { image_id: '7', image_version: null, natural_width: 1600, natural_height: 1000 },
+  coordinate_width: 1400,
+  coordinate_height: 875,
+  strokes: [
+    { id: 'a', tool: 'pen', layer: 'player', points: [0, 0, 9, 9], color: '#00E5FF', width: 6, order: 0 },
+  ],
+};
+
+const drawQuiz: Quiz = {
+  ...sampleQuiz,
+  question_count: 1,
+  questions: [
+    {
+      id: 5,
+      quiz_id: 1,
+      question_text: 'Draw your run fit',
+      question_type: 'draw_response',
+      position: 0,
+      options: [],
+      image: {
+        id: 7,
+        question_id: 5,
+        image_url: '/uploads/still.png',
+        annotations: [],
+        canvas_width: 1400,
+        updated_at: '2026-08-07T00:00:00Z',
+      },
+    },
+  ],
+};
+
+function drawAnswer(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    question_id: 5,
+    answer_text: null,
+    selected_option_id: null,
+    is_correct: null,
+    coach_feedback: null,
+    graded_at: null,
+    graded_by_username: null,
+    drawing: {
+      id: 1,
+      answer_id: 1,
+      document: DRAWN_DOC,
+      revision: 2,
+      preview_url: null,
+      updated_at: '2026-08-07T00:00:00Z',
+    },
+    ...overrides,
+  };
+}
+
+async function renderDrawRow(answer: Record<string, unknown>, quiz: Quiz = drawQuiz) {
+  render(
+    <MemoryRouter>
+      <ResponseRow
+        quiz={quiz}
+        response={{ ...sampleResponse, answers: [answer as never] }}
+        onChanged={vi.fn()}
+      />
+    </MemoryRouter>,
+  );
+  // A response row starts collapsed; the answers - and so any drawing - only
+  // exist once a coach opens it.
+  await userEvent.click(screen.getByLabelText(/Expand answers/));
+}
+
+describe('Draw Response in Results', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockAuth({ id: 1 });
+  });
+
+  it('renders the submitted drawing over the question image', async () => {
+    await renderDrawRow(drawAnswer());
+
+    const viewer = screen.getByTestId('drawing-viewer');
+    expect(viewer).toBeInTheDocument();
+    expect(viewer.getAttribute('data-image-url')).toContain('/uploads/still.png');
+  });
+
+  it('names the question in the drawing label, so a coach can tell them apart', async () => {
+    await renderDrawRow(drawAnswer());
+
+    expect(screen.getByLabelText('Drawing submitted for: Draw your run fit')).toBeInTheDocument();
+  });
+
+  it('says so plainly when the player drew nothing', async () => {
+    await renderDrawRow(drawAnswer({ drawing: null }));
+
+    expect(screen.queryByTestId('drawing-viewer')).not.toBeInTheDocument();
+    expect(screen.getByText('Nothing drawn')).toBeInTheDocument();
+  });
+
+  it('shows no drawing viewer on an ordinary question', async () => {
+    const writtenQuiz: Quiz = {
+      ...sampleQuiz,
+      question_count: 1,
+      questions: [
+        {
+          id: 9,
+          quiz_id: 1,
+          question_text: 'Describe your fit',
+          question_type: 'written',
+          position: 0,
+          options: [],
+          image: null,
+        },
+      ],
+    };
+    await renderDrawRow(
+      { ...drawAnswer({ drawing: null }), question_id: 9, answer_text: 'I set the edge.' },
+      writtenQuiz,
+    );
+
+    expect(screen.queryByTestId('drawing-viewer')).not.toBeInTheDocument();
+    expect(screen.getByText('I set the edge.')).toBeInTheDocument();
+  });
+});

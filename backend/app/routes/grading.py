@@ -21,6 +21,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
+from app.models.question import MANUALLY_GRADED_TYPES
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.access_codes import effective_roster_names_for_quiz
@@ -347,7 +348,7 @@ def player_history():
         pending_grading = sum(
             1
             for a in response.answers
-            if a.is_correct is None and a.question.question_type.value == "written"
+            if a.is_correct is None and a.question.question_type in MANUALLY_GRADED_TYPES
         )
 
         history.append(

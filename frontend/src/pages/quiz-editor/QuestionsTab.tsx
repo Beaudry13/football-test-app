@@ -19,8 +19,10 @@ import { EmptyState } from '../../components/ui/EmptyState';
 
 const TYPE_LABELS: Record<string, string> = {
   true_false: 'True / False',
-  multiple_choice: 'Multiple choice',
-  written: 'Written response',
+  multiple_choice: 'Multiple Choice',
+  // Labelled "Short Answer" for the coach; the stored value stays `written`.
+  written: 'Short Answer',
+  draw_response: 'Draw Response',
 };
 
 export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promise<void> }) {
@@ -43,18 +45,6 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
     await reload();
   }
 
-  /** Sends only `allow_drawing`, so flipping the toggle can never disturb the
-   * question's text, type or options - the PATCH schema treats an absent
-   * field as "leave alone". */
-  async function handleToggleDrawing(questionId: number, allowDrawing: boolean) {
-    setError(null);
-    try {
-      await updateQuestion(quiz.id, questionId, { allow_drawing: allowDrawing });
-      await reload();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    }
-  }
 
   async function handleDelete(questionId: number, number: number) {
     setError(null);
@@ -147,6 +137,16 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     ))}
                   </ul>
                 )}
+                {/* A Draw Response question with no image is answerable by
+                    nobody, and the API refuses to activate a quiz containing
+                    one. Surfaced on the card so the coach fixes it while
+                    authoring rather than discovering it at activation. */}
+                {question.needs_image && (
+                  <div className={styles.needsImage}>
+                    <Icon name="info" size={14} />
+                    <span>Needs an image before players can draw on it.</span>
+                  </div>
+                )}
                 <div className={styles.formActions}>
                   <button className={nb.btnSm} onClick={() => setEditingId(question.id)}>
                     Edit
@@ -157,21 +157,6 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   >
                     {question.image ? 'Edit image' : 'Add image'}
                   </Link>
-                  {/* Sits with the image controls, and only appears once an
-                      image exists: drawing is a property of the image, and
-                      offering it on a question with nothing to draw on would
-                      be an invitation the API rejects anyway. Adding an image
-                      never turns this on by itself - the coach opts in. */}
-                  {question.image && (
-                    <label className={styles.drawingToggle}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(question.allow_drawing)}
-                        onChange={(e) => void handleToggleDrawing(question.id, e.target.checked)}
-                      />
-                      <span>Let players draw on this image</span>
-                    </label>
-                  )}
                   <button
                     className={`${nb.btnSm} ${nb.btnDanger}`}
                     onClick={() => handleDelete(question.id, index + 1)}

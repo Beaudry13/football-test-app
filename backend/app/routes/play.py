@@ -21,10 +21,12 @@ from sqlalchemy.orm import selectinload
 
 from app.errors import ApiError
 from app.extensions import db, limiter
-from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question
+from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question, QuestionType
+from app.models.answer_drawing import document_has_strokes
 from app.schemas.play import (
     PlayerResultsSchema,
     SaveAnswerSchema,
+    SaveDrawingSchema,
     StartAttemptSchema,
     SubmitQuizSchema,
     ValidateCodeSchema,
@@ -35,7 +37,14 @@ from app.services.access_codes import (
     find_access_code_by_code,
     reason_for_invalid,
 )
-from app.services.attempts import find_attempt, upsert_answer
+from app.services.attempts import (
+    DrawingConflict,
+    find_attempt,
+    is_answered,
+    upsert_answer,
+    upsert_drawing,
+)
+from app.services.drawing_documents import validate_document
 from app.utils.validation import load_json_body
 
 play_bp = Blueprint("play", __name__)
@@ -56,7 +65,16 @@ def _invalid_code_error(reason: str) -> ApiError:
 def _resolve_answer_text(question: Question, answer: Answer | None) -> str | None:
     if answer is None:
         return None
-    if question.question_type.value == "written":
+    if question.question_type is QuestionType.DRAW_RESPONSE:
+        # A drawing has no text form, and the player results page renders this
+        # verbatim - returning None there printed "No answer" to a player who
+        # had just spent a minute drawing one. Showing the drawing itself on
+        # the player's own results page belongs with the coach viewer work in
+        # Phase 4; until then this at least tells them the truth.
+        if answer.drawing is not None and document_has_strokes(answer.drawing.document):
+            return "Drawing submitted"
+        return None
+    if question.question_type is QuestionType.WRITTEN:
         return answer.answer_text
     option = next((o for o in question.options if o.id == answer.selected_option_id), None)
     return option.option_text if option else None
@@ -214,6 +232,52 @@ def save_answer():
     return "", 204
 
 
+@play_bp.put("/drawing")
+# Same per-IP budget as the text autosave: a whole team drawing at once must
+# not trip it, and a drawing save is debounced far more heavily than a
+# keystroke, so the request rate per player is lower than /answers.
+@limiter.limit("300 per minute")
+def save_drawing():
+    """Autosave one Draw Response answer.
+
+    The server becomes authoritative here, but the client keeps its local
+    draft: this endpoint failing must never be the difference between a
+    player having their drawing and losing it.
+    """
+    data = load_json_body(SaveDrawingSchema())
+
+    access_code = db.session.get(AccessCode, data["access_code_id"])
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        raise _invalid_code_error(reason)
+
+    # Re-derived, never trusted from the client - the same rule every mutating
+    # /play route follows.
+    attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
+    if attempt is None:
+        raise ApiError("Start the quiz before saving a drawing", status_code=404)
+    if attempt.status == AttemptStatus.SUBMITTED:
+        raise ApiError("This attempt has already been submitted", status_code=409)
+
+    document = validate_document(data["document"])
+
+    try:
+        drawing = upsert_drawing(attempt, data["question_id"], document, data["base_revision"])
+    except DrawingConflict as conflict:
+        db.session.rollback()
+        # 409 with the current revision, so the client can tell the player
+        # their drawing was changed elsewhere rather than silently discarding
+        # one of the two versions.
+        raise ApiError(
+            "This drawing was updated on another device",
+            status_code=409,
+            reason="stale_revision",
+        ) from conflict
+
+    db.session.commit()
+    return jsonify({"revision": drawing.revision, "updated_at": drawing.updated_at.isoformat()}), 200
+
+
 @play_bp.post("/submit")
 # See validate-code's comment - keyed per-IP, needs to cover a whole team
 # submitting within the same short window, not one player.
@@ -242,13 +306,32 @@ def submit_quiz():
         # deselected option must still block submission, not just "some
         # Answer row exists in the database for this question" (which
         # upsert_answer creates even for a blank autosave).
-        answered_question_ids = {
-            a["question_id"]
-            for a in data["answers"]
-            if a["selected_option_id"] is not None or (a["answer_text"] or "").strip()
-        }
-        all_question_ids = {q.id for q in access_code.quiz.questions}
-        if not all_question_ids <= answered_question_ids:
+        #
+        # Evaluated per question TYPE rather than by looking for text or an
+        # option, because a Draw Response question is answered by strokes and
+        # carries neither. The rule lives in services/attempts.py so this and
+        # the frontend's guard cannot drift.
+        submitted_by_question = {a["question_id"]: a for a in data["answers"]}
+        missing = []
+        for question in access_code.quiz.questions:
+            submitted = submitted_by_question.get(question.id)
+            if submitted is None:
+                missing.append(question.id)
+                continue
+            if question.question_type is QuestionType.DRAW_RESPONSE:
+                # Read from the payload, not the database: the drawings in
+                # this submission have not been written yet (that happens
+                # below, inside the transaction), and an earlier autosave may
+                # have stored an empty document the player has since drawn on.
+                if not document_has_strokes(submitted.get("drawing")):
+                    missing.append(question.id)
+            elif question.question_type is QuestionType.WRITTEN:
+                if not (submitted.get("answer_text") or "").strip():
+                    missing.append(question.id)
+            elif submitted.get("selected_option_id") is None:
+                missing.append(question.id)
+
+        if missing:
             raise ApiError("Please answer all questions before submitting.", status_code=422)
 
     # Everything from here writes. If anything raises partway through - an
@@ -273,6 +356,21 @@ def submit_quiz():
                 submitted_answer["selected_option_id"],
                 submitted_answer["answer_text"],
             )
+            # Re-sent by the client as the same safety net the text answers
+            # get: an autosave may have failed on a flaky connection and this
+            # is the player's last chance to be heard. base_revision is None
+            # deliberately - submit is authoritative over whatever the server
+            # happens to hold, so it must not 409 against the player's own
+            # earlier autosave.
+            drawing = submitted_answer.get("drawing")
+            if drawing is not None:
+                upsert_drawing(
+                    attempt,
+                    submitted_answer["question_id"],
+                    validate_document(drawing),
+                    base_revision=None,
+                    force=True,
+                )
 
         # A conditional UPDATE, not a plain read-then-write: a debounced
         # autosave and this submit can race within the same network

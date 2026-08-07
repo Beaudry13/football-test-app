@@ -113,27 +113,19 @@
   cursor: default;
 }
 
-/* Drawing opt-in, shown only when the question has an image (QuestionsTab).
-   Styled as a control in the action row rather than a form field: it belongs
-   next to "Edit image" because it is a property of the image. */
-.drawingToggle {
-  display: inline-flex;
+/* A Draw Response question that cannot yet be played. Warning-coloured, not
+   danger: the quiz is not broken, it is unfinished, and the coach is mid-way
+   through authoring it. */
+.needsImage {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  /* Matches .btnSm's height so the action row stays on one baseline. */
-  min-height: 36px;
-  padding: 0 4px;
-  color: var(--nb-text);
+  gap: 7px;
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-danger-border);
+  background: var(--nb-warning-bg);
+  color: var(--nb-warning-text);
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-}
-
-.drawingToggle input {
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--nb-accent);
-  cursor: pointer;
 }

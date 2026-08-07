@@ -130,7 +130,7 @@ describe('PlayPage', () => {
       expect(submitSpy).toHaveBeenCalledWith({
         access_code_id: 42,
         player_name: 'Jordan Smith',
-        answers: [{ question_id: 10, selected_option_id: 100, answer_text: null }],
+        answers: [{ question_id: 10, selected_option_id: 100, answer_text: null, drawing: null }],
       }),
     );
     await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith', undefined));

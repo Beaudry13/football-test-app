@@ -12,6 +12,7 @@ from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db
+from app.models.question import MANUALLY_GRADED_TYPES
 from app.models import Player
 from app.schemas.player import (
     ImportConfirmSchema,
@@ -148,7 +149,7 @@ def get_player_history(player_id: int):
         pending_grading = sum(
             1
             for a in attempt.answers
-            if a.is_correct is None and a.question.question_type.value == "written"
+            if a.is_correct is None and a.question.question_type in MANUALLY_GRADED_TYPES
         )
         score_percent = round(100 * correct / len(auto_graded), 1) if auto_graded else None
         recent_results.append(

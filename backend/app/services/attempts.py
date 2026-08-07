@@ -8,7 +8,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Answer, PlayerAttempt, Question
+from app.models import Answer, AnswerDrawing, PlayerAttempt, Question, QuestionType
+from app.models.answer_drawing import document_has_strokes
 
 
 def find_attempt(
@@ -105,3 +106,97 @@ def upsert_answer(
     ).returning(Answer.id)
     answer_id = db.session.execute(stmt).scalar_one()
     return db.session.get(Answer, answer_id)
+
+
+# --- Answer presence ------------------------------------------------------
+#
+# The Phase 0 audit found sixteen places that decided, separately, whether a
+# question had been answered. Every one of them missed drawings. This is the
+# single backend rule; `require_all_answers` and anything else that asks the
+# question calls it rather than re-deriving it.
+#
+# Deliberately NOT written as "if it is a drawing question, ignore text":
+# a Draw Response question is planned to optionally also require a written
+# explanation or a choice, so this asks what the type REQUIRES rather than
+# assuming what it excludes.
+
+
+def is_answered(question: Question, answer: Answer | None) -> bool:
+    """Whether `answer` carries real content for `question`'s type.
+
+    An Answer row existing is not enough - upsert_answer creates one for a
+    blank autosave too, so a cleared text box or a deselected option must
+    still count as unanswered.
+    """
+    if answer is None:
+        return False
+
+    if question.question_type is QuestionType.DRAW_RESPONSE:
+        return answer.drawing is not None and document_has_strokes(answer.drawing.document)
+
+    if question.question_type is QuestionType.WRITTEN:
+        return bool((answer.answer_text or "").strip())
+
+    return answer.selected_option_id is not None
+
+
+class DrawingConflict(Exception):
+    """Raised when a client saves against a revision the server has moved past."""
+
+    def __init__(self, current_revision: int):
+        super().__init__("This drawing was updated somewhere else")
+        self.current_revision = current_revision
+
+
+def upsert_drawing(
+    attempt: PlayerAttempt,
+    question_id: int,
+    document: dict,
+    base_revision: int | None,
+    force: bool = False,
+) -> AnswerDrawing:
+    """Create or replace the one drawing for (attempt, question).
+
+    Writes through an Answer row, creating a blank one if the player has not
+    otherwise answered - the drawing IS the answer for a Draw Response
+    question, and `answer_drawings.answer_id` is NOT NULL.
+
+    Does not commit; the caller owns the transaction, so submit can write
+    several drawings and lock the attempt in one go.
+
+    `base_revision` is the revision the client last saw. Sending a stale one
+    raises DrawingConflict rather than overwriting: autosave plus a player
+    switching devices makes that race routine, and a drawing lost this way
+    would be minutes of work with no undo.
+    """
+    question = Question.query.filter_by(id=question_id, quiz_id=attempt.quiz_id).first()
+    if question is None:
+        raise ApiError(f"Question {question_id} does not belong to this quiz", status_code=422)
+    if question.question_type is not QuestionType.DRAW_RESPONSE:
+        raise ApiError(f"Question {question_id} does not accept a drawing", status_code=422)
+
+    answer = Answer.query.filter_by(attempt_id=attempt.id, question_id=question_id).first()
+    if answer is None:
+        answer = upsert_answer(attempt, question_id, None, None)
+
+    existing = answer.drawing
+    if existing is None:
+        drawing = AnswerDrawing(answer_id=answer.id, document=document, revision=1)
+        db.session.add(drawing)
+        return drawing
+
+    # `force` is submit's escape hatch. Submit re-sends the client's current
+    # document as a safety net, and must not 409 against the player's OWN
+    # earlier autosave - that would block them from finishing over a race
+    # they caused themselves. Autosave never forces.
+    if not force:
+        # None means "I have no revision yet", which only a client that never
+        # read one should send. Treated as a conflict when a drawing already
+        # exists, since overwriting on the strength of "I did not check" is
+        # exactly what this guard is for.
+        if base_revision is None or base_revision < existing.revision:
+            raise DrawingConflict(existing.revision)
+
+    existing.document = document
+    existing.revision = existing.revision + 1
+    return existing

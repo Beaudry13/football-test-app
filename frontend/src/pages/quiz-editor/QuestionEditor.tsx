@@ -40,7 +40,11 @@ export function QuestionEditor({
     setQuestionType(type);
     if (type === 'true_false') {
       setOptions(TRUE_FALSE_OPTIONS);
-    } else if (type === 'written') {
+    } else if (type === 'written' || type === 'draw_response') {
+      // Neither is answered by picking from a list. A Draw Response question
+      // converted from multiple choice may still have option rows in the
+      // database - they are kept, inert, for the planned combined-response
+      // work - but authoring one never creates or edits them.
       setOptions([]);
     } else {
       setOptions([
@@ -113,10 +117,18 @@ export function QuestionEditor({
           onChange={(e) => handleTypeChange(e.target.value as QuestionType)}
         >
           <option value="true_false">True / False</option>
-          <option value="multiple_choice">Multiple choice</option>
-          <option value="written">Written response</option>
+          <option value="multiple_choice">Multiple Choice</option>
+          <option value="written">Short Answer</option>
+          <option value="draw_response">Draw Response</option>
         </select>
       </div>
+
+      {questionType === 'draw_response' && (
+        <p className={styles.typeNote}>
+          Players answer by drawing on this question&rsquo;s image. Add an image after saving -
+          the quiz cannot be activated until every Draw Response question has one.
+        </p>
+      )}
 
       {questionType === 'true_false' && (
         <div className={nb.field}>

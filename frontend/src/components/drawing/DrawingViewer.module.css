@@ -1,0 +1,27 @@
+/* Coach-facing, so it sits on the dark coach surface rather than the player's
+   light theme - but the board itself was a dark film-room workspace, and the
+   drawing is easier to read against the same backdrop it was made on. */
+
+.wrapper {
+  display: inline-block;
+  max-width: 100%;
+  margin: 0.5em 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+}
+
+.canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.error {
+  padding: 0.75em 1em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-danger-border);
+  background: var(--nb-warning-bg);
+  color: var(--nb-warning-text);
+  font-size: 13px;
+}

@@ -31,3 +31,16 @@
   gap: 0.5em;
   margin-top: 1em;
 }
+
+/* Explains a question type at the point the coach picks it, rather than
+   leaving them to discover the image requirement at activation. */
+.typeNote {
+  margin: -0.25em 0 1em;
+  padding: 0.6em 0.8em;
+  border-left: 3px solid var(--nb-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-bg);
+  color: var(--nb-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
