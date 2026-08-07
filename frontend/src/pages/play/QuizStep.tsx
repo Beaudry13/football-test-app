@@ -3,6 +3,7 @@ import { saveAnswer, submitQuiz } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
 import type { Quiz, ResumedAnswer } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { hasDrawnAnswer } from '../../components/drawing/drawingDocument';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import { QuizProgress } from './QuizProgress';
 import styles from './PlayPage.module.css';
@@ -47,8 +48,22 @@ export function QuizStep({
   const [unansweredIds, setUnansweredIds] = useState<Set<number>>(new Set());
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
 
+  /** Namespaces drawing drafts in localStorage. Keyed by access code and
+   * player, so two team-mates handing one phone back and forth never see each
+   * other's drawings, and the same player on a different code starts clean. */
+  const drawingScope = `${accessCodeId}:${playerId ?? playerName}`;
+
+  /** The one place the player flow decides whether a question has been
+   * answered. A drawing counts: without this clause a player could spend a
+   * minute drawing their run fit and still be told the question is blank.
+   * hasDrawnAnswer is shared with the engine so "a document with no strokes
+   * is not an answer" is defined once. */
   function isAnswered(answer: PlayerAnswer | undefined): boolean {
-    return answer?.selected_option_id !== undefined || Boolean(answer?.answer_text?.trim());
+    return (
+      answer?.selected_option_id !== undefined ||
+      Boolean(answer?.answer_text?.trim()) ||
+      hasDrawnAnswer(answer?.drawing)
+    );
   }
 
   useEffect(() => {
@@ -97,6 +112,16 @@ export function QuizStep({
       delete debounceTimers.current[questionId];
     }
 
+    // A drawing-only change has nothing the server can accept yet: the save
+    // route takes selected_option_id and answer_text, and answer_drawings has
+    // no endpoint until Phase 3. Firing a request per stroke would post an
+    // empty answer repeatedly and, worse, flip the indicator to "Saved" for
+    // work that is only in localStorage. QuestionInput persists the draft;
+    // this stays quiet until there is somewhere real to send it.
+    const isDrawingOnlyChange =
+      answer.selected_option_id === undefined && !answer.answer_text && answer.drawing !== undefined;
+    if (isDrawingOnlyChange) return;
+
     if (answer.selected_option_id !== undefined) {
       // A radio/option pick is the final value until changed again -
       // nothing to protect against by delaying it, and delaying only
@@ -120,7 +145,34 @@ export function QuizStep({
     Object.values(debounceTimers.current).forEach(clearTimeout);
     debounceTimers.current = {};
 
+    // Phase 2 keeps drawings on the device: submitQuiz carries only
+    // selected_option_id and answer_text, and the server's own
+    // require_all_answers check (routes/play.py) counts a question answered
+    // only if one of those two has content. So a question answered ONLY by a
+    // drawing passes the client guard above and is then rejected by the
+    // server with a generic "answer all questions" the player cannot act on.
+    //
+    // Caught here, with a message that says what is actually wrong, rather
+    // than letting a player discover it after drawing for a minute. Removed
+    // in Phase 3, when the drawing reaches the server and genuinely counts.
     if (quiz.require_all_answers) {
+      const drawingOnly = questions.filter((q) => {
+        const answer = answers[q.id];
+        return (
+          hasDrawnAnswer(answer?.drawing) &&
+          answer?.selected_option_id === undefined &&
+          !answer?.answer_text?.trim()
+        );
+      });
+      if (drawingOnly.length > 0) {
+        setUnansweredIds(new Set(drawingOnly.map((q) => q.id)));
+        setError(
+          'Drawings are saved on this device but cannot be submitted yet. ' +
+            'Ask your coach to turn off "require all answers" for this Peira.',
+        );
+        return;
+      }
+
       const missing = questions.filter((q) => !isAnswered(answers[q.id]));
       if (missing.length > 0) {
         setUnansweredIds(new Set(missing.map((q) => q.id)));
@@ -194,6 +246,7 @@ export function QuizStep({
           answer={answers[question.id]}
           onChange={(a) => updateAnswer(question.id, a)}
           isUnanswered={unansweredIds.has(question.id)}
+          drawingScope={drawingScope}
         />
         <div className={styles.navRow}>
           <button
@@ -229,6 +282,7 @@ export function QuizStep({
           answer={answers[question.id]}
           onChange={(a) => updateAnswer(question.id, a)}
           isUnanswered={unansweredIds.has(question.id)}
+          drawingScope={drawingScope}
         />
       ))}
       <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting} style={{ width: '100%' }}>

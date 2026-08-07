@@ -310,3 +310,138 @@ describe('QuizStep', () => {
     });
   });
 });
+
+// --- Draw on Image: answer presence ------------------------------------
+//
+// The integration risk this feature carries is that a drawing is not
+// recognised as an answer, so a player who spent a minute drawing their run
+// fit is told the question is blank and blocked from submitting. That is a
+// silent failure for the player and the coach alike, so it is tested through
+// the real submit guard rather than by unit-testing the predicate.
+vi.mock('../../components/drawing/DrawingBoard', () => ({
+  DrawingBoard: () => <div data-testid="drawing-board" />,
+}));
+
+const DRAWN_DOCUMENT = {
+  format: 'peira.drawing',
+  version: 1,
+  source: { image_id: '7', image_version: null, natural_width: 1600, natural_height: 1000 },
+  coordinate_width: 1400,
+  coordinate_height: 875,
+  strokes: [
+    { id: 'a', tool: 'pen', layer: 'player', points: [0, 0, 10, 10], color: '#00E5FF', width: 6, order: 0 },
+  ],
+};
+
+const drawingQuiz: Quiz = {
+  ...quiz,
+  require_all_answers: true,
+  question_count: 1,
+  questions: [
+    {
+      id: 5,
+      quiz_id: 1,
+      question_text: 'Draw your run fit.',
+      question_type: 'written',
+      position: 0,
+      allow_drawing: true,
+      image: {
+        id: 7,
+        question_id: 5,
+        image_url: '/uploads/still.png',
+        annotations: [],
+        canvas_width: 1400,
+        updated_at: '2026-08-07T00:00:00Z',
+      },
+      options: [],
+    },
+  ],
+};
+
+describe('QuizStep drawing answers', () => {
+  beforeEach(() => {
+    // Matches the describe above. Without it the submitQuiz spy carries call
+    // history in from earlier tests in this file, and "was not called" passes
+    // or fails for reasons that have nothing to do with drawings.
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('blocks submission when a required drawing question has nothing drawn', () => {
+    const submit = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({} as never);
+    render(
+      <QuizStep
+        quiz={drawingQuiz}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={undefined}
+        initialAnswers={[]}
+        onSubmitted={vi.fn()}
+      />,
+    );
+
+    screen.getByRole('button', { name: 'Submit Quiz' }).click();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('explains why a drawing-only answer cannot be submitted while all answers are required', async () => {
+    // The server counts a question answered only if it carries an option or
+    // text, so a drawing-only submission would 422 with a message the player
+    // cannot act on. Caught client-side with one that names the real cause.
+    window.localStorage.setItem(
+      'peira.drawing.draft:42:Jordan Smith:5',
+      JSON.stringify(DRAWN_DOCUMENT),
+    );
+    const submit = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({} as never);
+
+    render(
+      <QuizStep
+        quiz={drawingQuiz}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={undefined}
+        initialAnswers={[]}
+        onSubmitted={vi.fn()}
+      />,
+    );
+    await screen.findByRole('button', { name: /edit your drawing/i });
+    await userEvent.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(await screen.findByText(/cannot be submitted yet/i)).toBeInTheDocument();
+  });
+
+  it('accepts a restored drawing as a real answer and lets the player submit', async () => {
+    // Seeded the way a returning player's draft would be: QuestionInput
+    // restores it on mount, which is also what proves the draft survives a
+    // refresh while the backend cannot store drawings yet.
+    window.localStorage.setItem(
+      'peira.drawing.draft:42:Jordan Smith:5',
+      JSON.stringify(DRAWN_DOCUMENT),
+    );
+    const submit = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({} as never);
+    const onSubmitted = vi.fn();
+
+    render(
+      <QuizStep
+        quiz={{ ...drawingQuiz, require_all_answers: false }}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={undefined}
+        initialAnswers={[]}
+        onSubmitted={onSubmitted}
+      />,
+    );
+
+    // The restored draft should present itself as existing work.
+    expect(await screen.findByRole('button', { name: /edit your drawing/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+
+    await waitFor(() => expect(submit).toHaveBeenCalled());
+    expect(screen.queryByText(/please answer all questions/i)).not.toBeInTheDocument();
+  });
+});

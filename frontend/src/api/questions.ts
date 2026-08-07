@@ -11,6 +11,9 @@ export interface QuestionInput {
   question_type: QuestionType;
   options: QuestionOptionInput[];
   position?: number | null;
+  /** Omit to leave unchanged on a PATCH - the API treats absence as "leave
+   * alone", so editing a question's text never disturbs its drawing setting. */
+  allow_drawing?: boolean;
 }
 
 export function createQuestion(quizId: number, input: QuestionInput): Promise<Question> {

@@ -24,12 +24,20 @@ class QuestionCreateSchema(Schema):
     question_type = fields.Str(required=True, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False, load_default=list)
     position = fields.Int(required=False, load_default=None)
+    # Defaults off, so every question created before this field existed - and
+    # every one created by a client that doesn't send it - behaves exactly as
+    # it did.
+    allow_drawing = fields.Bool(required=False, load_default=False)
 
 
 class QuestionUpdateSchema(Schema):
     question_text = fields.Str(required=False, validate=validate.Length(min=1))
     question_type = fields.Str(required=False, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False)
+    # No load_default: absence must mean "leave it alone", not "turn it off".
+    # A PATCH that only renames a question would otherwise silently disable
+    # drawing on it.
+    allow_drawing = fields.Bool(required=False)
 
 
 class QuestionReorderSchema(Schema):
@@ -39,6 +47,18 @@ class QuestionReorderSchema(Schema):
 class AnnotationsUpdateSchema(Schema):
     annotations = fields.List(fields.Dict(), required=True)
     canvas_width = fields.Int(required=False, allow_none=True, load_default=None)
+
+
+DRAWING_NEEDS_IMAGE = "Add an image to this question before letting players draw on it"
+
+
+def validate_drawing_requires_image(allow_drawing: bool, has_image: bool) -> None:
+    """A drawing answer is drawn *on* something. Enabling the toggle without
+    an image would produce a question a player is invited to answer and then
+    physically cannot - caught at authoring time, by one coach, rather than
+    at play time by a whole roster."""
+    if allow_drawing and not has_image:
+        raise ApiError(DRAWING_NEEDS_IMAGE, status_code=422)
 
 
 def validate_options_for_type(question_type: str, options: list[dict]) -> None:

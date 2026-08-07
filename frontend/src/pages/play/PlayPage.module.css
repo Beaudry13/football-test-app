@@ -432,3 +432,50 @@
     opacity: 1;
   }
 }
+
+/* --- Draw on Image (player) ------------------------------------------
+   Only rendered for questions whose coach enabled drawing; every other
+   question's markup is unchanged. */
+
+.drawingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75em;
+  margin-top: 0.85em;
+}
+
+.drawButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  /* 52px to match the answer options - this is the primary action on a
+     drawing question and gets pressed with a thumb. */
+  min-height: 52px;
+  padding: 0 1.2em;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  /* Explicit: a <button> does not inherit color. See buttonContrast.test.ts. */
+  color: var(--color-primary-contrast);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.drawButton:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-primary-contrast);
+}
+
+.drawingStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  color: var(--color-success);
+  font-size: 0.9em;
+  font-weight: 600;
+}
