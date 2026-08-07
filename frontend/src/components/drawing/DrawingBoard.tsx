@@ -287,27 +287,31 @@ export function DrawingBoard({
 
   // --- orientation and resize -------------------------------------------
   useEffect(() => {
-    // ResizeObserver fires once on observe() with the element's current size.
-    // That first callback is not a resize - and acting on it would fight the
-    // initial fit that runs when the source image finishes loading.
-    let seenInitialObservation = false;
+    // The size the canvas was last built for. A ResizeObserver fires once on
+    // observe() with the element's current size, and iOS emits further
+    // resizes as the URL bar settles - so the guard is "has the box actually
+    // changed", not "is this the first callback". Skipping the first callback
+    // outright was wrong: on a phone the settled size often differs from the
+    // size at mount (dvh resolves late), and the canvas kept the stale one.
+    let appliedCssWidth = 0;
+    let appliedCssHeight = 0;
 
     function handleResize() {
       const engine = engineRef.current;
       const surface = surfaceRef.current;
       if (!engine || !surface) return;
-      if (!seenInitialObservation) {
-        seenInitialObservation = true;
-        wasLandscapeRef.current = surface.clientWidth >= surface.clientHeight;
-        return;
-      }
+
+      const cssWidth = surface.clientWidth;
+      const cssHeight = surface.clientHeight;
+      // No layout yet. Re-fitting against a zero box would produce a
+      // degenerate transform that every later calculation inherits.
+      if (cssWidth <= 0 || cssHeight <= 0) return;
+      if (cssWidth === appliedCssWidth && cssHeight === appliedCssHeight) return;
 
       // Any in-flight gesture is abandoned: the geometry it was measured
       // against no longer exists.
       apply(arbiterRef.current.reset());
 
-      const cssWidth = surface.clientWidth;
-      const cssHeight = surface.clientHeight;
       const render = resolveRenderScale({
         viewportWidth: cssWidth,
         viewportHeight: cssHeight,
@@ -316,22 +320,29 @@ export function DrawingBoard({
       // What the player is looking at, captured before the geometry changes.
       const center = engine.getSceneCenter();
       const cssZoom = engine.getCssZoom();
+      // Whether they had zoomed IN, measured against the fit that was in
+      // force before the resize. Compared with a small tolerance because the
+      // fit is a float and an untouched board sits exactly on it.
+      const wasFitted = cssZoom <= engine.getFit().cssZoom * 1.01;
       const landscape = cssWidth >= cssHeight;
 
       // Backing store and CSS box are recomputed; the coordinate space is
       // not, so no stroke moves.
       engine.resize(render, cssWidth, cssHeight);
+      appliedCssWidth = cssWidth;
+      appliedCssHeight = cssHeight;
 
-      // A genuine orientation flip re-fits the image, because the old framing
-      // is meaningless in the new aspect. Anything else - notably iOS
-      // collapsing its URL bar - restores the previous view, so a player who
-      // had zoomed into the box does not get yanked back out mid-answer.
-      if (wasLandscapeRef.current !== landscape) {
+      // Re-fit whenever the player had not zoomed in, and on any orientation
+      // flip. That keeps the whole image visible through the resizes a phone
+      // generates on its own - the URL bar collapsing, the keyboard closing -
+      // which is the state a player is in for most of a question. Only
+      // someone who has deliberately zoomed into a corner keeps their framing.
+      if (wasFitted || wasLandscapeRef.current !== landscape) {
         engine.resetView();
-        wasLandscapeRef.current = landscape;
       } else {
         engine.centerOn(center, cssZoom);
       }
+      wasLandscapeRef.current = landscape;
       setTelemetry((prev) => ({
         ...prev,
         render,

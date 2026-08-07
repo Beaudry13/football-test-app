@@ -113,8 +113,8 @@ export function formatBytes(bytes: number): string {
 }
 
 /** Fits the coordinate space inside the overlay viewport, which is what the
- * board zooms out to on open and returns to on Reset View. Pure so the spike
- * can assert it without a DOM. */
+ * board zooms out to on open and returns to on Reset View. Pure so it can be
+ * asserted without a DOM. */
 export function fitScale(
   coordinateWidth: number,
   coordinateHeight: number,
@@ -123,6 +123,60 @@ export function fitScale(
 ): number {
   if (coordinateWidth <= 0 || coordinateHeight <= 0) return 1;
   return Math.min(viewportWidth / coordinateWidth, viewportHeight / coordinateHeight);
+}
+
+export interface ContainFit {
+  /** Scene units per CSS pixel - the zoom a person perceives. Comparisons
+   * and clamps belong in this space, never in backing space. */
+  cssZoom: number;
+  /** What Fabric's viewportTransform takes. Backing space, because
+   * canvas.width IS the backing width, so the transform is measured in
+   * device pixels whether or not anyone intends it to be. */
+  zoom: number;
+  /** Backing-space translation that centres the image. */
+  offsetX: number;
+  offsetY: number;
+}
+
+/** Contain-style fit: the WHOLE image visible, centred, aspect preserved.
+ *
+ * Derived from the CSS viewport and the render scale as two explicit inputs
+ * rather than from `canvas.getWidth()`. Both routes give the same answer while
+ * backing === css x renderScale, but reading the backing store hides which
+ * space a number is in - and mixing the two is what put the board's initial
+ * view in the wrong place on a phone. Keeping the CSS box and the scale
+ * separate makes the unit of every value in here obvious, and lets a test
+ * assert that DPR changes the backing store without changing the fit.
+ *
+ * Returns an identity-ish fit for a zero-sized viewport: a board mounted
+ * before layout settles (iOS resolves dvh only after the URL bar does) must
+ * not produce a NaN or zero transform that later maths then propagates.
+ */
+export function containFit(
+  coordinateWidth: number,
+  coordinateHeight: number,
+  cssWidth: number,
+  cssHeight: number,
+  renderScale: number,
+): ContainFit {
+  if (coordinateWidth <= 0 || coordinateHeight <= 0 || cssWidth <= 0 || cssHeight <= 0) {
+    return { cssZoom: 1, zoom: renderScale > 0 ? renderScale : 1, offsetX: 0, offsetY: 0 };
+  }
+
+  // min(), not max(): contain, not cover. max() would fill the viewport by
+  // cropping the image, which for a film still means hiding the part of the
+  // play the question is about.
+  const cssZoom = Math.min(cssWidth / coordinateWidth, cssHeight / coordinateHeight);
+  const zoom = cssZoom * renderScale;
+
+  const backingWidth = cssWidth * renderScale;
+  const backingHeight = cssHeight * renderScale;
+  return {
+    cssZoom,
+    zoom,
+    offsetX: (backingWidth - coordinateWidth * zoom) / 2,
+    offsetY: (backingHeight - coordinateHeight * zoom) / 2,
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {

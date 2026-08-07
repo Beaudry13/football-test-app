@@ -28,7 +28,7 @@
 
 import { Canvas, FabricImage, PencilBrush, Point, type FabricObject, type TMat2D } from 'fabric';
 import { addStroke, createStrokeId, removeStroke } from './drawingDocument';
-import { fitScale, type RenderScaleResult } from './renderScale';
+import { containFit, type ContainFit, type RenderScaleResult } from './renderScale';
 import {
   PLAYER_STROKE_COLOR,
   PLAYER_STROKE_WIDTH,
@@ -36,8 +36,14 @@ import {
   type DrawingStroke,
 } from './types';
 
-export const MIN_ZOOM = 0.5;
-export const MAX_ZOOM = 8;
+/** Furthest a player can zoom IN, in scene units per CSS pixel.
+ *
+ * There is deliberately no matching MIN constant. The zoom-out floor is the
+ * contain fit itself, which varies with the image and the phone - a 2400px
+ * still on a 390px screen fits at ~0.27 css zoom. A fixed floor of 0.5 was
+ * the bug: it sat above the legitimate fit, so any code clamping against it
+ * silently zoomed the board in and pushed the image off-screen. */
+export const MAX_CSS_ZOOM = 8;
 
 /** Marks a Fabric object as belonging to a DrawingDocument stroke, so the
  * eraser and serializer can find it again. Fabric allows arbitrary props on
@@ -68,6 +74,10 @@ export class DrawingEngine {
    * CSS pixels and has to cross this boundary before it means anything to
    * Fabric, whose viewportTransform lives in backing-store space. */
   private renderScale = 1;
+  /** The on-screen box, in CSS pixels. The fit is always derived from these
+   * two plus renderScale, never from the backing store. */
+  private cssWidth = 0;
+  private cssHeight = 0;
   /** Zoom at the moment the current pinch started. See beginPinch. */
   private pinchBaseZoom = 1;
 
@@ -148,6 +158,11 @@ export class DrawingEngine {
     // the two axes' derived ratios differ slightly, and a single scalar taken
     // from the width would skew y by that difference.
     this.renderScale = render.scale;
+    // Remembered so the fit is always recomputed from the CSS box the player
+    // actually sees, rather than read back out of canvas.getWidth() - which
+    // returns backing pixels and reads like CSS ones.
+    this.cssWidth = cssWidth;
+    this.cssHeight = cssHeight;
     this.canvas.setDimensions({ width: backingWidth, height: backingHeight });
     this.canvas.setDimensions({ width: `${cssWidth}px`, height: `${cssHeight}px` }, { cssOnly: true });
     this.canvas.requestRenderAll();
@@ -156,18 +171,24 @@ export class DrawingEngine {
   /** Fits the whole image in view. Used on open, on Reset View, and after an
    * orientation change - all of which change the viewport but must never
    * change the coordinate space. */
-  resetView(): void {
-    const zoom = fitScale(
+  /** The contain fit for the current CSS box: whole image, centred, aspect
+   * preserved. One definition, used by open, Reset View, resize and the
+   * zoom-out floor, so those four can never disagree. */
+  getFit(): ContainFit {
+    return containFit(
       this.document.coordinate_width,
       this.document.coordinate_height,
-      this.canvas.getWidth(),
-      this.canvas.getHeight(),
+      this.cssWidth,
+      this.cssHeight,
+      this.renderScale,
     );
-    const offsetX = (this.canvas.getWidth() - this.document.coordinate_width * zoom) / 2;
-    const offsetY = (this.canvas.getHeight() - this.document.coordinate_height * zoom) / 2;
-    this.canvas.setViewportTransform([zoom, 0, 0, zoom, offsetX, offsetY] as TMat2D);
+  }
+
+  resetView(): void {
+    const fit = this.getFit();
+    this.canvas.setViewportTransform([fit.zoom, 0, 0, fit.zoom, fit.offsetX, fit.offsetY] as TMat2D);
     this.canvas.requestRenderAll();
-    this.callbacks.onZoomChange?.(zoom);
+    this.callbacks.onZoomChange?.(fit.zoom);
   }
 
   /** Scene units per CSS pixel, i.e. the zoom the player actually perceives.
@@ -190,7 +211,12 @@ export class DrawingEngine {
    * scale may both have changed, and replaying the old transform verbatim
    * would shift the image under the player's finger. */
   centerOn(scene: Point, cssZoom: number): void {
-    const zoom = clamp(cssZoom, MIN_ZOOM, MAX_ZOOM) * this.renderScale;
+    // Clamped in CSS space against the CURRENT fit. Clamping a CSS zoom
+    // against backing-space constants is what broke the board on a phone:
+    // a fitted 2400px still sits near 0.27 css zoom, so a 0.5 floor forced
+    // it to 0.5 and then multiplied by renderScale, landing roughly twice
+    // as zoomed in as the fit with a large negative offset.
+    const zoom = clamp(cssZoom, this.getFit().cssZoom, MAX_CSS_ZOOM) * this.renderScale;
     const offsetX = this.canvas.getWidth() / 2 - scene.x * zoom;
     const offsetY = this.canvas.getHeight() / 2 - scene.y * zoom;
     this.canvas.setViewportTransform([zoom, 0, 0, zoom, offsetX, offsetY] as TMat2D);
@@ -292,7 +318,16 @@ export class DrawingEngine {
    * pixels. Skipping the conversion makes the image drift away from the
    * fingers as you pinch on any device where render scale is not 1. */
   zoomFromPinchStart(scaleFromStart: number, focalX: number, focalY: number): void {
-    const next = clamp(this.pinchBaseZoom * scaleFromStart, MIN_ZOOM, MAX_ZOOM);
+    // The zoom-out floor is the fit, so pinching out always lands back on the
+    // whole image and can never go past it into empty space. A fixed floor
+    // would instead stop short of the fit on a large image, leaving the
+    // player unable to see their whole drawing without Reset View.
+    const fit = this.getFit();
+    const next = clamp(
+      this.pinchBaseZoom * scaleFromStart,
+      fit.zoom,
+      MAX_CSS_ZOOM * this.renderScale,
+    );
     this.canvas.zoomToPoint(new Point(focalX * this.renderScale, focalY * this.renderScale), next);
     this.canvas.requestRenderAll();
     this.callbacks.onZoomChange?.(next);

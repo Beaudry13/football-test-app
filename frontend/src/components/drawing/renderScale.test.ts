@@ -5,6 +5,7 @@ import {
   MAX_RENDER_SCALE,
   MIN_RENDER_SCALE,
   estimateCanvasBytes,
+  containFit,
   fitScale,
   formatBytes,
   resolveRenderScale,
@@ -125,5 +126,121 @@ describe('fitScale', () => {
 
   it('is safe against a zero-sized coordinate space', () => {
     expect(fitScale(0, 0, 700, 700)).toBe(1);
+  });
+});
+
+describe('containFit - the whole image, centred', () => {
+  /** An iPhone-shaped board: 390 CSS wide, DPR 3 so renderScale caps at 1.5. */
+  const PHONE_CSS = { w: 390, h: 700 };
+  const RS = 1.5;
+
+  /** Where the image's four corners land, in backing pixels. */
+  function corners(cw: number, ch: number, cssW: number, cssH: number, rs: number) {
+    const fit = containFit(cw, ch, cssW, cssH, rs);
+    return {
+      fit,
+      left: fit.offsetX,
+      top: fit.offsetY,
+      right: fit.offsetX + cw * fit.zoom,
+      bottom: fit.offsetY + ch * fit.zoom,
+      backingW: cssW * rs,
+      backingH: cssH * rs,
+    };
+  }
+
+  it('fits a landscape image entirely inside the board and centres it', () => {
+    // 2400x1350 capped to a 1400-wide coordinate space.
+    const c = corners(1400, 788, PHONE_CSS.w, PHONE_CSS.h, RS);
+    expect(c.left).toBeGreaterThanOrEqual(-0.01);
+    expect(c.top).toBeGreaterThanOrEqual(-0.01);
+    expect(c.right).toBeLessThanOrEqual(c.backingW + 0.01);
+    expect(c.bottom).toBeLessThanOrEqual(c.backingH + 0.01);
+    // Centred: equal margin on each axis.
+    expect(c.left).toBeCloseTo(c.backingW - c.right, 5);
+    expect(c.top).toBeCloseTo(c.backingH - c.bottom, 5);
+  });
+
+  it('fits a portrait image entirely inside the board and centres it', () => {
+    const c = corners(788, 1400, PHONE_CSS.w, PHONE_CSS.h, RS);
+    expect(c.left).toBeGreaterThanOrEqual(-0.01);
+    expect(c.top).toBeGreaterThanOrEqual(-0.01);
+    expect(c.right).toBeLessThanOrEqual(c.backingW + 0.01);
+    expect(c.bottom).toBeLessThanOrEqual(c.backingH + 0.01);
+    expect(c.left).toBeCloseTo(c.backingW - c.right, 5);
+    expect(c.top).toBeCloseTo(c.backingH - c.bottom, 5);
+  });
+
+  it('fits a very large image entirely inside the board', () => {
+    // The regression: a 6000x4000 still on a phone. The old code clamped the
+    // resulting zoom up to a fixed 0.5 floor and pushed the image off-screen.
+    const c = corners(6000, 4000, PHONE_CSS.w, PHONE_CSS.h, RS);
+    expect(c.fit.cssZoom).toBeLessThan(0.5); // below the old MIN_ZOOM floor
+    expect(c.left).toBeGreaterThanOrEqual(-0.01);
+    expect(c.top).toBeGreaterThanOrEqual(-0.01);
+    expect(c.right).toBeLessThanOrEqual(c.backingW + 0.01);
+    expect(c.bottom).toBeLessThanOrEqual(c.backingH + 0.01);
+  });
+
+  it('never crops: the fit is the smaller axis ratio, never the larger', () => {
+    const fit = containFit(1400, 788, PHONE_CSS.w, PHONE_CSS.h, RS);
+    const cover = Math.max(PHONE_CSS.w / 1400, PHONE_CSS.h / 788);
+    expect(fit.cssZoom).toBeLessThan(cover);
+    expect(fit.cssZoom).toBeCloseTo(Math.min(PHONE_CSS.w / 1400, PHONE_CSS.h / 788), 10);
+  });
+
+  it('preserves aspect ratio - one zoom drives both axes', () => {
+    const fit = containFit(1400, 788, PHONE_CSS.w, PHONE_CSS.h, RS);
+    const drawnAspect = (1400 * fit.zoom) / (788 * fit.zoom);
+    expect(drawnAspect).toBeCloseTo(1400 / 788, 10);
+  });
+
+  it('DPR does not change the logical fit, only the backing store', () => {
+    // The unit bug in one assertion: what the player sees must be identical
+    // at DPR 1 and DPR 3; only the device-pixel numbers may differ.
+    const at1 = containFit(1400, 788, 390, 700, 1);
+    const at3 = containFit(1400, 788, 390, 700, 1.5);
+
+    expect(at3.cssZoom).toBeCloseTo(at1.cssZoom, 10);
+    expect(at3.zoom).toBeCloseTo(at1.zoom * 1.5, 10);
+    // Offsets scale with the backing store, so the image occupies the same
+    // fraction of the box either way.
+    expect(at3.offsetX / (390 * 1.5)).toBeCloseTo(at1.offsetX / 390, 10);
+    expect(at3.offsetY / (700 * 1.5)).toBeCloseTo(at1.offsetY / 700, 10);
+  });
+
+  it('recalculates for a rotation rather than reusing the old framing', () => {
+    const portrait = containFit(1400, 788, 390, 700, RS);
+    const landscape = containFit(1400, 788, 700, 390, RS);
+
+    expect(landscape.cssZoom).toBeGreaterThan(portrait.cssZoom);
+    // Still fully contained after the flip.
+    expect(1400 * landscape.zoom).toBeLessThanOrEqual(700 * RS + 0.01);
+    expect(788 * landscape.zoom).toBeLessThanOrEqual(390 * RS + 0.01);
+  });
+
+  it('is deterministic, so Fit View restores exactly the opening transform', () => {
+    const onOpen = containFit(1400, 788, 390, 700, RS);
+    const onFitView = containFit(1400, 788, 390, 700, RS);
+    expect(onFitView).toEqual(onOpen);
+  });
+
+  it('recomputes after a resize instead of scaling the previous transform', () => {
+    const before = containFit(1400, 788, 390, 700, RS);
+    // iOS collapsing its URL bar: same width, taller box.
+    const after = containFit(1400, 788, 390, 760, RS);
+
+    // Width-limited image, so a taller box must not change the zoom - only
+    // re-centre it vertically.
+    expect(after.cssZoom).toBeCloseTo(before.cssZoom, 10);
+    expect(after.offsetX).toBeCloseTo(before.offsetX, 10);
+    expect(after.offsetY).toBeGreaterThan(before.offsetY);
+  });
+
+  it('survives a zero-sized box without emitting NaN', () => {
+    // A board mounted before layout settles - iOS resolves dvh late.
+    const fit = containFit(1400, 788, 0, 0, RS);
+    expect(Number.isFinite(fit.zoom)).toBe(true);
+    expect(Number.isFinite(fit.offsetX)).toBe(true);
+    expect(Number.isFinite(fit.offsetY)).toBe(true);
   });
 });
