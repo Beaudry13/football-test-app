@@ -26,6 +26,12 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 1.05em;
+  /* Explicit, because a <button> does NOT inherit color - the UA stylesheet
+     gives it `color: buttontext`, i.e. near-black. On the coach theme's dark
+     surface that made every tool glyph invisible; the toolbar looked empty.
+     Setting a background on a button without also setting a color is the
+     whole bug, and it is easy to reintroduce. */
+  color: var(--color-text);
 }
 
 .toolButtonActive {

@@ -51,6 +51,11 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
+  /* Explicit rather than relying on the UA's near-black default - see the
+     note on AnnotationToolbar's .toolButton. It happens to look right on
+     this light theme, which is exactly why it would go unnoticed if this
+     surface ever darkened. */
+  color: var(--color-text);
   cursor: pointer;
   font-weight: 600;
 }
@@ -64,10 +69,14 @@
   min-height: 44px;
 }
 
+/* Selection is carried by the gold border and fill, NOT by gold text: the
+   gold-on-cream pairing measured 3.24:1, under the 4.5:1 floor for a
+   16px label. Keeping the normal text colour puts it at 11:1 while the
+   chrome still reads as clearly selected. */
 .nameButtonActive {
   border-color: var(--color-primary);
   background: var(--color-primary-bg);
-  color: var(--color-primary-hover);
+  color: var(--color-text);
 }
 
 .progressBlock {

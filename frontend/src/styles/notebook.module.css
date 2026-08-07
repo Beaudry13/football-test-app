@@ -377,7 +377,13 @@ textarea.input {
   cursor: pointer;
   background: transparent;
   border: 1px solid var(--color-border-strong);
-  color: var(--nb-text);
+  /* --peira-text, not --nb-text: ConfirmDialog applies this class inside a
+     portalled Modal, which renders outside .page's subtree where no --nb-*
+     property is defined. An undefined custom property makes the whole
+     declaration invalid, so the button silently falls back to inheriting -
+     which happened to look right here, and did NOT on .btnDanger below.
+     Reading the canonical token directly works in both places. */
+  color: var(--peira-text);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -398,17 +404,29 @@ textarea.input {
 /* Combine with .btnSm (or use standalone) for destructive actions - matches
    the handoff's Danger button spec exactly (fill/border/text all derived
    from the same danger token trio). */
+/* Every value here is a canonical token (a --peira- or --color- name) rather
+   than an --nb- alias, and that is load-bearing rather than stylistic.
+   ConfirmDialog - the delete confirmation for folders, quizzes, questions
+   and players - applies this class inside a portalled Modal, which renders
+   at document.body, OUTSIDE .page. No --nb-* property exists out there.
+   A var() naming an undefined property invalidates its whole declaration,
+   so `color` was dropped entirely and the button inherited the Modal's
+   near-white text, while `background: var(--color-danger-bg)` fell through
+   to index.css's :root - the light PLAYER palette - and painted pale pink.
+   Near-white on pale pink measured 1.06:1: the confirm button on every
+   destructive dialog in the app had invisible text. */
 .btnDanger {
-  background: var(--color-danger-bg);
-  border-color: var(--nb-delete-border);
-  color: var(--nb-warning-text);
+  background: var(--peira-danger-bg);
+  border-color: var(--color-danger-border);
+  color: var(--peira-danger);
 }
 
 .btnDanger:hover:not(:disabled) {
   /* Re-assert on hover - .btnSm's own hover rule would otherwise win
      (equal specificity, later property wins) and repaint it gold. */
-  border-color: var(--nb-delete-border);
-  background: var(--nb-delete-bg-hover);
+  border-color: var(--color-danger-border);
+  background: var(--peira-danger-bg);
+  color: var(--peira-danger);
 }
 
 /* --- Cards ------------------------------------------------------------ */
