@@ -392,7 +392,10 @@ textarea.input {
 }
 
 .btnSm:hover:not(:disabled) {
-  border-color: var(--nb-accent);
+  /* --color-accent, not --nb-accent: like this class's `color` above, this
+     rule has to work in ConfirmDialog's portalled Modal, where no --nb-*
+     property exists and the declaration would simply be discarded. */
+  border-color: var(--color-accent);
   background: var(--color-accent-bg);
 }
 
