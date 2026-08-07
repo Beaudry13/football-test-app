@@ -10,6 +10,17 @@ route does not exist in a production build.**
 
 ---
 
+> **The spike harness has since been deleted.** `frontend/src/pages/spike/`
+> and the dev-only `/spike/drawing` route were removed once Phases 1-2 landed
+> and the real feature could be exercised on an actual quiz question. Sections
+> below that describe running it are kept as the record of how these results
+> were obtained, not as instructions that still work.
+>
+> One consequence: this removed the only on-screen HUD, so FPS, canvas memory
+> and stray-mark counters are no longer visible on a phone. Re-attaching a HUD
+> needs no engine change - `DrawingBoard` still takes a `renderOverlay` render
+> prop and feeds it `BoardTelemetry`.
+
 ## 1. What was built
 
 | Area | File | Notes |

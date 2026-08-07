@@ -31,8 +31,7 @@ Versions verified working: Node 24.18.1, npm 11.16.0, Python 3.12.10.
 ### The fast path — frontend only
 
 **Most frontend work needs no backend, no database, and no `.env`.** The
-Vitest suite runs fully mocked, and the `/spike/drawing` harness is
-self-contained.
+Vitest suite runs fully mocked.
 
 ```bash
 cd frontend
@@ -128,7 +127,6 @@ frontend/src/
   components/annotation/   Fabric-based coach annotation editor
   pages/           route components
   styles/          tokens.css (canonical) + notebook.module.css (coach theme)
-  spike/           THROWAWAY Phase 0 spike — see "Work in flight"
 
 docs/            DEPLOYMENT.md, THEMING.md, API.md, DESIGN-draw-on-image.md
 ```
@@ -228,24 +226,25 @@ comes back in `access-control-allow-origin`.
 
 ## Work in flight
 
-**`feature/draw-on-image-consolidated`** — Draw on Image, at the design +
-Phase 0 spike stage with the data layer written but not deployed. This branch
-supersedes `design/draw-on-image` and `feature/draw-on-image`, which had
-diverged from each other; both can be deleted once this merges.
+**Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 
 - Read `docs/DESIGN-draw-on-image.md` first — product decisions are locked in
-  its §10 — then `docs/DRAW_ON_IMAGE_PHASE_0.md` for the spike results.
+  its §10 — then `docs/DRAW_ON_IMAGE_PHASE_0.md` for the engine's design and
+  the spike's findings.
 - **Drawing is a per-question boolean (`questions.allow_drawing`), NOT a
   question type.** The design doc originally locked a `draw_on_image` type;
   §3.3 and §10 record why that was reversed. The enum route is a one-way door
   (Postgres cannot remove an enum value) and cannot express "multiple choice
   *and* a drawing" on one question.
-- `frontend/src/components/drawing/` is the real engine and must stay free of
-  quiz knowledge (§11.1). `frontend/src/pages/spike/` is a **throwaway
-  harness** on the dev-only route `/spike/drawing`, guarded by
-  `import.meta.env.DEV` and verified absent from the production bundle.
-  Delete the route and that directory once Phase 0 is signed off.
-- Migration `b7e4c1d92f08` is written but **has never been run anywhere**.
-- **The gate is open.** Phase 0 needs a real iPhone and a real Android;
-  desktop emulation cannot settle the grace window or sustained FPS. Do not
-  start Phase 1+ until those results exist.
+- `frontend/src/components/drawing/` is the engine and must stay free of quiz
+  knowledge (§11.1). Everything quiz-specific lives in
+  `frontend/src/pages/play/drawingDraft.ts`.
+- The Phase 0 spike harness (`frontend/src/pages/spike/`, route
+  `/spike/drawing`) has been **deleted** now that the real feature exists.
+  Its findings are in the Phase 0 report. Note this also removed the only
+  on-screen HUD — FPS, canvas memory and stray-mark counters. Re-attaching
+  one needs no engine change: `DrawingBoard` still exposes a `renderOverlay`
+  render prop fed with `BoardTelemetry`.
+- **Phase 3 is not built.** Drawings persist to localStorage only; nothing
+  reaches `answer_drawings`, so a coach cannot see a player's drawing and the
+  server's `require_all_answers` check cannot count one.
