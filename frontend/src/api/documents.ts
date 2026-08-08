@@ -75,3 +75,25 @@ export function renameDocument(documentId: number, title: string): Promise<Sourc
 export function deleteDocument(documentId: number): Promise<void> {
   return api.delete<void>(`/documents/${documentId}`);
 }
+
+/** A text run detected in the PDF's own text layer. Normalised 0-1 page
+ *  coordinates, same space regions are stored in. Not OCR - this reads a
+ *  structure already in the file. */
+export interface TextRun {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Every tappable run on a page. Fetched once per page and hit-tested
+ *  locally - a request per tap would make the fast path the slow one.
+ *
+ *  An empty list is a valid answer: a scanned page has no text layer, and the
+ *  editor must behave identically, with drag still first-class. */
+export function getPageTextRuns(documentId: number, pageNumber: number): Promise<TextRun[]> {
+  return api
+    .get<{ runs: TextRun[] }>(`/documents/${documentId}/pages/${pageNumber}/text-runs`)
+    .then((body) => body.runs);
+}

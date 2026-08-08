@@ -19,6 +19,7 @@ export function RegionQuestionForm({
   onCancel,
   saving,
   defaultPrompt,
+  defaultAnswer = '',
 }: {
   onSave: (input: { question_text: string; expected_answers: string[] }) => void;
   onCancel: () => void;
@@ -26,13 +27,21 @@ export function RegionQuestionForm({
   /** The last prompt used on this page, so a coach masking twelve coverage
    *  names does not retype the same question twelve times. */
   defaultPrompt: string;
+  /** The text of the tapped run. THE speed win: the answer is already on the
+   *  page, so asking the coach to retype what the system just read to them is
+   *  pure ceremony. Empty for a dragged rectangle, where there is no text. */
+  defaultAnswer?: string;
 }) {
   const [prompt, setPrompt] = useState(defaultPrompt);
-  const [answers, setAnswers] = useState('');
+  const [answers, setAnswers] = useState(defaultAnswer);
   const answerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    // Selected, not just focused: a tapped answer is usually right, so Enter
+    // saves it - but if the coach wants a different wording, typing replaces
+    // it without a Ctrl+A first.
     answerRef.current?.focus();
+    answerRef.current?.select();
   }, []);
 
   // Comma-separated, because that is how a coach naturally writes a list and

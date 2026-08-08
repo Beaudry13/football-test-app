@@ -18,6 +18,7 @@ from app.extensions import db
 from app.models import DocumentPage, Question, QuestionRegion, Quiz, SourceDocument
 from app.schemas.document import DocumentUpdateSchema
 from app.services import document_render
+from app.services.document_text import detect_text_runs
 from app.services.private_storage import get_private_storage
 from app.services.signed_media import KIND_PAGE, KIND_THUMBNAIL, sign_media_token
 from app.utils.auth import current_coach
@@ -257,6 +258,36 @@ def _render_full_page(source: SourceDocument, page: DocumentPage) -> None:
         extension=document_render.RENDER_EXTENSION,
     )
     db.session.commit()
+
+
+@documents_bp.get("/<int:document_id>/pages/<int:page_number>/text-runs")
+@jwt_required()
+def get_page_text_runs(document_id: int, page_number: int):
+    """The page's detected text runs, for tap-to-select.
+
+    Coach-only, and separate from the page route so opening a page to look at
+    it does not pay for text extraction. The editor fetches this once per page
+    and hit-tests locally - a request per tap would make the fast path the
+    slow one.
+
+    An empty list is a perfectly good answer. A scanned page has no text layer,
+    and the editor is required to work identically with zero runs; that is what
+    keeps drag a first-class tool rather than a fallback.
+    """
+    source = _get_org_document(document_id)
+    page = DocumentPage.query.filter_by(
+        source_document_id=source.id, page_number=page_number
+    ).first()
+    if page is None:
+        raise ApiError("Page not found", status_code=404)
+
+    pdf_bytes = get_private_storage().load_private(source.storage_key)
+    if pdf_bytes is None:
+        raise ApiError(
+            "The source file for this document is no longer available.", status_code=410
+        )
+
+    return jsonify({"runs": detect_text_runs(pdf_bytes, page.page_number - 1)})
 
 
 @documents_bp.delete("/<int:document_id>")

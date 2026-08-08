@@ -422,3 +422,84 @@ class TestTitleEditing:
             f"/api/documents/{document_id}", headers=coach_headers, json={"title": ""}
         )
         assert response.status_code == 422
+
+
+class TestTextRunDetection:
+    """Tap-to-select's data source. Not OCR - this reads the text layer that
+    is already inside the PDF, which is why it needs no model and cannot be
+    'wrong' about what a word says."""
+
+    def test_returns_runs_with_their_text(self, client, coach_headers):
+        document_id = upload(client, coach_headers).get_json()["id"]
+        response = client.get(
+            f"/api/documents/{document_id}/pages/1/text-runs", headers=coach_headers
+        )
+        assert response.status_code == 200
+        runs = response.get_json()["runs"]
+        assert any("COVER 3" in run["text"] for run in runs), [r["text"] for r in runs]
+
+    def test_coordinates_are_normalised_with_a_top_left_origin(self, client, coach_headers):
+        # PDF user space has its origin at the BOTTOM-left; every client
+        # coordinate here has it at the top-left. Getting that backwards puts
+        # every mask on the wrong end of the page.
+        document_id = upload(client, coach_headers).get_json()["id"]
+        runs = client.get(
+            f"/api/documents/{document_id}/pages/1/text-runs", headers=coach_headers
+        ).get_json()["runs"]
+
+        for run in runs:
+            assert 0.0 <= run["x"] <= 1.0
+            assert 0.0 <= run["y"] <= 1.0
+            assert 0.0 < run["width"] <= 1.0
+            assert 0.0 < run["height"] <= 1.0
+
+        # make_pdf draws its text near the TOP of the page, so y must be small.
+        top = min(run["y"] for run in runs)
+        assert top < 0.3, f"text drawn at the top should have a small y, got {top}"
+
+    def test_a_page_with_no_text_returns_an_empty_list(self, client, coach_headers):
+        import io as _io
+
+        from reportlab.pdfgen import canvas as rl_canvas
+
+        buffer = _io.BytesIO()
+        canvas = rl_canvas.Canvas(buffer, pagesize=(612, 792))
+        canvas.circle(300, 400, 50)  # a shape, no text
+        canvas.showPage()
+        canvas.save()
+        buffer.seek(0)
+
+        document_id = client.post(
+            "/api/documents",
+            headers=coach_headers,
+            data={"file": (buffer, "shapes.pdf")},
+            content_type="multipart/form-data",
+        ).get_json()["id"]
+
+        response = client.get(
+            f"/api/documents/{document_id}/pages/1/text-runs", headers=coach_headers
+        )
+        # An empty list is a valid answer, not an error - it is what a scanned
+        # playbook returns, and the editor must work identically with it.
+        assert response.status_code == 200
+        assert response.get_json()["runs"] == []
+
+    def test_another_organization_cannot_read_the_text_layer(self, client, register_coach):
+        _, _, owner = register_coach(username="owner", email="owner@example.com")
+        document_id = upload(client, owner).get_json()["id"]
+
+        _, _, rival = register_coach(
+            username="rival", email="rival@example.com", organization="Rivals"
+        )
+        # The text layer is the playbook's contents in machine-readable form -
+        # if anything must not leak across organizations, it is this.
+        assert (
+            client.get(
+                f"/api/documents/{document_id}/pages/1/text-runs", headers=rival
+            ).status_code
+            == 404
+        )
+
+    def test_requires_authentication(self, client, coach_headers):
+        document_id = upload(client, coach_headers).get_json()["id"]
+        assert client.get(f"/api/documents/{document_id}/pages/1/text-runs").status_code == 401

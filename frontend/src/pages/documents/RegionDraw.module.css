@@ -43,6 +43,29 @@
   border-radius: 2px;
 }
 
+/* The selected region is the one the coach is acting on - handles, Delete,
+   duplicate and arrow-key nudges all target it - so it must be unmistakable
+   against the other masks on a busy page. */
+.existingSelected {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 1px rgba(74, 158, 255, 0.6);
+}
+
+.handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #4a9eff;
+  border: 1px solid #10131a;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.nw { left: -5px; top: -5px; cursor: nwse-resize; }
+.ne { right: -5px; top: -5px; cursor: nesw-resize; }
+.sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+
 .badge {
   position: absolute;
   top: -10px;

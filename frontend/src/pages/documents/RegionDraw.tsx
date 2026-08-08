@@ -9,43 +9,81 @@ export interface NormalisedRect {
   height: number;
 }
 
-/** Drag-to-draw over a page image.
+export interface ExistingRegion {
+  id: number;
+  label: string;
+  rect: NormalisedRect;
+}
+
+/** Below this much movement the gesture was a CLICK, not a drag. */
+const DRAG_THRESHOLD = 0.005;
+
+/** Corner handles, as fractions of the page. Generous relative to their visual
+ *  size, because a coach resizing a mask on a 6pt label is aiming at something
+ *  a few pixels across. */
+const HANDLE_HIT = 0.008;
+
+type Corner = 'nw' | 'ne' | 'sw' | 'se';
+const CORNERS: Corner[] = ['nw', 'ne', 'sw', 'se'];
+
+type Gesture =
+  | { kind: 'idle' }
+  | { kind: 'maybe-draw'; origin: { x: number; y: number } }
+  | { kind: 'move'; id: number; grab: { x: number; y: number }; start: NormalisedRect }
+  | { kind: 'resize'; id: number; corner: Corner; start: NormalisedRect };
+
+/** The authoring surface: one gesture model for tap, drag, move and resize.
  *
- * Everything here is in FRACTIONS OF THE ELEMENT, never pixels. The element's
- * own size is the only thing pixel coordinates are ever divided by, so a
- * rectangle drawn on a 900px-wide layout and one drawn on a 1400px-wide layout
- * produce identical stored values - and both stay correct if the page is later
- * re-rendered at a different resolution. See
- * backend/app/services/document_geometry.py for the contract this satisfies.
+ * THERE IS NO MODE SWITCH, and that is the point. What the coach does decides
+ * what happens:
  *
- * Pointer events, not mouse events: a coach on an iPad is explicitly supported
- * (design doc §12), and pointer events cover both without a second code path.
- * Phone authoring is NOT a goal - the spike measured 3-8% of diagram-page runs
- * reaching a 44px touch target - so nothing here fights for small screens.
+ *   click empty page      -> onClick, and the parent decides whether a text
+ *                            run was under it (tap-to-select) or nothing was
+ *   drag empty page       -> onDrawn, a hand-drawn rectangle for a diagram
+ *   click a region        -> selects it
+ *   drag a region         -> moves it
+ *   drag a corner handle  -> resizes it
+ *
+ * A page with an install sheet on the left and a formation on the right needs
+ * both behaviours within one second of each other, so asking the coach to
+ * pick a tool first would be asking them to keep answering a question they
+ * have already answered by aiming.
+ *
+ * Everything is in FRACTIONS OF THE ELEMENT. The element's own size is the
+ * only thing pixels are ever divided by, so the same gesture on a 900px and a
+ * 1400px layout produces identical stored values.
  */
 export function RegionDraw({
   children,
   existing,
+  selectedId,
+  onClick,
   onDrawn,
+  onRegionChanged,
+  onSelect,
   disabled = false,
 }: {
   children: React.ReactNode;
-  /** Already-created regions, drawn as static overlays. */
-  existing: Array<{ id: number; label: string; rect: NormalisedRect }>;
+  existing: ExistingRegion[];
+  selectedId: number | null;
+  /** A click that was not on an existing region. The parent hit-tests the
+   *  text layer; a miss means "nothing there", which is not an error. */
+  onClick: (x: number, y: number) => void;
   onDrawn: (rect: NormalisedRect) => void;
+  onRegionChanged: (id: number, rect: NormalisedRect) => void;
+  onSelect: (id: number | null) => void;
   disabled?: boolean;
 }) {
   const surfaceRef = useRef<HTMLDivElement>(null);
-  const originRef = useRef<{ x: number; y: number } | null>(null);
+  const gesture = useRef<Gesture>({ kind: 'idle' });
   const [draft, setDraft] = useState<NormalisedRect | null>(null);
+  const [live, setLive] = useState<{ id: number; rect: NormalisedRect } | null>(null);
 
   const pointFrom = useCallback((event: React.PointerEvent) => {
     const surface = surfaceRef.current;
     if (!surface) return null;
     const bounds = surface.getBoundingClientRect();
     if (bounds.width === 0 || bounds.height === 0) return null;
-    // Clamped, so a drag that leaves the image still produces a rectangle
-    // inside the page rather than one the server will reject.
     return {
       x: Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width)),
       y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
@@ -53,8 +91,6 @@ export function RegionDraw({
   }, []);
 
   function rectBetween(a: { x: number; y: number }, b: { x: number; y: number }): NormalisedRect {
-    // Normalised so dragging up or left works exactly as well as down-right -
-    // a coach should never have to think about which corner they started from.
     return {
       x: Math.min(a.x, b.x),
       y: Math.min(a.y, b.y),
@@ -63,40 +99,154 @@ export function RegionDraw({
     };
   }
 
+  function cornerAt(rect: NormalisedRect, x: number, y: number): Corner | null {
+    const points: Record<Corner, [number, number]> = {
+      nw: [rect.x, rect.y],
+      ne: [rect.x + rect.width, rect.y],
+      sw: [rect.x, rect.y + rect.height],
+      se: [rect.x + rect.width, rect.y + rect.height],
+    };
+    for (const corner of CORNERS) {
+      const [cx, cy] = points[corner];
+      if (Math.abs(x - cx) <= HANDLE_HIT && Math.abs(y - cy) <= HANDLE_HIT) return corner;
+    }
+    return null;
+  }
+
+  function regionUnder(x: number, y: number): ExistingRegion | null {
+    let best: ExistingRegion | null = null;
+    let bestArea = Infinity;
+    for (const region of existing) {
+      const r = region.rect;
+      if (x < r.x || x > r.x + r.width || y < r.y || y > r.y + r.height) continue;
+      const area = r.width * r.height;
+      if (area < bestArea) {
+        best = region;
+        bestArea = area;
+      }
+    }
+    return best;
+  }
+
+  function clampRect(rect: NormalisedRect): NormalisedRect {
+    const width = Math.min(rect.width, 1);
+    const height = Math.min(rect.height, 1);
+    return {
+      x: Math.min(Math.max(0, rect.x), 1 - width),
+      y: Math.min(Math.max(0, rect.y), 1 - height),
+      width,
+      height,
+    };
+  }
+
   function handlePointerDown(event: React.PointerEvent) {
     if (disabled || event.button !== 0) return;
     const point = pointFrom(event);
     if (!point) return;
-    originRef.current = point;
-    setDraft({ ...point, width: 0, height: 0 });
-    // Capture, so a drag that runs off the image still delivers its move and
-    // up events here rather than being swallowed by whatever is underneath.
     event.currentTarget.setPointerCapture(event.pointerId);
     event.preventDefault();
+
+    // Handles first: they sit ON the region's edge, so testing the region
+    // before its handles would make resizing impossible.
+    const selected = existing.find((r) => r.id === selectedId);
+    if (selected) {
+      const corner = cornerAt(selected.rect, point.x, point.y);
+      if (corner) {
+        gesture.current = { kind: 'resize', id: selected.id, corner, start: selected.rect };
+        return;
+      }
+    }
+
+    const under = regionUnder(point.x, point.y);
+    if (under) {
+      onSelect(under.id);
+      gesture.current = { kind: 'move', id: under.id, grab: point, start: under.rect };
+      return;
+    }
+
+    gesture.current = { kind: 'maybe-draw', origin: point };
   }
 
   function handlePointerMove(event: React.PointerEvent) {
-    const origin = originRef.current;
-    if (!origin) return;
+    const current = gesture.current;
+    if (current.kind === 'idle') return;
     const point = pointFrom(event);
-    if (point) setDraft(rectBetween(origin, point));
+    if (!point) return;
+
+    if (current.kind === 'maybe-draw') {
+      setDraft(rectBetween(current.origin, point));
+      return;
+    }
+
+    if (current.kind === 'move') {
+      setLive({
+        id: current.id,
+        rect: clampRect({
+          ...current.start,
+          x: current.start.x + (point.x - current.grab.x),
+          y: current.start.y + (point.y - current.grab.y),
+        }),
+      });
+      return;
+    }
+
+    // Resize: the dragged corner follows the pointer, the opposite corner is
+    // pinned, so dragging past it flips the rectangle rather than inverting it.
+    const s = current.start;
+    const anchor = {
+      x: current.corner === 'nw' || current.corner === 'sw' ? s.x + s.width : s.x,
+      y: current.corner === 'nw' || current.corner === 'ne' ? s.y + s.height : s.y,
+    };
+    setLive({ id: current.id, rect: clampRect(rectBetween(anchor, point)) });
   }
 
   function handlePointerUp(event: React.PointerEvent) {
-    const origin = originRef.current;
-    originRef.current = null;
-    if (!origin) return;
-
+    const current = gesture.current;
+    gesture.current = { kind: 'idle' };
     const point = pointFrom(event);
     setDraft(null);
-    if (!point) return;
+    setLive(null);
+    if (current.kind === 'idle' || !point) return;
 
-    const rect = rectBetween(origin, point);
-    // A click, or a twitch, is not a rectangle. Below this the coach almost
-    // certainly meant to click rather than drag, and creating a 3px question
-    // they then have to find and delete is worse than doing nothing.
-    if (rect.width < 0.005 || rect.height < 0.005) return;
-    onDrawn(rect);
+    if (current.kind === 'maybe-draw') {
+      const rect = rectBetween(current.origin, point);
+      // Under the threshold this was a CLICK. That is not a failed drag - it
+      // is the tap-to-select gesture, and the parent decides what was under it.
+      if (rect.width < DRAG_THRESHOLD && rect.height < DRAG_THRESHOLD) {
+        onSelect(null);
+        onClick(point.x, point.y);
+        return;
+      }
+      onDrawn(rect);
+      return;
+    }
+
+    if (current.kind === 'move') {
+      const moved = clampRect({
+        ...current.start,
+        x: current.start.x + (point.x - current.grab.x),
+        y: current.start.y + (point.y - current.grab.y),
+      });
+      // A click on a region selects it (already done on pointerdown) without
+      // recording a no-op move in the undo history.
+      if (
+        Math.abs(moved.x - current.start.x) < DRAG_THRESHOLD &&
+        Math.abs(moved.y - current.start.y) < DRAG_THRESHOLD
+      ) {
+        return;
+      }
+      onRegionChanged(current.id, moved);
+      return;
+    }
+
+    const s = current.start;
+    const anchor = {
+      x: current.corner === 'nw' || current.corner === 'sw' ? s.x + s.width : s.x,
+      y: current.corner === 'nw' || current.corner === 'ne' ? s.y + s.height : s.y,
+    };
+    const resized = clampRect(rectBetween(anchor, point));
+    if (resized.width < DRAG_THRESHOLD || resized.height < DRAG_THRESHOLD) return;
+    onRegionChanged(current.id, resized);
   }
 
   const asStyle = (rect: NormalisedRect) => ({
@@ -116,11 +266,25 @@ export function RegionDraw({
       onPointerCancel={handlePointerUp}
     >
       {children}
-      {existing.map((region) => (
-        <div key={region.id} className={styles.existing} style={asStyle(region.rect)}>
-          <span className={styles.badge}>{region.label}</span>
-        </div>
-      ))}
+
+      {existing.map((region) => {
+        const rect = live?.id === region.id ? live.rect : region.rect;
+        const isSelected = region.id === selectedId;
+        return (
+          <div
+            key={region.id}
+            className={`${styles.existing} ${isSelected ? styles.existingSelected : ''}`}
+            style={asStyle(rect)}
+          >
+            <span className={styles.badge}>{region.label}</span>
+            {isSelected &&
+              CORNERS.map((corner) => (
+                <span key={corner} className={`${styles.handle} ${styles[corner]}`} />
+              ))}
+          </div>
+        );
+      })}
+
       {draft && <div className={styles.draft} style={asStyle(draft)} />}
     </div>
   );
