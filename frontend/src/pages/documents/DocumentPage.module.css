@@ -1,0 +1,102 @@
+/* Page-specific styles only - shared notebook design system (buttons,
+   cards, inputs) lives in frontend/src/styles/notebook.module.css. */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1em;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 75vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.thumb:hover {
+  border-color: var(--nb-border-strong, var(--nb-border));
+}
+
+.thumbActive {
+  border-color: var(--nb-accent);
+}
+
+.thumb img,
+.thumbFallback {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--nb-surface-raised, var(--nb-surface));
+}
+
+.thumbLabel {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: #fff;
+  /* Fixed dark scrim rather than a theme token: this sits on top of the page
+     image, whose brightness has nothing to do with the app's theme. */
+  background: rgba(0, 0, 0, 0.66);
+}
+
+.viewer {
+  min-height: 240px;
+}
+
+.pageImage {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--nb-border);
+  /* Playbook pages are white paper; give them a white backing so a partially
+     loaded image does not flash the dark coach theme through. */
+  background: #fff;
+}
+
+@media (max-width: 720px) {
+  /* Authoring is a desktop workflow (design doc §12), but simply viewing a
+     playbook on a phone should not be broken. */
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .strip {
+    flex-direction: row;
+    max-height: none;
+    overflow-x: auto;
+  }
+
+  .thumb {
+    flex: 0 0 92px;
+  }
+}

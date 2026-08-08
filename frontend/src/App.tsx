@@ -18,6 +18,8 @@ import { JoinOrgPage } from './pages/JoinOrgPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
+import { DocumentsPage } from './pages/documents/DocumentsPage';
+import { DocumentPage } from './pages/documents/DocumentPage';
 import { PlayPage } from './pages/play/PlayPage';
 import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
 
@@ -49,6 +51,8 @@ function App() {
 
             <Route element={<NotebookLayout />}>
               <Route path="/team" element={<TeamPage />} />
+              <Route path="/documents" element={<DocumentsPage />} />
+              <Route path="/documents/:documentId" element={<DocumentPage />} />
               <Route path="/roster" element={<MasterRosterPage />} />
               <Route path="/roster/:playerId" element={<PlayerProfilePage />} />
               <Route path="/groups" element={<GroupsPage />} />

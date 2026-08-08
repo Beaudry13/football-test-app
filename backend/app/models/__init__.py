@@ -11,6 +11,8 @@ from app.models.question_image import QuestionImage
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
 from app.models.answer_drawing import AnswerDrawing
+from app.models.source_document import SourceDocument
+from app.models.document_page import DocumentPage
 from app.models.response import Answer, AttemptStatus, PlayerAttempt
 from app.models.grade_audit_log import GradeAuditLog
 
@@ -36,4 +38,6 @@ __all__ = [
     "Answer",
     "AnswerDrawing",
     "GradeAuditLog",
+    "SourceDocument",
+    "DocumentPage",
 ]

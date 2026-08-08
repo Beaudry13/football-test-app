@@ -51,6 +51,22 @@ def _compress_image(uploaded_file: UploadedFile, max_dimension: int, quality: in
     extension/content-type survive.
     """
     raw_bytes = uploaded_file.stream.read()
+
+    # The image size limit lives HERE now, not in MAX_CONTENT_LENGTH.
+    #
+    # Werkzeug applies MAX_CONTENT_LENGTH to every request before any route
+    # runs, so once the app also accepts 50 MB playbook PDFs that value can no
+    # longer be the 10 MB image cap. Enforcing it at the point where an image
+    # is actually being processed keeps the cap - and keeps it honest, since
+    # it measures the bytes that arrived rather than a Content-Length header
+    # the client chose.
+    max_bytes = current_app.config["IMAGE_MAX_UPLOAD_BYTES"]
+    if len(raw_bytes) > max_bytes:
+        raise ApiError(
+            f"That image is too large. The limit is {max_bytes // (1024 * 1024)} MB.",
+            status_code=413,
+        )
+
     try:
         image = Image.open(io.BytesIO(raw_bytes))
         image.load()

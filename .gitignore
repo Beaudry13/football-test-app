@@ -13,6 +13,13 @@ backend/.env
 backend/uploads/*
 !backend/uploads/.gitkeep
 
+# Protected documents (local dev private storage). A real playbook lands here
+# during local testing, and a playbook committed to a public repo is the exact
+# loss the private-storage design exists to prevent - so this is ignored
+# wholesale, with no .gitkeep exception, and the directory is created at write
+# time by LocalPrivateStorage.
+backend/private_uploads/
+
 # Editors / OS
 .vscode/
 .idea/

@@ -16,6 +16,11 @@ const NAV_LINKS = [
     label: 'Quizzes',
     isActive: (path: string) => path === '/dashboard' || path.startsWith('/quizzes'),
   },
+  {
+    to: '/documents',
+    label: 'Playbooks',
+    isActive: (path: string) => path.startsWith('/documents'),
+  },
   { to: '/roster', label: 'Roster', isActive: (path: string) => path.startsWith('/roster') },
   { to: '/groups', label: 'Groups', isActive: (path: string) => path.startsWith('/groups') },
   { to: '/team', label: 'Team', isActive: (path: string) => path.startsWith('/team') },

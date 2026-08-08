@@ -54,8 +54,27 @@ class BaseConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     UPLOAD_FOLDER = _resolve_upload_folder(os.environ.get("UPLOAD_FOLDER", "uploads"))
-    MAX_CONTENT_LENGTH = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "10")) * 1024 * 1024
     ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
+
+    # --- Upload size limits -------------------------------------------------
+    # MAX_CONTENT_LENGTH is enforced by Werkzeug for EVERY request, before any
+    # route runs, so it can only ever be the *largest* thing the app accepts.
+    # A playbook PDF is far bigger than a film still, so raising it to the PDF
+    # ceiling would silently remove the image cap that used to be enforced
+    # here for free.
+    #
+    # So the image cap moves into the image path itself
+    # (file_storage._compress_image) where it can be enforced per upload type,
+    # and this global value becomes what it should always have been: a coarse
+    # backstop against a request nobody could have a legitimate reason to send.
+    IMAGE_MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_SIZE_MB", "10")) * 1024 * 1024
+    PDF_MAX_UPLOAD_BYTES = int(os.environ.get("PDF_MAX_UPLOAD_SIZE_MB", "50")) * 1024 * 1024
+    MAX_CONTENT_LENGTH = max(IMAGE_MAX_UPLOAD_BYTES, PDF_MAX_UPLOAD_BYTES)
+
+    # A playbook with more pages than this is far more likely to be a
+    # decompression bomb or a mis-selected file than a real install book, and
+    # rendering thumbnails for it happens synchronously on the request.
+    PDF_MAX_PAGES = int(os.environ.get("PDF_MAX_PAGES", "400"))
     # Every accepted upload is recompressed to a JPEG capped at this longest
     # dimension - comfortably above MAX_CANVAS_WIDTH (1400, see
     # frontend/src/components/annotation/canvasSizing.ts) so it's never the
@@ -75,6 +94,35 @@ class BaseConfig:
     R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME")
     R2_PUBLIC_URL_BASE = os.environ.get("R2_PUBLIC_URL_BASE")
 
+    # --- Private document storage -------------------------------------------
+    # Deliberately a DIFFERENT BUCKET, not a prefix inside R2_BUCKET_NAME.
+    #
+    # A prefix called "private/" provides no privacy whatsoever: if the public
+    # hostname in R2_PUBLIC_URL_BASE is bound to the bucket root, then every
+    # object in that bucket is readable by anyone who knows or guesses its
+    # key, prefix or not. Playbooks are the one asset in this product where
+    # that would be a genuine competitive loss, so privacy here is a property
+    # of the bucket's own configuration - it must have NO public binding at
+    # all - rather than of anything this code does.
+    #
+    # There is intentionally no R2_PRIVATE_PUBLIC_URL_BASE. Nothing in the
+    # codebase can construct a public URL for a private object because no such
+    # value exists to construct it from.
+    R2_PRIVATE_BUCKET_NAME = os.environ.get("R2_PRIVATE_BUCKET_NAME")
+
+    # Local-dev equivalent. Must sit OUTSIDE UPLOAD_FOLDER: create_app serves
+    # UPLOAD_FOLDER wholesale at /uploads/<path:filename>, so a private asset
+    # written underneath it would be downloadable without any credential.
+    # There is a test that fails if these two paths ever overlap.
+    PRIVATE_UPLOAD_FOLDER = _resolve_upload_folder(
+        os.environ.get("PRIVATE_UPLOAD_FOLDER", "private_uploads")
+    )
+
+    # How long a signed media URL stays valid. Short by design: the browser
+    # only needs it long enough to load an image, and every payload that
+    # contains one is generated fresh on request.
+    SIGNED_MEDIA_TTL_SECONDS = int(os.environ.get("SIGNED_MEDIA_TTL_SECONDS", "600"))
+
     CORS_ORIGINS = _split_origins(os.environ.get("CORS_ORIGINS", "http://localhost:5173"))
 
     ACCESS_CODE_TTL_HOURS = int(os.environ.get("ACCESS_CODE_TTL_HOURS", "24"))
@@ -93,6 +141,10 @@ class TestingConfig(BaseConfig):
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     UPLOAD_FOLDER = os.environ.get(
         "TEST_UPLOAD_FOLDER", os.path.join(tempfile.gettempdir(), "football_quiz_test_uploads")
+    )
+    PRIVATE_UPLOAD_FOLDER = os.environ.get(
+        "TEST_PRIVATE_UPLOAD_FOLDER",
+        os.path.join(tempfile.gettempdir(), "football_quiz_test_private"),
     )
     # Rate limits exist to slow down abuse (credential stuffing, access-code
     # brute-forcing), not something the test suite is exercising - many tests
