@@ -108,7 +108,10 @@ def get_player(player_id: int):
 @players_bp.get("/<int:player_id>/history")
 @jwt_required()
 def get_player_history(player_id: int):
-    """The one unified analytics standard for this Player's activity,
+    """Coach View: scoped to quizzes this coach owns. See the organization
+    -wide admin variant in routes/organizations.py.
+
+    The one unified analytics standard for this Player's activity,
     linked entirely through PlayerAttempt.player_id - the same physical
     person's attempts across every Group they've ever belonged to (or a
     direct-roster assignment) all land here, regardless of which one they
@@ -118,13 +121,25 @@ def get_player_history(player_id: int):
     never sees this page disagree with the quiz dashboard or the
     org-wide, name-based legacy history endpoint.
     """
+    player = get_org_player(player_id)
+    return jsonify(build_player_history(current_coach(), player, organization_wide=False))
+
+
+def build_player_history(coach, player, organization_wide: bool) -> dict:
+    """Shared by the coach route above and the admin org-wide route, so the
+    two scopes cannot drift into reporting different numbers for one player."""
     from app.models import Answer, AttemptStatus, Group, GroupPlayer, PlayerAttempt, Quiz
 
-    player = get_org_player(player_id)
+    scope = [PlayerAttempt.player_id == player.id]
+    if not organization_wide:
+        # Only quizzes this coach created. Without this a coach could read the
+        # titles and scores of a teammate's quizzes from the player page,
+        # which is the same leak the quiz list was closed against.
+        scope.append(Quiz.coach_id == coach.id)
 
     attempts = (
         PlayerAttempt.query.join(Quiz)
-        .filter(PlayerAttempt.player_id == player.id)
+        .filter(*scope)
         .options(
             db.joinedload(PlayerAttempt.quiz),
             db.selectinload(PlayerAttempt.answers).selectinload(Answer.question),
@@ -173,7 +188,7 @@ def get_player_history(player_id: int):
     ]
     groups = Group.query.filter(Group.id.in_(group_ids)).all() if group_ids else []
 
-    return jsonify(
+    return (
         {
             "player": player.to_dict(),
             "current_groups": [{"id": g.id, "name": g.name} for g in groups],

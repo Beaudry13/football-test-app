@@ -167,14 +167,28 @@ def test_export_404s_for_another_organizations_quiz(client, register_coach):
 
 
 def test_removed_coach_immediately_loses_export_access(client, coach_headers, invite_teammate):
-    quiz, *_ = build_ready_quiz(client, coach_headers)
     teammate, _, teammate_headers = invite_teammate(coach_headers)
+    # The teammate exports THEIR OWN quiz. It used to be the admin's, which a
+    # teammate could export back when every quiz was visible org-wide; now
+    # that would be a 404 and would prove nothing about removal.
+    quiz, *_ = build_ready_quiz(client, teammate_headers)
 
     # Sanity: can export while still a member.
     ok = client.get(f"/api/quizzes/{quiz['id']}/export-detailed.pdf", headers=teammate_headers)
     assert ok.status_code == 200
 
-    remove_response = client.delete(f"/api/organizations/members/{teammate['id']}", headers=coach_headers)
+    # Removal now requires somewhere for their quizzes to go - see
+    # remove_member. Handing them to the admin in the same call.
+    admin_id = next(
+        m["id"]
+        for m in client.get("/api/organizations", headers=coach_headers).get_json()["members"]
+        if m["id"] != teammate["id"]
+    )
+    remove_response = client.delete(
+        f"/api/organizations/members/{teammate['id']}",
+        headers=coach_headers,
+        json={"reassign_quizzes_to": admin_id},
+    )
     assert remove_response.status_code == 204
 
     after_removal = client.get(f"/api/quizzes/{quiz['id']}/export-detailed.pdf", headers=teammate_headers)

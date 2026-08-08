@@ -1,0 +1,118 @@
+/* Page-specific styles only - shared notebook design system lives in
+   frontend/src/styles/notebook.module.css. */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1em;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 1em;
+}
+
+.controls input {
+  flex: 1;
+}
+
+.controls select {
+  max-width: 220px;
+}
+
+.notice {
+  padding: 10px 14px;
+  margin-bottom: 1em;
+  border: 1px solid var(--nb-warning, #b58900);
+  border-left-width: 4px;
+  border-radius: 6px;
+  color: var(--nb-text);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* An unassigned quiz is the one thing on this screen that needs action, so it
+   is marked rather than left to be spotted in a list. */
+.rowUnassigned {
+  border-left: 4px solid var(--nb-warning, #b58900);
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.rowTitle:hover {
+  text-decoration: underline;
+}
+
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--nb-text-muted);
+  font-size: 0.85em;
+}
+
+.ownerTag,
+.unassignedTag {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ownerTag {
+  background: var(--nb-surface-raised, rgba(255, 255, 255, 0.08));
+  color: var(--nb-text);
+}
+
+.unassignedTag {
+  background: var(--nb-warning, #b58900);
+  color: #10131a;
+}
+
+.rowActions select {
+  max-width: 180px;
+}
+
+@media (max-width: 720px) {
+  .controls {
+    flex-direction: column;
+  }
+
+  .controls select {
+    max-width: none;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

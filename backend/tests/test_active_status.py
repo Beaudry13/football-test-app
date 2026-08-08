@@ -145,11 +145,19 @@ def test_a_teammates_active_quiz_appears_but_a_different_orgs_does_not(
     )
     build_ready_quiz(client, outsider_headers)
 
+    # The status board is own-only now, like every other Coach View list: a
+    # teammate does not see their colleague's live quiz here either. Before
+    # the Coach View / Admin View split this returned 1.
     teammate_view = client.get("/api/quizzes/active-status", headers=teammate_headers).get_json()
-    assert len(teammate_view) == 1
+    assert teammate_view == []
 
+    # The quiz's own creator still sees it.
+    owner_view = client.get("/api/quizzes/active-status", headers=coach_headers).get_json()
+    assert len(owner_view) == 1
+    assert owner_view[0]["quiz_title"] == "Week 1 Prep"
+
+    # And another organization sees only its own, which is the separate
+    # boundary this test was originally written to prove.
     outsider_view = client.get("/api/quizzes/active-status", headers=outsider_headers).get_json()
     assert len(outsider_view) == 1
-    assert outsider_view[0]["quiz_title"] == "Week 1 Prep"
-    # Confirms org-scoping, not a global list - the teammate's org only sees its own quiz.
-    assert teammate_view[0]["quiz_id"] != outsider_view[0]["quiz_id"]
+    assert outsider_view[0]["quiz_id"] != owner_view[0]["quiz_id"]

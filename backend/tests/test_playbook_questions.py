@@ -228,10 +228,23 @@ class TestPlayerNeverSeesTheAnswer:
         code = activate(client, coach_headers, quiz["id"])
 
         payload = client.post("/api/play/validate-code", json={"code": code["code"]}).get_json()
-        serialised = str(payload)
-        assert "expected_answers" not in serialised
-        assert "Cover 3" not in serialised
-        assert "C3" not in serialised
+
+        # Checked field by field rather than as a substring of the whole
+        # payload. The payload carries a base64 HMAC signature, and a short
+        # answer like "C3" turns up inside random base64 often enough to make
+        # a substring assertion flaky - it failed in a full run and passed
+        # alone, which is exactly what that looks like.
+        question = payload["quiz"]["questions"][0]
+        assert "expected_answers" not in question
+        assert "answer_matching" not in question
+        assert "Cover 3" not in question["question_text"]
+        assert question["options"] == []
+        # Nothing in the region payload carries the answer either.
+        assert set(question["region"]) == {
+            "id", "question_id", "document_page_id", "shape", "x", "y", "width",
+            "height", "role", "position", "page_number", "source_document_id",
+            "render_width", "render_height",
+        }
 
     def test_the_player_gets_a_masked_url_and_no_page_url(self, client, coach_headers):
         quiz, _, _ = playbook_quiz(client, coach_headers)

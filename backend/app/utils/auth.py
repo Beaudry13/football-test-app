@@ -42,32 +42,62 @@ def require_admin() -> Coach:
     return coach
 
 
+def own_quizzes_query(coach: Coach | None = None):
+    """THE scope for every Coach View list. Quizzes this coach created.
+
+    One helper rather than a repeated filter_by, because "which quizzes does
+    this coach see" is now a security boundary and there are eight list
+    surfaces that must all answer it identically. A missed one is a leak, and
+    a leak here shows a coach another coach's work.
+
+    NO ADMIN EXCEPTION, deliberately. An admin using the normal coach
+    endpoints sees only their own quizzes, exactly as a member does - the
+    org-wide view lives behind /api/organizations/quizzes and nowhere else.
+    That is what stops Admin View from being "the same list, but bigger".
+    """
+    coach = coach or current_coach()
+    return Quiz.query.filter(
+        Quiz.organization_id == coach.organization_id,
+        Quiz.coach_id == coach.id,
+    )
+
+
 def get_visible_quiz(quiz_id: int) -> Quiz:
-    """A quiz in the caller's organization. For reads - any member may view
-    any quiz their organization owns."""
+    """A single quiz the caller may open: in their organization, and either
+    created by them or they are an admin.
+
+    THE SPLIT IS AT LISTS, NOT AT READS. Lists are own-only for everyone;
+    single-quiz reads allow admins. The alternative - a parallel admin copy of
+    all nine single-quiz routes (quiz, questions, responses, dashboard,
+    access codes, roster, CSV, PDF, detailed PDF) - would be nine more places
+    for two implementations of the same rule to drift apart, to buy a
+    restriction an admin defeats by clicking "Admin View" anyway. The real
+    boundary is ROLE, and role is enforced here.
+
+    404, never 403: a member must not be able to learn that a quiz id exists
+    by the error it produces. That is why this reads as "not found" for a
+    teammate's quiz rather than "not allowed".
+    """
     coach = current_coach()
     quiz = db.session.get(Quiz, quiz_id)
     if quiz is None or quiz.organization_id != coach.organization_id:
+        raise ApiError("Quiz not found", status_code=404)
+    if quiz.coach_id != coach.id and not coach.is_admin():
         raise ApiError("Quiz not found", status_code=404)
     return quiz
 
 
 def get_editable_quiz(quiz_id: int) -> Quiz:
-    """A quiz the caller may modify: in their organization, and either
-    created by them or they're an admin.
+    """A quiz the caller may modify.
 
-    404 (not 403) when it exists in the org but belongs to a teammate would
-    be misleading - the coach can see it listed - so that specific case is a
-    403 with a clear reason, while a quiz in another org stays a 404.
+    Identical to `get_visible_quiz` now, and that convergence is the point:
+    once Coach View became own-only, "can see it" and "can change it" answer
+    the same question. Both names are kept because the call sites read very
+    differently - `get_editable_quiz` at a mutating route documents intent -
+    and because if the two rules ever diverge again there are already two
+    hooks to diverge at.
     """
-    quiz = get_visible_quiz(quiz_id)
-    coach = current_coach()
-    if quiz.coach_id != coach.id and not coach.is_admin():
-        raise ApiError(
-            "Only the coach who created this quiz, or an organization admin, can change it",
-            status_code=403,
-        )
-    return quiz
+    return get_visible_quiz(quiz_id)
 
 
 def get_org_folder(folder_id: int) -> Folder:

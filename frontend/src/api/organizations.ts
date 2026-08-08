@@ -1,5 +1,11 @@
 import { api } from './client';
-import type { CoachRole, Organization, OrganizationInvite, OrganizationMember } from './types';
+import type {
+  CoachRole,
+  Organization,
+  OrganizationInvite,
+  OrganizationMember,
+  Quiz,
+} from './types';
 
 export function getOrganization(): Promise<Organization> {
   return api.get<Organization>('/organizations');
@@ -29,4 +35,35 @@ export function updateMemberRole(coachId: number, role: CoachRole): Promise<Orga
 
 export function removeMember(coachId: number): Promise<void> {
   return api.delete<void>(`/organizations/members/${coachId}`);
+}
+
+/** A quiz as Admin View sees it: the normal payload plus who owns it. */
+export interface OrganizationQuiz extends Quiz {
+  owner: { id: number; username: string } | null;
+  /** True when nobody owns it. Such a quiz is in NO coach's Coach View, so
+   *  Admin View is the only place it can be found and reassigned. */
+  is_unassigned: boolean;
+}
+
+/** Admin View's quiz list. Organization-wide, admin-only, and the only
+ *  endpoint that returns quizzes the caller did not create. */
+export function listOrganizationQuizzes(params: {
+  coachId?: number | 'unassigned' | null;
+  search?: string;
+} = {}): Promise<OrganizationQuiz[]> {
+  const query = new URLSearchParams();
+  if (params.coachId !== undefined && params.coachId !== null) {
+    query.set('coach_id', String(params.coachId));
+  }
+  if (params.search) query.set('q', params.search);
+  const suffix = query.toString() ? `?${query}` : '';
+  return api.get<OrganizationQuiz[]>(`/organizations/quizzes${suffix}`);
+}
+
+/** Explicit ownership transfer. Never happens as a side effect of anything
+ *  else - ownership decides whose Coach View a quiz appears in. */
+export function transferQuizOwner(quizId: number, coachId: number): Promise<OrganizationQuiz> {
+  return api.patch<OrganizationQuiz>(`/organizations/quizzes/${quizId}/owner`, {
+    coach_id: coachId,
+  });
 }

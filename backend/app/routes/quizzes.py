@@ -31,7 +31,13 @@ from app.models import (
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
 from app.services.file_storage import get_file_storage
-from app.utils.auth import current_coach, get_editable_quiz, get_org_folder, get_visible_quiz
+from app.utils.auth import (
+    current_coach,
+    get_editable_quiz,
+    get_org_folder,
+    get_visible_quiz,
+    own_quizzes_query,
+)
 from app.utils.validation import load_json_body
 
 quizzes_bp = Blueprint("quizzes", __name__)
@@ -46,8 +52,11 @@ def list_quizzes():
     # when a quiz has no active (or group-restricted) code - without
     # eager-loading both, each quiz would trigger its own lazy-load query
     # (N+1).
+    # Own-only, for members AND admins. The organization-wide list is a
+    # separate admin endpoint (/api/organizations/quizzes); there is
+    # deliberately no parameter here that could widen this.
     quizzes = (
-        Quiz.query.filter_by(organization_id=coach.organization_id)
+        own_quizzes_query(coach)
         .options(
             selectinload(Quiz.questions),
             selectinload(Quiz.coach),
@@ -156,6 +165,9 @@ def active_status():
         AccessCode.query.join(Quiz)
         .filter(
             Quiz.organization_id == coach.organization_id,
+            # Same own-only scope as the dashboard list: an active quiz a coach
+            # cannot open must not appear on their status board either.
+            Quiz.coach_id == coach.id,
             AccessCode.is_active.is_(True),
             AccessCode.expires_at > datetime.now(timezone.utc),
         )

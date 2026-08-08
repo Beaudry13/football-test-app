@@ -18,6 +18,7 @@ import { JoinOrgPage } from './pages/JoinOrgPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
+import { AdminQuizzesPage } from './pages/admin/AdminQuizzesPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { DocumentPage } from './pages/documents/DocumentPage';
 import { PlayPage } from './pages/play/PlayPage';
@@ -51,6 +52,7 @@ function App() {
 
             <Route element={<NotebookLayout />}>
               <Route path="/team" element={<TeamPage />} />
+              <Route path="/admin/quizzes" element={<AdminQuizzesPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:documentId" element={<DocumentPage />} />
               <Route path="/roster" element={<MasterRosterPage />} />

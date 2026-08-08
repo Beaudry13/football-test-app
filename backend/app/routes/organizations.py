@@ -12,8 +12,14 @@ from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db, limiter
-from app.models import Coach, CoachRole, OrganizationInvite
-from app.schemas.organization import MemberRoleUpdateSchema, OrganizationUpdateSchema
+from sqlalchemy.orm import selectinload
+
+from app.models import Coach, CoachRole, OrganizationInvite, Quiz
+from app.schemas.organization import (
+    MemberRoleUpdateSchema,
+    OrganizationUpdateSchema,
+    QuizOwnerUpdateSchema,
+)
 from app.services.invites import INVITE_TTL_DAYS, generate_invite_code
 from app.utils.auth import current_coach, require_admin
 from app.utils.validation import load_json_body
@@ -159,8 +165,197 @@ def remove_member(coach_id: int):
     if member.role == CoachRole.ADMIN and _admin_count(admin.organization_id) <= 1:
         raise ApiError("An organization must keep at least one admin", status_code=422)
 
-    # Quizzes, folders, and groups this coach created stay with the
-    # organization; their coach_id is nulled by the FK's ON DELETE SET NULL.
+    # SILENT ORPHANING IS THE THING THIS GUARD EXISTS TO PREVENT.
+    #
+    # quizzes.coach_id is ON DELETE SET NULL, so removing a coach used to
+    # quietly hand their quizzes to nobody. That was harmless when every quiz
+    # was visible org-wide. Now that Coach View is own-only, a quiz owned by
+    # nobody appears in nobody's list - it would still exist, still be live,
+    # still be answerable by players, and no one would ever find it again.
+    #
+    # So the removal is refused until the quizzes have somewhere to go. The
+    # refusal is actionable rather than a dead end: pass `reassign_quizzes_to`
+    # and the transfer and the removal happen together.
+    owned = Quiz.query.filter_by(coach_id=member.id).all()
+    if owned:
+        payload = request.get_json(silent=True) or {}
+        target_id = payload.get("reassign_quizzes_to")
+
+        if target_id is None:
+            raise ApiError(
+                f"{member.username} owns {len(owned)} "
+                f"{'quiz' if len(owned) == 1 else 'quizzes'}. Reassign them to another "
+                "coach first, or choose someone to take them over as part of removing "
+                "this coach.",
+                status_code=409,
+                reason="owns_quizzes",
+                details={
+                    "quiz_count": len(owned),
+                    "quizzes": [{"id": q.id, "title": q.title} for q in owned],
+                },
+            )
+
+        # Resolved inside this organization, so a coach id from elsewhere
+        # cannot be named as the new owner.
+        new_owner = _get_org_member(int(target_id), admin.organization_id)
+        if new_owner.id == member.id:
+            raise ApiError(
+                "Choose a different coach to take over these quizzes", status_code=422
+            )
+        for quiz in owned:
+            quiz.coach_id = new_owner.id
+
+        # Flush the transfer, then forget `member.quizzes`.
+        #
+        # Coach.quizzes has no passive_deletes, so on db.session.delete(member)
+        # SQLAlchemy loads that collection and nulls each row's coach_id
+        # itself - silently undoing the reassignment above and orphaning the
+        # very quizzes this guard exists to protect. Expiring the collection
+        # makes it reload as empty (the quizzes belong to someone else now),
+        # so there is nothing left for the delete to null.
+        db.session.flush()
+        db.session.expire(member, ["quizzes"])
+
+    # Folders and groups still fall to the FK's SET NULL, and that stays
+    # correct: they are org-shared infrastructure that any coach can see and
+    # edit, so an unowned one is not hidden from anybody.
     db.session.delete(member)
     db.session.commit()
     return "", 204
+
+
+# ---------------------------------------------------------------------------
+# ADMIN VIEW
+#
+# The organization-wide surface, and the ONLY place it exists. Every coach
+# endpoint elsewhere is own-only for everyone including admins, so this is not
+# "the normal list with a wider filter" - it is a different screen with
+# different questions: whose is this, who has what, what is unowned.
+#
+# Every route here goes through require_admin(), and every one resolves the
+# organization from the authenticated admin rather than from the URL, so
+# cross-organization access is not something to authorize - it is something
+# that cannot be expressed.
+# ---------------------------------------------------------------------------
+
+
+@organizations_bp.get("/quizzes")
+@jwt_required()
+def list_organization_quizzes():
+    """Every quiz in the admin's organization, with its owner.
+
+    Includes UNASSIGNED quizzes (coach_id IS NULL). That is the whole reason
+    an ownerless quiz is not lost: Coach View shows a coach their own quizzes,
+    so a quiz belonging to nobody appears in nobody's list. Here it appears
+    with owner null and can be reassigned.
+    """
+    admin = require_admin()
+
+    query = Quiz.query.filter(Quiz.organization_id == admin.organization_id).options(
+        selectinload(Quiz.questions), selectinload(Quiz.coach)
+    )
+
+    # Filter by coach. "unassigned" is a first-class value rather than a
+    # separate endpoint, because "show me what nobody owns" is the same
+    # question as "show me what Dave owns" from the admin's point of view.
+    coach_filter = (request.args.get("coach_id") or "").strip()
+    if coach_filter == "unassigned":
+        query = query.filter(Quiz.coach_id.is_(None))
+    elif coach_filter:
+        try:
+            query = query.filter(Quiz.coach_id == int(coach_filter))
+        except ValueError:
+            raise ApiError("coach_id must be a number or 'unassigned'", status_code=422) from None
+
+    # Search. Server-side here (unlike the dashboard, which filters a list it
+    # already has) because an organization's full quiz list is the one that
+    # can actually get long.
+    search = (request.args.get("q") or "").strip()
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(
+            db.or_(Quiz.title.ilike(pattern), Quiz.description.ilike(pattern))
+        )
+
+    quizzes = query.order_by(Quiz.updated_at.desc()).all()
+    return jsonify(
+        [
+            {
+                **quiz.to_dict(),
+                # Ownership is the point of this screen, so it is explicit
+                # rather than inferred from created_by_username being null.
+                "owner": (
+                    {"id": quiz.coach.id, "username": quiz.coach.username}
+                    if quiz.coach
+                    else None
+                ),
+                "is_unassigned": quiz.coach_id is None,
+            }
+            for quiz in quizzes
+        ]
+    )
+
+
+@organizations_bp.patch("/quizzes/<int:quiz_id>/owner")
+@jwt_required()
+def transfer_quiz_owner(quiz_id: int):
+    """Reassign a quiz to another coach in the organization.
+
+    EXPLICIT, never a side effect. Ownership decides who sees a quiz in their
+    Coach View, so changing it silently - on edit, on duplicate, on anything -
+    would make quizzes appear and disappear from people's dashboards for
+    reasons they could not see. This is the only route that changes it.
+    """
+    admin = require_admin()
+    quiz = Quiz.query.filter_by(id=quiz_id, organization_id=admin.organization_id).first()
+    if quiz is None:
+        raise ApiError("Quiz not found", status_code=404)
+
+    data = load_json_body(QuizOwnerUpdateSchema())
+    # Re-resolved inside the admin's own organization, so a coach id from
+    # another organization cannot be assigned even if one is guessed.
+    new_owner = _get_org_member(data["coach_id"], admin.organization_id)
+
+    quiz.coach_id = new_owner.id
+    db.session.commit()
+    return jsonify(
+        {
+            **quiz.to_dict(),
+            "owner": {"id": new_owner.id, "username": new_owner.username},
+            "is_unassigned": False,
+        }
+    )
+
+
+@organizations_bp.get("/players/history")
+@jwt_required()
+def organization_player_history():
+    """Whole-program history for a player, by name. Admin View only.
+
+    This is where the org-wide analytics moved to, not where they were added:
+    the coach route used to do this for everyone. The reasoning behind it -
+    that a player's development across the whole program is the point - is
+    still right, which is why the capability was preserved rather than
+    dropped when Coach View became own-only.
+    """
+    admin = require_admin()
+    player_name = (request.args.get("name") or "").strip()
+    if not player_name:
+        raise ApiError("Query parameter 'name' is required", status_code=400)
+
+    from app.routes.grading import _player_history_payload
+
+    return jsonify(_player_history_payload(admin, player_name, organization_wide=True))
+
+
+@organizations_bp.get("/players/<int:player_id>/history")
+@jwt_required()
+def organization_player_profile(player_id: int):
+    """Whole-program analytics for a canonical roster player. Admin View only."""
+    admin = require_admin()
+
+    from app.routes.players import build_player_history
+    from app.utils.auth import get_org_player
+
+    player = get_org_player(player_id)
+    return jsonify(build_player_history(admin, player, organization_wide=True))

@@ -40,6 +40,10 @@ def _seed(app, player_count: int):
         coach = Coach(organization_id=org.id, username=f"perfcoach{player_count}", email=f"perf{player_count}@example.com")
         coach.set_password("password123")
         db.session.add(coach)
+        # flush() so coach.id exists. Without it coach_id was None and this
+        # fixture built an OWNERLESS quiz - invisible to everyone now that
+        # Coach View is own-only, and silently fine before.
+        db.session.flush()
 
         quiz = Quiz(organization_id=org.id, coach_id=coach.id, title=f"Perf Export Quiz {player_count}")
         db.session.add(quiz)

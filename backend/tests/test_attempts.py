@@ -323,7 +323,10 @@ def test_reset_attempt_requires_the_quizs_creator_or_an_org_admin(client, coach_
     response = client.delete(
         f"/api/quizzes/{quiz['id']}/attempts/{submit_response['id']}", headers=teammate_headers
     )
-    assert response.status_code == 403
+    # 404 now, not 403. A teammate cannot see this quiz at all, so telling
+    # them "forbidden" would confirm the id exists. Was 403 when every quiz
+    # was visible org-wide and pretending otherwise would have been confusing.
+    assert response.status_code == 404
 
 
 def test_reset_attempt_404s_for_an_attempt_belonging_to_a_different_quiz(client, coach_headers):

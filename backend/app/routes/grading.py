@@ -311,21 +311,39 @@ def export_results_detailed_pdf(quiz_id: int):
 @grading_bp.get("/players/history")
 @jwt_required()
 def player_history():
+    """Coach View: this player's history across THIS COACH'S quizzes only.
+
+    This reverses an earlier deliberate choice - the org-wide version's
+    comment argued that a player's development across the whole program is
+    the point, and that argument is still correct. It has not been deleted,
+    it has MOVED: the whole-program view now lives at
+    /api/organizations/players/history, behind admin. A coach who cannot open
+    a quiz must not be able to read its title and scores from here, which is
+    exactly what an org-wide list would leak.
+    """
     coach = current_coach()
     player_name = request.args.get("name", "").strip()
     if not player_name:
         raise ApiError("Query parameter 'name' is required", status_code=400)
 
+    return jsonify(_player_history_payload(coach, player_name, organization_wide=False))
+
+
+def _player_history_payload(coach, player_name: str, organization_wide: bool):
+    """Shared by the coach and admin routes so the two scopes cannot drift
+    into computing different numbers for the same player."""
+    scope = [
+        Quiz.organization_id == coach.organization_id,
+        PlayerAttempt.player_name == player_name,
+        PlayerAttempt.status == AttemptStatus.SUBMITTED,
+    ]
+    if not organization_wide:
+        # Coach View. Whole-program history is the admin route's job.
+        scope.append(Quiz.coach_id == coach.id)
+
     responses = (
         PlayerAttempt.query.join(Quiz)
-        # Org-wide, not per-coach: a player's development across the whole
-        # program is the point, and quizzes from different coaches on the
-        # same staff are all part of that picture.
-        .filter(
-            Quiz.organization_id == coach.organization_id,
-            PlayerAttempt.player_name == player_name,
-            PlayerAttempt.status == AttemptStatus.SUBMITTED,
-        )
+        .filter(*scope)
         # contains_eager reuses the join above for response.quiz.title instead of
         # a separate lazy-load per response; selectinload batches .answers (and each
         # answer's .question, needed below for pending_grading_count) in one query each.
@@ -363,4 +381,4 @@ def player_history():
             }
         )
 
-    return jsonify({"player_name": player_name, "history": history})
+    return {"player_name": player_name, "history": history}

@@ -681,7 +681,18 @@ def test_removing_a_coach_nulls_graded_by_but_keeps_the_audit_log_row(
         log = GradeAuditLog.query.filter_by(answer_id=answer_id).first()
         assert log.coach_id == teammate["id"]
 
-    remove_response = client.delete(f"/api/organizations/members/{teammate['id']}", headers=coach_headers)
+    # The teammate owns the quiz they graded, so removal must say where it
+    # goes - quizzes are never silently orphaned now.
+    admin_id = next(
+        m["id"]
+        for m in client.get("/api/organizations", headers=coach_headers).get_json()["members"]
+        if m["id"] != teammate["id"]
+    )
+    remove_response = client.delete(
+        f"/api/organizations/members/{teammate['id']}",
+        headers=coach_headers,
+        json={"reassign_quizzes_to": admin_id},
+    )
     assert remove_response.status_code == 204
 
     with app.app_context():

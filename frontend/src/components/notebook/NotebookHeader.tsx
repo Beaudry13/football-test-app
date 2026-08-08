@@ -26,6 +26,15 @@ const NAV_LINKS = [
   { to: '/team', label: 'Team', isActive: (path: string) => path.startsWith('/team') },
 ];
 
+// Shown only to admins, and kept out of NAV_LINKS so it renders visually
+// apart from the normal tabs. Switching views is not the same kind of action
+// as moving between sections: the tabs are all Coach View, and this leaves it.
+const ADMIN_LINK = {
+  to: '/admin/quizzes',
+  label: 'Admin View',
+  isActive: (path: string) => path.startsWith('/admin'),
+};
+
 /** Shared header for every notebook-themed page. Reads auth state itself
  * (no props needed) so it can be dropped into any page: shows the full
  * nav + coach name + logout when signed in, or just the brand when not
@@ -77,6 +86,22 @@ export function NotebookHeader() {
               {link.label}
             </Link>
           ))}
+          {/* Admins only. Coach View is everything to the left of this and
+              is always where a page load lands; this is the one way out of
+              it, and clicking any tab above comes straight back. */}
+          {coach.role === 'admin' && (
+            <>
+              <span className={styles.navDivider} />
+              <Link
+                to={ADMIN_LINK.to}
+                className={`${styles.navLink} ${
+                  ADMIN_LINK.isActive(location.pathname) ? styles.navLinkActive : ''
+                }`}
+              >
+                {ADMIN_LINK.label}
+              </Link>
+            </>
+          )}
           <span className={styles.navDivider} />
           <span className={styles.coachName}>{coach.username}</span>
           <button className={styles.logoutButton} onClick={handleLogout}>

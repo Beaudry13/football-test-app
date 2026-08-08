@@ -180,30 +180,30 @@ def test_player_history_does_not_cross_organizations(client, coach_headers, regi
 # --- Same-org sharing: see all, edit own ----------------------------------
 
 
-def test_teammate_can_see_but_not_edit_another_members_quiz(client, coach_headers, invite_teammate):
+def test_teammate_cannot_see_another_members_quiz_at_all(client, coach_headers, invite_teammate):
+    """Coach View is own-only. This test previously asserted the opposite -
+    that a teammate could SEE any quiz in the org and was merely blocked from
+    editing it with a 403. Both halves changed: the quiz is now absent from
+    their list, and every route answers 404 rather than 403 so a member cannot
+    learn that the id exists."""
     quiz = create_quiz(client, coach_headers, title="Coach 1's quiz")
     _, _, teammate_headers = invite_teammate(coach_headers)
 
-    listed = client.get("/api/quizzes", headers=teammate_headers).get_json()
-    assert [q["title"] for q in listed] == ["Coach 1's quiz"]
-    assert listed[0]["created_by_username"] == "coach1"
+    assert client.get("/api/quizzes", headers=teammate_headers).get_json() == []
 
-    assert client.get(f"/api/quizzes/{quiz['id']}", headers=teammate_headers).status_code == 200
-
-    # 403, not 404: they can see it listed, so pretending it doesn't exist
-    # would be actively confusing.
+    assert client.get(f"/api/quizzes/{quiz['id']}", headers=teammate_headers).status_code == 404
     assert client.patch(
         f"/api/quizzes/{quiz['id']}", json={"title": "changed"}, headers=teammate_headers
-    ).status_code == 403
-    assert client.delete(f"/api/quizzes/{quiz['id']}", headers=teammate_headers).status_code == 403
+    ).status_code == 404
+    assert client.delete(f"/api/quizzes/{quiz['id']}", headers=teammate_headers).status_code == 404
     assert client.post(
         f"/api/quizzes/{quiz['id']}/questions",
         json={"question_text": "Q", "question_type": "written", "options": []},
         headers=teammate_headers,
-    ).status_code == 403
+    ).status_code == 404
     assert client.put(
         f"/api/quizzes/{quiz['id']}/roster", json={"players": ["X"]}, headers=teammate_headers
-    ).status_code == 403
+    ).status_code == 404
 
 
 def test_admin_can_edit_a_members_quiz(client, coach_headers, invite_teammate):
@@ -226,20 +226,28 @@ def test_teammate_can_edit_their_own_quiz(client, coach_headers, invite_teammate
     ).status_code == 200
 
 
-def test_teammate_can_duplicate_another_members_quiz_and_owns_the_copy(
+def test_an_admin_duplicating_a_members_quiz_owns_the_copy(
     client, coach_headers, invite_teammate
 ):
-    quiz = create_quiz(client, coach_headers, title="Original")
+    """Duplication assigns the copy to whoever made it. Previously any
+    teammate could duplicate any quiz in the org; now only the owner or an
+    admin can reach it at all, so this exercises the admin path."""
     _, _, teammate_headers = invite_teammate(coach_headers)
+    quiz = create_quiz(client, teammate_headers, title="Original")
 
-    copy = client.post(f"/api/quizzes/{quiz['id']}/duplicate", headers=teammate_headers)
+    # The member cannot duplicate a quiz they cannot see...
+    assert client.post(
+        f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers
+    ).status_code == 201  # the admin can
+
+    copy = client.post(f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers)
     assert copy.status_code == 201
     copy_body = copy.get_json()
-    assert copy_body["created_by_username"] == "teammate"
+    assert copy_body["created_by_username"] == "coach1"
 
     # ...and can then edit it, since it's theirs.
     assert client.patch(
-        f"/api/quizzes/{copy_body['id']}", json={"title": "My version"}, headers=teammate_headers
+        f"/api/quizzes/{copy_body['id']}", json={"title": "My version"}, headers=coach_headers
     ).status_code == 200
 
 
@@ -321,20 +329,38 @@ def test_cannot_demote_or_remove_the_last_admin(client, coach_headers, register_
     ).status_code == 422
 
 
-def test_removing_a_member_keeps_their_quizzes_with_the_organization(
+def test_removing_a_member_cannot_strand_their_quizzes(
     client, coach_headers, invite_teammate
 ):
+    """This test used to assert that removal simply nulled the owner and the
+    quiz "stayed with the organization". That was true and harmless when every
+    quiz was visible org-wide - but under own-only, a quiz owned by nobody is
+    in nobody's list, so it stayed with the organization in the sense that it
+    was lost inside it. Removal is now refused until the quizzes have an owner."""
     teammate, _, teammate_headers = invite_teammate(coach_headers)
     quiz = create_quiz(client, teammate_headers, title="Leaver's quiz")
 
-    assert client.delete(
+    refused = client.delete(
         f"/api/organizations/members/{teammate['id']}", headers=coach_headers
+    )
+    assert refused.status_code == 409
+    assert refused.get_json()["reason"] == "owns_quizzes"
+
+    admin_id = next(
+        m["id"]
+        for m in client.get("/api/organizations", headers=coach_headers).get_json()["members"]
+        if m["id"] != teammate["id"]
+    )
+    assert client.delete(
+        f"/api/organizations/members/{teammate['id']}",
+        headers=coach_headers,
+        json={"reassign_quizzes_to": admin_id},
     ).status_code == 204
 
+    # The work survives, and now has a real owner rather than none.
     remaining = client.get("/api/quizzes", headers=coach_headers).get_json()
     assert [q["title"] for q in remaining] == ["Leaver's quiz"]
-    # Creator attribution is gone, but the work stays with the team.
-    assert remaining[0]["created_by_username"] is None
+    assert remaining[0]["created_by_username"] == "coach1"
     assert client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).status_code == 200
 
 

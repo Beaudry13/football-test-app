@@ -15,7 +15,8 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import Folder
 from app.schemas.folder import FolderCreateSchema, FolderUpdateSchema
-from app.utils.auth import current_coach, get_org_folder
+from app.services.quiz_scope import visible_folders
+from app.utils.auth import current_coach, own_quizzes_query, get_org_folder
 from app.utils.validation import load_json_body
 
 folders_bp = Blueprint("folders", __name__)
@@ -31,7 +32,13 @@ def list_folders():
         .order_by(Folder.name)
         .all()
     )
-    return jsonify([f.to_dict() for f in folders])
+    # Coach View shows only folders relevant to this coach - theirs, ones
+    # holding their quizzes, and the ancestors needed to reach those. Without
+    # the ancestors a nested folder becomes unreachable from the dashboard.
+    # See services/quiz_scope.visible_folders.
+    return jsonify(
+        [f.to_dict() for f in visible_folders(coach, folders, own_quizzes_query(coach).all())]
+    )
 
 
 @folders_bp.post("")
