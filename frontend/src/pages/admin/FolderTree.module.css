@@ -1,0 +1,153 @@
+/* File-explorer styling for Admin View's tree. Page-specific only - the
+   shared notebook design system lives in styles/notebook.module.css. */
+
+.level {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Indentation is driven by --depth rather than nested padding, so a deep
+   branch indents predictably without each level compounding, and every row -
+   at any depth - still spans the full width for hover and focus. */
+.folderRow,
+.quizRow {
+  --indent: calc(var(--depth, 0) * 22px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px 8px calc(12px + var(--indent));
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+.folderRow {
+  cursor: pointer;
+}
+
+.folderRow:hover,
+.quizRow:hover {
+  background: var(--nb-surface-raised, rgba(255, 255, 255, 0.05));
+}
+
+.folderRow:focus-visible {
+  outline: 2px solid var(--nb-accent);
+  outline-offset: -2px;
+}
+
+.chevron {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--nb-text-muted);
+  transition: transform 120ms ease;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.folderIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--nb-accent);
+}
+
+.folderName {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Summary sits to the right and stays quiet - it is reference information
+   while scanning, not the thing being scanned for. */
+.summary {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--nb-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.emptyTag {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* A quiz row is deliberately lighter than a folder row: folders are the
+   navigation, quizzes are the contents. */
+.quizRow {
+  border-left: 2px solid var(--nb-border);
+  border-radius: 0 6px 6px 0;
+}
+
+.quizRowUnassigned {
+  border-left-color: var(--nb-warning, #b58900);
+}
+
+.quizIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--nb-text-muted);
+}
+
+.quizTitle {
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.quizTitle:hover {
+  text-decoration: underline;
+}
+
+.ownerTag,
+.unassignedTag {
+  flex: 0 0 auto;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ownerTag {
+  background: var(--nb-surface-raised, rgba(255, 255, 255, 0.08));
+  color: var(--nb-text-muted);
+}
+
+.unassignedTag {
+  background: var(--nb-warning, #b58900);
+  color: #10131a;
+}
+
+.quizMeta {
+  margin-left: auto;
+  color: var(--nb-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.assign {
+  flex: 0 0 auto;
+  max-width: 150px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 720px) {
+  .summary,
+  .quizMeta {
+    display: none;
+  }
+
+  .folderRow,
+  .quizRow {
+    --indent: calc(var(--depth, 0) * 14px);
+  }
+}

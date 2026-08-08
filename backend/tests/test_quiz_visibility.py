@@ -18,7 +18,14 @@ def make_quiz(client, headers, title: str) -> dict:
 
 
 def titles(payload) -> set[str]:
-    return {q["title"] for q in payload}
+    """Quiz titles from either shape: the coach list is a bare array, the admin
+    endpoint returns {folders, quizzes} because Admin View renders a tree."""
+    quizzes = payload["quizzes"] if isinstance(payload, dict) else payload
+    return {q["title"] for q in quizzes}
+
+
+def admin_quizzes(payload) -> list[dict]:
+    return payload["quizzes"]
 
 
 @pytest.fixture
@@ -142,7 +149,7 @@ class TestAdminView:
 
     def test_shows_the_owner_of_every_quiz(self, client, org):
         body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
-        owners = {q["title"]: q["owner"]["username"] for q in body}
+        owners = {q["title"]: q["owner"]["username"] for q in admin_quizzes(body)}
         assert owners == {"A Quiz": "coacha", "B Quiz": "coachb", "Admin Quiz": "theadmin"}
 
     def test_a_member_is_refused(self, client, org):
@@ -181,8 +188,8 @@ class TestAdminView:
         body = client.get(
             "/api/organizations/quizzes?q=B Quiz", headers=org["admin_headers"]
         ).get_json()
-        assert len(body) == 1
-        assert body[0]["owner"]["username"] == "coachb"
+        assert len(admin_quizzes(body)) == 1
+        assert admin_quizzes(body)[0]["owner"]["username"] == "coachb"
 
     def test_rejects_a_nonsense_coach_filter(self, client, org):
         response = client.get(
@@ -208,7 +215,7 @@ class TestUnassignedQuizzes:
         # The whole reason an ownerless quiz is recoverable rather than lost.
         self._orphan(app, org["b"]["quiz"]["id"])
         body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
-        orphan = next(q for q in body if q["title"] == "B Quiz")
+        orphan = next(q for q in admin_quizzes(body) if q["title"] == "B Quiz")
         assert orphan["owner"] is None
         assert orphan["is_unassigned"] is True
 
@@ -497,3 +504,126 @@ class TestAnalyticsScope:
             headers=org["admin_headers"],
         ).get_json()
         assert "Rival Quiz" not in {row["quiz_title"] for row in body["history"]}
+
+
+class TestAdminTreeData:
+    """Admin View builds a folder tree from ONE response, so that response has
+    to carry the whole shape of the organization - including branches holding
+    nothing, which is exactly what a lazy per-expand fetch would omit."""
+
+    def _folder(self, client, headers, name, parent=None):
+        return client.post(
+            "/api/folders", headers=headers, json={"name": name, "parent_folder_id": parent}
+        ).get_json()
+
+    def test_returns_every_folder_in_the_organization(self, client, org):
+        self._folder(client, org["a"]["headers"], "A Folder")
+        self._folder(client, org["b"]["headers"], "B Folder")
+
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        names = {f["name"] for f in body["folders"]}
+        assert {"A Folder", "B Folder"} <= names
+
+    def test_carries_the_hierarchy(self, client, org):
+        season = self._folder(client, org["admin_headers"], "2026 Season")
+        camp = self._folder(client, org["admin_headers"], "Fall Camp", parent=season["id"])
+
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        by_name = {f["name"]: f for f in body["folders"]}
+        # The client reconstructs the tree from parent_folder_id alone, so the
+        # chain has to be intact at every level.
+        assert by_name["2026 Season"]["parent_folder_id"] is None
+        assert by_name["Fall Camp"]["parent_folder_id"] == season["id"]
+        assert camp["id"] in {f["id"] for f in body["folders"]}
+
+    def test_nesting_five_levels_deep(self, client, org):
+        """The real season shape, which the old two-level cap forced coaches to
+        flatten into folder names."""
+        names = ["2026 Season", "Week 3", "Defense", "Redzone", "Install Quizzes"]
+        parent = None
+        created = []
+        for name in names:
+            folder = self._folder(client, org["admin_headers"], name, parent=parent)
+            assert "id" in folder, folder
+            created.append(folder)
+            parent = folder["id"]
+
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        by_name = {f["name"]: f for f in body["folders"]}
+
+        # The whole chain is intact, so a client can rebuild it from
+        # parent_folder_id alone.
+        assert by_name["2026 Season"]["parent_folder_id"] is None
+        for child, parent_name in zip(names[1:], names[:-1]):
+            assert by_name[child]["parent_folder_id"] == by_name[parent_name]["id"]
+
+    def test_a_quiz_five_levels_down_is_reachable(self, client, org):
+        parent = None
+        for name in ["2026 Season", "Week 3", "Defense", "Redzone", "Install Quizzes"]:
+            parent = self._folder(client, org["a"]["headers"], name, parent=parent)["id"]
+
+        client.patch(
+            f"/api/quizzes/{org['a']['quiz']['id']}",
+            headers=org["a"]["headers"],
+            json={"folder_id": parent},
+        )
+
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        quiz = next(q for q in body["quizzes"] if q["title"] == "A Quiz")
+        assert quiz["folder_id"] == parent
+
+    def test_includes_empty_folders(self, client, org):
+        # A branch with nothing in it still has to be navigable - an admin
+        # filing quizzes into it needs to see it exists.
+        self._folder(client, org["admin_headers"], "Empty Branch")
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        assert "Empty Branch" in {f["name"] for f in body["folders"]}
+
+    def test_quizzes_carry_the_folder_they_live_in(self, client, org):
+        folder = self._folder(client, org["a"]["headers"], "Week 1")
+        client.patch(
+            f"/api/quizzes/{org['a']['quiz']['id']}",
+            headers=org["a"]["headers"],
+            json={"folder_id": folder["id"]},
+        )
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        quiz = next(q for q in body["quizzes"] if q["title"] == "A Quiz")
+        assert quiz["folder_id"] == folder["id"]
+
+    def test_an_uncategorised_quiz_has_no_folder_id(self, client, org):
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        quiz = next(q for q in body["quizzes"] if q["title"] == "B Quiz")
+        # Nullable folder_id is what the client's "Uncategorized" section is
+        # built from - these must not silently vanish from the tree.
+        assert quiz["folder_id"] is None
+
+    def test_a_quiz_survives_its_folder_being_deleted(self, client, org):
+        folder = self._folder(client, org["a"]["headers"], "Temporary")
+        client.patch(
+            f"/api/quizzes/{org['a']['quiz']['id']}",
+            headers=org["a"]["headers"],
+            json={"folder_id": folder["id"]},
+        )
+        assert client.delete(f"/api/folders/{folder['id']}", headers=org["a"]["headers"]).status_code == 204
+
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        quiz = next(q for q in body["quizzes"] if q["title"] == "A Quiz")
+        # folders.quizzes is ON DELETE SET NULL, so it lands in Uncategorized
+        # rather than disappearing with the folder.
+        assert quiz["folder_id"] is None
+
+    def test_another_organizations_tree_is_never_included(self, client, org, register_coach):
+        _, _, outsider = register_coach(
+            username="rival", email="rival@example.com", organization="Rivals"
+        )
+        self._folder(client, outsider, "Rival Season")
+        make_quiz(client, outsider, "Rival Quiz")
+
+        body = client.get("/api/organizations/quizzes", headers=org["admin_headers"]).get_json()
+        assert "Rival Season" not in {f["name"] for f in body["folders"]}
+        assert "Rival Quiz" not in {q["title"] for q in body["quizzes"]}
+
+    def test_a_member_cannot_read_the_tree(self, client, org):
+        assert (
+            client.get("/api/organizations/quizzes", headers=org["a"]["headers"]).status_code == 403
+        )

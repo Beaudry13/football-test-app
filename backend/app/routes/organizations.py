@@ -14,7 +14,7 @@ from app.errors import ApiError
 from app.extensions import db, limiter
 from sqlalchemy.orm import selectinload
 
-from app.models import Coach, CoachRole, OrganizationInvite, Quiz
+from app.models import Coach, CoachRole, Folder, OrganizationInvite, Quiz
 from app.schemas.organization import (
     MemberRoleUpdateSchema,
     OrganizationUpdateSchema,
@@ -278,21 +278,43 @@ def list_organization_quizzes():
         )
 
     quizzes = query.order_by(Quiz.updated_at.desc()).all()
+
+    # The organization's folders come back in the SAME response, unfiltered.
+    #
+    # Admin View renders a tree and needs the whole shape of it - names,
+    # parents, and the branches that hold nothing - and it needs that shape
+    # before the admin expands anything. Fetching folders separately, or a
+    # level at a time as branches open, would mean a request per expand and a
+    # window where the two halves disagree. One request, then every expand,
+    # filter and search is instant and local.
+    #
+    # Sized for the real case: hundreds of quizzes and tens of folders is a
+    # small JSON document. If an organization ever outgrows that, the server
+    # already accepts coach_id and q to narrow it.
+    folders = (
+        Folder.query.filter_by(organization_id=admin.organization_id)
+        .order_by(Folder.name)
+        .all()
+    )
+
     return jsonify(
-        [
-            {
-                **quiz.to_dict(),
-                # Ownership is the point of this screen, so it is explicit
-                # rather than inferred from created_by_username being null.
-                "owner": (
-                    {"id": quiz.coach.id, "username": quiz.coach.username}
-                    if quiz.coach
-                    else None
-                ),
-                "is_unassigned": quiz.coach_id is None,
-            }
-            for quiz in quizzes
-        ]
+        {
+            "folders": [folder.to_dict() for folder in folders],
+            "quizzes": [
+                {
+                    **quiz.to_dict(),
+                    # Ownership is the point of this screen, so it is explicit
+                    # rather than inferred from created_by_username being null.
+                    "owner": (
+                        {"id": quiz.coach.id, "username": quiz.coach.username}
+                        if quiz.coach
+                        else None
+                    ),
+                    "is_unassigned": quiz.coach_id is None,
+                }
+                for quiz in quizzes
+            ],
+        }
     )
 
 

@@ -52,12 +52,18 @@ def create_folder():
         # get_org_folder() already 404s for a missing id or one in another
         # organization - covers "stale/missing parent" and "cross-org
         # parent" with no extra code here.
-        parent = get_org_folder(parent_folder_id)
-        if parent.parent_folder_id is not None:
-            raise ApiError(
-                "Folders can only be nested one level deep - this folder is already a subfolder",
-                status_code=422,
-            )
+        # Nesting is unlimited. A real season structure is genuinely several
+        # levels deep - 2026 Season > Week 3 > Defense > Redzone > Install -
+        # and the previous two-level cap forced coaches to flatten that into
+        # folder names.
+        #
+        # CYCLES REMAIN IMPOSSIBLE, and not by luck: a folder's parent is
+        # chosen at creation and never changed (rename does not move folders,
+        # and there is no reparent route). A new folder therefore cannot be
+        # named as its own ancestor, because it does not exist yet when its
+        # parent is picked. Adding folder-moving later WOULD need a real cycle
+        # check - that is the change to be careful about, not this one.
+        get_org_folder(parent_folder_id)
 
     folder = Folder(
         organization_id=coach.organization_id,

@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
 import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
 import { getErrorMessage } from '../api/client';
@@ -11,6 +10,7 @@ import { QuizCard } from '../components/QuizCard';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
 import { Icon } from '../components/ui/Icon';
+import { CoachFolderSection } from './CoachFolderSection';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
@@ -188,9 +188,10 @@ export function DashboardPage() {
     );
   }
 
-  // Only root folders (no parent) render as their own accordion section
-  // here - a subfolder is reached by clicking its link inside its parent's
-  // section, which navigates to its own page (FolderPage) instead.
+  // Only root folders start the recursion; CoachFolderSection renders each
+  // folder's own subfolders inline, to any depth. Subfolders used to be links
+  // out to FolderPage, which only worked while nesting was capped at two
+  // levels - a five-deep season would otherwise be five pages to walk.
   const rootFolders = folders?.filter((f) => f.parent_folder_id === null) ?? [];
   const hasFolders = rootFolders.length > 0;
   const uncategorized = quizzes?.filter((q) => q.folder_id === null) ?? [];
@@ -254,112 +255,34 @@ export function DashboardPage() {
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
           <div className={styles.folderSections}>
-            {rootFolders.map((folder) => {
-              const folderQuizzes = quizzes.filter((q) => q.folder_id === folder.id);
-              const subfolders = folders?.filter((f) => f.parent_folder_id === folder.id) ?? [];
-              const isCollapsed = collapsedFolderIds.has(folder.id);
-              return (
-                <div key={folder.id} className={styles.folderSection}>
-                  <div className={styles.folderHeader}>
-                    <button className={styles.folderToggle} onClick={() => toggleFolder(folder.id)}>
-                      <span className={styles.folderCollapseIcon}>
-                        <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={16} />
-                      </span>
-                      {folder.name} <span className={styles.folderCount}>({folderQuizzes.length})</span>
-                    </button>
-                    <div className={styles.folderActions}>
-                      {renamingFolderId === folder.id ? (
-                        <>
-                          <input
-                            autoFocus
-                            className={nb.input}
-                            style={{ width: 200 }}
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleRenameFolder(folder.id)}
-                            aria-label={`Rename folder "${folder.name}"`}
-                          />
-                          <button className={nb.btnSm} onClick={() => handleRenameFolder(folder.id)}>
-                            Save
-                          </button>
-                          <button className={nb.btnSm} onClick={() => setRenamingFolderId(null)}>
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className={nb.btnSm}
-                          onClick={() => {
-                            setRenamingFolderId(folder.id);
-                            setRenameValue(folder.name);
-                          }}
-                        >
-                          Rename
-                        </button>
-                      )}
-                      <button
-                        className={`${nb.btnSm} ${nb.btnDanger}`}
-                        onClick={() => handleDeleteFolder(folder.id, folder.name)}
-                      >
-                        Delete folder
-                      </button>
-                    </div>
-                  </div>
-                  {!isCollapsed && (
-                    <>
-                      <div className={styles.subfolderSection}>
-                        <h4 className={styles.subListHeading}>Subfolders</h4>
-                        {subfolders.length > 0 && (
-                          <div className={styles.subfolderList}>
-                            {subfolders.map((sub) => (
-                              <Link
-                                key={sub.id}
-                                to={`/folders/${sub.id}`}
-                                className={styles.subfolderLink}
-                              >
-                                📁 {sub.name} <span className={styles.folderCount}>({sub.quiz_count})</span>
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-                        <form
-                          className={styles.newSubfolderForm}
-                          onSubmit={(e) => handleCreateSubfolder(e, folder.id)}
-                        >
-                          <input
-                            className={nb.input}
-                            style={{ width: 200 }}
-                            type="text"
-                            placeholder="New subfolder, e.g. Week 1"
-                            value={newSubfolderNames[folder.id] ?? ''}
-                            onChange={(e) =>
-                              setNewSubfolderNames((prev) => ({ ...prev, [folder.id]: e.target.value }))
-                            }
-                            aria-label={`New subfolder inside "${folder.name}"`}
-                          />
-                          <button
-                            type="submit"
-                            className={nb.btnSm}
-                            disabled={
-                              isCreatingSubfolderFor === folder.id || !(newSubfolderNames[folder.id] ?? '').trim()
-                            }
-                          >
-                            {isCreatingSubfolderFor === folder.id ? 'Creating…' : 'New subfolder'}
-                          </button>
-                        </form>
-                      </div>
-                      <div className={styles.list}>
-                        {folderQuizzes.length === 0 ? (
-                          <div className={styles.emptyFolder}>No Quizzes directly in this folder yet.</div>
-                        ) : (
-                          folderQuizzes.map(renderQuizCard)
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+            {rootFolders.map((folder) => (
+              <CoachFolderSection
+                key={folder.id}
+                folder={folder}
+                depth={0}
+                allFolders={folders ?? []}
+                quizzes={quizzes}
+                collapsedIds={collapsedFolderIds}
+                onToggle={toggleFolder}
+                renamingId={renamingFolderId}
+                renameValue={renameValue}
+                onRenameValueChange={setRenameValue}
+                onStartRename={(f) => {
+                  setRenamingFolderId(f.id);
+                  setRenameValue(f.name);
+                }}
+                onCancelRename={() => setRenamingFolderId(null)}
+                onRename={handleRenameFolder}
+                onDelete={handleDeleteFolder}
+                subfolderNames={newSubfolderNames}
+                onSubfolderNameChange={(parentId, value) =>
+                  setNewSubfolderNames((prev) => ({ ...prev, [parentId]: value }))
+                }
+                creatingSubfolderFor={isCreatingSubfolderFor}
+                onCreateSubfolder={handleCreateSubfolder}
+                renderQuizCard={renderQuizCard}
+              />
+            ))}
 
             {uncategorized.length > 0 && (
               <div className={styles.folderSection}>

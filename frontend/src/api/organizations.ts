@@ -1,6 +1,7 @@
 import { api } from './client';
 import type {
   CoachRole,
+  Folder,
   Organization,
   OrganizationInvite,
   OrganizationMember,
@@ -45,19 +46,30 @@ export interface OrganizationQuiz extends Quiz {
   is_unassigned: boolean;
 }
 
-/** Admin View's quiz list. Organization-wide, admin-only, and the only
- *  endpoint that returns quizzes the caller did not create. */
+/** Everything Admin View's tree needs, in ONE response.
+ *
+ *  Folders come back with the quizzes so the tree can be built client-side
+ *  and expanding a branch costs no request. Filtering and search also run
+ *  locally against this payload - the server still accepts coachId/search for
+ *  an organization large enough to want narrowing, but the tree does not use
+ *  them, because a round-trip per keystroke is worse UX than filtering a few
+ *  hundred rows in memory. */
+export interface OrganizationTree {
+  folders: Folder[];
+  quizzes: OrganizationQuiz[];
+}
+
 export function listOrganizationQuizzes(params: {
   coachId?: number | 'unassigned' | null;
   search?: string;
-} = {}): Promise<OrganizationQuiz[]> {
+} = {}): Promise<OrganizationTree> {
   const query = new URLSearchParams();
   if (params.coachId !== undefined && params.coachId !== null) {
     query.set('coach_id', String(params.coachId));
   }
   if (params.search) query.set('q', params.search);
   const suffix = query.toString() ? `?${query}` : '';
-  return api.get<OrganizationQuiz[]>(`/organizations/quizzes${suffix}`);
+  return api.get<OrganizationTree>(`/organizations/quizzes${suffix}`);
 }
 
 /** Explicit ownership transfer. Never happens as a side effect of anything

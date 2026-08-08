@@ -282,9 +282,9 @@ describe('DashboardPage', () => {
     updated_at: '2026-01-01T00:00:00Z',
   };
 
-  function renderDashboardWithFolderRoute() {
+  function renderDashboardWithFolderRoute(entry = '/') {
     render(
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/folders/:folderId" element={<FolderPage />} />
@@ -293,17 +293,59 @@ describe('DashboardPage', () => {
     );
   }
 
-  it('shows a subfolder inside its root folder, visually distinct from a quiz card', async () => {
+  it('renders a subfolder inline inside its parent, not as a link away', async () => {
+    // Subfolders used to be links out to their own page, which only worked
+    // while nesting was capped at two levels. Now that a season can be five
+    // deep, they expand in place - otherwise the coach walks five pages.
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
     renderDashboard();
 
     await screen.findByRole('button', { name: /Fall Camp/ });
-    // A subfolder renders as a link (with a folder glyph), not a quiz card -
-    // sampleQuiz is titled "Week 1 Prep", so scope by href to tell them apart.
-    const subfolderLink = screen.getAllByRole('link').find((el) => el.getAttribute('href') === '/folders/20');
-    expect(subfolderLink).toBeDefined();
-    expect(subfolderLink).toHaveTextContent('Week 1');
+    // Its own expandable section, with its own controls, exactly like a root.
+    expect(screen.getByRole('button', { name: /Week 1 \(/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('New subfolder inside "Week 1"')).toBeInTheDocument();
+  });
+
+  it('nests folders five levels deep, each expandable in place', async () => {
+    const chain = ['2026 Season', 'Week 3', 'Defense', 'Redzone', 'Install Quizzes'].map(
+      (name, index) => ({
+        ...sampleFolder,
+        id: 100 + index,
+        name,
+        parent_folder_id: index === 0 ? null : 100 + index - 1,
+      }),
+    );
+    const deepQuiz: Quiz = { ...sampleQuiz, id: 99, title: 'Deep Install', folder_id: 104 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([deepQuiz]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue(chain);
+    renderDashboard();
+
+    // Expanded by default in Coach View, so the whole chain is present and the
+    // quiz at the bottom is reachable without navigating anywhere.
+    for (const name of ['2026 Season', 'Week 3', 'Defense', 'Redzone', 'Install Quizzes']) {
+      expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument();
+    }
+    expect(await screen.findByText('Deep Install')).toBeInTheDocument();
+  });
+
+  it('collapsing a folder hides everything nested below it', async () => {
+    const user = userEvent.setup();
+    const chain = ['Season', 'Week', 'Defense'].map((name, index) => ({
+      ...sampleFolder,
+      id: 200 + index,
+      name,
+      parent_folder_id: index === 0 ? null : 200 + index - 1,
+    }));
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue(chain);
+    renderDashboard();
+
+    await user.click(await screen.findByRole('button', { name: /Season/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Defense/ })).not.toBeInTheDocument(),
+    );
   });
 
   it('creates a subfolder from the inline form inside its root folder', async () => {
@@ -327,9 +369,10 @@ describe('DashboardPage', () => {
     const subQuiz: Quiz = { ...sampleQuiz, id: 2, title: 'Install Quiz', folder_id: 20 };
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([subQuiz]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
-    renderDashboardWithFolderRoute();
-
-    await user.click(await screen.findByRole('link', { name: /Week 1/ }));
+    // FolderPage is still reachable by URL - a bookmark, a shared link - so
+    // its breadcrumb still has to work. It is just no longer how a coach
+    // reaches a subfolder from the dashboard, which now nests inline.
+    renderDashboardWithFolderRoute('/folders/20');
 
     expect(await screen.findByRole('heading', { name: 'Week 1' })).toBeInTheDocument();
     expect(await screen.findByText('Install Quiz')).toBeInTheDocument();

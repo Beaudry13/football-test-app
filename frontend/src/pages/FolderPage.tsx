@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { listQuizzes, duplicateQuiz, deleteQuiz, updateQuiz } from '../api/quizzes';
-import { deleteFolder, listFolders, renameFolder } from '../api/folders';
+import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
 import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import type { Folder, Quiz } from '../api/types';
@@ -16,11 +16,22 @@ import styles from './FolderPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Icon } from '../components/ui/Icon';
+import { CoachFolderSection } from './CoachFolderSection';
 
-/** A single subfolder's own page: breadcrumb back to its parent, rename,
- * delete, and the quizzes assigned directly to it. Folders are at most one
- * level deep (see Folder.parent_folder_id), so this page never needs to
- * show a further level of nesting - just its own quizzes. */
+/** A single folder's own page: its place in the tree, its quizzes, and its
+ * subfolders nested recursively beneath it.
+ *
+ * Reachable by URL, so bookmarks and shared links keep working - it is just no
+ * longer the only way to open a subfolder, since the dashboard now nests them
+ * inline as well.
+ *
+ * The subfolders are rendered by the SAME CoachFolderSection the dashboard
+ * uses. There is deliberately no second tree implementation here: two copies
+ * of "how does a folder expand" would drift, and the scoping that keeps a
+ * coach from seeing a teammate's quizzes lives in what gets passed in.
+ *
+ * The breadcrumb walks the full ancestor chain rather than assuming a single
+ * parent, which is what the old two-level nesting cap used to guarantee. */
 export function FolderPage() {
   const { folderId } = useParams<{ folderId: string }>();
   const { coach } = useAuth();
@@ -30,6 +41,13 @@ export function FolderPage() {
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+  // Separate from the page's own rename form above: that one renames THIS
+  // folder, these track a rename happening on a nested subfolder.
+  const [nestedRenamingId, setNestedRenamingId] = useState<number | null>(null);
+  const [nestedRenameValue, setNestedRenameValue] = useState('');
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+  const [subfolderNames, setSubfolderNames] = useState<Record<number, string>>({});
+  const [creatingSubfolderFor, setCreatingSubfolderFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
 
@@ -56,6 +74,79 @@ export function FolderPage() {
   const parent = folder?.parent_folder_id
     ? (folders?.find((f) => f.id === folder.parent_folder_id) ?? null)
     : null;
+
+  // The whole chain to the root, not just the immediate parent. With nesting
+  // uncapped, "Back to <parent>" alone tells a coach nothing about where they
+  // are five levels down.
+  const ancestors: Folder[] = [];
+  if (folders && folder) {
+    const seen = new Set<number>();
+    let current = folder.parent_folder_id
+      ? folders.find((f) => f.id === folder.parent_folder_id)
+      : undefined;
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      ancestors.unshift(current);
+      current = current.parent_folder_id
+        ? folders.find((f) => f.id === current!.parent_folder_id)
+        : undefined;
+    }
+  }
+
+  function toggleFolder(id: number) {
+    setCollapsedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleNestedRename(id: number) {
+    if (!nestedRenameValue.trim()) return;
+    setError(null);
+    try {
+      await renameFolder(id, { name: nestedRenameValue.trim() });
+      setNestedRenamingId(null);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleNestedDelete(id: number, name: string) {
+    setError(null);
+    try {
+      await confirm({
+        title: 'Delete Folder?',
+        body: `"${name}" will be removed. Its Quizzes move to Uncategorized rather than being deleted.`,
+        confirmLabel: 'Delete Folder',
+        action: async () => {
+          await deleteFolder(id);
+          await load();
+        },
+      });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleCreateSubfolder(event: FormEvent, parentId: number) {
+    event.preventDefault();
+    const name = (subfolderNames[parentId] ?? '').trim();
+    if (!name) return;
+    setCreatingSubfolderFor(parentId);
+    setError(null);
+    try {
+      await createFolder({ name, parent_folder_id: parentId });
+      setSubfolderNames((prev) => ({ ...prev, [parentId]: '' }));
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setCreatingSubfolderFor(null);
+    }
+  }
 
   async function handleRename(event: FormEvent) {
     event.preventDefault();
@@ -156,6 +247,21 @@ export function FolderPage() {
   }
 
   const folderQuizzes = quizzes.filter((q) => q.folder_id === folder.id);
+  const subfolders = folders.filter((f) => f.parent_folder_id === folder.id);
+
+  function renderQuizCard(quiz: Quiz) {
+    return (
+      <QuizCard
+        key={quiz.id}
+        quiz={quiz}
+        coach={coach}
+        folders={folders!}
+        onMoveToFolder={handleMoveToFolder}
+        onDuplicate={handleDuplicate}
+        onDelete={handleDeleteQuiz}
+      />
+    );
+  }
 
   return (
     <NotebookPage>
@@ -163,9 +269,30 @@ export function FolderPage() {
       <NotebookHeader />
       <div className={nb.content}>
         <div className={styles.header}>
-          <Link to={parent ? `/folders/${parent.id}` : '/dashboard'} className={styles.backLink}>
-            <Icon name="back" size={14} /> Back to {parent ? parent.name : 'Dashboard'}
-          </Link>
+          <nav className={styles.breadcrumb} aria-label="Folder path">
+            <Link to={parent ? `/folders/${parent.id}` : '/dashboard'} className={styles.backLink}>
+              <Icon name="back" size={14} /> Back to {parent ? parent.name : 'Dashboard'}
+            </Link>
+            {/* The full path, not just the parent. Five levels down, "Back to
+                Redzone" on its own says nothing about where you are. */}
+            {ancestors.length > 0 && (
+              <span className={styles.crumbs}>
+                <Link to="/dashboard" className={styles.crumb}>
+                  Dashboard
+                </Link>
+                {ancestors.map((ancestor) => (
+                  <span key={ancestor.id}>
+                    <span className={styles.crumbSeparator}>/</span>
+                    <Link to={`/folders/${ancestor.id}`} className={styles.crumb}>
+                      {ancestor.name}
+                    </Link>
+                  </span>
+                ))}
+                <span className={styles.crumbSeparator}>/</span>
+                <span className={styles.crumbCurrent}>{folder.name}</span>
+              </span>
+            )}
+          </nav>
           <button className={`${nb.btnSm} ${nb.btnDanger}`} onClick={handleDelete}>
             Delete folder
           </button>
@@ -196,22 +323,77 @@ export function FolderPage() {
           </span>
         </div>
 
-        {folderQuizzes.length === 0 ? (
-          <EmptyState message="No Quizzes in this folder yet." />
-        ) : (
-          <div className={dashboardStyles.list}>
-            {folderQuizzes.map((quiz) => (
-              <QuizCard
-                key={quiz.id}
-                quiz={quiz}
-                coach={coach}
-                folders={folders}
-                onMoveToFolder={handleMoveToFolder}
-                onDuplicate={handleDuplicate}
-                onDelete={handleDeleteQuiz}
+        {/* This folder's own subfolders, nested recursively - rendered by the
+            SAME component the dashboard uses, rather than a second tree
+            implementation that would drift from it.
+
+            `quizzes` came from listQuizzes(), which is own-only, so nesting
+            can never surface a teammate's quiz here any more than it can on
+            the dashboard. */}
+        {subfolders.length > 0 && (
+          <div className={dashboardStyles.folderSections}>
+            {subfolders.map((sub) => (
+              <CoachFolderSection
+                key={sub.id}
+                folder={sub}
+                depth={0}
+                allFolders={folders}
+                quizzes={quizzes}
+                collapsedIds={collapsedIds}
+                onToggle={toggleFolder}
+                renamingId={nestedRenamingId}
+                renameValue={nestedRenameValue}
+                onRenameValueChange={setNestedRenameValue}
+                onStartRename={(f) => {
+                  setNestedRenamingId(f.id);
+                  setNestedRenameValue(f.name);
+                }}
+                onCancelRename={() => setNestedRenamingId(null)}
+                onRename={handleNestedRename}
+                onDelete={handleNestedDelete}
+                subfolderNames={subfolderNames}
+                onSubfolderNameChange={(parentId, value) =>
+                  setSubfolderNames((prev) => ({ ...prev, [parentId]: value }))
+                }
+                creatingSubfolderFor={creatingSubfolderFor}
+                onCreateSubfolder={handleCreateSubfolder}
+                renderQuizCard={renderQuizCard}
               />
             ))}
           </div>
+        )}
+
+        <form
+          className={dashboardStyles.newSubfolderForm}
+          onSubmit={(e) => handleCreateSubfolder(e, folder.id)}
+        >
+          <input
+            className={nb.input}
+            style={{ width: 200 }}
+            type="text"
+            placeholder="New subfolder, e.g. Week 1"
+            value={subfolderNames[folder.id] ?? ''}
+            onChange={(e) =>
+              setSubfolderNames((prev) => ({ ...prev, [folder.id]: e.target.value }))
+            }
+            aria-label={`New subfolder inside "${folder.name}"`}
+          />
+          <button
+            type="submit"
+            className={nb.btnSm}
+            disabled={
+              creatingSubfolderFor === folder.id ||
+              !(subfolderNames[folder.id] ?? '').trim()
+            }
+          >
+            {creatingSubfolderFor === folder.id ? 'Creating…' : 'New subfolder'}
+          </button>
+        </form>
+
+        {folderQuizzes.length === 0 ? (
+          <EmptyState message="No Quizzes in this folder yet." />
+        ) : (
+          <div className={dashboardStyles.list}>{folderQuizzes.map(renderQuizCard)}</div>
         )}
       </div>
     </NotebookPage>

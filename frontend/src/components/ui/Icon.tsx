@@ -21,6 +21,8 @@ import {
   Undo2,
   X,
   type LucideProps,
+  FolderOpen,
+  FileText,
 } from 'lucide-react';
 
 /** Every icon the app uses, named for what it MEANS rather than which
@@ -38,6 +40,11 @@ const ICONS = {
   chevronRight: ChevronRight,
   chevronUp: ChevronUp,
   folder: Folder,
+  // Admin View's tree distinguishes an open branch from a closed one with
+  // the icon as well as the chevron - two signals for one state, because the
+  // chevron alone is small and easy to miss when scanning a deep tree.
+  folderOpen: FolderOpen,
+  quiz: FileText,
   duplicate: Copy,
   delete: Trash2,
   streak: Flame,

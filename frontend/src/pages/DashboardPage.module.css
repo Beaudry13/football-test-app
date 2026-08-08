@@ -263,3 +263,11 @@ button.actionDelete:hover:not(:disabled) {
     align-items: flex-start;
   }
 }
+
+
+/* Nested folder sections indent by depth rather than by nesting padding, so a
+   five-deep season structure stays readable instead of each level compounding
+   the last and marching off the right edge. Depth 0 is unaffected. */
+.folderSection {
+  margin-left: calc(var(--folder-depth, 0) * 20px);
+}

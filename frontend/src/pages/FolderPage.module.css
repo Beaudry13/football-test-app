@@ -29,3 +29,42 @@
 .renameForm input {
   max-width: 320px;
 }
+
+
+/* The full path to this folder. Shown alongside the Back link rather than
+   replacing it: Back is the one-click action, the crumbs are the orientation,
+   and five levels down a coach needs both. */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--nb-text-muted);
+  font-size: 0.82rem;
+}
+
+.crumb {
+  color: var(--nb-text-muted);
+  text-decoration: none;
+}
+
+.crumb:hover {
+  text-decoration: underline;
+}
+
+.crumbSeparator {
+  padding: 0 2px;
+  opacity: 0.5;
+}
+
+.crumbCurrent {
+  color: var(--nb-text);
+  font-weight: 600;
+}

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -190,5 +190,110 @@ describe('FolderPage', () => {
     await user.selectOptions(select, '2026 Season');
 
     await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { folder_id: 10 }));
+  });
+});
+
+describe('FolderPage deep nesting', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([]);
+    mockAuth();
+  });
+
+  /** 2026 Season > Week 3 > Defense > Redzone > Install Quizzes, ids 100-104. */
+  function deepChain(): Folder[] {
+    return ['2026 Season', 'Week 3', 'Defense', 'Redzone', 'Install Quizzes'].map(
+      (name, index) => ({
+        ...root,
+        id: 100 + index,
+        name,
+        parent_folder_id: index === 0 ? null : 100 + index - 1,
+      }),
+    );
+  }
+
+  it('shows the current folder’s subfolders nested recursively', async () => {
+    const deepQuiz: Quiz = { ...quizInSubfolder, id: 90, title: 'Deep Install', folder_id: 104 };
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([deepQuiz]);
+
+    // Open the SECOND level; three more levels hang below it.
+    renderAtFolder(101);
+
+    expect(await screen.findByRole('heading', { name: 'Week 3' })).toBeInTheDocument();
+    for (const name of ['Defense', 'Redzone', 'Install Quizzes']) {
+      expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument();
+    }
+    // And the quiz four levels down is reachable without navigating away.
+    expect(await screen.findByText('Deep Install')).toBeInTheDocument();
+  });
+
+  it('shows the full ancestor path, not just the parent', async () => {
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+
+    renderAtFolder(104);
+
+    // Five levels down, "Back to Redzone" alone says nothing about where you
+    // are - the crumbs carry the whole path.
+    const path = await screen.findByLabelText('Folder path');
+    for (const name of ['2026 Season', 'Week 3', 'Defense', 'Redzone']) {
+      expect(within(path).getByRole('link', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('collapses a nested branch', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    renderAtFolder(101);
+
+    await user.click(await screen.findByRole('button', { name: /Defense/ }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /Redzone/ })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('offers rename, delete and new-subfolder at nested levels', async () => {
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    renderAtFolder(101);
+
+    await screen.findByRole('button', { name: /Defense/ });
+    // Every level gets the same controls - there is nothing special about depth.
+    expect(screen.getByLabelText('New subfolder inside "Redzone"')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Rename' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Delete folder' }).length).toBeGreaterThan(1);
+  });
+
+  it('creates a subfolder under a nested folder', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    const create = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(root);
+    renderAtFolder(101);
+
+    const input = await screen.findByLabelText('New subfolder inside "Install Quizzes"');
+    await user.type(input, 'Even Deeper');
+    // Scoped to the form that owns this input - every level has a "New
+    // subfolder" button, so an unscoped query submits somebody else's.
+    const form = input.closest('form') as HTMLElement;
+    await user.click(within(form).getByRole('button', { name: 'New subfolder' }));
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({ name: 'Even Deeper', parent_folder_id: 104 }),
+    );
+  });
+
+  it('never renders a quiz the coach does not own', async () => {
+    // listQuizzes is own-only server-side; this asserts the page adds nothing
+    // that could reintroduce a teammate's quiz through the nested tree.
+    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    renderAtFolder(101);
+
+    await screen.findByRole('heading', { name: 'Week 3' });
+    expect(screen.queryByText('Install Quiz')).not.toBeInTheDocument();
   });
 });

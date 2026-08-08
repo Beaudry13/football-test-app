@@ -216,16 +216,40 @@ def test_cannot_nest_a_folder_under_another_organizations_folder(client, coach_h
     assert response.status_code == 404
 
 
-def test_cannot_nest_more_than_two_levels_deep(client, coach_headers):
-    root = create_folder(client, coach_headers, name="2026 Season")
-    sub = create_folder(client, coach_headers, name="Week 1", parent_folder_id=root["id"])
+def test_folders_nest_arbitrarily_deep(client, coach_headers):
+    """This previously asserted a two-level cap. The cap was removed because a
+    real season structure genuinely is several levels deep, and coaches were
+    flattening it into folder names instead."""
+    names = ["2026 Season", "Week 3", "Defense", "Redzone", "Install Quizzes"]
+    parent = None
+    created = []
+    for name in names:
+        folder = create_folder(client, coach_headers, name=name, parent_folder_id=parent)
+        created.append(folder)
+        parent = folder["id"]
 
-    response = client.post(
-        "/api/folders",
-        json={"name": "Too Deep", "parent_folder_id": sub["id"]},
+    listed = {f["name"]: f for f in client.get("/api/folders", headers=coach_headers).get_json()}
+    assert listed["2026 Season"]["parent_folder_id"] is None
+    for child, parent_name in zip(names[1:], names[:-1]):
+        assert listed[child]["parent_folder_id"] == listed[parent_name]["id"]
+
+
+def test_a_folder_still_cannot_be_its_own_ancestor(client, coach_headers):
+    """Cycle safety does not come from the depth cap - it comes from
+    parent_folder_id being fixed at creation, so a folder cannot name an id
+    that does not exist yet. Removing the cap did not weaken that."""
+    root = create_folder(client, coach_headers, name="Root")
+
+    # There is no route that reparents a folder, so the only way to attempt a
+    # cycle is at creation - and the parent must already exist.
+    assert client.patch(
+        f"/api/folders/{root['id']}",
+        json={"name": "Renamed", "parent_folder_id": root["id"]},
         headers=coach_headers,
-    )
-    assert response.status_code == 422
+    ).status_code in (200, 422)
+    refreshed = {f["id"]: f for f in client.get("/api/folders", headers=coach_headers).get_json()}
+    # Rename never moves a folder, whatever the payload carries.
+    assert refreshed[root["id"]]["parent_folder_id"] is None
 
 
 def test_creating_a_folder_under_a_nonexistent_parent_is_rejected(client, coach_headers):

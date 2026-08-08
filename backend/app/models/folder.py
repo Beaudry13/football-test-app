@@ -17,11 +17,16 @@ class Folder(TimestampMixin, db.Model):
         db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True, index=True
     )
     name = db.Column(db.String(255), nullable=False)
-    # Nullable = root folder. Settable only at creation (see routes/folders.py)
-    # - never changed by the rename route - which is what makes "can't become
-    # its own parent" and "can't create a cycle" true by construction rather
-    # than needing extra guard logic: a folder's parent is fixed the moment it
-    # exists, and it can't reference an id (its own) that doesn't exist yet.
+    # Nullable = root folder. Nesting is unlimited in depth.
+    #
+    # Settable only at creation (see routes/folders.py) - never changed by the
+    # rename route, and there is no reparent route - which is what makes
+    # "can't become its own parent" and "can't create a cycle" true by
+    # construction rather than needing extra guard logic: a folder's parent is
+    # fixed the moment it exists, and it can't reference an id (its own) that
+    # doesn't exist yet. That argument does not depend on how deep the tree
+    # goes, which is why lifting the old two-level cap needed no new guard -
+    # but introducing folder-MOVING would break it and would need one.
     # ondelete="RESTRICT": the DB itself refuses to delete a folder that still
     # has subfolders, backing up the same check in delete_folder().
     parent_folder_id = db.Column(
