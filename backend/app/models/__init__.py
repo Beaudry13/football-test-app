@@ -7,6 +7,7 @@ from app.models.player import Player
 from app.models.group import Group, GroupPlayer
 from app.models.quiz import Quiz
 from app.models.question import Question, QuestionOption, QuestionType
+from app.models.question_region import QuestionRegion, RegionRole
 from app.models.question_image import QuestionImage
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
@@ -29,6 +30,8 @@ __all__ = [
     "Question",
     "QuestionOption",
     "QuestionType",
+    "QuestionRegion",
+    "RegionRole",
     "QuestionImage",
     "Roster",
     "RosterPlayer",

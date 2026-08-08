@@ -1,0 +1,60 @@
+/* Page-specific styles only - shared notebook design system lives in
+   frontend/src/styles/notebook.module.css. */
+
+.surface {
+  position: relative;
+  display: block;
+  line-height: 0;
+  /* The page image fills this; the overlays are absolutely positioned in
+     percentages of it, which is what keeps them resolution-independent. */
+  touch-action: none;
+  user-select: none;
+}
+
+.armed {
+  cursor: crosshair;
+}
+
+.surface > :global(img) {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.existing,
+.draft {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.existing {
+  /* Deliberately semi-transparent rather than solid: this is the coach's view,
+     and they need to see what is underneath to check the rectangle covers the
+     right words. The player's copy is masked server-side and opaque. */
+  background: rgba(17, 20, 24, 0.55);
+  border: 2px solid var(--nb-accent);
+  border-radius: 2px;
+}
+
+.draft {
+  background: rgba(80, 160, 255, 0.22);
+  border: 2px dashed #4a9eff;
+  border-radius: 2px;
+}
+
+.badge {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--nb-accent);
+  color: #10131a;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}

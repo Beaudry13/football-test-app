@@ -22,11 +22,13 @@ attacker which half of a forged token was closer to right.
 
 from flask import Blueprint, Response, abort
 
+from app.errors import ApiError
 from app.extensions import db
-from app.models import DocumentPage
+from app.models import DocumentPage, Question
+from app.services.page_masking import masked_render_bytes
 from app.services.private_storage import get_private_storage
 from app.services.signed_media import (
-    KIND_PAGE,
+    KIND_QUESTION_MASK,
     KIND_THUMBNAIL,
     InvalidMediaToken,
     seconds_until_expiry,
@@ -37,6 +39,24 @@ from app.services.document_render import RENDER_CONTENT_TYPE
 media_bp = Blueprint("media", __name__)
 
 
+def _masked_question_bytes(question_id: int) -> bytes | None:
+    """This question's page with its regions masked, rendering on first request.
+
+    A player can be the one to trigger that first render - the coach may never
+    have previewed the question. The render is cached on the region, so only
+    the first player of a given question ever waits.
+    """
+    question = db.session.get(Question, question_id)
+    if question is None or not question.regions:
+        return None
+    try:
+        return masked_render_bytes(question.regions[0])
+    except ApiError:
+        # The source document was deleted out from under a live quiz. A 404 is
+        # the honest answer, and matches every other failure here.
+        return None
+
+
 @media_bp.get("/<token>")
 def serve_signed_media(token: str):
     try:
@@ -45,21 +65,18 @@ def serve_signed_media(token: str):
         abort(404)
 
     kind = payload["k"]
-    page = db.session.get(DocumentPage, payload["i"])
-    if page is None:
-        abort(404)
 
-    if kind == KIND_THUMBNAIL:
-        key = page.thumbnail_key
-    elif kind == KIND_PAGE:
-        key = page.image_key
-    else:  # pragma: no cover - verify_media_token already rejects these
-        abort(404)
+    if kind == KIND_QUESTION_MASK:
+        data = _masked_question_bytes(payload["i"])
+    else:
+        page = db.session.get(DocumentPage, payload["i"])
+        if page is None:
+            abort(404)
+        key = page.thumbnail_key if kind == KIND_THUMBNAIL else page.image_key
+        if not key:
+            abort(404)
+        data = get_private_storage().load_private(key)
 
-    if not key:
-        abort(404)
-
-    data = get_private_storage().load_private(key)
     if data is None:
         abort(404)
 

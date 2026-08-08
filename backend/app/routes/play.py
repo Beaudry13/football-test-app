@@ -23,6 +23,12 @@ from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question, QuestionType
 from app.models.answer_drawing import document_has_strokes
+from app.models.question import TEXT_ANSWER_TYPES
+from app.services.signed_media import (
+    KIND_QUESTION_MASK,
+    audience_for_access_code,
+    sign_media_token,
+)
 from app.schemas.play import (
     PlayerResultsSchema,
     SaveAnswerSchema,
@@ -74,10 +80,31 @@ def _resolve_answer_text(question: Question, answer: Answer | None) -> str | Non
         if answer.drawing is not None and document_has_strokes(answer.drawing.document):
             return "Drawing submitted"
         return None
-    if question.question_type is QuestionType.WRITTEN:
+    if question.question_type in TEXT_ANSWER_TYPES:
         return answer.answer_text
     option = next((o for o in question.options if o.id == answer.selected_option_id), None)
     return option.option_text if option else None
+
+
+def _attach_masked_media(quiz_payload: dict, access_code_id: int) -> None:
+    """Give every region-backed question a signed URL to its MASKED page.
+
+    Signed here rather than in `Question.to_dict` for two reasons. The audience
+    is the access code, which the model has no idea about; and keeping it out
+    of to_dict means the default serialisation of a question can never
+    accidentally hand a player an unmasked page - the coach-facing payload
+    carries the region's geometry but no image URL at all, and this is the one
+    function that turns a question into something a player can look at.
+    """
+    for question in quiz_payload.get("questions", []):
+        if not question.get("region"):
+            continue
+        token = sign_media_token(
+            KIND_QUESTION_MASK,
+            question["id"],
+            audience=audience_for_access_code(access_code_id),
+        )
+        question["masked_image_url"] = f"/api/media/{token}"
 
 
 def _attempt_state(attempt: PlayerAttempt) -> dict:
@@ -125,12 +152,14 @@ def validate_code():
         raise _invalid_code_error(reason)
 
     quiz = access_code.quiz
+    quiz_payload = quiz.to_dict(include_questions=True, include_correct_answers=False)
+    _attach_masked_media(quiz_payload, access_code.id)
 
     return jsonify(
         {
             "access_code_id": access_code.id,
             "expires_at": access_code.expires_at.isoformat(),
-            "quiz": quiz.to_dict(include_questions=True, include_correct_answers=False),
+            "quiz": quiz_payload,
             "roster_players": effective_roster_names(access_code),
             # Additive, not a replacement for roster_players above (kept
             # unchanged for backward compatibility) - carries player_id
@@ -325,7 +354,7 @@ def submit_quiz():
                 # have stored an empty document the player has since drawn on.
                 if not document_has_strokes(submitted.get("drawing")):
                     missing.append(question.id)
-            elif question.question_type is QuestionType.WRITTEN:
+            elif question.question_type in TEXT_ANSWER_TYPES:
                 if not (submitted.get("answer_text") or "").strip():
                     missing.append(question.id)
             elif submitted.get("selected_option_id") is None:

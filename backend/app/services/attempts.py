@@ -10,6 +10,8 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import Answer, AnswerDrawing, PlayerAttempt, Question, QuestionType
 from app.models.answer_drawing import document_has_strokes
+from app.models.question import TEXT_ANSWER_TYPES
+from app.services.answer_matching import matches
 
 
 def find_attempt(
@@ -88,6 +90,19 @@ def upsert_answer(
                 status_code=422,
             )
         is_correct = option.is_correct_answer
+    elif question.question_type is QuestionType.FILL_BLANK:
+        # Auto-graded here, on every save, exactly as a selected option is -
+        # is_correct is a pure function of what the player has typed.
+        #
+        # Blank text stays None rather than becoming False. A player who never
+        # answered has not answered *wrongly*, and scoring them 0 for it is
+        # precisely the "fabricating 0% when nothing is graded" that CLAUDE.md
+        # forbids. `score = correct / (correct + incorrect)` therefore ignores
+        # them, as it does for every other type.
+        if (answer_text or "").strip():
+            is_correct = matches(
+                answer_text, question.expected_answers, question.answer_matching
+            )
 
     stmt = pg_insert(Answer).values(
         attempt_id=attempt.id,
@@ -134,7 +149,10 @@ def is_answered(question: Question, answer: Answer | None) -> bool:
     if question.question_type is QuestionType.DRAW_RESPONSE:
         return answer.drawing is not None and document_has_strokes(answer.drawing.document)
 
-    if question.question_type is QuestionType.WRITTEN:
+    # Both typed types, asked together: a FILL_BLANK left blank is unanswered
+    # for exactly the same reason a WRITTEN one is, and splitting them here
+    # would be the first place the two could drift.
+    if question.question_type in TEXT_ANSWER_TYPES:
         return bool((answer.answer_text or "").strip())
 
     return answer.selected_option_id is not None

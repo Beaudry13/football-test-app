@@ -23,6 +23,7 @@ const TYPE_LABELS: Record<string, string> = {
   // Labelled "Short Answer" for the coach; the stored value stays `written`.
   written: 'Short Answer',
   draw_response: 'Draw Response',
+  fill_blank: 'Fill in the Blank',
 };
 
 export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promise<void> }) {
@@ -151,12 +152,18 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   <button className={nb.btnSm} onClick={() => setEditingId(question.id)}>
                     Edit
                   </button>
+                  {/* Hidden for a question built from a playbook page: it
+                      already has an image, from its region, and a question may
+                      have only one source. The API refuses the upload too - this
+                      just avoids offering an action that would be rejected. */}
+                  {!question.region && (
                   <Link
                     className={nb.btnSm}
                     to={`/quizzes/${quiz.id}/questions/${question.id}/annotate`}
                   >
                     {question.image ? 'Edit image' : 'Add image'}
                   </Link>
+                  )}
                   <button
                     className={`${nb.btnSm} ${nb.btnDanger}`}
                     onClick={() => handleDelete(question.id, index + 1)}

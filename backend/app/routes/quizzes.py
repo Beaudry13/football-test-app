@@ -24,6 +24,7 @@ from app.models import (
     Question,
     QuestionImage,
     QuestionOption,
+    QuestionRegion,
     Quiz,
     Roster,
 )
@@ -302,6 +303,11 @@ def duplicate_quiz(quiz_id: int):
             question_text=question.question_text,
             question_type=question.question_type,
             position=question.position,
+            # Without these a duplicated Fill in the Blank question would keep
+            # its type but lose its answers, so every player would be marked
+            # wrong - and the coach would have no way to see why.
+            expected_answers=question.expected_answers,
+            answer_matching=question.answer_matching,
         )
         db.session.add(copy_question)
         db.session.flush()
@@ -313,6 +319,25 @@ def duplicate_quiz(quiz_id: int):
                     option_text=option.option_text,
                     is_correct_answer=option.is_correct_answer,
                     position=option.position,
+                )
+            )
+
+        for region in question.regions:
+            # The rectangle is copied; the cached masked render deliberately is
+            # not. It is derived data keyed to the original region, and letting
+            # the copy point at it would mean deleting one question's mask
+            # blanked the other's. It regenerates on first request.
+            db.session.add(
+                QuestionRegion(
+                    question_id=copy_question.id,
+                    document_page_id=region.document_page_id,
+                    shape=region.shape,
+                    x=region.x,
+                    y=region.y,
+                    width=region.width,
+                    height=region.height,
+                    role=region.role,
+                    position=region.position,
                 )
             )
 

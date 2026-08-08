@@ -1,7 +1,37 @@
 /** `written` is labelled "Short Answer" in the coach UI. The stored value
  * keeps its original name - renaming it would mean a second irreversible
  * Postgres enum change plus a data migration, to alter one word. */
-export type QuestionType = 'true_false' | 'multiple_choice' | 'written' | 'draw_response';
+export type QuestionType =
+  | 'true_false'
+  | 'multiple_choice'
+  | 'written'
+  | 'draw_response'
+  /** Typed text matched against accepted answers and graded automatically at
+   *  answer time. Unlike `written`, no coach ever grades one by hand - that
+   *  difference is the reason it is a separate type. */
+  | 'fill_blank';
+
+/** A rectangle on a playbook page that a question was built from.
+ *
+ * Coordinates are NORMALISED 0-1 fractions of the page, not pixels, so the
+ * same region is correct at any render size. Multiply by the render size (or
+ * by the element's own width) to place it. */
+export interface QuestionRegion {
+  id: number;
+  question_id: number;
+  document_page_id: number;
+  shape: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  role: 'mask' | 'focus' | 'crop';
+  position: number;
+  page_number: number | null;
+  source_document_id: number | null;
+  render_width: number | null;
+  render_height: number | null;
+}
 
 export type CoachRole = 'admin' | 'member';
 
@@ -136,6 +166,17 @@ export interface Question {
    * containing one - the check lands at activation rather than creation
    * because an image can only be uploaded to a question that already exists. */
   needs_image?: boolean;
+  /** Present when the question was built from a playbook page. */
+  region?: QuestionRegion | null;
+  /** The accepted answers for a `fill_blank` question. COACH-ONLY - the API
+   *  omits it from every player-facing payload, so it is always undefined in
+   *  the player app. */
+  expected_answers?: string[];
+  answer_matching?: string | null;
+  /** A short-lived signed URL for the page WITH its regions masked. The only
+   *  image a player is ever given for a region-backed question; the unmasked
+   *  page is never addressable from the player app. */
+  masked_image_url?: string | null;
 }
 
 /** A canonical master-roster identity - see Player.id as the only real

@@ -10,8 +10,11 @@ from marshmallow import Schema, fields, validate
 
 from app.errors import ApiError
 from app.models import QuestionType
+from app.models.question import OPTIONLESS_TYPES
+from app.services.answer_matching import VALID_MODES
 
 QUESTION_TYPE_VALUES = [t.value for t in QuestionType]
+MATCHING_MODES = sorted(VALID_MODES)
 
 
 class QuestionOptionSchema(Schema):
@@ -32,6 +35,53 @@ class QuestionUpdateSchema(Schema):
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False)
 
 
+class RegionSchema(Schema):
+    """A rectangle in normalised 0-1 page coordinates. The range is checked
+    again in `document_geometry.validate_normalised_rect`, which owns the rule;
+    these bounds only reject obvious nonsense before it gets that far."""
+
+    x = fields.Float(required=True)
+    y = fields.Float(required=True)
+    width = fields.Float(required=True)
+    height = fields.Float(required=True)
+
+
+class RegionQuestionCreateSchema(Schema):
+    """Creating a Fill in the Blank question from a rectangle on a page.
+
+    `question_text` is required and typed by the coach. V1 deliberately does
+    NOT generate it from the surrounding line: the spike measured reading order
+    at 63-77% on every real playbook page, so a generated prompt would often be
+    scrambled and the coach would be proof-reading rather than writing. See
+    docs/DESIGN-playbook-quiz.md §0b decision 11.
+    """
+
+    document_page_id = fields.Int(required=True)
+    question_text = fields.Str(required=True, validate=validate.Length(min=1))
+    expected_answers = fields.List(
+        fields.Str(), required=True, validate=validate.Length(min=1, max=25)
+    )
+    answer_matching = fields.Str(
+        required=False, load_default=None, allow_none=True, validate=validate.OneOf(MATCHING_MODES)
+    )
+    region = fields.Nested(RegionSchema, required=True)
+    position = fields.Int(required=False, load_default=None)
+
+
+class RegionQuestionUpdateSchema(Schema):
+    """Editing a region-backed question. Every field optional - the editor
+    sends only what changed."""
+
+    question_text = fields.Str(required=False, validate=validate.Length(min=1))
+    expected_answers = fields.List(
+        fields.Str(), required=False, validate=validate.Length(min=1, max=25)
+    )
+    answer_matching = fields.Str(
+        required=False, allow_none=True, validate=validate.OneOf(MATCHING_MODES)
+    )
+    region = fields.Nested(RegionSchema, required=False)
+
+
 class QuestionReorderSchema(Schema):
     question_ids = fields.List(fields.Int(), required=True, validate=validate.Length(min=1))
 
@@ -45,11 +95,11 @@ def validate_options_for_type(question_type: str, options: list[dict]) -> None:
     """Raises ApiError(422) - same status as marshmallow validation failures,
     since this is the same class of error (semantically invalid payload),
     just enforced in Python because it's a cross-field business rule."""
-    if question_type in (QuestionType.WRITTEN.value, QuestionType.DRAW_RESPONSE.value):
-        # Neither is answered by picking from a list. A Draw Response question
-        # may still HAVE option rows - one converted from multiple choice by
-        # migration d2b5f8a41c32 keeps them, inert - but it never requires
-        # them, and authoring one never creates them.
+    if question_type in {t.value for t in OPTIONLESS_TYPES}:
+        # None of these is answered by picking from a list. A Draw Response
+        # question may still HAVE option rows - one converted from multiple
+        # choice by migration d2b5f8a41c32 keeps them, inert - but it never
+        # requires them, and authoring one never creates them.
         return
 
     if question_type == QuestionType.TRUE_FALSE.value:

@@ -62,11 +62,27 @@ SCHEME_VERSION = "v1"
 #: What a token may point at. Note the absence of anything meaning "the PDF".
 KIND_PAGE = "page"
 KIND_THUMBNAIL = "thumb"
-VALID_KINDS = frozenset({KIND_PAGE, KIND_THUMBNAIL})
+#: A question's page WITH its masked regions filled in. `id` is the question,
+#: not the page: the mask set belongs to the question, and keying on it means a
+#: token issued for one question can never render another's view of the same
+#: page. This is the only kind a player is ever issued.
+KIND_QUESTION_MASK = "qmask"
+VALID_KINDS = frozenset({KIND_PAGE, KIND_THUMBNAIL, KIND_QUESTION_MASK})
 
-#: Audience for a coach-issued URL. Player audiences (`ac:<id>`) arrive with
-#: the player experience in M2/M4.
+#: Audience for a coach-issued URL.
 AUDIENCE_COACH = "coach"
+
+
+def audience_for_access_code(access_code_id: int) -> str:
+    """The audience recorded on a URL issued to a player.
+
+    Note that replay across quizzes is already impossible without checking
+    this, because a `qmask` token names a question and a question belongs to
+    exactly one quiz. It is recorded anyway: it makes a leaked URL traceable
+    to the code it was issued for, and it is what a future revocation check
+    would key on.
+    """
+    return f"ac:{access_code_id}"
 
 
 class InvalidMediaToken(Exception):

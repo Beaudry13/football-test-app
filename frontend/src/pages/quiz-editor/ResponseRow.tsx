@@ -32,6 +32,10 @@ function AnswerRow({
   const selectedOption = question.options.find((o) => o.id === answer.selected_option_id);
   // Both types are judged by a person rather than scored from an option. The
   // grading UI itself is Phase 4; this only decides what the coach is shown.
+  //
+  // fill_blank is deliberately NOT here: it is scored the moment the player
+  // types, so offering a coach a Correct/Incorrect button for one would invite
+  // them to overrule a decision the server already made and recorded.
   const needsManualGrading =
     question.question_type === 'written' || question.question_type === 'draw_response';
   const isDrawResponse = question.question_type === 'draw_response';

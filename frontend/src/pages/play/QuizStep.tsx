@@ -77,7 +77,11 @@ export function QuizStep({
    * answered the moment either half arrived. */
   function isAnswered(question: Question, answer: PlayerAnswer | undefined): boolean {
     if (question.question_type === 'draw_response') return hasDrawnAnswer(answer?.drawing);
-    if (question.question_type === 'written') return Boolean(answer?.answer_text?.trim());
+    // Both typed types together, mirroring the backend's TEXT_ANSWER_TYPES.
+    // Splitting them here is exactly where the two rules would drift.
+    if (question.question_type === 'written' || question.question_type === 'fill_blank') {
+      return Boolean(answer?.answer_text?.trim());
+    }
     return answer?.selected_option_id !== undefined;
   }
 

@@ -77,6 +77,8 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.models.question import TEXT_ANSWER_TYPES, QuestionType
+
 CSV_HEADER = ["Player", "Submitted At", "Question #", "Question", "Type", "Answer", "Correct", "Coach Feedback"]
 
 _CORRECT_LABELS = {True: "Yes", False: "No", None: "Ungraded"}
@@ -578,7 +580,10 @@ def export_filename_slug(title: str) -> str:
 def _answer_text(question, answer) -> str:
     if answer is None:
         return ""
-    if question.question_type.value == "written":
+    # Both typed types. This used to ask for "written" specifically, which
+    # would have sent every Fill in the Blank answer down the option branch
+    # below and printed a blank cell for a player who answered correctly.
+    if question.question_type in TEXT_ANSWER_TYPES:
         return answer.answer_text or ""
     return answer.selected_option.option_text if answer.selected_option else ""
 
@@ -1221,7 +1226,14 @@ def build_detailed_results_pdf(
                 Paragraph(_xml_escape(_answer_text(question, answer)) or "No answer submitted.", wrap_style),
             ]
 
-            if question.question_type.value != "written":
+            if question.question_type is QuestionType.FILL_BLANK:
+                # Auto-graded, so there IS a right answer to show - it just
+                # lives in expected_answers rather than on an option row.
+                accepted = question.expected_answers or []
+                if accepted:
+                    answer_group.append(Paragraph("ACCEPTED ANSWERS", styles["fieldLabel"]))
+                    answer_group.append(Paragraph(_xml_escape(", ".join(accepted)), wrap_style))
+            elif question.question_type not in TEXT_ANSWER_TYPES:
                 correct_option = next((o for o in question.options if o.is_correct_answer), None)
                 if correct_option is not None:
                     answer_group.append(Paragraph("CORRECT ANSWER", styles["fieldLabel"]))

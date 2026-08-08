@@ -114,14 +114,29 @@ export function QuestionEditor({
           id="question_type"
           className={nb.input}
           value={questionType}
+          disabled={questionType === 'fill_blank'}
           onChange={(e) => handleTypeChange(e.target.value as QuestionType)}
         >
           <option value="true_false">True / False</option>
           <option value="multiple_choice">Multiple Choice</option>
           <option value="written">Short Answer</option>
           <option value="draw_response">Draw Response</option>
+          {/* Present so an existing Fill in the Blank question shows its real
+              type rather than falling back to the first option - but disabled,
+              because one cannot be created here: it needs a rectangle on a
+              playbook page, which is the Playbooks editor's job. */}
+          <option value="fill_blank" disabled>
+            Fill in the Blank
+          </option>
         </select>
       </div>
+
+      {questionType === 'fill_blank' && (
+        <p className={styles.typeNote}>
+          This question was built from a playbook page. Edit its region and accepted answers
+          from Playbooks; the wording can still be changed here.
+        </p>
+      )}
 
       {questionType === 'draw_response' && (
         <p className={styles.typeNote}>

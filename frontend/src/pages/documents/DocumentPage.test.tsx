@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentPage } from './DocumentPage';
 import * as documentsApi from '../../api/documents';
+import * as quizzesApi from '../../api/quizzes';
 import type { DocumentPage as PageModel, SourceDocumentWithPages } from '../../api/documents';
 
 function makePage(pageNumber: number, overrides: Partial<PageModel> = {}): PageModel {
@@ -49,6 +50,9 @@ function renderDocument() {
 describe('DocumentPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // The page loads the coach's quizzes so they can pick where questions go.
+    // Every test needs it; only the authoring ones care what it returns.
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
   });
 
   it('shows the playbook title and page count', async () => {

@@ -49,6 +49,11 @@ export function QuestionInput({
   // if one slips through (an image deleted mid-session), it degrades to a
   // question with a clear message rather than an empty board.
   const isDrawResponse = question.question_type === 'draw_response';
+  const isFillBlank = question.question_type === 'fill_blank';
+  // Only ever the MASKED render. There is deliberately no fallback to a page
+  // image here: if the server did not supply one, the right outcome is a
+  // question with no picture, never an unmasked page.
+  const maskedImageUrl = question.masked_image_url ?? null;
   const canDraw = isDrawResponse && image !== null;
   const drawing = answer?.drawing;
   const storageKey = drawingScope ? draftKey(drawingScope, question.id) : null;
@@ -98,6 +103,28 @@ export function QuestionInput({
       id={`question-${question.id}`}
       className={`card ${styles.questionCard} ${isUnanswered ? styles.questionCardUnanswered : ''}`}
     >
+      {/* A playbook page, already masked by the server. The unmasked page is
+          never sent to a player - the black box is baked into these pixels,
+          not drawn over them in CSS, so there is nothing to inspect, disable
+          or right-click around. See backend/app/services/page_masking.py. */}
+      {maskedImageUrl && (
+        <>
+          <img
+            src={resolveMediaUrl(maskedImageUrl)}
+            alt="Playbook page with the answer covered"
+            onClick={() => setIsZoomed(true)}
+            className={styles.questionImage}
+          />
+          {isZoomed && (
+            <ImageLightbox
+              src={resolveMediaUrl(maskedImageUrl)}
+              alt="Playbook page, enlarged"
+              annotations={[]}
+              onClose={() => setIsZoomed(false)}
+            />
+          )}
+        </>
+      )}
       {image && (
         <>
           {hasAnnotations ? (
@@ -180,7 +207,22 @@ export function QuestionInput({
           future combined-response work will add an explanation box or choices
           here behind their own per-question requirements; until then the
           absence is deliberate, not an oversight. */}
-      {isDrawResponse ? null : question.question_type === 'written' ? (
+      {isDrawResponse ? null : isFillBlank ? (
+        /* A single line, not a textarea: a fill-in-the-blank answer is a play
+           name or a call, and a multi-line box invites an essay the matcher
+           would then mark wrong. */
+        <input
+          type="text"
+          className={styles.writtenAnswer}
+          aria-label="Your answer"
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={answer?.answer_text ?? ''}
+          onChange={(e) => onChange({ answer_text: e.target.value })}
+        />
+      ) : question.question_type === 'written' ? (
         <textarea
           className={styles.writtenAnswer}
           value={answer?.answer_text ?? ''}

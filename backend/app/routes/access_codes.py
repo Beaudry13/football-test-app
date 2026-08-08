@@ -84,6 +84,36 @@ def activate_quiz(quiz_id: int):
             details={"questions_needing_images": missing_images},
         )
 
+    # Same class of problem, same place to catch it: a Fill in the Blank
+    # question whose region or accepted answers went missing cannot be answered
+    # correctly by anyone. The region can disappear without the coach touching
+    # the question - deleting the source document takes its pages with it - so
+    # like the image check above, this is re-derived at activation rather than
+    # trusted from creation time.
+    unanswerable = [
+        index + 1
+        for index, question in enumerate(quiz.questions)
+        if question.question_type is QuestionType.FILL_BLANK
+        and (not question.regions or not question.expected_answers)
+    ]
+    if unanswerable:
+        listed = ", ".join(str(n) for n in unanswerable)
+        if len(unanswerable) == 1:
+            message = (
+                f"Question {listed} is missing its playbook region or its accepted "
+                "answers. Fix it, or remove it, before sending this quiz."
+            )
+        else:
+            message = (
+                f"Questions {listed} are missing their playbook regions or accepted "
+                "answers. Fix them, or remove them, before sending this quiz."
+            )
+        raise ApiError(
+            message,
+            status_code=422,
+            details={"questions_needing_regions": unanswerable},
+        )
+
     has_roster_players = quiz.roster is not None and bool(quiz.roster.players)
     has_group_players = any(g.players for g in groups)
     if not has_roster_players and not has_group_players:

@@ -11,9 +11,63 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 140px minmax(0, 1fr) 280px;
   gap: 20px;
   align-items: start;
+}
+
+.quizPicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.quizPicker select {
+  max-width: 320px;
+}
+
+.instruction {
+  margin: 0 0 1em;
+  color: var(--nb-text-muted);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 12px;
+}
+
+.created {
+  padding: 12px 14px;
+  border: 1px solid var(--nb-border);
+  border-radius: 8px;
+}
+
+.createdTitle {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.createdList {
+  margin: 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.createdAnswer {
+  display: block;
+  font-weight: 600;
+}
+
+.createdPrompt {
+  display: block;
+  color: var(--nb-text-muted);
+  font-size: 0.82rem;
 }
 
 .strip {
@@ -88,6 +142,10 @@
      playbook on a phone should not be broken. */
   .layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .side {
+    position: static;
   }
 
   .strip {

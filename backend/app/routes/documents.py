@@ -15,7 +15,7 @@ from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import DocumentPage, SourceDocument
+from app.models import DocumentPage, Question, QuestionRegion, Quiz, SourceDocument
 from app.schemas.document import DocumentUpdateSchema
 from app.services import document_render
 from app.services.private_storage import get_private_storage
@@ -274,6 +274,33 @@ def delete_document(document_id: int):
     left to read them from.
     """
     source = _get_org_document(document_id)
+
+    # question_regions.document_page_id is ON DELETE RESTRICT, so this delete
+    # would otherwise fail as a 500 deep inside SQLAlchemy. Refusing here turns
+    # that into something a coach can act on - and naming the quizzes matters,
+    # because "it's in use" without saying where is a dead end.
+    #
+    # RESTRICT rather than CASCADE is the deliberate choice: silently deleting
+    # a document must not silently destroy questions in quizzes a coach has
+    # already sent out.
+    blocking = (
+        db.session.query(Quiz.title)
+        .join(Question, Question.quiz_id == Quiz.id)
+        .join(QuestionRegion, QuestionRegion.question_id == Question.id)
+        .join(DocumentPage, DocumentPage.id == QuestionRegion.document_page_id)
+        .filter(DocumentPage.source_document_id == source.id)
+        .distinct()
+        .all()
+    )
+    if blocking:
+        titles = sorted({title for (title,) in blocking})
+        listed = ", ".join(f'"{t}"' for t in titles)
+        raise ApiError(
+            f"This playbook is still used by {listed}. Remove those questions first, "
+            "or delete the quiz, and then delete the playbook.",
+            status_code=409,
+            details={"quizzes": titles},
+        )
 
     keys = [source.storage_key]
     for page in source.pages:

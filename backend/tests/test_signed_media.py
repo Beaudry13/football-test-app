@@ -10,6 +10,7 @@ import pytest
 from app.services.signed_media import (
     AUDIENCE_COACH,
     KIND_PAGE,
+    KIND_QUESTION_MASK,
     KIND_THUMBNAIL,
     SCHEME_VERSION,
     InvalidMediaToken,
@@ -67,11 +68,20 @@ class TestTokenRoundTrip:
                 sign_media_token("source_pdf", 1)
 
     def test_there_is_no_kind_that_reaches_the_source_pdf(self):
-        # Requirement 9 holds by construction rather than by a check somebody
-        # has to remember: the capability to address a PDF does not exist.
+        # "A player cannot obtain the source document" holds by construction
+        # rather than by a check somebody has to remember: the capability to
+        # address a PDF does not exist.
+        #
+        # Asserted as an EXACT set on purpose. Adding a token kind is exactly
+        # the change that could quietly create such a capability, so it should
+        # not be possible to do it without this test failing and forcing the
+        # question to be asked again.
         from app.services.signed_media import VALID_KINDS
 
-        assert VALID_KINDS == {KIND_PAGE, KIND_THUMBNAIL}
+        assert VALID_KINDS == {KIND_PAGE, KIND_THUMBNAIL, KIND_QUESTION_MASK}
+        # Every kind resolves to a rendered image derived from a page. None
+        # names the document itself.
+        assert all("pdf" not in kind and "document" not in kind for kind in VALID_KINDS)
 
 
 class TestTokenRejection:

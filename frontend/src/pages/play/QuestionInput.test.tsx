@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { QuestionInput } from './QuestionInput';
 import type { Question } from '../../api/types';
@@ -171,5 +172,81 @@ describe('QuestionInput drawing entry point', () => {
 
     expect(screen.getByRole('button', { name: /edit your drawing/i })).toBeInTheDocument();
     expect(screen.getByText(/1 mark/)).toBeInTheDocument();
+  });
+});
+
+describe('QuestionInput fill-in-the-blank', () => {
+  const fillBlank: Question = {
+    id: 9,
+    quiz_id: 1,
+    question_text: 'What coverage is hidden?',
+    question_type: 'fill_blank',
+    position: 0,
+    options: [],
+    image: null,
+    masked_image_url: '/api/media/v1.qmask.sig',
+    region: {
+      id: 5,
+      question_id: 9,
+      document_page_id: 2,
+      shape: 'rect',
+      x: 0.2,
+      y: 0.3,
+      width: 0.25,
+      height: 0.05,
+      role: 'mask',
+      position: 0,
+      page_number: 1,
+      source_document_id: 1,
+      render_width: 1275,
+      render_height: 1651,
+    },
+  };
+
+  it('shows the masked playbook page', () => {
+    render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={vi.fn()} />);
+    const image = screen.getByAltText('Playbook page with the answer covered');
+    expect(image.getAttribute('src')).toContain('/api/media/v1.qmask.sig');
+  });
+
+  it('renders a single-line answer box, not a textarea', () => {
+    // A fill-in-the-blank answer is a play name or a call. A multi-line box
+    // invites an essay that the matcher would then mark wrong.
+    render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={vi.fn()} />);
+    const input = screen.getByLabelText('Your answer');
+    expect(input.tagName).toBe('INPUT');
+  });
+
+  it('reports what the player types', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={onChange} />);
+
+    await user.type(screen.getByLabelText('Your answer'), 'C');
+    expect(onChange).toHaveBeenCalledWith({ answer_text: 'C' });
+  });
+
+  it('turns off autocorrect and autocapitalise', () => {
+    // A phone keyboard "helpfully" capitalising or correcting a play name is
+    // the difference between a correct answer and a wrong one.
+    render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={vi.fn()} />);
+    const input = screen.getByLabelText('Your answer');
+    expect(input).toHaveAttribute('autocorrect', 'off');
+    expect(input).toHaveAttribute('autocapitalize', 'none');
+  });
+
+  it('shows no picture at all rather than an unmasked page when none is supplied', () => {
+    // The failure mode this guards is the only one that matters here: falling
+    // back to a page image would hand the player the answer.
+    const withoutMask: Question = { ...fillBlank, masked_image_url: null };
+    render(<QuestionInput question={withoutMask} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('never receives the accepted answers', () => {
+    // The API omits expected_answers from every player payload; this asserts
+    // the component does not render them even if one ever leaked through.
+    render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.queryByText(/Cover 3/)).not.toBeInTheDocument();
   });
 });
