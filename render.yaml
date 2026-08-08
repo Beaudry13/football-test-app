@@ -47,6 +47,14 @@ services:
         sync: false
       - key: R2_PUBLIC_URL_BASE
         sync: false
+      # A SEPARATE bucket for protected documents (playbook PDFs and their
+      # rendered pages), with no public access binding - not a prefix inside
+      # R2_BUCKET_NAME, whose hostname serves its whole bucket. Declared here
+      # so a re-deploy from this blueprint lists it as required; the app
+      # refuses to store a playbook when it is unset rather than silently
+      # falling back to the public bucket.
+      - key: R2_PRIVATE_BUCKET_NAME
+        sync: false
       - key: MAX_UPLOAD_SIZE_MB
         value: "10"
       - key: ACCESS_CODE_TTL_HOURS
