@@ -1276,16 +1276,18 @@ _REPORT_COLS = (380, 90, 70)
 
 
 def _format_report_date(dt: datetime | None) -> str:
-    """Compact m/d/yy.
+    """Compact m/d - no year.
 
-    The year survives the squeeze even though it costs three characters: a
-    cumulative report is exactly where a coach compares this season with
-    last, and a bare "8/2" spanning two seasons is genuinely ambiguous.
+    This report summarises the CURRENT season, so the year is the same on
+    every row and repeating it is three characters of clutter in a column
+    built for scanning. A report spanning two seasons would be ambiguous,
+    which is the known trade being made here deliberately.
+
     Built by hand because strftime's %-m/%-d is not portable.
     """
     if dt is None:
         return "-"
-    return f"{dt.month}/{dt.day}/{dt.strftime('%y')}"
+    return f"{dt.month}/{dt.day}"
 
 
 def _format_report_percent(value: float | None) -> str:
