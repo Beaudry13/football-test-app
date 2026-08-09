@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { TourProvider } from '../help/tour/TourProvider';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPage } from './DashboardPage';
 import { FolderPage } from './FolderPage';
@@ -60,10 +61,15 @@ const sampleFolder: Folder = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+/** TourProvider wraps these renders because the shared header contains the
+ *  Help menu, which can launch the Dashboard Tour. useTour throws without a
+ *  provider rather than silently producing a Help entry that does nothing. */
 function renderDashboard() {
   render(
     <MemoryRouter>
-      <DashboardPage />
+      <TourProvider>
+        <DashboardPage />
+      </TourProvider>
     </MemoryRouter>,
   );
 }
@@ -285,10 +291,12 @@ describe('DashboardPage', () => {
   function renderDashboardWithFolderRoute(entry = '/') {
     render(
       <MemoryRouter initialEntries={[entry]}>
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/folders/:folderId" element={<FolderPage />} />
-        </Routes>
+        <TourProvider>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/folders/:folderId" element={<FolderPage />} />
+          </Routes>
+        </TourProvider>
       </MemoryRouter>,
     );
   }

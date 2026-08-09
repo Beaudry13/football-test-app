@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { restoreOnboarding } from '../api/onboarding';
+import { useTour } from './tour/tourContext';
 import { HelpArticleModal } from './HelpArticleModal';
 import { HELP_ACTIONS, HELP_ENTRIES, type HelpEntry } from './registry';
 import styles from './Help.module.css';
@@ -17,6 +18,7 @@ export function HelpMenu() {
   const [article, setArticle] = useState<HelpEntry | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const tour = useTour();
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +60,7 @@ export function HelpMenu() {
       return;
     }
     try {
-      await entry.run?.({ restoreChecklist });
+      await entry.run?.({ restoreChecklist, startTour: tour.start });
     } catch {
       // Nothing useful to say here, and a help menu is the wrong place to
       // start reporting API failures. The checklist is unchanged; trying
@@ -74,6 +76,7 @@ export function HelpMenu() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
+        data-tour="help"
       >
         Help
       </button>

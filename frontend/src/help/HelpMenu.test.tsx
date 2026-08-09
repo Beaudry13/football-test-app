@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HelpMenu } from './HelpMenu';
+import { TourProvider } from './tour/TourProvider';
 import { HELP_ACTIONS, HELP_ENTRIES } from './registry';
 import * as onboardingApi from '../api/onboarding';
 
@@ -14,11 +15,13 @@ function LocationProbe() {
 function renderMenu(initialPath = '/roster') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <HelpMenu />
-      <LocationProbe />
-      <Routes>
-        <Route path="*" element={null} />
-      </Routes>
+      <TourProvider>
+        <HelpMenu />
+        <LocationProbe />
+        <Routes>
+          <Route path="*" element={null} />
+        </Routes>
+      </TourProvider>
     </MemoryRouter>,
   );
 }
@@ -92,20 +95,31 @@ describe('HelpMenu', () => {
     renderMenu();
     await openMenu();
 
-    expect(screen.getByRole('menuitem', { name: 'Dashboard Tour' })).toBeDisabled();
     expect(screen.getByRole('menuitem', { name: "What's New" })).toBeDisabled();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
+    // The tour shipped, so it is a real action now rather than a placeholder.
+    expect(screen.getByRole('menuitem', { name: 'Dashboard Tour' })).toBeEnabled();
   });
 
   it('does nothing when a pending entry is clicked', async () => {
     renderMenu();
     const user = await openMenu();
 
-    await user.click(screen.getByRole('menuitem', { name: 'Dashboard Tour' }));
+    await user.click(screen.getByRole('menuitem', { name: "What's New" }));
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     // The menu stays put rather than closing as though something happened.
     expect(screen.getByRole('menu', { name: 'Help' })).toBeInTheDocument();
+  });
+
+  it('launches the dashboard tour', async () => {
+    renderMenu('/dashboard');
+    const user = await openMenu();
+
+    await user.click(screen.getByRole('menuitem', { name: 'Dashboard Tour' }));
+
+    // Same tour the checklist's link starts - one implementation, two doors.
+    expect(screen.getByTestId('dashboard-tour')).toBeInTheDocument();
   });
 
   it('closes on Escape and on a click outside', async () => {
@@ -166,8 +180,10 @@ describe('HelpMenu restore checklist', () => {
     }
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
-        <HelpMenu />
-        <KeyProbe />
+        <TourProvider>
+          <HelpMenu />
+          <KeyProbe />
+        </TourProvider>
       </MemoryRouter>,
     );
     const user = await openMenu();

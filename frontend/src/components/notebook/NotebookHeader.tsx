@@ -17,9 +17,20 @@ const NAV_LINKS = [
     to: '/documents',
     label: 'Playbooks',
     isActive: (path: string) => path.startsWith('/documents'),
+    tour: 'playbooks',
   },
-  { to: '/roster', label: 'Roster', isActive: (path: string) => path.startsWith('/roster') },
-  { to: '/groups', label: 'Groups', isActive: (path: string) => path.startsWith('/groups') },
+  {
+    to: '/roster',
+    label: 'Roster',
+    isActive: (path: string) => path.startsWith('/roster'),
+    tour: 'roster',
+  },
+  {
+    to: '/groups',
+    label: 'Groups',
+    isActive: (path: string) => path.startsWith('/groups'),
+    tour: 'groups',
+  },
   { to: '/team', label: 'Team', isActive: (path: string) => path.startsWith('/team') },
 ];
 
@@ -64,6 +75,9 @@ export function NotebookHeader() {
               key={link.to}
               to={link.to}
               className={`${styles.navLink} ${link.isActive(location.pathname) ? styles.navLinkActive : ''}`}
+              // Labels this link as tourable. An attribute, not a class, so
+              // restyling the nav can never silently unhook the tour.
+              data-tour={link.tour}
             >
               {link.label}
             </Link>
@@ -79,6 +93,10 @@ export function NotebookHeader() {
                 className={`${styles.navLink} ${
                   ADMIN_LINK.isActive(location.pathname) ? styles.navLinkActive : ''
                 }`}
+                // Absent for members, which is exactly how the tour's
+                // "admins only" step works - no role check, just a target
+                // that is not there.
+                data-tour="admin-view"
               >
                 {ADMIN_LINK.label}
               </Link>

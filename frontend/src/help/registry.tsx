@@ -19,6 +19,7 @@ export type HelpEntryKind = 'article' | 'action' | 'pending';
  *  data file with no knowledge of routing or API calls. */
 export interface HelpActionContext {
   restoreChecklist: () => Promise<void>;
+  startTour: () => void;
 }
 
 export interface HelpEntry {
@@ -72,8 +73,13 @@ export const HELP_ENTRIES: HelpEntry[] = [
   {
     id: 'dashboard_tour',
     title: 'Dashboard Tour',
-    summary: 'A guided walk through the dashboard.',
-    kind: 'pending',
+    summary: 'A short guided walk through the main parts of the dashboard.',
+    kind: 'action',
+    // Launched only from here and from the setup checklist's link. Nothing
+    // starts it automatically: the checklist owns a new coach's first
+    // screen, and a dimmed overlay on top of it would recreate exactly the
+    // "useful thing arrives behind a dialog" problem we removed.
+    run: (context) => context.startTour(),
   },
   {
     id: 'first_quiz',

@@ -1,0 +1,135 @@
+/* Dashboard Tour overlay.
+ *
+ * Coach theme (dark), tokens only - see styles/tokens.css. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  /* Above everything on the page. Modals portal to body too and are opened
+     from the header, but the tour and a help article are never open at once. */
+  z-index: 100;
+  /* Transparent, but it eats clicks: the tour is a guided read, and letting
+     a coach click a dimmed control mid-step is how a tour desynchronises
+     from the page it is describing. */
+  background: transparent;
+}
+
+/* The dim IS this element's outer shadow, so there is exactly one layer and
+   the lit area can never drift out of register with a separate scrim. */
+.spotlight {
+  position: fixed;
+  border-radius: var(--peira-radius-sm);
+  box-shadow:
+    0 0 0 9999px rgb(0 0 0 / 68%),
+    0 0 0 2px var(--nb-accent);
+  /* The shadow paints outside the box; without this the (tiny) lit box would
+     be the only clickable thing on screen. Blocking is the overlay's job. */
+  pointer-events: none;
+  transition:
+    top 180ms ease,
+    left 180ms ease,
+    width 180ms ease,
+    height 180ms ease;
+}
+
+.panel {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 28px);
+  background: var(--peira-surface);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 55%);
+  padding: 18px;
+  outline: none;
+}
+
+.panel:focus-visible {
+  border-color: var(--nb-accent);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--nb-text);
+  margin: 0 0 8px;
+}
+
+.body {
+  color: var(--nb-text-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+}
+
+.skip {
+  background: none;
+  border: none;
+  color: var(--nb-text-faint);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 2px;
+}
+
+.skip:hover {
+  color: var(--nb-text);
+  text-decoration: underline;
+}
+
+.secondary,
+.primary {
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: var(--peira-radius-sm);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.secondary {
+  background: none;
+  border: 1px solid var(--nb-input-border);
+  color: var(--nb-text-muted);
+}
+
+.secondary:hover:not(:disabled) {
+  color: var(--nb-text);
+  border-color: var(--nb-accent);
+}
+
+.secondary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.primary {
+  background: var(--nb-accent);
+  border: 1px solid var(--nb-accent);
+  color: var(--nb-bg);
+  font-weight: 600;
+}
+
+.primary:hover {
+  background: var(--nb-accent-hover);
+  border-color: var(--nb-accent-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spotlight {
+    transition: none;
+  }
+}

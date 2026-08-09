@@ -170,6 +170,24 @@
   margin: 14px 0 0;
 }
 
+.tourLink {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--nb-accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.tourLink:hover {
+  color: var(--nb-accent-bright);
+}
+
+.footnoteDivider {
+  margin: 0 6px;
+}
+
 /* Success state - shown once, then dismissed automatically. */
 .successHead {
   display: flex;

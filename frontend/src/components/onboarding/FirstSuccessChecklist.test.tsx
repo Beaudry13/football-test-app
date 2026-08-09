@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FirstSuccessChecklist } from './FirstSuccessChecklist';
+import { TourProvider } from '../../help/tour/TourProvider';
 import * as onboardingApi from '../../api/onboarding';
 import type { OnboardingProgress, OnboardingStep } from '../../api/onboarding';
 
@@ -69,10 +70,15 @@ function makeProgress(
   };
 }
 
+/** TourProvider is required, not incidental: the card offers "take the
+ *  dashboard tour", and useTour throws without a provider rather than
+ *  silently rendering a dead link. */
 function renderChecklist() {
   return render(
     <MemoryRouter>
-      <FirstSuccessChecklist />
+      <TourProvider>
+        <FirstSuccessChecklist />
+      </TourProvider>
     </MemoryRouter>,
   );
 }
@@ -166,6 +172,18 @@ describe('FirstSuccessChecklist', () => {
     expect(screen.getAllByText('already set up for your team')).toHaveLength(3);
     // ...and their own work is still in front of them.
     expect(screen.getByTestId('onboarding-action-create_quiz')).toBeInTheDocument();
+  });
+
+  it('launches the dashboard tour from its optional link', async () => {
+    // The tour is supporting help, not a step - the link sits under the
+    // checklist and starts the same tour the Help menu does.
+    vi.spyOn(onboardingApi, 'getOnboarding').mockResolvedValue(makeProgress());
+    const user = userEvent.setup();
+    renderChecklist();
+
+    await user.click(await screen.findByRole('button', { name: /take the dashboard tour/i }));
+
+    expect(screen.getByTestId('dashboard-tour')).toBeInTheDocument();
   });
 
   it('renders nothing while loading, and nothing if the request fails', async () => {
@@ -284,14 +302,18 @@ describe('FirstSuccessChecklist completion', () => {
 
     const { rerender } = render(
       <MemoryRouter>
-        <FirstSuccessChecklist reloadSignal={0} />
+        <TourProvider>
+          <FirstSuccessChecklist reloadSignal={0} />
+        </TourProvider>
       </MemoryRouter>,
     );
     await screen.findByText(/you.re set up/i);
 
     rerender(
       <MemoryRouter>
-        <FirstSuccessChecklist reloadSignal={1} />
+        <TourProvider>
+          <FirstSuccessChecklist reloadSignal={1} />
+        </TourProvider>
       </MemoryRouter>,
     );
 

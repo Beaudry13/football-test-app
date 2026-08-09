@@ -6,6 +6,7 @@ import {
   type OnboardingProgress,
   type OnboardingStep,
 } from '../../api/onboarding';
+import { useTour } from '../../help/tour/tourContext';
 import { Icon } from '../ui/Icon';
 import nb from '../../styles/notebook.module.css';
 import styles from './FirstSuccessChecklist.module.css';
@@ -44,6 +45,7 @@ export function FirstSuccessChecklist({ reloadSignal = 0 }: FirstSuccessChecklis
   // appears. The coach does all seven steps and is shown nothing.
   const [celebrating, setCelebrating] = useState(false);
   const location = useLocation();
+  const tour = useTour();
 
   const load = useCallback(() => {
     getOnboarding()
@@ -141,7 +143,16 @@ export function FirstSuccessChecklist({ reloadSignal = 0 }: FirstSuccessChecklis
         ))}
       </ol>
 
-      <p className={styles.footnote}>You can bring this back later from Help.</p>
+      <p className={styles.footnote}>
+        {/* Optional, and deliberately below the steps. The checklist is the
+            onboarding; the tour is supporting help for a coach who wants to
+            know where things are before starting. */}
+        <button type="button" className={styles.tourLink} onClick={tour.start}>
+          New here? Take the dashboard tour
+        </button>
+        <span className={styles.footnoteDivider}>·</span>
+        You can bring this back later from Help.
+      </p>
     </section>
   );
 }

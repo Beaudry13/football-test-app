@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotebookHeader } from './NotebookHeader';
+import { TourProvider } from '../../help/tour/TourProvider';
 import * as authContext from '../../auth/AuthContext';
 import type { Coach } from '../../api/types';
 
@@ -30,7 +31,9 @@ function mockAuth() {
 function renderHeader() {
   render(
     <MemoryRouter>
-      <NotebookHeader />
+      <TourProvider>
+        <NotebookHeader />
+      </TourProvider>
     </MemoryRouter>,
   );
 }

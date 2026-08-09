@@ -217,7 +217,10 @@ export function DashboardPage() {
 
         <ActiveQuizStatusSection />
 
-        <div className={styles.contentHeader}>
+        {/* Tour target. An attribute rather than a class, so restyling this
+            header can never silently unhook the Dashboard Tour - see
+            help/tour/tourSteps. */}
+        <div className={styles.contentHeader} data-tour="quizzes">
           <h1 className={nb.heading}>Your Quizzes</h1>
           {quizzes && (
             <span className={nb.countBadge}>
@@ -241,7 +244,7 @@ export function DashboardPage() {
           </button>
         </form>
 
-        <form className={styles.newFolderForm} onSubmit={handleCreateFolder}>
+        <form className={styles.newFolderForm} onSubmit={handleCreateFolder} data-tour="folders">
           <input
             className={nb.input}
             type="text"

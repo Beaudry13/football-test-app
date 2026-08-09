@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
+import { TourProvider } from './help/tour/TourProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { NotFoundRedirect } from './auth/NotFoundRedirect';
 import { NotebookLayout } from './components/notebook/NotebookLayout';
@@ -28,6 +29,10 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        {/* Inside the router because launching the tour navigates to the
+            dashboard, and inside auth because both launchers are behind
+            login. Mounts the overlay once for the whole app. */}
+        <TourProvider>
         <Routes>
           {/* "/" is always the public marketing homepage, signed in or not -
               a coach who wants their dashboard uses the nav/logo (which
@@ -70,6 +75,7 @@ function App() {
 
           <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
+        </TourProvider>
       </AuthProvider>
     </BrowserRouter>
   );
