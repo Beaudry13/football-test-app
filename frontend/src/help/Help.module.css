@@ -1,0 +1,161 @@
+/* Help / Learn menu and its article modal.
+ *
+ * Coach theme (dark). Every colour is a token - see styles/tokens.css and the
+ * NAMING NOTE at the top of it before adding one. */
+
+.container {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  background: none;
+  border: 1px solid var(--nb-input-border);
+  border-radius: var(--peira-radius-sm);
+  color: var(--nb-text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  color: var(--nb-text);
+  border-color: var(--nb-accent);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  /* Wide enough for a topic title and its one-line summary on one row each;
+     any narrower and every summary wraps, which turns a scannable list into
+     a wall. */
+  width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--peira-surface);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+  /* Above the page content, below a modal - the article modal portals to
+     document.body and so always wins. */
+  z-index: 40;
+  padding: 6px;
+}
+
+.group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.actionGroup {
+  border-top: 1px solid var(--nb-card-border);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: var(--peira-radius-sm);
+  padding: 9px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.item:hover:not(:disabled),
+.item:focus-visible {
+  background: var(--nb-bg);
+}
+
+.item:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.itemTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--nb-text);
+  font-size: 14px;
+}
+
+.itemSummary {
+  display: block;
+  color: var(--nb-text-faint);
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.soon {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-faint);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+/* Article modal content. The scrim and panel come from ui/Modal. */
+.heading {
+  font-family: var(--font-heading);
+  color: var(--nb-text, var(--color-text));
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.article {
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+.body {
+  color: var(--nb-text-muted, var(--color-text-muted));
+  font-size: 14.5px;
+  line-height: 1.7;
+  margin: 0 0 16px;
+}
+
+.body:last-child {
+  margin-bottom: 0;
+}
+
+.list {
+  color: var(--nb-text-muted, var(--color-text-muted));
+  font-size: 14.5px;
+  line-height: 1.7;
+  margin: 0 0 16px;
+  padding-left: 20px;
+}
+
+.list li {
+  margin-bottom: 6px;
+}
+
+.mark {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.emphasis {
+  color: var(--nb-accent-bright, var(--color-accent-bright));
+  font-style: normal;
+}
+
+@media (max-width: 640px) {
+  .menu {
+    width: min(320px, calc(100vw - 32px));
+  }
+}

@@ -26,6 +26,12 @@ class Coach(TimestampMixin, db.Model):
         db.Integer, db.ForeignKey("organizations.id"), nullable=False, index=True
     )
     role = db.Column(db.Enum(CoachRole), nullable=False, default=CoachRole.MEMBER)
+    # The ONLY piece of onboarding state that is stored. Every checklist step
+    # is derived from real data on each request (see services/onboarding.py);
+    # dismissal is a preference, so there is nothing to derive it from.
+    # Nullable timestamp rather than a boolean so "when did they give up on
+    # the checklist" stays answerable without a second column.
+    onboarding_dismissed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     organization = db.relationship("Organization", back_populates="coaches")
     # No delete cascade on any of these: quizzes, folders, and groups belong

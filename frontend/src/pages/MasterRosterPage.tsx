@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   createPlayer,
   deactivatePlayer,
@@ -28,7 +28,12 @@ export function MasterRosterPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState<PlayerInput>(EMPTY_FORM);
   const [isCreating, setIsCreating] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [searchParams] = useSearchParams();
+  // `?import=1` arrives from the setup checklist's "Upload a roster" button.
+  // Read once as the initial value rather than watched: the coach can close
+  // the panel afterwards, and a live binding would fight them for it while
+  // the parameter is still in the URL.
+  const [showImport, setShowImport] = useState(() => searchParams.get('import') === '1');
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {

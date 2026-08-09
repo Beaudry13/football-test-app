@@ -26,7 +26,7 @@ interface ModalProps {
 }
 
 /** Token-driven modal shell (backdrop + panel + optional close button),
- * shared by ConfirmDialog/OnboardingModal/ImageLightbox's chrome instead
+ * shared by ConfirmDialog/HelpArticleModal/ImageLightbox's chrome instead
  * of each hand-rolling its own backdrop/panel CSS. Deliberately just the
  * shell - focus-trap and Escape-key handling stay in each caller (they
  * already have working, tested implementations; duplicating that logic
@@ -34,9 +34,9 @@ interface ModalProps {
  * used to replace).
  *
  * Rendered through a portal to document.body so it always paints above
- * everything, regardless of where in the DOM the caller lives (mirrors
- * OnboardingModal's original reasoning: NotebookHeader's own stacking
- * context would otherwise sit under `.content`). */
+ * everything, regardless of where in the DOM the caller lives (the original
+ * reasoning came from the header's onboarding modal: NotebookHeader's own
+ * stacking context would otherwise sit under `.content`). */
 export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
   {
     children,

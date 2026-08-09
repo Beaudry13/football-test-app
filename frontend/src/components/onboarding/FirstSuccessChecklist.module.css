@@ -1,0 +1,225 @@
+/* The First Success checklist.
+ *
+ * Coach theme (dark) - every colour comes from a token, never a literal, so
+ * this card follows a restyle of the notebook theme without being touched.
+ * See styles/tokens.css and docs/THEMING.md. */
+
+.card {
+  padding: 20px 24px;
+  margin-bottom: 32px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--nb-text);
+  margin: 0;
+}
+
+.subtitle {
+  color: var(--nb-text-faint);
+  font-size: 13px;
+  margin: 3px 0 0;
+}
+
+.dismiss {
+  background: none;
+  border: none;
+  color: var(--nb-text-faint);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--peira-radius-sm);
+  flex-shrink: 0;
+}
+
+.dismiss:hover {
+  color: var(--nb-text);
+  text-decoration: underline;
+}
+
+/* Progress bar. Present because "3 of 7" alone makes a coach do arithmetic to
+   find out whether they are nearly there. */
+.track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--nb-input-border);
+  margin: 14px 0 4px;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  background: var(--nb-accent);
+  border-radius: 2px;
+  transition: width 220ms ease;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+
+.step:last-child {
+  border-bottom: none;
+}
+
+/* The next step is the only one carrying emphasis. Everything else is
+   deliberately quiet - seven equally loud rows is the "overwhelming" failure
+   this card exists to avoid. */
+.stepNext {
+  background: var(--nb-warning-bg);
+  border-radius: var(--peira-radius-sm);
+  padding: 12px;
+  margin: 4px -12px;
+  border-bottom: none;
+}
+
+.stepNext + .step {
+  border-top: 1px solid var(--nb-card-border);
+}
+
+.marker {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--nb-input-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--nb-bg);
+}
+
+.stepDone .marker {
+  background: var(--nb-success);
+  border-color: var(--nb-success);
+}
+
+.stepBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.stepTitle {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--nb-text);
+}
+
+.stepDone .stepTitle {
+  color: var(--nb-text-faint);
+}
+
+.stepDescription {
+  color: var(--nb-text-faint);
+  font-size: 13px;
+  margin: 3px 0 0;
+}
+
+.nextTag {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--nb-warning-text);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.inherited {
+  font-size: 11px;
+  color: var(--nb-text-faint);
+  font-style: italic;
+}
+
+.stepActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.footnote {
+  color: var(--nb-text-faint);
+  font-size: 12px;
+  margin: 14px 0 0;
+}
+
+/* Success state - shown once, then dismissed automatically. */
+.successHead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.successHead > div:nth-child(2) {
+  flex: 1;
+}
+
+.successMark {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--nb-success);
+  color: var(--nb-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.milestone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--nb-card-border);
+}
+
+.milestoneTitle {
+  font-size: 14px;
+  color: var(--nb-text);
+  margin: 0;
+}
+
+/* Phones: the action buttons stop fitting beside the text well before the
+   text stops fitting, so the row becomes a stack rather than shrinking. */
+@media (max-width: 640px) {
+  .step {
+    flex-wrap: wrap;
+  }
+
+  .stepActions {
+    width: 100%;
+    padding-left: 30px;
+    justify-content: flex-start;
+  }
+}

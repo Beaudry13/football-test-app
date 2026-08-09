@@ -17,6 +17,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.players import players_bp
     from app.routes.documents import documents_bp
     from app.routes.media import media_bp
+    from app.routes.onboarding import onboarding_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -33,3 +34,4 @@ def register_blueprints(app: Flask) -> None:
     # No url_prefix collision with /api/documents: the token is opaque and
     # this blueprint only ever matches /api/media/<token>.
     app.register_blueprint(media_bp, url_prefix="/api/media")
+    app.register_blueprint(onboarding_bp, url_prefix="/api/onboarding")

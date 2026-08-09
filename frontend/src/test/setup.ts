@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach } from 'vitest';
+import { afterEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
 // React Testing Library's own auto-cleanup only registers itself when it
@@ -11,12 +11,7 @@ afterEach(() => {
   cleanup();
 });
 
-// Default every test to "onboarding already seen", so NotebookHeader's
-// OnboardingModal doesn't auto-open (and steal focus into itself) in tests
-// that have nothing to do with onboarding - jsdom's localStorage otherwise
-// starts empty, matching a real first-ever visit. Tests that specifically
-// exercise the onboarding flow (NotebookHeader.test.tsx) clear localStorage
-// in their own beforeEach, which runs after this one and overrides it.
-beforeEach(() => {
-  localStorage.setItem('peira_onboarding_seen', 'true');
-});
+// There used to be a beforeEach here seeding `peira_onboarding_seen`, because
+// a modal auto-opened on a first visit and stole focus in every test that
+// rendered the header. Nothing auto-opens any more - help is opened from the
+// Help menu on purpose - so the workaround, and the key, are both gone.

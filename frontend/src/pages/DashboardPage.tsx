@@ -14,6 +14,7 @@ import { CoachFolderSection } from './CoachFolderSection';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
+import { FirstSuccessChecklist } from '../components/onboarding/FirstSuccessChecklist';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
@@ -34,6 +35,13 @@ export function DashboardPage() {
   const [newSubfolderNames, setNewSubfolderNames] = useState<Record<number, string>>({});
   const [isCreatingSubfolderFor, setIsCreatingSubfolderFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped when this page changes something the setup checklist derives from,
+  // so it re-checks instead of sitting stale. Only quiz create/duplicate/
+  // delete qualify - folders are not a setup step, and bumping on every
+  // refresh would re-fetch onboarding twice on each dashboard load for
+  // nothing. The checklist owns no rules of its own; see
+  // components/onboarding/FirstSuccessChecklist.
+  const [onboardingSignal, setOnboardingSignal] = useState(0);
   const { confirm, dialog } = useConfirmDialog();
 
   useEffect(() => {
@@ -59,6 +67,7 @@ export function DashboardPage() {
       await createQuiz({ title: newTitle.trim() });
       setNewTitle('');
       await refresh();
+      setOnboardingSignal((n) => n + 1);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -71,6 +80,7 @@ export function DashboardPage() {
     try {
       await duplicateQuiz(quizId);
       await refresh();
+      setOnboardingSignal((n) => n + 1);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -86,6 +96,7 @@ export function DashboardPage() {
         action: async () => {
           await deleteQuiz(quizId);
           await refresh();
+          setOnboardingSignal((n) => n + 1);
         },
       });
     } catch (err) {
@@ -202,6 +213,8 @@ export function DashboardPage() {
       <NotebookHeader />
 
       <div className={nb.content}>
+        <FirstSuccessChecklist reloadSignal={onboardingSignal} />
+
         <ActiveQuizStatusSection />
 
         <div className={styles.contentHeader}>

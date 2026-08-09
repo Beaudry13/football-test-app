@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,45 +35,63 @@ function renderHeader() {
   );
 }
 
-describe('NotebookHeader onboarding modal', () => {
+describe('NotebookHeader help', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
     mockAuth();
   });
 
-  it('shows the onboarding modal automatically the first time (nothing in localStorage yet)', () => {
+  it('never opens anything on its own, however new the coach is', () => {
+    // A modal used to auto-open here on a first visit. A new coach's first
+    // screen is now the setup checklist on the dashboard, which is about the
+    // work they came to do; the help content is theirs to open when they want
+    // it, not something to put in front of them.
     renderHeader();
 
-    expect(screen.getByText('Welcome to Peira')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('Welcome to Peira')).not.toBeInTheDocument();
   });
 
-  it('dismisses on "Begin" and remembers that in localStorage', async () => {
+  it('leaves no first-run flag behind in localStorage', () => {
+    // Nothing schedules anything any more, so nothing needs to remember it
+    // has been seen. A stale key would only mislead the next reader.
+    renderHeader();
+
+    expect(localStorage.getItem('peira_onboarding_seen')).toBeNull();
+  });
+
+  it('offers Help, and no longer a standalone "What is Peira?" link', () => {
+    // The old link's content is a Help article now. Two doors onto the same
+    // material is how a help system starts to rot.
+    renderHeader();
+
+    expect(screen.getByRole('button', { name: 'Help' })).toBeInTheDocument();
+    expect(screen.queryByText('What is Peira?')).not.toBeInTheDocument();
+  });
+
+  it('shows Help to a normal coach and to an admin alike', async () => {
     const user = userEvent.setup();
     renderHeader();
+    expect(screen.getByRole('button', { name: 'Help' })).toBeInTheDocument();
+    // A member sees no Admin View...
+    expect(screen.queryByText('Admin View')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Begin' }));
-
-    expect(screen.queryByText('Welcome to Peira')).not.toBeInTheDocument();
-    expect(localStorage.getItem('peira_onboarding_seen')).toBe('true');
-  });
-
-  it('does not auto-show again once already seen', () => {
-    localStorage.setItem('peira_onboarding_seen', 'true');
+    vi.spyOn(authContext, 'useAuth').mockReturnValue({
+      coach: { ...currentCoach, role: 'admin' },
+      isLoading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      registerWithInvite: vi.fn(),
+      logout: vi.fn(),
+    });
+    cleanup();
     renderHeader();
 
-    expect(screen.queryByText('Welcome to Peira')).not.toBeInTheDocument();
-  });
-
-  it('reopens via the "What is Peira?" link even after being dismissed', async () => {
-    const user = userEvent.setup();
-    localStorage.setItem('peira_onboarding_seen', 'true');
-    renderHeader();
-    expect(screen.queryByText('Welcome to Peira')).not.toBeInTheDocument();
-
-    await user.click(screen.getByText('What is Peira?'));
-
-    expect(screen.getByText('Welcome to Peira')).toBeInTheDocument();
+    expect(screen.getByText('Admin View')).toBeInTheDocument();
+    // ...but help is not a privilege.
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+    expect(screen.getByRole('menu', { name: 'Help' })).toBeInTheDocument();
   });
 
   it('does not show anything for a logged-out visitor', () => {
@@ -87,7 +105,6 @@ describe('NotebookHeader onboarding modal', () => {
     });
     renderHeader();
 
-    expect(screen.queryByText('Welcome to Peira')).not.toBeInTheDocument();
-    expect(screen.queryByText('What is Peira?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Help' })).not.toBeInTheDocument();
   });
 });

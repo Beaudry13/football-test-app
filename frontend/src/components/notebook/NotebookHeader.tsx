@@ -1,11 +1,8 @@
-import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { PeiraLogo } from '../brand/PeiraLogo';
-import { OnboardingModal } from '../OnboardingModal';
+import { HelpMenu } from '../../help/HelpMenu';
 import styles from '../../styles/notebook.module.css';
-
-const ONBOARDING_SEEN_KEY = 'peira_onboarding_seen';
 
 const NAV_LINKS = [
   // isActive checks a prefix rather than exact match, so e.g. viewing a
@@ -44,21 +41,9 @@ export function NotebookHeader() {
   const { coach, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  // Auto-shows once per browser (not per session) the first time a coach
-  // lands on any notebook-themed page, then stays dismissed - the "What is
-  // Peira?" link is what makes it reachable again after that.
-  const [onboardingOpen, setOnboardingOpen] = useState(
-    () => localStorage.getItem(ONBOARDING_SEEN_KEY) !== 'true',
-  );
-
   function handleLogout() {
     logout();
     navigate('/login');
-  }
-
-  function dismissOnboarding() {
-    localStorage.setItem(ONBOARDING_SEEN_KEY, 'true');
-    setOnboardingOpen(false);
   }
 
   return (
@@ -74,9 +59,6 @@ export function NotebookHeader() {
           the brand, for visual consistency with the rest of the app. */}
       {coach && (
         <div className={styles.nav}>
-          <button type="button" className={styles.whatIsPeira} onClick={() => setOnboardingOpen(true)}>
-            What is Peira?
-          </button>
           {NAV_LINKS.map((link) => (
             <Link
               key={link.to}
@@ -103,13 +85,17 @@ export function NotebookHeader() {
             </>
           )}
           <span className={styles.navDivider} />
+          {/* Everything a coach can be taught lives behind this one control,
+              admins and members alike. It replaced a standalone "What is
+              Peira?" link, whose content is now a Help article. */}
+          <HelpMenu />
+          <span className={styles.navDivider} />
           <span className={styles.coachName}>{coach.username}</span>
           <button className={styles.logoutButton} onClick={handleLogout}>
             Log out
           </button>
         </div>
       )}
-      {coach && onboardingOpen && <OnboardingModal onDismiss={dismissOnboarding} />}
     </div>
   );
 }

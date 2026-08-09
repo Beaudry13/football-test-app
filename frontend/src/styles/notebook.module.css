@@ -153,23 +153,9 @@
   background: var(--color-border-strong);
 }
 
-.whatIsPeira {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  background: none;
-  border: none;
-  padding: 0 var(--space-2);
-  font: inherit;
-  color: var(--nb-text-muted2, var(--color-text-muted-2));
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.whatIsPeira:hover {
-  color: var(--nb-text-muted, var(--color-text-muted));
-}
+/* `.whatIsPeira` lived here: the header link that opened the standalone
+   onboarding modal. Both are gone - that content is a Help article now, and
+   the header's only guidance control is the Help menu (see help/HelpMenu). */
 
 .coachName {
   font-family: var(--font-body);
