@@ -162,3 +162,109 @@ describe('MasterRosterPage', () => {
     expect(screen.queryByText('Import Roster')).not.toBeInTheDocument();
   });
 });
+
+describe('MasterRosterPage performance report', () => {
+  const jordan = makePlayer({ id: 1, first_name: 'Jordan', last_name: 'Lee', full_name: 'Jordan Lee' });
+  const marcus = makePlayer({ id: 2, first_name: 'Marcus', last_name: 'Hill', full_name: 'Marcus Hill', jersey_number: '5' });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    // downloadBlob reaches for URL.createObjectURL, which jsdom does not have.
+    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:x'), writable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), writable: true });
+  });
+
+  async function renderWithPlayers() {
+    vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([jordan, marcus]);
+    renderPage();
+    await screen.findByText('Jordan Lee');
+    return userEvent.setup();
+  }
+
+  it('disables the report button until a player is selected', async () => {
+    await renderWithPlayers();
+
+    expect(screen.getByRole('button', { name: 'Generate Performance Report' })).toBeDisabled();
+    expect(screen.getByText('No players selected')).toBeInTheDocument();
+  });
+
+  it('counts the selection as it changes', async () => {
+    const user = await renderWithPlayers();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Jordan Lee' }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Marcus Hill' }));
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate Performance Report' })).toBeEnabled();
+  });
+
+  it('generates a report for one selected player', async () => {
+    const download = vi
+      .spyOn(playersApi, 'downloadPerformanceReport')
+      .mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    const user = await renderWithPlayers();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Jordan Lee' }));
+    await user.click(screen.getByRole('button', { name: 'Generate Performance Report' }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledWith([1]));
+  });
+
+  it('generates one report for several selected players', async () => {
+    // One request, one PDF - not one download per player.
+    const download = vi
+      .spyOn(playersApi, 'downloadPerformanceReport')
+      .mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    const user = await renderWithPlayers();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Jordan Lee' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Marcus Hill' }));
+    await user.click(screen.getByRole('button', { name: 'Generate Performance Report' }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    expect(download).toHaveBeenCalledWith([1, 2]);
+  });
+
+  it('selects and clears every visible player', async () => {
+    const user = await renderWithPlayers();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all players' }));
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Clear all' }));
+    expect(screen.getByText('No players selected')).toBeInTheDocument();
+  });
+
+  it('select all covers only what the search has left on screen', async () => {
+    // Selecting rows hidden behind a filter would put players in the report
+    // that the coach never saw.
+    const user = await renderWithPlayers();
+    await user.type(screen.getByPlaceholderText(/search/i), 'Marcus');
+    await waitFor(() => expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select all players' }));
+
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+
+  it('surfaces a failure instead of silently doing nothing', async () => {
+    vi.spyOn(playersApi, 'downloadPerformanceReport').mockRejectedValue(new Error('nope'));
+    const user = await renderWithPlayers();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Jordan Lee' }));
+    await user.click(screen.getByRole('button', { name: 'Generate Performance Report' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('offers no selection bar when the roster is empty', async () => {
+    vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([]);
+    renderPage();
+    await screen.findByText(/No players yet/);
+
+    expect(
+      screen.queryByRole('button', { name: 'Generate Performance Report' }),
+    ).not.toBeInTheDocument();
+  });
+});

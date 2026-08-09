@@ -60,3 +60,33 @@
     max-width: none;
   }
 }
+
+/* Cumulative performance report selection bar. */
+.reportBar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 18px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-sm);
+  background: var(--peira-surface);
+}
+
+.selectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+}
+
+.selectedCount {
+  font-size: 13px;
+  color: var(--nb-text-faint);
+  /* Pushes the actions to the right edge on a wide screen, and simply wraps
+     on a narrow one. */
+  margin-right: auto;
+}

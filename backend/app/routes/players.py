@@ -7,6 +7,8 @@ Org-shared, same tenancy rule as Group/Folder: any coach in the
 organization may view or edit any player it owns (see get_org_player).
 """
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import jwt_required
 
@@ -21,6 +23,7 @@ from app.schemas.player import (
     PlayerCreateSchema,
     PlayerUpdateSchema,
 )
+from app.services.export import build_cumulative_performance_pdf
 from app.services.file_storage import get_file_storage
 from app.services.roster_import import apply_import, build_preview
 from app.utils.auth import current_coach, get_org_player
@@ -125,9 +128,18 @@ def get_player_history(player_id: int):
     return jsonify(build_player_history(current_coach(), player, organization_wide=False))
 
 
-def build_player_history(coach, player, organization_wide: bool) -> dict:
+def build_player_history(
+    coach, player, organization_wide: bool, result_limit: int | None = 20
+) -> dict:
     """Shared by the coach route above and the admin org-wide route, so the
-    two scopes cannot drift into reporting different numbers for one player."""
+    two scopes cannot drift into reporting different numbers for one player.
+
+    `result_limit` caps only the per-quiz LIST; every total below is computed
+    over all submitted attempts regardless. The cumulative performance PDF
+    passes None because a report that silently stopped at the player's 20
+    most recent quizzes would be wrong in a way nobody could see. The default
+    keeps the two history endpoints returning exactly what they always have.
+    """
     from app.models import Answer, AttemptStatus, Group, GroupPlayer, PlayerAttempt, Quiz
 
     scope = [PlayerAttempt.player_id == player.id]
@@ -156,6 +168,7 @@ def build_player_history(coach, player, organization_wide: bool) -> dict:
     recent_results = []
     total_correct = 0
     total_graded = 0
+    total_pending = 0
     for attempt in submitted:
         auto_graded = [a for a in attempt.answers if a.is_correct is not None]
         correct = sum(1 for a in auto_graded if a.is_correct)
@@ -166,6 +179,7 @@ def build_player_history(coach, player, organization_wide: bool) -> dict:
             for a in attempt.answers
             if a.is_correct is None and a.question.question_type in MANUALLY_GRADED_TYPES
         )
+        total_pending += pending_grading
         score_percent = round(100 * correct / len(auto_graded), 1) if auto_graded else None
         recent_results.append(
             {
@@ -196,8 +210,88 @@ def build_player_history(coach, player, organization_wide: bool) -> dict:
             "completed_count": completed_count,
             "completion_percent": completion_percent,
             "average_score_percent": average_score_percent,
-            "recent_results": recent_results[:20],
+            # Cumulative totals across every submitted attempt in scope.
+            # Exposed so the performance PDF reads them rather than deriving
+            # its own - two places computing "how many did they get right"
+            # is how a report starts disagreeing with the player's profile.
+            # Incorrect is graded minus correct by definition: an ungraded or
+            # unanswered question is neither, and must never become a wrong.
+            "total_correct_count": total_correct,
+            "total_incorrect_count": total_graded - total_correct,
+            "total_graded_count": total_graded,
+            "total_pending_grading_count": total_pending,
+            "recent_results": recent_results if result_limit is None else recent_results[:result_limit],
         }
+    )
+
+
+# A single report should not be able to become a denial-of-service or a
+# thousand-page download by accident. Well above any real roster selection.
+MAX_REPORT_PLAYERS = 100
+
+
+@players_bp.get("/report.pdf")
+@jwt_required()
+def cumulative_performance_report():
+    """One cumulative performance PDF for several selected players.
+
+    COACH VIEW SCOPING: every player's numbers come from
+    `build_player_history(..., organization_wide=False)`, which restricts to
+    quizzes this coach created. A coach cannot learn a teammate's quiz titles
+    or scores from this report, exactly as they cannot from the player
+    profile page it reuses.
+
+    GET with ids in the query string so the browser download path (and the
+    frontend's existing getBlob helper) works unchanged, matching the other
+    exports in this app. No writes happen here.
+
+    Routing note: this is declared before nothing in particular - Flask's
+    `int` converter means "/report.pdf" can never be mistaken for
+    "/<int:player_id>".
+    """
+    coach = current_coach()
+
+    raw_ids = (request.args.get("ids") or "").strip()
+    if not raw_ids:
+        raise ApiError("Select at least one player", status_code=400)
+
+    try:
+        # dict.fromkeys: de-duplicated, order preserved, so asking for the
+        # same player twice yields one section rather than two identical ones.
+        requested = list(dict.fromkeys(int(part) for part in raw_ids.split(",") if part.strip()))
+    except ValueError:
+        raise ApiError("Player ids must be numbers", status_code=400)
+
+    if not requested:
+        raise ApiError("Select at least one player", status_code=400)
+    if len(requested) > MAX_REPORT_PLAYERS:
+        raise ApiError(
+            f"Select at most {MAX_REPORT_PLAYERS} players for one report", status_code=422
+        )
+
+    players = Player.query.filter(
+        Player.id.in_(requested), Player.organization_id == coach.organization_id
+    ).all()
+    # All-or-nothing, and 404 rather than 403: a partial report would quietly
+    # omit somebody the coach believes they selected, and a distinct 403 would
+    # confirm that an id exists in another organization.
+    if len(players) != len(requested):
+        raise ApiError("One or more players were not found", status_code=404)
+
+    ordered = sorted(players, key=lambda p: (p.last_name.lower(), p.first_name.lower()))
+    histories = [
+        build_player_history(coach, player, organization_wide=False, result_limit=None)
+        for player in ordered
+    ]
+
+    pdf = build_cumulative_performance_pdf(histories)
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="performance-report-{stamp}.pdf"'
+        },
     )
 
 

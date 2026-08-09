@@ -89,6 +89,14 @@ export function downloadImportTemplate(): Promise<Blob> {
   return api.getBlob('/players/import/template.csv');
 }
 
+/** One cumulative performance PDF covering every selected player.
+ *
+ *  Scoped server-side to the signed-in coach's own quizzes - see the Coach
+ *  View rule in backend routes/players.cumulative_performance_report. */
+export function downloadPerformanceReport(playerIds: number[]): Promise<Blob> {
+  return api.getBlob(`/players/report.pdf?ids=${playerIds.join(',')}`);
+}
+
 export function addGroupMembers(groupId: number, playerIds: number[]): Promise<Group> {
   return api.post<Group>(`/groups/${groupId}/members`, { player_ids: playerIds });
 }

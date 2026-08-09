@@ -1255,3 +1255,139 @@ def build_detailed_results_pdf(
     footer = _make_footer(theme, quiz.title)
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()
+
+
+def _format_report_date(dt: datetime) -> str:
+    """Date only, for the per-quiz rows. The time a quiz was submitted is
+    noise in a cumulative report - the coach is scanning for trend, not for
+    when someone pressed the button."""
+    return dt.strftime("%b %d, %Y") if dt else "-"
+
+
+def build_cumulative_performance_pdf(histories: list[dict], theme: dict | None = None) -> bytes:
+    """One PDF covering several players' cumulative performance.
+
+    `histories` are payloads from routes/players.build_player_history with
+    `result_limit=None`. THIS FUNCTION COMPUTES NO SCORES. Every number it
+    prints is read straight from that payload, which is the same builder the
+    player-profile page and the org-wide admin history use - so this report
+    cannot disagree with the rest of the app about what a player scored, and
+    there is no second cumulative calculation to keep in sync.
+
+    Scope is the caller's problem too: `build_player_history` applies the
+    Coach View ownership rule (own quizzes only), so a coach's report can
+    never contain a teammate's quiz titles or scores.
+
+    Ungraded work is reported, never scored. A written answer still awaiting
+    a coach's grade appears in its own "Awaiting Grading" column and is
+    absent from correct, incorrect and the percentage - a player is not
+    marked wrong because their coach has not read their answer yet.
+    """
+    theme = theme or PDF_THEME
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter, title="Cumulative Performance Report"
+    )
+    styles = _pdf_styles(theme)
+    generated = datetime.now(timezone.utc)
+
+    player_word = "Player" if len(histories) == 1 else "Players"
+    elements = [
+        *_masthead(
+            theme,
+            styles,
+            [
+                f"Generated {generated.strftime('%b %d, %Y at %I:%M %p UTC')}",
+                f"{len(histories)} {player_word}",
+            ],
+        ),
+        Spacer(1, theme["spacing"]["lg"]),
+        Paragraph("PERFORMANCE", styles["eyebrow"]),
+        Spacer(1, theme["spacing"]["xs"]),
+        Paragraph("Cumulative Performance Report", styles["display"]),
+        Spacer(1, theme["spacing"]["xl"]),
+    ]
+
+    for index, history in enumerate(histories):
+        # One player per page. A cumulative report is read player by player,
+        # and letting two players share a page invites exactly the "where
+        # does John end and Mike begin" confusion this report exists to
+        # avoid. It also removes any chance of a section being clipped.
+        if index > 0:
+            elements.append(PageBreak())
+
+        player = history["player"]
+        name = f"{player['first_name']} {player['last_name']}".strip()
+        jersey = (player.get("jersey_number") or "").strip()
+        heading = f"#{jersey} {name}" if jersey else name
+
+        overall = history["average_score_percent"]
+        elements.append(_section_header(theme, styles, heading))
+        elements.append(Spacer(1, theme["spacing"]["md"]))
+        elements.append(
+            _metric_block(
+                theme,
+                [
+                    # "-", not "0%": nothing graded yet is not a score of
+                    # zero, and printing one would libel the player.
+                    ("Overall", f"{overall}%" if overall is not None else "-"),
+                    ("Quizzes Completed", str(history["completed_count"])),
+                    ("Correct", str(history["total_correct_count"])),
+                    ("Incorrect", str(history["total_incorrect_count"])),
+                    ("Awaiting Grading", str(history["total_pending_grading_count"])),
+                ],
+            )
+        )
+        elements.append(Spacer(1, theme["spacing"]["lg"]))
+
+        results = history["recent_results"]
+        if results:
+            rows = [["Quiz", "Date", "Score", "Awaiting Grading"]]
+            # Oldest first: a cumulative report reads as a progression, and
+            # the API hands them back newest-first for the profile page.
+            for result in sorted(
+                results, key=lambda r: (r["submitted_at"] or "", r["quiz_id"])
+            ):
+                score = result["score_percent"]
+                rows.append(
+                    [
+                        result["quiz_title"],
+                        _format_report_date(
+                            datetime.fromisoformat(result["submitted_at"])
+                            if result["submitted_at"]
+                            else None
+                        ),
+                        f"{score}%" if score is not None else "-",
+                        str(result["pending_grading_count"]),
+                    ]
+                )
+            elements.append(_styled_table(theme, rows, first_col_width=250))
+            elements.append(Spacer(1, theme["spacing"]["lg"]))
+            elements.append(
+                Paragraph(
+                    f"Cumulative: {history['total_correct_count']} correct, "
+                    f"{history['total_incorrect_count']} incorrect of "
+                    f"{history['total_graded_count']} graded"
+                    + (
+                        f" ({history['total_pending_grading_count']} still awaiting grading)"
+                        if history["total_pending_grading_count"]
+                        else ""
+                    )
+                    + ".",
+                    styles["normal"],
+                )
+            )
+        else:
+            # Said plainly rather than shown as a 0% row. A player who has
+            # not taken anything has no performance, which is different from
+            # performing badly.
+            elements.append(
+                Paragraph(
+                    "No completed quizzes yet for this coach&#8217;s quizzes.",
+                    styles["normal"],
+                )
+            )
+
+    footer = _make_footer(theme, "Cumulative Performance Report")
+    doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+    return buffer.getvalue()

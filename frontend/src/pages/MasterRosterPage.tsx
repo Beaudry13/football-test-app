@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import {
   createPlayer,
   deactivatePlayer,
+  downloadPerformanceReport,
   listPlayers,
   reactivatePlayer,
   type PlayerInput,
@@ -13,6 +14,7 @@ import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { RosterImportPanel } from '../components/RosterImportPanel';
 import { PlayerAvatar } from '../components/PlayerAvatar';
+import { downloadBlob } from '../utils/download';
 import nb from '../styles/notebook.module.css';
 import styles from './MasterRosterPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
@@ -34,6 +36,11 @@ export function MasterRosterPage() {
   // the panel afterwards, and a live binding would fight them for it while
   // the parameter is still in the URL.
   const [showImport, setShowImport] = useState(() => searchParams.get('import') === '1');
+  // Selection for the cumulative performance report. Ids rather than the
+  // Player objects, so a reload or a filter change cannot leave a stale copy
+  // of somebody's record selected.
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isGenerating, setIsGenerating] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -92,6 +99,31 @@ export function MasterRosterPage() {
     }
   }
 
+  function toggleSelected(playerId: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) next.delete(playerId);
+      else next.add(playerId);
+      return next;
+    });
+  }
+
+  async function handleGenerateReport() {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      // Ordered so the request is stable and cache-friendly; the PDF itself
+      // is ordered by name on the server.
+      const ids = [...selectedIds].sort((a, b) => a - b);
+      const blob = await downloadPerformanceReport(ids);
+      downloadBlob(blob, `performance-report-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
   const filtered = (players ?? []).filter((p) => {
     if (positionFilter && p.position !== positionFilter) return false;
     if (search.trim()) {
@@ -100,6 +132,26 @@ export function MasterRosterPage() {
     }
     return true;
   });
+
+  // Selection is tracked across the whole roster, but "select all" acts on
+  // what the coach can currently SEE. Selecting rows hidden behind a search
+  // would put players in the report that never appeared on screen.
+  const visibleIds = filtered.map((p) => p.id);
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id));
+
+  function toggleAllVisible(checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
 
   const positions = Array.from(new Set((players ?? []).map((p) => p.position).filter(Boolean))) as string[];
 
@@ -205,6 +257,46 @@ export function MasterRosterPage() {
           </button>
         </form>
 
+        {/* Selection bar. Only appears once there is a roster to select
+            from - an empty roster has nothing to report on, and a permanent
+            disabled toolbar is noise on the page a coach visits most. */}
+        {filtered.length > 0 && (
+          <div className={styles.reportBar}>
+            <label className={styles.selectAll}>
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                // Some-but-not-all reads as indeterminate rather than as
+                // "none selected", which is what an unchecked box claims.
+                ref={(el) => {
+                  if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
+                }}
+                onChange={(e) => toggleAllVisible(e.target.checked)}
+                aria-label="Select all players"
+              />
+              Select all
+            </label>
+            <span className={styles.selectedCount}>
+              {selectedCount === 0
+                ? 'No players selected'
+                : `${selectedCount} selected`}
+            </span>
+            {selectedCount > 0 && (
+              <button type="button" className={nb.btnSm} onClick={() => setSelectedIds(new Set())}>
+                Clear all
+              </button>
+            )}
+            <button
+              type="button"
+              className={nb.btnPrimary}
+              onClick={handleGenerateReport}
+              disabled={selectedCount === 0 || isGenerating}
+            >
+              {isGenerating ? 'Generating…' : 'Generate Performance Report'}
+            </button>
+          </div>
+        )}
+
         {players === null ? (
           <LoadingState />
         ) : filtered.length === 0 ? (
@@ -220,6 +312,7 @@ export function MasterRosterPage() {
             <thead>
               <tr>
                 <th></th>
+                <th></th>
                 <th>Player</th>
                 <th>#</th>
                 <th>Position</th>
@@ -230,6 +323,14 @@ export function MasterRosterPage() {
             <tbody>
               {filtered.map((player) => (
                 <tr key={player.id} className={player.is_active ? '' : styles.inactiveRow}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(player.id)}
+                      onChange={() => toggleSelected(player.id)}
+                      aria-label={`Select ${player.full_name}`}
+                    />
+                  </td>
                   <td>
                     <PlayerAvatar name={player.full_name} photoUrl={player.photo_url} size="sm" />
                   </td>
