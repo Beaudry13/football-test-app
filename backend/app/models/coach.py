@@ -32,6 +32,17 @@ class Coach(TimestampMixin, db.Model):
     # Nullable timestamp rather than a boolean so "when did they give up on
     # the checklist" stays answerable without a second column.
     onboarding_dismissed_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # The id of the newest release this coach has seen in What's New, or NULL
+    # if they have never opened it. HELP state, not onboarding state - the
+    # rule that every onboarding step stays derived is untouched.
+    #
+    # A string compared by equality, deliberately: a timestamp would make
+    # unread depend on release dates being ordering-safe (backdate a release
+    # and it silently reads as seen), and a per-release join table would
+    # answer a question nobody asks, since the panel shows every release at
+    # once and reading one is reading all. NULL meaning "never opened" is
+    # also what makes existing coaches see the indicator with no backfill.
+    whats_new_seen_version = db.Column(db.String(32), nullable=True)
 
     organization = db.relationship("Organization", back_populates="coaches")
     # No delete cascade on any of these: quizzes, folders, and groups belong

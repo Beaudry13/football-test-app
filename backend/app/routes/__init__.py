@@ -18,6 +18,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.documents import documents_bp
     from app.routes.media import media_bp
     from app.routes.onboarding import onboarding_bp
+    from app.routes.whats_new import whats_new_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -35,3 +36,4 @@ def register_blueprints(app: Flask) -> None:
     # this blueprint only ever matches /api/media/<token>.
     app.register_blueprint(media_bp, url_prefix="/api/media")
     app.register_blueprint(onboarding_bp, url_prefix="/api/onboarding")
+    app.register_blueprint(whats_new_bp, url_prefix="/api/whats-new")

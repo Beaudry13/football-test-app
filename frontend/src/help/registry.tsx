@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { PeiraLogo } from '../components/brand/PeiraLogo';
+import { ReleaseNotes } from './whatsNew/ReleaseNotes';
 import styles from './Help.module.css';
 
 /** What a menu entry does when clicked.
@@ -20,6 +21,7 @@ export type HelpEntryKind = 'article' | 'action' | 'pending';
 export interface HelpActionContext {
   restoreChecklist: () => Promise<void>;
   startTour: () => void;
+  markReleasesSeen: () => void;
 }
 
 export interface HelpEntry {
@@ -33,6 +35,14 @@ export interface HelpEntry {
   body?: () => ReactNode;
   /** Actions only. */
   run?: (context: HelpActionContext) => Promise<void> | void;
+  /** Marks this entry as the one that carries the unread indicator. The menu
+   *  supplies the actual unread state; the registry only says which row it
+   *  belongs to, so neither has to know about the other's business. */
+  tracksUnread?: boolean;
+  /** Articles only: runs when the article is opened. What's New uses it to
+   *  record that the releases have been read. Declared here as intent and
+   *  implemented by HelpMenu, so this file stays free of API calls. */
+  onOpen?: (context: HelpActionContext) => void;
 }
 
 /** Every help topic, in menu order.
@@ -246,8 +256,16 @@ export const HELP_ENTRIES: HelpEntry[] = [
   {
     id: 'whats_new',
     title: "What's New",
-    summary: 'Recent changes to Peira.',
-    kind: 'pending',
+    summary: 'Recent changes to Peira, newest first.',
+    kind: 'article',
+    // The unread dot lives on this row and on the Help button. Opening the
+    // article marks the newest release seen - deliberately on open rather
+    // than on scroll-to-bottom: a coach who opened the notes and skimmed
+    // them has been told, and nagging them again is the spam this system
+    // exists to avoid.
+    tracksUnread: true,
+    onOpen: (context) => context.markReleasesSeen(),
+    body: () => <ReleaseNotes />,
   },
 ];
 

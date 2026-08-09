@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { restoreOnboarding } from '../api/onboarding';
 import { useTour } from './tour/tourContext';
+import { useWhatsNew } from './whatsNew/useWhatsNew';
 import { HelpArticleModal } from './HelpArticleModal';
 import { HELP_ACTIONS, HELP_ENTRIES, type HelpEntry } from './registry';
 import styles from './Help.module.css';
@@ -19,6 +20,7 @@ export function HelpMenu() {
   const containerRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const tour = useTour();
+  const whatsNew = useWhatsNew();
 
   useEffect(() => {
     if (!open) return;
@@ -51,16 +53,25 @@ export function HelpMenu() {
     navigate('/dashboard', { replace: false, state: { restoredAt: Date.now() } });
   }
 
+  const context = {
+    restoreChecklist,
+    startTour: tour.start,
+    markReleasesSeen: whatsNew.markSeen,
+  };
+
   async function handleEntry(entry: HelpEntry) {
     if (entry.kind === 'pending') return;
     setOpen(false);
 
     if (entry.kind === 'article') {
+      // Before rendering, so the unread dot clears on the same click that
+      // opened the article rather than a frame later.
+      entry.onOpen?.(context);
       setArticle(entry);
       return;
     }
     try {
-      await entry.run?.({ restoreChecklist, startTour: tour.start });
+      await entry.run?.(context);
     } catch {
       // Nothing useful to say here, and a help menu is the wrong place to
       // start reporting API failures. The checklist is unchanged; trying
@@ -79,13 +90,21 @@ export function HelpMenu() {
         data-tour="help"
       >
         Help
+        {/* Subtle by design: a dot, not a count. There is nothing to count -
+            either there are releases you have not seen or there are not. */}
+        {whatsNew.hasUnread && <span className={styles.unreadDot} aria-label="Unread updates" />}
       </button>
 
       {open && (
         <div className={styles.menu} role="menu" aria-label="Help">
           <ul className={styles.group}>
             {HELP_ENTRIES.map((entry) => (
-              <MenuItem key={entry.id} entry={entry} onSelect={handleEntry} />
+              <MenuItem
+                key={entry.id}
+                entry={entry}
+                onSelect={handleEntry}
+                unread={Boolean(entry.tracksUnread && whatsNew.hasUnread)}
+              />
             ))}
           </ul>
           <ul className={`${styles.group} ${styles.actionGroup}`}>
@@ -108,9 +127,11 @@ export function HelpMenu() {
 function MenuItem({
   entry,
   onSelect,
+  unread = false,
 }: {
   entry: HelpEntry;
   onSelect: (entry: HelpEntry) => void;
+  unread?: boolean;
 }) {
   const pending = entry.kind === 'pending';
 
@@ -129,6 +150,7 @@ function MenuItem({
       >
         <span className={styles.itemTitle}>
           {entry.title}
+          {unread && <span className={styles.unreadTag}>New</span>}
           {/* Listed, but honest about it. A menu entry that opens nothing
               teaches a coach the menu is broken; one that says so teaches
               them it is coming. */}

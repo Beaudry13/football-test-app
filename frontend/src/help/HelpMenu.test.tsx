@@ -6,6 +6,8 @@ import { HelpMenu } from './HelpMenu';
 import { TourProvider } from './tour/TourProvider';
 import { HELP_ACTIONS, HELP_ENTRIES } from './registry';
 import * as onboardingApi from '../api/onboarding';
+import * as whatsNewApi from '../api/whatsNew';
+import { LATEST_RELEASE_ID } from './whatsNew/releases';
 
 function LocationProbe() {
   const location = useLocation();
@@ -35,6 +37,10 @@ async function openMenu() {
 describe('HelpMenu', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Default to "up to date" so the unread dot does not bleed into tests
+    // that are about something else.
+    vi.spyOn(whatsNewApi, 'getWhatsNew').mockResolvedValue({ seen_version: LATEST_RELEASE_ID });
+    vi.spyOn(whatsNewApi, 'markWhatsNewSeen').mockResolvedValue({ seen_version: LATEST_RELEASE_ID });
   });
 
   it('lists every topic the registry declares', async () => {
@@ -91,25 +97,15 @@ describe('HelpMenu', () => {
     expect(screen.getByText(/trial, test, proof through experience/)).toBeInTheDocument();
   });
 
-  it('disables what is not built yet instead of offering a dead button', async () => {
+  it('has nothing left marked Coming soon', async () => {
+    // Every entry in the menu now does something. The 'pending' kind stays
+    // in the registry for the next unbuilt topic.
     renderMenu();
     await openMenu();
 
-    expect(screen.getByRole('menuitem', { name: "What's New" })).toBeDisabled();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
-    // The tour shipped, so it is a real action now rather than a placeholder.
+    expect(screen.queryByText('Coming soon')).not.toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Dashboard Tour' })).toBeEnabled();
-  });
-
-  it('does nothing when a pending entry is clicked', async () => {
-    renderMenu();
-    const user = await openMenu();
-
-    await user.click(screen.getByRole('menuitem', { name: "What's New" }));
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    // The menu stays put rather than closing as though something happened.
-    expect(screen.getByRole('menu', { name: 'Help' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: "What's New" })).toBeEnabled();
   });
 
   it('launches the dashboard tour', async () => {
@@ -141,6 +137,7 @@ describe('HelpMenu', () => {
 describe('HelpMenu restore checklist', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(whatsNewApi, 'getWhatsNew').mockResolvedValue({ seen_version: LATEST_RELEASE_ID });
   });
 
   it('clears the dismissal on the server, not in this browser', async () => {
