@@ -47,15 +47,31 @@ function expectRect(
 
 function setup(props: Partial<React.ComponentProps<typeof RegionDraw>> = {}) {
   const onDrawn = vi.fn();
+  const onClick = vi.fn();
+  const onSelect = vi.fn();
+  const onRegionChanged = vi.fn();
   const { container } = render(
-    <RegionDraw existing={[]} onDrawn={onDrawn} {...props}>
+    // Every required prop is supplied here, BEFORE the spread, so a caller can
+    // still override any of them. These became required when RegionDraw grew
+    // tap-to-select and region editing; without them the click path called an
+    // undefined onSelect, which the tests only survived because the throw
+    // happened inside a dispatched event handler.
+    <RegionDraw
+      existing={[]}
+      selectedId={null}
+      onDrawn={onDrawn}
+      onClick={onClick}
+      onSelect={onSelect}
+      onRegionChanged={onRegionChanged}
+      {...props}
+    >
       <img alt="page" src="/page.webp" />
     </RegionDraw>,
   );
   const surface = container.firstElementChild as HTMLElement;
   // setPointerCapture does not exist in jsdom.
   surface.setPointerCapture = vi.fn();
-  return { onDrawn, surface };
+  return { onDrawn, onClick, onSelect, onRegionChanged, surface };
 }
 
 describe('RegionDraw', () => {
