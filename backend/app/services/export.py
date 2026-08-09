@@ -69,6 +69,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     HRFlowable,
     Image as RLImage,
+    KeepTogether,
     PageBreak,
     Paragraph,
     SimpleDocTemplate,
@@ -1257,11 +1258,241 @@ def build_detailed_results_pdf(
     return buffer.getvalue()
 
 
-def _format_report_date(dt: datetime) -> str:
-    """Date only, for the per-quiz rows. The time a quiz was submitted is
-    noise in a cumulative report - the coach is scanning for trend, not for
-    when someone pressed the button."""
-    return dt.strftime("%b %d, %Y") if dt else "-"
+# --- Cumulative performance report ---------------------------------------
+#
+# A coach's packet, not a business report. The design goal is that twenty
+# players can be printed, carried and flipped through - so density beats
+# elegance everywhere the two disagree, and the only page breaks are the
+# ones ReportLab is forced into.
+
+# Narrower than the quiz exports': this report is scanned, not filed, and
+# every point of margin is a row of quiz history that did not fit.
+_REPORT_MARGIN = 0.5 * inch
+
+# Quiz / Date / Score, plus Awaiting only when some row actually has
+# ungraded work. Each set sums to the printable width at the margin above.
+_REPORT_COLS_WITH_PENDING = (300, 70, 60, 110)
+_REPORT_COLS = (380, 90, 70)
+
+
+def _format_report_date(dt: datetime | None) -> str:
+    """Compact m/d/yy.
+
+    The year survives the squeeze even though it costs three characters: a
+    cumulative report is exactly where a coach compares this season with
+    last, and a bare "8/2" spanning two seasons is genuinely ambiguous.
+    Built by hand because strftime's %-m/%-d is not portable.
+    """
+    if dt is None:
+        return "-"
+    return f"{dt.month}/{dt.day}/{dt.strftime('%y')}"
+
+
+def _format_report_percent(value: float | None) -> str:
+    """"92%", not "92.0%".
+
+    A trailing ".0" on nearly every score is three characters of noise per
+    row that a coach scanning a column never needs; the tenth is kept only
+    when it actually says something (86.7%)."""
+    if value is None:
+        return "-"
+    return f"{value:g}%"
+
+
+def _compact_footer(theme: dict, title: str):
+    """A hairline and one line of text.
+
+    The Peira wordmark appears once, in the masthead on page one. Repeating
+    it on every page of a twenty-player packet is branding nobody reads,
+    printed on space a coach could have used for another two quizzes."""
+
+    def _draw(canvas, doc):
+        canvas.saveState()
+        page_width, page_height = letter
+        canvas.setFillColor(theme["background"])
+        canvas.rect(0, 0, page_width, page_height, stroke=0, fill=1)
+
+        footer_y = 0.3 * inch
+        left = doc.leftMargin
+        right = page_width - doc.rightMargin
+
+        canvas.setStrokeColor(theme["hairline"])
+        canvas.setLineWidth(theme["rule"]["hair"])
+        canvas.line(left, footer_y + 10, right, footer_y + 10)
+
+        canvas.setFont(theme["body_font"], theme["body_sizes"]["footer"])
+        canvas.setFillColor(theme["footer_text"])
+        canvas.drawString(left, footer_y, title[:90])
+        canvas.drawRightString(right, footer_y, f"Page {canvas.getPageNumber()}")
+        canvas.restoreState()
+
+    return _draw
+
+
+def _report_styles(theme: dict) -> dict[str, ParagraphStyle]:
+    """Type scale for the packet: smaller than the quiz exports throughout,
+    with every leading set explicitly - ReportLab's default 1.2x leading is
+    what quietly turns a "compact" table back into a loose one."""
+    return {
+        "player": ParagraphStyle(
+            "ReportPlayer",
+            fontName=theme["heading_font"],
+            fontSize=theme["heading_sizes"]["h3"],
+            leading=13,
+            textColor=theme["primary_text"],
+        ),
+        "stats": ParagraphStyle(
+            "ReportStats",
+            fontName=theme["body_font"],
+            fontSize=theme["body_sizes"]["label"],
+            leading=11,
+            textColor=theme["secondary_text"],
+        ),
+        "cell": ParagraphStyle(
+            "ReportCell",
+            fontName=theme["body_font"],
+            fontSize=theme["body_sizes"]["small"],
+            leading=9,
+            textColor=theme["primary_text"],
+        ),
+        "note": ParagraphStyle(
+            "ReportNote",
+            fontName=theme["body_font"],
+            fontSize=theme["body_sizes"]["small"],
+            leading=10,
+            textColor=theme["secondary_text"],
+        ),
+        "title": ParagraphStyle(
+            "ReportTitle",
+            fontName=theme["heading_font"],
+            fontSize=theme["heading_sizes"]["h2"],
+            leading=15,
+            textColor=theme["primary_text"],
+        ),
+        "meta": ParagraphStyle(
+            "ReportMeta",
+            fontName=theme["body_font"],
+            fontSize=theme["body_sizes"]["small"],
+            leading=10,
+            textColor=theme["secondary_text"],
+        ),
+        "header_cell": ParagraphStyle(
+            "ReportHeaderCell",
+            fontName=theme["heading_font"],
+            fontSize=theme["body_sizes"]["table_header"],
+            leading=8,
+            textColor=theme["header_text"],
+        ),
+    }
+
+
+def _dense_quiz_table(theme: dict, styles: dict, rows: list[list], show_pending: bool) -> Table:
+    """The per-player quiz list, as tight as it can be while staying legible:
+    2pt of vertical padding, hairline separators, no outer box, no zebra.
+
+    Every cell is a Paragraph so a long quiz name wraps inside its own column
+    instead of running under the date - the widths are chosen so an ordinary
+    name still takes exactly one line. `repeatRows` keeps the header on a
+    player whose history is long enough to split across a page."""
+    widths = _REPORT_COLS_WITH_PENDING if show_pending else _REPORT_COLS
+    header = ["Quiz", "Date", "Score"] + (["Awaiting"] if show_pending else [])
+
+    body = [[Paragraph(_xml_escape(str(c)), styles["header_cell"]) for c in header]]
+    for row in rows:
+        body.append([Paragraph(_xml_escape(str(cell)), styles["cell"]) for cell in row])
+
+    table = Table(body, colWidths=list(widths), hAlign="LEFT", repeatRows=1)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), theme["header_fill"]),
+                ("LINEBELOW", (0, 0), (-1, 0), theme["rule"]["hair"], theme["border"]),
+                ("LINEBELOW", (0, 1), (-1, -2), theme["rule"]["hair"], theme["hairline"]),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    return table
+
+
+def _player_block(theme: dict, styles: dict, history: dict) -> list:
+    """One player, as a list of flowables."""
+    player = history["player"]
+    name = f"{player['first_name']} {player['last_name']}".strip()
+    jersey = (player.get("jersey_number") or "").strip()
+    heading = f"#{jersey} {name}" if jersey else name
+
+    overall = history["average_score_percent"]
+    pending = history["total_pending_grading_count"]
+
+    # Five metric cards became one line of five words. The labels stay -
+    # "87 - 14 - 182" means nothing at a glance - but nothing is repeated
+    # per row below, and "Awaiting Grading" is omitted when there is none.
+    stats = [
+        f"Overall: {_format_report_percent(overall)}",
+        f"Completed: {history['completed_count']}",
+        f"Correct: {history['total_correct_count']}",
+        f"Incorrect: {history['total_incorrect_count']}",
+    ]
+    if pending:
+        stats.append(f"Awaiting Grading: {pending}")
+
+    block = [
+        HRFlowable(
+            width="100%",
+            thickness=theme["rule"]["thin"],
+            color=theme["border"],
+            spaceBefore=0,
+            spaceAfter=4,
+        ),
+        Paragraph(_xml_escape(heading), styles["player"]),
+        Paragraph(
+            " &#183; ".join(_xml_escape(item) for item in stats),
+            styles["stats"],
+        ),
+        Spacer(1, 4),
+    ]
+
+    results = history["recent_results"]
+    if results:
+        # The column earns its width only if some row has ungraded work.
+        show_pending = any(r["pending_grading_count"] for r in results)
+        rows = []
+        for result in sorted(results, key=lambda r: (r["submitted_at"] or "", r["quiz_id"])):
+            score = result["score_percent"]
+            row = [
+                result["quiz_title"],
+                _format_report_date(
+                    datetime.fromisoformat(result["submitted_at"])
+                    if result["submitted_at"]
+                    else None
+                ),
+                _format_report_percent(score),
+            ]
+            if show_pending:
+                row.append(str(result["pending_grading_count"]))
+            rows.append(row)
+        block.append(_dense_quiz_table(theme, styles, rows, show_pending))
+    else:
+        block.append(Paragraph("No completed quizzes yet.", styles["note"]))
+
+    block.append(Spacer(1, 10))
+    return block
+
+
+def _block_height(block: list, width: float, height: float) -> float | None:
+    """Total laid-out height of a player block, or None if it cannot be
+    measured. Only ever used to decide whether KeepTogether would help, so a
+    failure here degrades to "keep it together" rather than breaking."""
+    try:
+        return sum(flowable.wrap(width, height)[1] for flowable in block)
+    except Exception:
+        return None
 
 
 def build_cumulative_performance_pdf(histories: list[dict], theme: dict | None = None) -> bytes:
@@ -1279,115 +1510,67 @@ def build_cumulative_performance_pdf(histories: list[dict], theme: dict | None =
     never contain a teammate's quiz titles or scores.
 
     Ungraded work is reported, never scored. A written answer still awaiting
-    a coach's grade appears in its own "Awaiting Grading" column and is
-    absent from correct, incorrect and the percentage - a player is not
-    marked wrong because their coach has not read their answer yet.
+    a coach's grade appears in an "Awaiting" column - shown only when some
+    row actually has one - and is absent from correct, incorrect and the
+    percentage. A player is not marked wrong because their coach has not read
+    their answer yet.
+
+    LAYOUT: players flow one after another down the page, with NO forced page
+    breaks. Each player is wrapped in KeepTogether, which asks ReportLab to
+    move a whole block to the next page rather than split it - so a break
+    happens only when the next player genuinely will not fit. A player whose
+    own history is taller than a page still splits rather than looping, and
+    the table header repeats on the continuation.
     """
     theme = theme or PDF_THEME
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buffer, pagesize=letter, title="Cumulative Performance Report"
+        buffer,
+        pagesize=letter,
+        title="Cumulative Performance Report",
+        leftMargin=_REPORT_MARGIN,
+        rightMargin=_REPORT_MARGIN,
+        topMargin=_REPORT_MARGIN,
+        # Room for the hairline footer, and no more.
+        bottomMargin=0.55 * inch,
     )
-    styles = _pdf_styles(theme)
+    styles = _report_styles(theme)
     generated = datetime.now(timezone.utc)
 
-    player_word = "Player" if len(histories) == 1 else "Players"
+    player_word = "player" if len(histories) == 1 else "players"
     elements = [
-        *_masthead(
-            theme,
-            styles,
-            [
-                f"Generated {generated.strftime('%b %d, %Y at %I:%M %p UTC')}",
-                f"{len(histories)} {player_word}",
-            ],
+        # Page one only. Later pages start straight into the next player - a
+        # repeated masthead in a twenty-player packet is nineteen wasted
+        # bands of paper.
+        _brand_mark(theme, _pdf_styles(theme)),
+        Spacer(1, 4),
+        Paragraph("Cumulative Performance Report", styles["title"]),
+        Paragraph(
+            f"{len(histories)} {player_word} &#183; generated "
+            f"{generated.strftime('%b %d, %Y')}",
+            styles["meta"],
         ),
-        Spacer(1, theme["spacing"]["lg"]),
-        Paragraph("PERFORMANCE", styles["eyebrow"]),
-        Spacer(1, theme["spacing"]["xs"]),
-        Paragraph("Cumulative Performance Report", styles["display"]),
-        Spacer(1, theme["spacing"]["xl"]),
+        Spacer(1, 8),
     ]
 
-    for index, history in enumerate(histories):
-        # One player per page. A cumulative report is read player by player,
-        # and letting two players share a page invites exactly the "where
-        # does John end and Mike begin" confusion this report exists to
-        # avoid. It also removes any chance of a section being clipped.
-        if index > 0:
-            elements.append(PageBreak())
+    frame_width = letter[0] - (2 * _REPORT_MARGIN)
+    frame_height = letter[1] - _REPORT_MARGIN - (0.55 * inch)
 
-        player = history["player"]
-        name = f"{player['first_name']} {player['last_name']}".strip()
-        jersey = (player.get("jersey_number") or "").strip()
-        heading = f"#{jersey} {name}" if jersey else name
+    for history in histories:
+        block = _player_block(theme, styles, history)
 
-        overall = history["average_score_percent"]
-        elements.append(_section_header(theme, styles, heading))
-        elements.append(Spacer(1, theme["spacing"]["md"]))
-        elements.append(
-            _metric_block(
-                theme,
-                [
-                    # "-", not "0%": nothing graded yet is not a score of
-                    # zero, and printing one would libel the player.
-                    ("Overall", f"{overall}%" if overall is not None else "-"),
-                    ("Quizzes Completed", str(history["completed_count"])),
-                    ("Correct", str(history["total_correct_count"])),
-                    ("Incorrect", str(history["total_incorrect_count"])),
-                    ("Awaiting Grading", str(history["total_pending_grading_count"])),
-                ],
-            )
-        )
-        elements.append(Spacer(1, theme["spacing"]["lg"]))
-
-        results = history["recent_results"]
-        if results:
-            rows = [["Quiz", "Date", "Score", "Awaiting Grading"]]
-            # Oldest first: a cumulative report reads as a progression, and
-            # the API hands them back newest-first for the profile page.
-            for result in sorted(
-                results, key=lambda r: (r["submitted_at"] or "", r["quiz_id"])
-            ):
-                score = result["score_percent"]
-                rows.append(
-                    [
-                        result["quiz_title"],
-                        _format_report_date(
-                            datetime.fromisoformat(result["submitted_at"])
-                            if result["submitted_at"]
-                            else None
-                        ),
-                        f"{score}%" if score is not None else "-",
-                        str(result["pending_grading_count"]),
-                    ]
-                )
-            elements.append(_styled_table(theme, rows, first_col_width=250))
-            elements.append(Spacer(1, theme["spacing"]["lg"]))
-            elements.append(
-                Paragraph(
-                    f"Cumulative: {history['total_correct_count']} correct, "
-                    f"{history['total_incorrect_count']} incorrect of "
-                    f"{history['total_graded_count']} graded"
-                    + (
-                        f" ({history['total_pending_grading_count']} still awaiting grading)"
-                        if history["total_pending_grading_count"]
-                        else ""
-                    )
-                    + ".",
-                    styles["normal"],
-                )
-            )
+        # KeepTogether only helps when the block CAN fit a page. Applied to a
+        # player with more history than a page holds, it pushes the whole
+        # thing forward and leaves the previous page blank - which is how a
+        # single long player used to waste page one entirely. Measured on a
+        # throwaway copy, because Table.wrap caches its column widths and the
+        # flowables that get rendered should be untouched.
+        measured = _block_height(_player_block(theme, styles, history), frame_width, frame_height)
+        if measured is not None and measured > frame_height:
+            elements.extend(block)
         else:
-            # Said plainly rather than shown as a 0% row. A player who has
-            # not taken anything has no performance, which is different from
-            # performing badly.
-            elements.append(
-                Paragraph(
-                    "No completed quizzes yet for this coach&#8217;s quizzes.",
-                    styles["normal"],
-                )
-            )
+            elements.append(KeepTogether(block))
 
-    footer = _make_footer(theme, "Cumulative Performance Report")
+    footer = _compact_footer(theme, "Cumulative Performance Report")
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()

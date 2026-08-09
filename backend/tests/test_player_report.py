@@ -5,6 +5,7 @@ looking at the PDF: that it never counts another coach's quizzes, and that
 it never turns an ungraded answer into a wrong one.
 """
 
+import io
 from datetime import datetime, timezone
 
 import pytest
@@ -12,6 +13,7 @@ import pytest
 from app.extensions import db
 from app.models import Answer, AttemptStatus, PlayerAttempt
 from app.routes.players import build_player_history
+from app.services.export import build_cumulative_performance_pdf
 
 
 def make_quiz(client, headers, title="Install 1"):
@@ -335,3 +337,153 @@ def test_report_renders_for_any_selection_size(client, coach_headers, count):
 
     assert response.status_code == 200
     assert response.data.startswith(b"%PDF")
+
+
+# --- layout: a coach's packet, not one page per player --------------------
+
+
+def synthetic_history(first, last, jersey, quiz_count, pending=0):
+    """A history payload shaped exactly like build_player_history's, so the
+    layout can be exercised without a database behind it."""
+    results = [
+        {
+            "quiz_id": i + 1,
+            "quiz_title": f"Install {i + 1}",
+            "attempt_id": i + 1,
+            "submitted_at": f"2026-08-{(i % 27) + 1:02d}T15:00:00+00:00",
+            "score_percent": 80.0,
+            "graded_answer_count": 10,
+            "correct_answer_count": 8,
+            "pending_grading_count": 1 if (pending and i == 0) else 0,
+        }
+        for i in range(quiz_count)
+    ]
+    return {
+        "player": {"first_name": first, "last_name": last, "jersey_number": jersey},
+        "completed_count": quiz_count,
+        "average_score_percent": 80.0 if quiz_count else None,
+        "total_correct_count": quiz_count * 8,
+        "total_incorrect_count": quiz_count * 2,
+        "total_graded_count": quiz_count * 10,
+        "total_pending_grading_count": pending,
+        "recent_results": results,
+    }
+
+
+def pdf_pages_text(pdf_bytes):
+    import pypdfium2 as pdfium
+
+    doc = pdfium.PdfDocument(io.BytesIO(pdf_bytes))
+    return [doc[i].get_textpage().get_text_range() for i in range(len(doc))]
+
+
+def squad(size=20, quizzes=6):
+    return [synthetic_history(f"P{i}", f"Last{i}", str(i + 1), quizzes) for i in range(size)]
+
+
+class TestPacketDensity:
+    def test_many_players_share_pages(self):
+        # THE point of the redesign. One page per player turned a squad into
+        # a twenty-page document nobody flips through.
+        pages = pdf_pages_text(build_cumulative_performance_pdf(squad()))
+
+        assert len(pages) < 20
+        assert len(pages) <= 7, f"20 players should not need {len(pages)} pages"
+
+    def test_short_players_fit_on_one_page(self):
+        histories = [synthetic_history(f"P{i}", f"Last{i}", str(i + 1), 3) for i in range(3)]
+
+        assert len(pdf_pages_text(build_cumulative_performance_pdf(histories))) == 1
+
+    def test_no_player_section_is_orphaned_across_a_page_break(self):
+        # A heading and stats line stranded at the foot of a page with the
+        # table overleaf is exactly what KeepTogether exists to prevent.
+        pages = pdf_pages_text(build_cumulative_performance_pdf(squad()))
+
+        for page in pages[1:]:
+            body = [
+                line
+                for line in page.strip().splitlines()
+                if line.strip() and not line.startswith("Cumulative Performance Report")
+            ]
+            assert body[0].startswith("#"), f"page opens mid-section: {body[0]!r}"
+
+    def test_a_player_taller_than_a_page_still_uses_the_current_page(self):
+        # KeepTogether cannot help a block bigger than a page; applying it
+        # anyway pushed the block forward and left the page before it blank.
+        pages = pdf_pages_text(
+            build_cumulative_performance_pdf([synthetic_history("Marathon", "Player", "99", 60)])
+        )
+
+        assert "Install 1" in pages[0], "the first page should carry rows, not sit empty"
+
+    def test_a_split_table_repeats_its_header(self):
+        pages = pdf_pages_text(
+            build_cumulative_performance_pdf([synthetic_history("Marathon", "Player", "99", 60)])
+        )
+
+        assert "Quiz" in pages[1] and "Score" in pages[1]
+
+
+class TestPacketChrome:
+    def test_the_report_title_appears_once_on_later_pages(self):
+        # Page one carries the masthead AND the footer; later pages carry
+        # only the footer, so the phrase count drops to one.
+        pages = pdf_pages_text(build_cumulative_performance_pdf(squad()))
+
+        assert pages[0].count("Cumulative Performance Report") >= 2
+        for page in pages[1:]:
+            assert page.count("Cumulative Performance Report") == 1
+
+    def test_every_page_is_numbered(self):
+        pages = pdf_pages_text(build_cumulative_performance_pdf(squad()))
+
+        for index, page in enumerate(pages):
+            assert f"Page {index + 1}" in page
+
+
+class TestPacketReadability:
+    def test_scores_lose_their_pointless_decimal(self):
+        pages = pdf_pages_text(
+            build_cumulative_performance_pdf([synthetic_history("A", "B", "1", 1)])
+        )
+
+        assert "80%" in pages[0]
+        assert "80.0%" not in pages[0]
+
+    def test_the_awaiting_column_is_dropped_when_nothing_is_awaiting(self):
+        # A column of zeros is width spent on nothing.
+        clean = pdf_pages_text(
+            build_cumulative_performance_pdf([synthetic_history("A", "B", "1", 3)])
+        )
+        assert "Awaiting" not in clean[0]
+
+        pending = pdf_pages_text(
+            build_cumulative_performance_pdf([synthetic_history("A", "B", "1", 3, pending=1)])
+        )
+        assert "Awaiting" in pending[0]
+
+    def test_a_long_player_name_and_quiz_title_survive_intact(self):
+        history = synthetic_history(
+            "Bartholomew Fitzwilliam-Montgomery", "Vandersteenhoven-Aleksandrovich", "88", 1
+        )
+        history["recent_results"][0]["quiz_title"] = (
+            "Week 12 Opponent Preparation - Third Down and Long Situational Install "
+            "with Red Zone Carryover"
+        )
+
+        pages = pdf_pages_text(build_cumulative_performance_pdf([history]))
+
+        # Nothing clipped: text pushed outside its frame would be absent from
+        # the text layer entirely.
+        assert "Bartholomew" in pages[0]
+        assert "Vandersteenhoven" in pages[0]
+        assert "Red Zone Carryover" in pages[0]
+
+    def test_a_player_with_no_attempts_says_so(self):
+        pages = pdf_pages_text(
+            build_cumulative_performance_pdf([synthetic_history("Empty", "Zero", "", 0)])
+        )
+
+        assert "No completed quizzes yet." in pages[0]
+        assert "Overall: -" in pages[0]
