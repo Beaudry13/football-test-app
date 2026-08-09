@@ -80,15 +80,34 @@ through Bash.
 ```bash
 # Frontend
 cd frontend
+npm run build                          # THE GATE — see below. tsc -b + vite build
 npx vitest run --no-file-parallelism   # see the note below — use this form
-npx tsc --noEmit
 npx oxlint .
-npx vite build
 
 # Backend
 cd backend
 .venv/Scripts/python.exe -m pytest -q
 ```
+
+### `npm run build` is the frontend gate. `tsc --noEmit` proves nothing here.
+
+**Never report a frontend change as production-ready on the strength of
+`npx tsc --noEmit`.** In this repo that command exits 0 on a project that
+cannot compile, and it has already shipped a broken build to Netlify once.
+
+`frontend/tsconfig.json` is a *solution file* — `"files": []` with nothing but
+`references` to `tsconfig.app.json` and `tsconfig.node.json`. `tsc --noEmit`
+against it type-checks **zero files** and reports success. Only `tsc -b`
+builds the referenced projects, and that is what `npm run build` runs before
+Vite.
+
+Netlify runs `npm run build` (see `netlify.toml`), so that command *is* the
+deploy. Running `tsc --noEmit` and `vite build` separately skips the only step
+that would have caught the failure — the two together look like the same
+thing and are not.
+
+`npx tsc -b` on its own is fine for a quick check mid-work. `npm run build` is
+what must pass before saying the frontend is ready.
 
 ### Test-suite noise that is NOT your fault
 
@@ -180,6 +199,14 @@ client-supplied id. Keep that.
 *names* (`WRITTEN`, not `written`). `ALTER TYPE … ADD VALUE` cannot be used
 in the same transaction that added it, and Alembic wraps migrations in one.
 Split the migration, and rehearse on a scratch database first.
+
+**9. `tsc --noEmit` is a lie in this repo.** `frontend/tsconfig.json` is a
+solution file (`"files": []` plus `references`), so that command type-checks
+nothing and exits 0 on code that will not compile. It shipped a build to
+Netlify that failed with exit code 2 on a type error `--noEmit` had cheerfully
+approved. Use `npm run build` (`tsc -b && vite build`) — see the Commands
+section. This one is easy to repeat, because the wrong command looks
+*more* careful than the right one.
 
 ---
 
