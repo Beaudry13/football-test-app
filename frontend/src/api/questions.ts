@@ -13,8 +13,28 @@ export interface QuestionInput {
   position?: number | null;
 }
 
-export function createQuestion(quizId: number, input: QuestionInput): Promise<Question> {
-  return api.post<Question>(`/quizzes/${quizId}/questions`, input);
+/** Creates a question, and its image if one is supplied, in ONE request.
+ *
+ *  The image used to be a second request against the question that had just
+ *  been created, which meant a coach saved, reopened, navigated to the
+ *  annotate page, uploaded and came back - and a half-made question existed in
+ *  between. When `image` is given this posts multipart and the server commits
+ *  both together or neither.
+ *
+ *  Without an image it stays plain JSON, exactly as before. */
+export function createQuestion(
+  quizId: number,
+  input: QuestionInput,
+  image?: File | null,
+): Promise<Question> {
+  if (!image) return api.post<Question>(`/quizzes/${quizId}/questions`, input);
+
+  const formData = new FormData();
+  // The options are a nested list, which form fields cannot express without
+  // inventing an encoding - so the question travels as one JSON field.
+  formData.append('payload', JSON.stringify(input));
+  formData.append('image', image);
+  return api.postForm<Question>(`/quizzes/${quizId}/questions`, formData);
 }
 
 export function updateQuestion(

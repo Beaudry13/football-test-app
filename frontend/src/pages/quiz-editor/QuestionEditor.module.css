@@ -44,3 +44,33 @@
   font-size: 13px;
   line-height: 1.5;
 }
+
+
+/* The picked image, shown from the local file before anything is uploaded. */
+.imagePreview {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.imagePreview img {
+  max-width: 220px;
+  max-height: 140px;
+  border-radius: 6px;
+  border: 1px solid var(--nb-border);
+  object-fit: contain;
+  background: #fff;
+}
+
+.imageActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.imageHint {
+  margin: 0 0 6px;
+  color: var(--nb-text-muted);
+  font-size: 0.82rem;
+}

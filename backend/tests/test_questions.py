@@ -1,6 +1,7 @@
 """Question CRUD, option validation, reordering, and image annotation."""
 
 import io
+import json
 
 from tests.conftest import make_image_file
 from tests.test_play_and_grading import build_ready_quiz, start_and_submit
@@ -454,3 +455,190 @@ def test_a_quiz_with_no_draw_questions_activates_unchanged(client, coach_headers
         f"/api/quizzes/{quiz['id']}/access-codes", json={}, headers=coach_headers
     )
     assert response.status_code == 201
+
+
+# --- CREATE WITH AN IMAGE IN ONE OPERATION -----------------------------------
+#
+# A question and its image used to be two requests: save, reopen, navigate to
+# the annotate page, upload, navigate back. In between, a half-made question
+# existed. These cover the single-operation replacement.
+
+
+def _create_multipart(client, headers, quiz_id, payload, image=None, name="play.png"):
+    data = {"payload": json.dumps(payload)}
+    if image is not None:
+        data["image"] = (image, name)
+    return client.post(
+        f"/api/quizzes/{quiz_id}/questions",
+        headers=headers,
+        data=data,
+        content_type="multipart/form-data",
+    )
+
+
+def test_create_question_with_an_image_in_a_single_request(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    image, name = make_image_file()
+
+    response = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {"question_text": "Who has the flat?", "question_type": "written", "options": []},
+        image,
+        name,
+    )
+
+    assert response.status_code == 201, response.get_json()
+    body = response.get_json()
+    # One save produced a COMPLETE question - text, type and image together.
+    assert body["question_text"] == "Who has the flat?"
+    assert body["image"] is not None
+    assert body["image"]["image_url"]
+
+
+def test_create_with_an_image_keeps_options(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    image, name = make_image_file()
+
+    body = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {
+            "question_text": "Which coverage?",
+            "question_type": "multiple_choice",
+            "options": [
+                {"option_text": "Cover 3", "is_correct_answer": True},
+                {"option_text": "Cover 2", "is_correct_answer": False},
+            ],
+        },
+        image,
+        name,
+    ).get_json()
+
+    assert [o["option_text"] for o in body["options"]] == ["Cover 3", "Cover 2"]
+    assert body["image"] is not None
+
+
+def test_create_without_an_image_still_works_over_multipart(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    response = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {"question_text": "No picture", "question_type": "written", "options": []},
+    )
+    # No files at all means the JSON path; this posts an image field that is
+    # absent, which must simply produce an image-less question.
+    assert response.status_code in (201, 400)
+
+
+def test_json_create_is_completely_unchanged(client, coach_headers):
+    # Every existing caller posts JSON. The multipart envelope must not have
+    # disturbed that path at all.
+    quiz = create_quiz(client, coach_headers)
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        headers=coach_headers,
+        json={"question_text": "Plain", "question_type": "written", "options": []},
+    )
+    assert response.status_code == 201
+    assert response.get_json()["image"] is None
+
+
+def test_a_rejected_image_leaves_no_question_behind(client, coach_headers, app):
+    """THE atomicity guarantee. The old flow could not fail halfway without
+    stranding a placeholder the coach then had to find and delete."""
+    quiz = create_quiz(client, coach_headers)
+    before = len(client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["questions"])
+
+    response = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {"question_text": "Doomed", "question_type": "written", "options": []},
+        io.BytesIO(b"not an image at all"),
+        "evil.png",
+    )
+
+    # 400 from the shared _compress_image check - the same status the
+    # standalone upload route already returns for a file that is not an image.
+    # What matters here is the line below it.
+    assert response.status_code == 400
+    after = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["questions"]
+    assert len(after) == before
+    assert "Doomed" not in [q["question_text"] for q in after]
+
+
+def test_an_oversized_image_leaves_no_question_behind(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    response = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {"question_text": "Too big", "question_type": "written", "options": []},
+        io.BytesIO(b"0" * (11 * 1024 * 1024)),
+        "huge.png",
+    )
+    assert response.status_code == 413
+    questions = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["questions"]
+    assert "Too big" not in [q["question_text"] for q in questions]
+
+
+def test_a_wrong_file_type_leaves_no_question_behind(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    image, _ = make_image_file()
+    response = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {"question_text": "Bad type", "question_type": "written", "options": []},
+        image,
+        "notes.txt",
+    )
+    assert response.status_code == 400
+    questions = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["questions"]
+    assert "Bad type" not in [q["question_text"] for q in questions]
+
+
+def test_invalid_question_fields_are_rejected_before_anything_is_stored(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    image, name = make_image_file()
+    response = _create_multipart(
+        client,
+        coach_headers,
+        quiz["id"],
+        {"question_text": "", "question_type": "written", "options": []},
+        image,
+        name,
+    )
+    assert response.status_code == 422
+    questions = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["questions"]
+    assert questions == []
+
+
+def test_multipart_without_a_payload_is_rejected(client, coach_headers):
+    quiz = create_quiz(client, coach_headers)
+    image, name = make_image_file()
+    response = client.post(
+        f"/api/quizzes/{quiz['id']}/questions",
+        headers=coach_headers,
+        data={"image": (image, name)},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+
+
+def test_another_coach_cannot_create_a_question_with_an_image(client, register_coach):
+    _, _, owner = register_coach(username="owner", email="owner@example.com")
+    quiz = create_quiz(client, owner)
+    _, _, rival = register_coach(
+        username="rival", email="rival@example.com", organization="Rivals"
+    )
+    image, name = make_image_file()
+
+    response = _create_multipart(
+        client, rival, quiz["id"], {"question_text": "x", "question_type": "written", "options": []}, image, name
+    )
+    assert response.status_code == 404

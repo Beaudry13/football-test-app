@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { getErrorMessage } from '../../api/client';
@@ -16,8 +16,14 @@ interface QuestionEditorProps {
   initialType?: QuestionType;
   initialOptions?: QuestionOptionInput[];
   submitLabel: string;
-  onSave: (input: QuestionInput) => Promise<void>;
+  onSave: (input: QuestionInput, image?: File | null) => Promise<void>;
   onCancel: () => void;
+  /** Offers an image picker whose file is held here until save.
+   *
+   *  Only the create flow passes this. Editing keeps its existing route to the
+   *  annotation page, which does more than upload - it is where a coach draws
+   *  on the image - and folding that in here would be a different change. */
+  allowImage?: boolean;
 }
 
 export function QuestionEditor({
@@ -27,6 +33,7 @@ export function QuestionEditor({
   submitLabel,
   onSave,
   onCancel,
+  allowImage = false,
 }: QuestionEditorProps) {
   const [questionText, setQuestionText] = useState(initialText);
   const [questionType, setQuestionType] = useState<QuestionType>(initialType);
@@ -35,6 +42,30 @@ export function QuestionEditor({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // The file lives HERE, not on the server, until the coach saves. That is
+  // what makes Cancel leave nothing behind: nothing was ever created.
+  const [image, setImage] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!image) {
+      setPreview(null);
+      return;
+    }
+    const url = URL.createObjectURL(image);
+    setPreview(url);
+    // Revoked on replace and on unmount; an object URL pins the whole file in
+    // memory until it is.
+    return () => URL.revokeObjectURL(url);
+  }, [image]);
+
+  function clearImage() {
+    setImage(null);
+    // Without this, re-picking the SAME file after removing it fires no change
+    // event at all and the picker appears broken.
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
 
   function handleTypeChange(type: QuestionType) {
     setQuestionType(type);
@@ -81,7 +112,10 @@ export function QuestionEditor({
 
     setIsSaving(true);
     try {
-      await onSave({ question_text: questionText.trim(), question_type: questionType, options });
+      await onSave(
+        { question_text: questionText.trim(), question_type: questionType, options },
+        image,
+      );
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -195,6 +229,56 @@ export function QuestionEditor({
           <button type="button" className={`${nb.btnSm} ${styles.addOption}`} onClick={addOption}>
             + Add option
           </button>
+        </div>
+      )}
+
+      {/* TODO (future UX, deliberately not built now): accept a drag-and-drop
+          image onto this form as well as the click-to-upload below. The
+          click path stays either way - drag-and-drop is an addition, not a
+          replacement, and a coach on a trackpad or a tablet still needs the
+          button. The plumbing already suits it: the file is held in state
+          until save, so a dropped File would take exactly the same path as a
+          picked one and need no server change. */}
+      {allowImage && (
+        <div className={nb.field}>
+          <span className={nb.fieldLabel}>Image</span>
+          {preview ? (
+            <div className={styles.imagePreview}>
+              {/* Previewed from the file itself, so the coach sees exactly what
+                  they picked without a round-trip - and without anything having
+                  been created yet. */}
+              <img src={preview} alt="Selected question image" />
+              <div className={styles.imageActions}>
+                <button
+                  type="button"
+                  className={nb.btnSm}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Replace
+                </button>
+                <button
+                  type="button"
+                  className={`${nb.btnSm} ${nb.btnDanger}`}
+                  onClick={clearImage}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className={styles.imageHint}>
+              Optional. Added when you save this question &mdash; you can annotate it afterwards.
+            </p>
+          )}
+          <input
+            ref={fileInputRef}
+            id="question_image"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className={preview ? nb.srOnly : undefined}
+            aria-label="Question image"
+            onChange={(event) => setImage(event.target.files?.[0] ?? null)}
+          />
         </div>
       )}
 

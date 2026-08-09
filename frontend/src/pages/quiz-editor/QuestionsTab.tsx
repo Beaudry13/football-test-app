@@ -34,8 +34,10 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
 
   const questions = quiz.questions ?? [];
 
-  async function handleCreate(input: QuestionInput) {
-    await createQuestion(quiz.id, input);
+  async function handleCreate(input: QuestionInput, image?: File | null) {
+    // One call. The question and its image are committed together server-side,
+    // so a rejected image leaves no half-made question to clean up.
+    await createQuestion(quiz.id, input, image);
     setIsAdding(false);
     await reload();
   }
@@ -190,7 +192,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
       </div>
 
       {isAdding ? (
-        <QuestionEditor submitLabel="Add question" onSave={handleCreate} onCancel={() => setIsAdding(false)} />
+        <QuestionEditor
+          submitLabel="Add question"
+          allowImage
+          onSave={handleCreate}
+          onCancel={() => setIsAdding(false)}
+        />
       ) : (
         <button className={nb.btnPrimary} onClick={() => setIsAdding(true)}>
           + Add question

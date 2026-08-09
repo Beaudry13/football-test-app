@@ -93,14 +93,19 @@ describe('QuestionEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Add question' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(onSave).toHaveBeenCalledWith({
-      question_text: 'Is this cover 2?',
-      question_type: 'true_false',
-      options: [
-        { option_text: 'True', is_correct_answer: false },
-        { option_text: 'False', is_correct_answer: true },
-      ],
-    });
+    // The second argument is the image, which the create flow now passes in
+    // the same call - null here because this editor has no picker.
+    expect(onSave).toHaveBeenCalledWith(
+      {
+        question_text: 'Is this cover 2?',
+        question_type: 'true_false',
+        options: [
+          { option_text: 'True', is_correct_answer: false },
+          { option_text: 'False', is_correct_answer: true },
+        ],
+      },
+      null,
+    );
   });
 
   it('shows the save error and re-enables the form when onSave rejects', async () => {
@@ -122,5 +127,109 @@ describe('QuestionEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('QuestionEditor image upload on create', () => {
+  function pngFile(name = 'play.png') {
+    return new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], name, { type: 'image/png' });
+  }
+
+  it('offers no image picker unless the create flow asks for one', () => {
+    // Editing keeps its existing route to the annotation page, which does more
+    // than upload - that is where a coach draws on the image.
+    renderEditor();
+    expect(screen.queryByLabelText('Question image')).not.toBeInTheDocument();
+  });
+
+  it('lets a coach attach an image before the first save', async () => {
+    const user = userEvent.setup();
+    renderEditor({ allowImage: true });
+
+    await user.upload(screen.getByLabelText('Question image'), pngFile());
+
+    // Previewed from the local file - nothing has been created yet.
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+  });
+
+  it('sends the file with the question in one save', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ allowImage: true });
+    const file = pngFile();
+
+    await user.type(screen.getByLabelText('Question'), 'Who has the flat?');
+    await user.upload(screen.getByLabelText('Question image'), file);
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ question_text: 'Who has the flat?' }),
+        file,
+      ),
+    );
+  });
+
+  it('can replace the image before saving', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ allowImage: true });
+    const second = pngFile('second.png');
+
+    await user.upload(screen.getByLabelText('Question image'), pngFile('first.png'));
+    await screen.findByAltText('Selected question image');
+    await user.upload(screen.getByLabelText('Question image'), second);
+
+    await user.type(screen.getByLabelText('Question'), 'Q');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), second));
+  });
+
+  it('can remove the image before saving', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ allowImage: true });
+
+    await user.upload(screen.getByLabelText('Question image'), pngFile());
+    await screen.findByAltText('Selected question image');
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() =>
+      expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument(),
+    );
+
+    await user.type(screen.getByLabelText('Question'), 'Q');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), null));
+  });
+
+  it('saves with no image when none was picked', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ allowImage: true });
+
+    await user.type(screen.getByLabelText('Question'), 'No picture');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), null));
+  });
+
+  it('cancelling never calls save, so nothing reaches the server', async () => {
+    // THE guarantee: the file is held locally until save, so Cancel cannot
+    // leave a partial question behind - there was never anything to leave.
+    const user = userEvent.setup();
+    const { onSave, onCancel } = renderEditor({ allowImage: true });
+
+    await user.upload(screen.getByLabelText('Question image'), pngFile());
+    await screen.findByAltText('Selected question image');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onCancel).toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('only accepts image types at the picker', () => {
+    renderEditor({ allowImage: true });
+    expect(screen.getByLabelText('Question image')).toHaveAttribute(
+      'accept',
+      'image/png,image/jpeg,image/webp',
+    );
   });
 });

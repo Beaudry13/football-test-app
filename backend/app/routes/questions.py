@@ -5,8 +5,11 @@ the caller may edit the parent quiz, so a coach can never mutate another
 organization's data - or a teammate's quiz they didn't create.
 """
 
+import json
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
+from marshmallow import ValidationError
 
 from app.errors import ApiError
 from app.extensions import db
@@ -75,11 +78,53 @@ def _reject_if_already_answered(question: Question, action: str) -> None:
         )
 
 
+def _create_payload() -> tuple[dict, object | None]:
+    """The create body, from JSON or from multipart.
+
+    ONE ENDPOINT, TWO ENVELOPES, on purpose. A question and its image used to
+    be two requests, which meant a coach saved a question, reopened it, went to
+    another page, uploaded, and came back - and it meant a half-made question
+    existed in between. Accepting the image on create makes "save" mean what a
+    coach already thinks it means.
+
+    JSON stays exactly as it was, so every existing caller and every test that
+    posts JSON is untouched. Multipart carries the same object as a `payload`
+    field because options are a nested list, which form fields cannot express
+    without inventing an encoding.
+    """
+    if request.files:
+        raw = request.form.get("payload")
+        if not raw:
+            raise ApiError(
+                "Multipart question create needs a 'payload' field with the question JSON",
+                status_code=400,
+            )
+        try:
+            parsed = json.loads(raw)
+        except ValueError as exc:
+            raise ApiError("'payload' must be valid JSON", status_code=400) from exc
+
+        try:
+            data = QuestionCreateSchema().load(parsed)
+        except ValidationError as exc:
+            raise ApiError("Validation failed", status_code=422, details=exc.messages) from exc
+        return data, request.files.get("image")
+
+    return load_json_body(QuestionCreateSchema()), None
+
+
 @questions_bp.post("/<int:quiz_id>/questions")
 @jwt_required()
 def create_question(quiz_id: int):
+    """Create a question, and its image if one was sent, in ONE operation.
+
+    Everything commits together or nothing does. A rejected image - wrong type,
+    too large, corrupt - leaves no question behind, which is the whole point:
+    the old two-request flow could not fail halfway without stranding a
+    placeholder that a coach then had to find and delete.
+    """
     quiz = get_editable_quiz(quiz_id)
-    data = load_json_body(QuestionCreateSchema())
+    data, uploaded_image = _create_payload()
     validate_options_for_type(data["question_type"], data["options"])
 
     next_position = data["position"]
@@ -96,7 +141,28 @@ def create_question(quiz_id: int):
     db.session.flush()
     _replace_options(question, data["options"])
 
-    db.session.commit()
+    # Written to storage before the commit, so a commit failure would leave the
+    # bytes orphaned. Tracked and removed on any failure - the same discipline
+    # the document upload uses, and the reason the two halves cannot disagree.
+    stored_url: str | None = None
+    try:
+        if uploaded_image is not None and uploaded_image.filename:
+            storage = get_file_storage()
+            # Same save_image() the standalone upload route uses, so extension
+            # checks, EXIF rotation and the size cap apply identically. A
+            # second validation path here would be one that could drift.
+            stored_url = storage.save_image(uploaded_image)
+            db.session.add(
+                QuestionImage(question_id=question.id, image_url=stored_url, annotations=[])
+            )
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        if stored_url:
+            get_file_storage().delete_image(stored_url)
+        raise
+
     return jsonify(question.to_dict(include_correct_answers=True)), 201
 
 
