@@ -133,6 +133,9 @@ def activate_quiz(quiz_id: int):
         activated_at=datetime.now(timezone.utc),
         expires_at=AccessCode.default_expiry(ttl_hours),
         is_active=True,
+        # The assignment decides how the quiz is being used. Every attempt
+        # started under this code copies it and freezes it.
+        mode=data["mode"],
         groups=groups,
     )
     db.session.add(access_code)

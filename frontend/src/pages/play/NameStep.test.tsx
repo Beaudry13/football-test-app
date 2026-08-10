@@ -26,7 +26,9 @@ describe('NameStep', () => {
     const attempt: AttemptState = {
       attempt_id: 5,
       status: 'in_progress',
-      answers: [{ question_id: 1, selected_option_id: 10, answer_text: null }],
+      mode: 'GRADED',
+      feedback: [],
+      answers: [{ question_id: 1, selected_option_id: 10, answer_text: null, checked: false }],
     };
     const startSpy = vi.spyOn(playApi, 'startAttempt').mockResolvedValue(attempt);
     const onStarted = vi.fn();
@@ -54,7 +56,7 @@ describe('NameStep', () => {
 
   it('starts an attempt for a legacy (non-canonical) roster entry without a player_id', async () => {
     const user = userEvent.setup();
-    const attempt: AttemptState = { attempt_id: 6, status: 'in_progress', answers: [] };
+    const attempt: AttemptState = { attempt_id: 6, status: 'in_progress', mode: 'GRADED', feedback: [], answers: [] };
     const startSpy = vi.spyOn(playApi, 'startAttempt').mockResolvedValue(attempt);
     const onStarted = vi.fn();
 

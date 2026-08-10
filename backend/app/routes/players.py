@@ -23,6 +23,7 @@ from app.schemas.player import (
     PlayerCreateSchema,
     PlayerUpdateSchema,
 )
+from app.services.attempt_scope import official_only
 from app.services.export import build_cumulative_performance_pdf
 from app.services.file_storage import get_file_storage
 from app.services.roster_import import apply_import, build_preview
@@ -150,7 +151,11 @@ def build_player_history(
         scope.append(Quiz.coach_id == coach.id)
 
     attempts = (
-        PlayerAttempt.query.join(Quiz)
+        # Practice never reaches a cumulative grade. One rule, in
+        # services/attempt_scope - see that module for why this is not an
+        # inline mode check.
+        official_only(PlayerAttempt.query)
+        .join(Quiz)
         .filter(*scope)
         .options(
             db.joinedload(PlayerAttempt.quiz),
@@ -417,6 +422,9 @@ def delete_player(player_id: int):
     from app.models import PlayerAttempt
 
     player = get_org_player(player_id)
+    # Deliberately NOT scoped to official attempts. This is a safety guard
+    # about whether rows exist at all, not a performance metric - a practice
+    # attempt is still real history that a hard delete would destroy.
     has_attempts = PlayerAttempt.query.filter_by(player_id=player.id).first() is not None
     if has_attempts:
         raise ApiError(

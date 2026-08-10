@@ -21,6 +21,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
+from app.services.attempt_scope import official_filter, official_only
 from app.models.question import MANUALLY_GRADED_TYPES
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
@@ -48,6 +49,7 @@ def _get_gradable_answer(answer_id: int) -> Answer:
     coach = current_coach()
     answer = (
         Answer.query.join(PlayerAttempt)
+        .filter(official_filter())
         .join(Quiz)
         .filter(Answer.id == answer_id, Quiz.organization_id == coach.organization_id)
         .first()
@@ -63,7 +65,8 @@ def _get_gradable_answer(answer_id: int) -> Answer:
 def list_responses(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = (
-        PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        official_only(PlayerAttempt.query)
+        .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
         # player eager-loaded alongside answers - display_name resolves it
         # for every row below, and this is the one place that would
         # otherwise turn into an N+1 (one lazy load per canonical attempt).
@@ -79,7 +82,8 @@ def list_responses(quiz_id: int):
 def get_response(quiz_id: int, response_id: int):
     quiz = get_visible_quiz(quiz_id)
     response = (
-        PlayerAttempt.query.filter_by(
+        official_only(PlayerAttempt.query)
+        .filter_by(
             id=response_id, quiz_id=quiz.id, status=AttemptStatus.SUBMITTED
         )
         .options(selectinload(PlayerAttempt.answers), selectinload(PlayerAttempt.player))
@@ -211,7 +215,8 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
     # is nullable now, so an in-progress attempt reaching either builder
     # would crash rather than just look wrong.
     return (
-        PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        official_only(PlayerAttempt.query)
+        .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
         .options(
             selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
             selectinload(PlayerAttempt.player),
@@ -225,7 +230,8 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
 def quiz_dashboard(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = (
-        PlayerAttempt.query.filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        official_only(PlayerAttempt.query)
+        .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
         .options(selectinload(PlayerAttempt.answers))
         .all()
     )
@@ -342,7 +348,8 @@ def _player_history_payload(coach, player_name: str, organization_wide: bool):
         scope.append(Quiz.coach_id == coach.id)
 
     responses = (
-        PlayerAttempt.query.join(Quiz)
+        official_only(PlayerAttempt.query)
+        .join(Quiz)
         .filter(*scope)
         # contains_eager reuses the join above for response.quiz.title instead of
         # a separate lazy-load per response; selectinload batches .answers (and each

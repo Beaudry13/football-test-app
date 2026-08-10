@@ -3,6 +3,7 @@
 import enum
 
 from app.extensions import db
+from app.models.assessment_mode import DEFAULT_MODE, GRADED, PRACTICE
 
 
 class AttemptStatus(str, enum.Enum):
@@ -54,8 +55,30 @@ class PlayerAttempt(db.Model):
     status = db.Column(
         db.Enum(AttemptStatus), nullable=False, default=AttemptStatus.IN_PROGRESS
     )
+    # Copied from the access code when the attempt is created, and never
+    # written again. Denormalised deliberately: if mode lived only on the
+    # access code, a coach editing that code would RETROACTIVELY reclassify
+    # every attempt made under it - moving real graded results out of
+    # official analytics, or practice results in. Freezing it here is what
+    # makes "an attempt's mode is immutable" true rather than aspirational.
+    mode = db.Column(
+        db.String(16), nullable=False, server_default=DEFAULT_MODE, default=DEFAULT_MODE
+    )
     started_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=db.func.now())
     submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    @property
+    def is_practice(self) -> bool:
+        return self.mode == PRACTICE
+
+    @property
+    def counts_officially(self) -> bool:
+        """Whether this attempt may influence grades, reports or analytics.
+
+        The single source of that truth lives in services/attempt_scope; this
+        mirrors it for a loaded object so callers holding an attempt do not
+        have to re-derive the rule."""
+        return self.mode == GRADED
 
     quiz = db.relationship("Quiz", back_populates="attempts")
     access_code = db.relationship("AccessCode", back_populates="attempts")
@@ -68,14 +91,17 @@ class PlayerAttempt(db.Model):
             "access_code_id",
             "player_name",
             unique=True,
-            postgresql_where=db.text("player_id IS NULL"),
+            # GRADED only. Practice is deliberately unconstrained: unlimited
+            # retakes fall out of the index rather than needing an attempt
+            # counter. Graded keeps exactly-once semantics untouched.
+            postgresql_where=db.text("player_id IS NULL AND mode = 'GRADED'"),
         ),
         db.Index(
             "uq_canonical_attempt_by_player",
             "access_code_id",
             "player_id",
             unique=True,
-            postgresql_where=db.text("player_id IS NOT NULL"),
+            postgresql_where=db.text("player_id IS NOT NULL AND mode = 'GRADED'"),
         ),
     )
 
@@ -135,6 +161,14 @@ class Answer(db.Model):
         db.Integer, db.ForeignKey("question_options.id", ondelete="SET NULL"), nullable=True
     )
     is_correct = db.Column(db.Boolean, nullable=True)
+    # PRACTICE ONLY. When the player pressed "Check Answer" and was shown the
+    # verdict and the coach's explanation. Stamped explicitly rather than
+    # inferred from "an answer row exists", because a Draw Response answer row
+    # is created by the first autosaved brush stroke - long before the player
+    # has checked anything - and because a page reload must not re-open a
+    # question whose explanation has already been read. Always NULL on a
+    # graded attempt: nothing is revealed there, so nothing locks.
+    checked_at = db.Column(db.DateTime(timezone=True), nullable=True)
     coach_feedback = db.Column(db.Text, nullable=True)
     # Most-recently-graded-at, not first-graded-at - overwritten on every
     # re-grade, same as is_correct/coach_feedback. The full history of every

@@ -479,3 +479,97 @@
   font-size: 0.9em;
   font-weight: 600;
 }
+
+/* --- Practice Mode -------------------------------------------------------
+   The player theme is light (see docs/THEMING.md) - these use the player
+   palette from index.css, never the coach tokens. */
+
+.practiceBanner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.practiceBannerNote {
+  font-weight: 400;
+}
+
+.feedbackCard {
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  padding: 14px 16px;
+  margin: 12px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feedbackCorrect {
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+.feedbackIncorrect {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+}
+
+/* Neither right nor wrong: a coach still has to look at this one. */
+.feedbackRecorded {
+  background: var(--color-surface);
+}
+
+.feedbackVerdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+}
+
+.feedbackCorrect .feedbackVerdict {
+  color: var(--color-success);
+}
+
+.feedbackIncorrect .feedbackVerdict {
+  color: var(--color-danger);
+}
+
+.feedbackNote,
+.feedbackExplanation {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+.feedbackNote {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.practiceComplete {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+}
+
+.practiceScore {
+  font-size: 20px;
+  margin: 0;
+}
+
+.practiceNote {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  margin: 0;
+  max-width: 34ch;
+}

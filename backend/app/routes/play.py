@@ -30,6 +30,7 @@ from app.services.signed_media import (
     sign_media_token,
 )
 from app.schemas.play import (
+    CheckAnswerSchema,
     PlayerResultsSchema,
     SaveAnswerSchema,
     SaveDrawingSchema,
@@ -47,6 +48,9 @@ from app.services.attempts import (
     DrawingConflict,
     find_attempt,
     is_answered,
+    is_checked,
+    mark_checked,
+    practice_feedback,
     upsert_answer,
     upsert_drawing,
 )
@@ -120,14 +124,30 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
     return {
         "attempt_id": attempt.id,
         "status": attempt.status.value,
+        # The attempt's own frozen mode, not the code's current one - if a
+        # coach edits the code mid-session the work already done keeps the
+        # rules it was started under.
+        "mode": attempt.mode,
         "answers": [
             {
                 "question_id": a.question_id,
                 "selected_option_id": a.selected_option_id,
                 "answer_text": a.answer_text,
+                # Practice lock state, so a reload restores a checked
+                # question as checked instead of handing the player a second
+                # attempt at it. Always false on a graded attempt.
+                "checked": a.checked_at is not None,
             }
             for a in attempt.answers
         ],
+        # Feedback already earned, so a refresh mid-practice does not wipe the
+        # explanations the player was reading. Recomputed rather than stored:
+        # practice_feedback is the single definition of what a player is told.
+        "feedback": (
+            [practice_feedback(attempt, a) for a in attempt.answers if a.checked_at is not None]
+            if attempt.is_practice
+            else []
+        ),
     }
 
 
@@ -159,6 +179,9 @@ def validate_code():
         {
             "access_code_id": access_code.id,
             "expires_at": access_code.expires_at.isoformat(),
+            # So the player is told, before they start, that this one is
+            # practice and will not be graded.
+            "mode": access_code.mode,
             "quiz": quiz_payload,
             "roster_players": effective_roster_names(access_code),
             # Additive, not a replacement for roster_players above (kept
@@ -223,14 +246,25 @@ def start_attempt():
     existing = find_attempt(access_code.id, data["player_name"], player_id)
     if existing is not None:
         if existing.status == AttemptStatus.SUBMITTED:
-            raise ApiError(ALREADY_SUBMITTED, status_code=409)
-        return jsonify(_attempt_state(existing))
+            # Practice is unlimited: a finished practice attempt is history,
+            # not a blocker, so "Try Again" simply starts a new one. Graded
+            # still refuses, and the database still enforces that through the
+            # partial unique indexes.
+            if not access_code.is_practice:
+                raise ApiError(ALREADY_SUBMITTED, status_code=409)
+        else:
+            return jsonify(_attempt_state(existing))
 
     attempt = PlayerAttempt(
         quiz_id=access_code.quiz_id,
         access_code_id=access_code.id,
         player_name=data["player_name"],
         player_id=player_id,
+        # Copied from the code, never from the request. A player cannot ask
+        # for an attempt to be practice, or for a practice attempt to count -
+        # the assignment decides, and this freezes that decision so a later
+        # edit to the code cannot reclassify work already done.
+        mode=access_code.mode,
     )
     db.session.add(attempt)
     try:
@@ -276,10 +310,59 @@ def save_answer():
         # The hard lock: once submitted, no further edits.
         raise ApiError("This attempt has already been submitted", status_code=409)
 
+    if attempt.is_practice and is_checked(attempt, data["question_id"]):
+        # PRACTICE LOCK, enforced here rather than in the client. The player
+        # has been shown the verdict and the coach's explanation for this
+        # question; letting them rewrite the answer afterwards would turn the
+        # teaching material into a way to score. Their next retake is a fresh
+        # attempt with every question open again.
+        raise ApiError(
+            "This answer is locked for this practice attempt",
+            status_code=409,
+            reason="practice_answer_locked",
+        )
+
     upsert_answer(attempt, data["question_id"], data["selected_option_id"], data["answer_text"])
     db.session.commit()
-
+    # Identical shape in both modes: correctness is revealed by /check, never
+    # by an autosave. A practice player who has not pressed Check Answer yet
+    # must not be able to learn the verdict by watching the network tab.
     return "", 204
+
+
+@play_bp.post("/check")
+# Once per question rather than per keystroke, so a whole team working
+# through a practice quiz on one shared IP still fits comfortably - see
+# validate-code's comment for why these budgets are roster-sized.
+@limiter.limit("600 per minute")
+def check_answer():
+    """Practice only: reveal how the player did on one question and lock it.
+
+    Deliberately separate from autosave. Autosave answers "is my work safe";
+    this answers "how did I do", and the two must not be the same request -
+    a player mid-typing should never be shown a verdict they did not ask for,
+    and a graded attempt must have no route that reveals one at all.
+    """
+    data = load_json_body(CheckAnswerSchema())
+
+    access_code = db.session.get(AccessCode, data["access_code_id"])
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        raise _invalid_code_error(reason)
+
+    attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
+    if attempt is None:
+        raise ApiError("Start the quiz before checking an answer", status_code=404)
+    if not attempt.is_practice:
+        # The attempt's frozen mode decides, not the code's current one. There
+        # is no path from a graded attempt to a correct-answer reveal.
+        raise ApiError("This quiz is graded - answers are checked by your coach", status_code=422)
+    if attempt.status == AttemptStatus.SUBMITTED:
+        raise ApiError("This attempt has already been submitted", status_code=409)
+
+    answer = mark_checked(attempt, data["question_id"])
+    db.session.commit()
+    return jsonify(practice_feedback(attempt, answer)), 200
 
 
 @play_bp.put("/drawing")
@@ -308,6 +391,15 @@ def save_drawing():
         raise ApiError("Start the quiz before saving a drawing", status_code=404)
     if attempt.status == AttemptStatus.SUBMITTED:
         raise ApiError("This attempt has already been submitted", status_code=409)
+    if attempt.is_practice and is_checked(attempt, data["question_id"]):
+        # Same lock as a text answer. A drawing autosaves continuously, so
+        # without this a player could keep editing after reading the
+        # explanation - which is exactly what checking is meant to close.
+        raise ApiError(
+            "This drawing is locked for this practice attempt",
+            status_code=409,
+            reason="practice_answer_locked",
+        )
 
     document = validate_document(data["document"])
 

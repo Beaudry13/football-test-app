@@ -4,6 +4,8 @@ both need identical question/option validation and identical is_correct
 computation, so it lives here once rather than being duplicated per route.
 """
 
+from datetime import datetime, timezone
+
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.errors import ApiError
@@ -31,11 +33,17 @@ def find_attempt(
     can tell two same-name canonical Players apart - falling through to
     `player_name` would ambiguously match either one. A legacy caller
     (no player_id) keeps the original name-only behavior unchanged.
+    NEWEST FIRST. A graded code can only ever hold one attempt per player -
+    the database enforces that - but a practice code holds one per retake, and
+    an unordered `.first()` would resume whichever row Postgres happened to
+    return, dropping the player back into an attempt they finished last week.
     """
     if player_id is not None:
-        by_id = PlayerAttempt.query.filter_by(
-            access_code_id=access_code_id, player_id=player_id
-        ).first()
+        by_id = (
+            PlayerAttempt.query.filter_by(access_code_id=access_code_id, player_id=player_id)
+            .order_by(PlayerAttempt.id.desc())
+            .first()
+        )
         if by_id is not None:
             return by_id
         # Falls through only to an unlinked legacy attempt with this exact
@@ -45,12 +53,20 @@ def find_attempt(
         # collision two same-name Players (e.g. two "Chris Smith"s) must
         # not hit, and the plain name-only query below would have matched
         # either one indiscriminately.
-        return PlayerAttempt.query.filter_by(
-            access_code_id=access_code_id, player_name=player_name, player_id=None
-        ).first()
-    return PlayerAttempt.query.filter_by(
-        access_code_id=access_code_id, player_name=player_name
-    ).first()
+        return (
+            PlayerAttempt.query.filter_by(
+                access_code_id=access_code_id, player_name=player_name, player_id=None
+            )
+            .order_by(PlayerAttempt.id.desc())
+            .first()
+        )
+    return (
+        PlayerAttempt.query.filter_by(
+            access_code_id=access_code_id, player_name=player_name
+        )
+        .order_by(PlayerAttempt.id.desc())
+        .first()
+    )
 
 
 def upsert_answer(
@@ -218,3 +234,61 @@ def upsert_drawing(
     existing.document = document
     existing.revision = existing.revision + 1
     return existing
+
+
+def existing_answer(attempt, question_id: int):
+    """The answer already recorded for this question on this attempt, if any."""
+    return Answer.query.filter_by(attempt_id=attempt.id, question_id=question_id).first()
+
+
+def is_checked(attempt, question_id: int) -> bool:
+    """Whether this practice question has already been checked, and is
+    therefore locked. Cheap enough to call on every save."""
+    answer = existing_answer(attempt, question_id)
+    return answer is not None and answer.checked_at is not None
+
+
+def mark_checked(attempt, question_id: int) -> Answer:
+    """Stamp one practice answer as checked and return it.
+
+    Idempotent on the timestamp - a double-tap on "Check Answer" re-reads the
+    same feedback rather than moving the clock, so the record stays "when the
+    player first saw this". Does not commit; the caller owns the transaction.
+
+    Creates a blank answer row when none exists, which is what a player
+    skipping a question and pressing Check looks like: they have used up their
+    shot at it in this attempt, and the explanation is now visible.
+    """
+    answer = existing_answer(attempt, question_id)
+    if answer is None:
+        answer = upsert_answer(attempt, question_id, None, None)
+    if answer.checked_at is None:
+        answer.checked_at = datetime.now(timezone.utc)
+    return answer
+
+
+def practice_feedback(attempt, answer) -> dict:
+    """What a player is told immediately after checking an answer.
+
+    HONESTY IS THE WHOLE DESIGN. `is_correct` is returned ONLY for question
+    types Peira can actually grade - the auto-gradable ones, where the value
+    was already computed at save time. Short Answer and Draw Response return
+    it as None, and the client shows "Response recorded" rather than inventing
+    a verdict a coach has not given.
+
+    The correct answer itself is never included. The coach's explanation is
+    the teaching mechanism; if they want the answer revealed, they write it
+    there.
+    """
+    from app.models.question import AUTO_GRADABLE_TYPES
+
+    question = answer.question
+    auto_gradable = question.question_type in AUTO_GRADABLE_TYPES
+
+    return {
+        "question_id": question.id,
+        "auto_gradable": auto_gradable,
+        # None for anything a coach must grade by hand.
+        "is_correct": answer.is_correct if auto_gradable else None,
+        "answer_explanation": question.answer_explanation or None,
+    }

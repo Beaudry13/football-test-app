@@ -46,6 +46,9 @@ def test_start_resumes_an_existing_in_progress_attempt_with_its_saved_answers(cl
             "question_id": tf_question["id"],
             "selected_option_id": tf_question["options"][0]["id"],
             "answer_text": None,
+            # Practice's per-question lock. Always false on a graded attempt:
+            # nothing is revealed there, so nothing locks.
+            "checked": False,
         }
     ]
 
@@ -116,7 +119,12 @@ def test_autosave_persists_and_is_retrievable_on_resume(client, coach_headers):
 
     resumed = start_attempt(client, access_code["id"], "Jordan Smith").get_json()
     assert resumed["answers"] == [
-        {"question_id": written_question["id"], "selected_option_id": None, "answer_text": "I set the edge."}
+        {
+            "question_id": written_question["id"],
+            "selected_option_id": None,
+            "answer_text": "I set the edge.",
+            "checked": False,
+        }
     ]
 
 

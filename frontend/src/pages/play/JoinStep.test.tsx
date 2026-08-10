@@ -44,6 +44,7 @@ describe('JoinStep', () => {
   it('calls onJoined with the code and result on success', async () => {
     const user = userEvent.setup();
     const result = {
+      mode: 'GRADED' as const,
       access_code_id: 1,
       expires_at: '2026-08-02T00:00:00Z',
       roster_players: [],

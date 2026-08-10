@@ -25,6 +25,7 @@ export function QuestionInput({
   onChange,
   isUnanswered = false,
   drawingScope,
+  locked = false,
 }: {
   question: Question;
   index: number;
@@ -36,6 +37,13 @@ export function QuestionInput({
   /** Namespaces this player's drawing drafts in localStorage. Omitted by the
    * coach's preview, which deliberately keeps nothing. */
   drawingScope?: string;
+  /** Practice only: this question has been checked, so the answer is fixed
+   * for this attempt. Shown read-only rather than hidden - a player should
+   * still be able to re-read what they put and what their coach said.
+   *
+   * The server enforces the same lock; this is the honest UI of a rule that
+   * already exists, not the rule itself. */
+  locked?: boolean;
 }) {
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -179,9 +187,20 @@ export function QuestionInput({
 
       {canDraw && (
         <div className={styles.drawingRow}>
-          <button type="button" className={styles.drawButton} onClick={() => void openBoard()}>
+          <button
+            type="button"
+            className={styles.drawButton}
+            onClick={() => void openBoard()}
+            disabled={locked}
+          >
             <Icon name="pen" size={18} />
-            <span>{hasDrawnAnswer(drawing) ? 'Edit your drawing' : 'Draw your answer'}</span>
+            <span>
+              {locked
+                ? 'View your drawing'
+                : hasDrawnAnswer(drawing)
+                  ? 'Edit your drawing'
+                  : 'Draw your answer'}
+            </span>
           </button>
           {hasDrawnAnswer(drawing) && (
             <span className={styles.drawingStatus}>
@@ -197,7 +216,7 @@ export function QuestionInput({
         <DrawingBoard
           imageUrl={resolveMediaUrl(image.image_url)}
           document={drawing}
-          onChange={handleDrawingChange}
+          onChange={locked ? () => {} : handleDrawingChange}
           onClose={() => setIsDrawing(false)}
           saveState={storageKey ? 'saved' : 'idle'}
         />
@@ -221,12 +240,14 @@ export function QuestionInput({
           spellCheck={false}
           value={answer?.answer_text ?? ''}
           onChange={(e) => onChange({ answer_text: e.target.value })}
+          readOnly={locked}
         />
       ) : question.question_type === 'written' ? (
         <textarea
           className={styles.writtenAnswer}
           value={answer?.answer_text ?? ''}
           onChange={(e) => onChange({ answer_text: e.target.value })}
+          readOnly={locked}
         />
       ) : (
         <div className={styles.optionList}>
@@ -247,6 +268,7 @@ export function QuestionInput({
                 name={`question-${question.id}`}
                 checked={answer?.selected_option_id === option.id}
                 onChange={() => onChange({ selected_option_id: option.id })}
+                disabled={locked}
               />
               <span className={styles.optionText}>{renderArrows(option.option_text)}</span>
             </label>

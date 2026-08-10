@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
+from app.models.assessment_mode import DEFAULT_MODE, PRACTICE
 
 # Which saved group(s), if any, have access under a given activation. Plain
 # association table (no extra columns) - a code with no linked groups falls
@@ -31,10 +32,18 @@ class AccessCode(db.Model):
     activated_at = db.Column(db.DateTime(timezone=True), nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    # How this assignment is being used. See models/assessment_mode.
+    mode = db.Column(
+        db.String(16), nullable=False, server_default=DEFAULT_MODE, default=DEFAULT_MODE
+    )
 
     quiz = db.relationship("Quiz", back_populates="access_codes")
     attempts = db.relationship("PlayerAttempt", back_populates="access_code")
     groups = db.relationship("Group", secondary=access_code_groups)
+
+    @property
+    def is_practice(self) -> bool:
+        return self.mode == PRACTICE
 
     def is_valid(self) -> bool:
         if not self.is_active:
@@ -55,4 +64,6 @@ class AccessCode(db.Model):
             "is_active": self.is_active,
             "is_valid": self.is_valid(),
             "groups": [{"id": g.id, "name": g.name} for g in self.groups],
+            "mode": self.mode,
+            "is_practice": self.is_practice,
         }

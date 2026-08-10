@@ -15,6 +15,7 @@ interface QuestionEditorProps {
   initialText?: string;
   initialType?: QuestionType;
   initialOptions?: QuestionOptionInput[];
+  initialExplanation?: string | null;
   submitLabel: string;
   onSave: (input: QuestionInput, image?: File | null) => Promise<void>;
   onCancel: () => void;
@@ -30,6 +31,7 @@ export function QuestionEditor({
   initialText = '',
   initialType = 'true_false',
   initialOptions,
+  initialExplanation = null,
   submitLabel,
   onSave,
   onCancel,
@@ -40,6 +42,7 @@ export function QuestionEditor({
   const [options, setOptions] = useState<QuestionOptionInput[]>(
     initialOptions ?? (initialType === 'true_false' ? TRUE_FALSE_OPTIONS : []),
   );
+  const [explanation, setExplanation] = useState(initialExplanation ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // The file lives HERE, not on the server, until the coach saves. That is
@@ -113,7 +116,12 @@ export function QuestionEditor({
     setIsSaving(true);
     try {
       await onSave(
-        { question_text: questionText.trim(), question_type: questionType, options },
+        {
+          question_text: questionText.trim(),
+          question_type: questionType,
+          options,
+          answer_explanation: explanation.trim(),
+        },
         image,
       );
     } catch (err) {
@@ -231,6 +239,28 @@ export function QuestionEditor({
           </button>
         </div>
       )}
+
+      {/* Offered for EVERY type, including the ones Peira cannot score.
+          On a Short Answer or Draw Response question the player is told
+          "Response recorded" rather than right/wrong, which is exactly when
+          a coach's own explanation is doing the whole job of teaching. */}
+      <div className={nb.field}>
+        <label className={nb.fieldLabel} htmlFor="answer_explanation">
+          Explanation <span className={styles.optionalTag}>(optional)</span>
+        </label>
+        <textarea
+          id="answer_explanation"
+          className={nb.input}
+          rows={3}
+          value={explanation}
+          onChange={(e) => setExplanation(e.target.value)}
+          placeholder="Why is this the answer? Shown after a player checks it in Practice."
+        />
+        <p className={styles.explanationHint}>
+          Players see this only in Practice Mode, and only after they check their answer. It is
+          never shown during a graded quiz.
+        </p>
+      </div>
 
       {/* TODO (future UX, deliberately not built now): accept a drag-and-drop
           image onto this form as well as the click-to-upload below. The

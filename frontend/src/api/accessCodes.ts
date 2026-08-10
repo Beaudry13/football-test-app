@@ -1,12 +1,23 @@
 import { api } from './client';
-import type { AccessCode } from './types';
+import type { AccessCode, AssessmentMode } from './types';
 
 export function listAccessCodes(quizId: number): Promise<AccessCode[]> {
   return api.get<AccessCode[]>(`/quizzes/${quizId}/access-codes`);
 }
 
-export function activateQuiz(quizId: number, groupIds: number[] = []): Promise<AccessCode> {
-  return api.post<AccessCode>(`/quizzes/${quizId}/access-codes`, { group_ids: groupIds });
+/** `mode` is how the quiz is being used - GRADED counts, PRACTICE never does.
+ * It defaults to GRADED here as well as server-side: an activation that
+ * forgets to say must be the one that affects the coach's numbers, never the
+ * one that silently doesn't. */
+export function activateQuiz(
+  quizId: number,
+  groupIds: number[] = [],
+  mode: AssessmentMode = 'GRADED',
+): Promise<AccessCode> {
+  return api.post<AccessCode>(`/quizzes/${quizId}/access-codes`, {
+    group_ids: groupIds,
+    mode,
+  });
 }
 
 export function deactivateAccessCode(quizId: number, accessCodeId: number): Promise<AccessCode> {

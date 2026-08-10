@@ -15,6 +15,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import contains_eager, selectinload
 
 from app.extensions import db
+from app.services.attempt_scope import official_filter
 from app.models import (
     AccessCode,
     Answer,
@@ -102,6 +103,8 @@ def list_quizzes():
             .filter(
                 PlayerAttempt.quiz_id.in_(quiz_ids),
                 PlayerAttempt.status == AttemptStatus.SUBMITTED,
+                # Response counts and average score are official numbers.
+                official_filter(),
             )
             .group_by(PlayerAttempt.quiz_id)
             .all()
@@ -117,6 +120,8 @@ def list_quizzes():
             .filter(
                 PlayerAttempt.quiz_id.in_(quiz_ids),
                 PlayerAttempt.status == AttemptStatus.SUBMITTED,
+                # Response counts and average score are official numbers.
+                official_filter(),
             )
             .group_by(PlayerAttempt.quiz_id)
             .all()
@@ -181,7 +186,22 @@ def active_status():
     attempts_by_code: dict[int, list[PlayerAttempt]] = defaultdict(list)
     if active_codes:
         code_ids = [c.id for c in active_codes]
-        for attempt in PlayerAttempt.query.filter(PlayerAttempt.access_code_id.in_(code_ids)).all():
+        # DELIBERATELY NOT official_only. This board answers "who is doing the
+        # thing I just sent", scoped to one access code - not "how did anybody
+        # perform". Excluding practice here does not protect a number, it
+        # blanks the card: a live practice code would show nobody submitted
+        # and the whole roster not started, forever.
+        #
+        # Cross-mode contamination is impossible anyway because each attempt
+        # is matched against its OWN code's mode below, so a graded card can
+        # never absorb a practice attempt even if a code were re-moded after
+        # attempts existed.
+        modes_by_code = {c.id: c.mode for c in active_codes}
+        for attempt in PlayerAttempt.query.filter(
+            PlayerAttempt.access_code_id.in_(code_ids)
+        ).all():
+            if attempt.mode != modes_by_code[attempt.access_code_id]:
+                continue
             attempts_by_code[attempt.access_code_id].append(attempt)
 
     result = []
@@ -213,6 +233,11 @@ def active_status():
                 "access_code_id": code.id,
                 "code": code.code,
                 "expires_at": code.expires_at.isoformat(),
+                # So the live board can say plainly that this one is practice.
+                # A "12 submitted" card that silently meant practice reps
+                # would be read as twelve real results.
+                "mode": code.mode,
+                "is_practice": code.is_practice,
                 # Sorted so the "sent to" line doesn't visually reorder on a
                 # background poll when nothing actually changed - a poll
                 # that reorders things nobody touched reads as a bug.

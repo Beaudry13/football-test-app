@@ -48,6 +48,13 @@ class QuestionType(str, enum.Enum):
 #: grade forty recall answers.
 MANUALLY_GRADED_TYPES = frozenset({QuestionType.WRITTEN, QuestionType.DRAW_RESPONSE})
 
+#: Types Peira can mark right or wrong by itself, the instant they are
+#: answered. DERIVED from MANUALLY_GRADED_TYPES rather than listed separately,
+#: so a new question type joins exactly one of the two sets and the other
+#: follows - two hand-maintained lists would eventually disagree about a type
+#: and Practice Mode would claim to know an answer it cannot grade.
+AUTO_GRADABLE_TYPES = frozenset(QuestionType) - MANUALLY_GRADED_TYPES
+
 #: Types answered by typing rather than by choosing an option. Introduced
 #: because several places asked `question_type == "written"` when what they
 #: actually meant was "the answer is text, so read answer_text rather than
@@ -79,6 +86,12 @@ class Question(db.Model):
     # correct for "Cover 3" - one character apart, opposite meanings.
     # See services/answer_matching.py.
     expected_answers = db.Column(JSONB, nullable=True)
+    # Optional coaching note, shown to a player in PRACTICE mode only, and
+    # only once they have answered. Never shown during a graded attempt -
+    # that would hand out the teaching material mid-assessment. Available on
+    # every question type, including the manually graded ones, where it is
+    # the ONLY feedback Peira can honestly give.
+    answer_explanation = db.Column(db.Text, nullable=True)
     answer_matching = db.Column(db.String(32), nullable=True)
 
     quiz = db.relationship("Quiz", back_populates="questions")
@@ -118,6 +131,11 @@ class Question(db.Model):
             "question_text": self.question_text,
             "question_type": self.question_type.value,
             "position": self.position,
+            # Gated by the same flag as the correct answers: the explanation
+            # is teaching material, and a player taking a graded quiz must
+            # not receive it. The play routes decide when to include it - in
+            # practice mode, only after the question has been answered.
+            "auto_gradable": self.question_type in AUTO_GRADABLE_TYPES,
             # Draw Response questions never require options. A converted one
             # may still carry rows (migration d2b5f8a41c32 keeps them), so they
             # are withheld here rather than deleted - inert, not lost.
@@ -139,6 +157,7 @@ class Question(db.Model):
         # player would hand them the answer to a question whose whole purpose
         # is that they cannot see it.
         if include_correct_answers:
+            data["answer_explanation"] = self.answer_explanation
             data["expected_answers"] = self.expected_answers or []
             data["answer_matching"] = self.answer_matching
         return data

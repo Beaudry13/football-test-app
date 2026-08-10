@@ -7,6 +7,7 @@ import * as playApi from '../../api/play';
 import type { AttemptState, PlayerResultsResponse, ValidateCodeResponse } from '../../api/types';
 
 const joinedResponse: ValidateCodeResponse = {
+  mode: 'GRADED',
   access_code_id: 42,
   expires_at: '2026-08-02T00:00:00Z',
   roster_players: ['Jordan Smith', 'Alex Lee'],
@@ -44,7 +45,13 @@ const joinedResponse: ValidateCodeResponse = {
   },
 };
 
-const startedAttempt: AttemptState = { attempt_id: 900, status: 'in_progress', answers: [] };
+const startedAttempt: AttemptState = {
+  attempt_id: 900,
+  status: 'in_progress',
+  mode: 'GRADED',
+  feedback: [],
+  answers: [],
+};
 
 const submittedResponse = {
   id: 1,

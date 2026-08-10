@@ -171,6 +171,14 @@ export interface Question {
    *  the player app. */
   expected_answers?: string[];
   answer_matching?: string | null;
+  /** Whether Peira can score this type itself. Read from the API rather than
+   *  re-derived from question_type, so the coach UI and the player's practice
+   *  feedback cannot disagree about what "we can check this" means. */
+  auto_gradable?: boolean;
+  /** The coach's note, shown to a player in Practice Mode after they check
+   *  their answer. COACH-ONLY in every other payload - the player app only
+   *  ever receives it inside a PracticeFeedback, never up front. */
+  answer_explanation?: string | null;
   /** A short-lived signed URL for the page WITH its regions masked. The only
    *  image a player is ever given for a region-backed question; the unmasked
    *  page is never addressable from the player app. */
@@ -288,6 +296,10 @@ export interface ImportConfirmResponse {
   players: Player[];
 }
 
+/** How a quiz is being used, not what kind of quiz it is. Chosen by the
+ *  coach at activation and frozen onto every attempt started under it. */
+export type AssessmentMode = 'GRADED' | 'PRACTICE';
+
 export interface AccessCode {
   id: number;
   quiz_id: number;
@@ -297,6 +309,8 @@ export interface AccessCode {
   is_active: boolean;
   is_valid: boolean;
   groups: { id: number; name: string }[];
+  mode: AssessmentMode;
+  is_practice: boolean;
 }
 
 /** A player's submitted drawing, as the coach-facing routes return it. */
@@ -403,6 +417,8 @@ export interface ActiveQuizStatus {
   /** Empty means "whole roster" - no Group is linked to this activation. */
   group_names: string[];
   roster_size: number;
+  mode: AssessmentMode;
+  is_practice: boolean;
   submitted: ActiveAttemptSummary[];
   in_progress: ActiveAttemptSummary[];
   not_started: string[];
@@ -424,6 +440,8 @@ export interface RosterPlayerOption {
 export interface ValidateCodeResponse {
   access_code_id: number;
   expires_at: string;
+  /** So the player is told this is practice before they start, not after. */
+  mode: AssessmentMode;
   quiz: Quiz;
   roster_players: string[];
   /** Additive alongside roster_players (unchanged, kept for compatibility) -
@@ -439,12 +457,34 @@ export interface ResumedAnswer {
   question_id: number;
   selected_option_id: number | null;
   answer_text: string | null;
+  /** Practice only: the player has already seen this question's verdict and
+   *  explanation, so it is locked. Always false on a graded attempt. */
+  checked: boolean;
+}
+
+/** What a practice player is told after pressing Check Answer.
+ *
+ *  `is_correct` is null for anything Peira cannot score - the client must
+ *  show "Response recorded" there rather than inventing a verdict. The
+ *  correct answer itself is never included; the coach's explanation is the
+ *  teaching mechanism. */
+export interface PracticeFeedback {
+  question_id: number;
+  auto_gradable: boolean;
+  is_correct: boolean | null;
+  answer_explanation: string | null;
 }
 
 export interface AttemptState {
   attempt_id: number;
   status: 'in_progress' | 'submitted';
+  /** The attempt's own frozen mode. A coach editing the code mid-session
+   *  does not change the rules of work already in progress. */
+  mode: AssessmentMode;
   answers: ResumedAnswer[];
+  /** Feedback already earned this attempt, so a refresh does not wipe the
+   *  explanations the player was reading. Empty on a graded attempt. */
+  feedback: PracticeFeedback[];
 }
 
 export interface ApiErrorBody {

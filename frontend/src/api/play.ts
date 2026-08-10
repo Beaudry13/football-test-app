@@ -1,5 +1,11 @@
 import { api } from './client';
-import type { AttemptState, PlayerResponse, PlayerResultsResponse, ValidateCodeResponse } from './types';
+import type {
+  AttemptState,
+  PlayerResponse,
+  PlayerResultsResponse,
+  PracticeFeedback,
+  ValidateCodeResponse,
+} from './types';
 import type { DrawingDocument } from '../components/drawing/types';
 
 export function validateCode(code: string): Promise<ValidateCodeResponse> {
@@ -35,6 +41,22 @@ export function saveAnswer(input: {
   answer_text?: string | null;
 }): Promise<void> {
   return api.post<void>('/play/answers', input, { auth: false });
+}
+
+/** PRACTICE ONLY. "I'm done with this question - how did I do?"
+ *
+ * Deliberately a separate call from saveAnswer rather than a flag on it.
+ * Autosave answers "is my work safe"; this answers "how did I do", and
+ * fusing them would mean a player mid-typing could be shown a verdict they
+ * never asked for. It also keeps the graded path with no route that reveals
+ * correctness at all. Locks the question server-side as a side effect. */
+export function checkAnswer(input: {
+  access_code_id: number;
+  player_name: string;
+  player_id?: number;
+  question_id: number;
+}): Promise<PracticeFeedback> {
+  return api.post<PracticeFeedback>('/play/check', input, { auth: false });
 }
 
 export interface SaveDrawingResult {

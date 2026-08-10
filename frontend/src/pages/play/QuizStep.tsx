@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { saveAnswer, saveDrawing, submitQuiz } from '../../api/play';
+import { checkAnswer, saveAnswer, saveDrawing, submitQuiz } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
-import type { Question, Quiz, ResumedAnswer } from '../../api/types';
+import type { AssessmentMode, PracticeFeedback, Question, Quiz, ResumedAnswer } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { hasDrawnAnswer } from '../../components/drawing/drawingDocument';
+import { PracticeFeedbackCard } from './PracticeFeedbackCard';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import { QuizProgress } from './QuizProgress';
 import styles from './PlayPage.module.css';
@@ -31,7 +32,10 @@ export function QuizStep({
   playerName,
   playerId,
   initialAnswers,
+  mode = 'GRADED',
+  initialFeedback = [],
   onSubmitted,
+  onPracticeComplete,
 }: {
   quiz: Quiz;
   accessCodeId: number;
@@ -41,8 +45,20 @@ export function QuizStep({
    * display name never collide onto the same attempt. */
   playerId: number | undefined;
   initialAnswers: ResumedAnswer[];
+  /** The ATTEMPT's frozen mode, not the access code's current one - a coach
+   * editing the code mid-session must not change the rules of work already
+   * in progress. Defaults to GRADED so any caller that has not been taught
+   * about practice gets the behaviour that existed before it. */
+  mode?: AssessmentMode;
+  /** Feedback already earned before a reload, so a refresh mid-practice does
+   * not wipe the explanations the player was reading. */
+  initialFeedback?: PracticeFeedback[];
   onSubmitted: () => void;
+  /** Practice ends on its own screen, not the results page - a practice
+   * attempt never becomes a result a coach reviews. */
+  onPracticeComplete?: (feedback: PracticeFeedback[]) => void;
 }) {
+  const isPractice = mode === 'PRACTICE';
   const questions = quiz.questions ?? [];
   const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => seedAnswers(initialAnswers));
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -50,6 +66,16 @@ export function QuizStep({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [unansweredIds, setUnansweredIds] = useState<Set<number>>(new Set());
+  /** Feedback per question, which doubles as the lock: a question present
+   * here has been checked, has had its explanation shown, and can no longer
+   * be answered. Seeded from the server so the lock survives a reload rather
+   * than living only in this component. */
+  const [feedback, setFeedback] = useState<Record<number, PracticeFeedback>>(() => {
+    const seeded: Record<number, PracticeFeedback> = {};
+    for (const f of initialFeedback) seeded[f.question_id] = f;
+    return seeded;
+  });
+  const [isChecking, setIsChecking] = useState(false);
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   /** The revision the server last confirmed, per question.
    *
@@ -154,6 +180,52 @@ export function QuizStep({
       });
   }
 
+  /** Practice only. Asks the server how the player did, which also locks
+   * the question. The server is the authority on both - this never decides
+   * correctness locally, because the correct answer is never sent here. */
+  async function handleCheck(questionId: number) {
+    // Flush this question's pending autosave first. Checking asks the server
+    // to judge what it has stored, so a debounced keystroke still in flight
+    // would otherwise be judged as the previous value.
+    const pending = debounceTimers.current[questionId];
+    if (pending) {
+      clearTimeout(pending);
+      delete debounceTimers.current[questionId];
+      const answer = answers[questionId];
+      if (answer) {
+        try {
+          await saveAnswer({
+            access_code_id: accessCodeId,
+            player_name: playerName,
+            player_id: playerId,
+            question_id: questionId,
+            selected_option_id: answer.selected_option_id ?? null,
+            answer_text: answer.answer_text ?? null,
+          });
+          setSaveStatus('saved');
+        } catch {
+          setSaveStatus('error');
+        }
+      }
+    }
+
+    setError(null);
+    setIsChecking(true);
+    try {
+      const result = await checkAnswer({
+        access_code_id: accessCodeId,
+        player_name: playerName,
+        player_id: playerId,
+        question_id: questionId,
+      });
+      setFeedback((prev) => ({ ...prev, [questionId]: result }));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
   function updateAnswer(questionId: number, answer: PlayerAnswer) {
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
     const changedQuestion = questions.find((q) => q.id === questionId);
@@ -210,7 +282,10 @@ export function QuizStep({
     // a drawing could not reach the server, so a drawing-only answer passed
     // the client check and was then refused by one. Both sides now agree, via
     // isAnswered above and services/attempts.py::is_answered below it.
-    if (quiz.require_all_answers) {
+    // require_all_answers is an assessment rule. In practice a player may
+    // legitimately stop partway - the point is reps, and blocking them would
+    // strand anyone who checked a few questions and wanted their summary.
+    if (quiz.require_all_answers && !isPractice) {
       const missing = questions.filter((q) => !isAnswered(q, answers[q.id]));
       if (missing.length > 0) {
         setUnansweredIds(new Set(missing.map((q) => q.id)));
@@ -245,7 +320,11 @@ export function QuizStep({
           drawing: answers[q.id]?.drawing ?? null,
         })),
       });
-      onSubmitted();
+      if (isPractice && onPracticeComplete) {
+        onPracticeComplete(questions.map((q) => feedback[q.id]).filter(Boolean));
+      } else {
+        onSubmitted();
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -266,12 +345,25 @@ export function QuizStep({
     </div>
   );
 
+  /** Told up front, not discovered at the end. A player who thinks a quiz
+   * counts answers it differently from one who knows it is reps. */
+  const practiceBanner = isPractice && (
+    <div className={styles.practiceBanner}>
+      <span>Practice</span>
+      <span className={styles.practiceBannerNote}>
+        Instant feedback. This does not count toward your grades.
+      </span>
+    </div>
+  );
+
   if (quiz.one_question_at_a_time) {
     const question = questions[currentIndex];
     const isLast = currentIndex === questions.length - 1;
+    const checked = feedback[question.id];
 
     return (
       <div className={styles.quizPanel}>
+        {practiceBanner}
         {/* A bar, not just a count. "Question 7 of 20" tells a player where
             they are only after they do the arithmetic; a filled track tells
             them how much is left at a glance, which is what actually keeps
@@ -290,7 +382,17 @@ export function QuizStep({
           onChange={(a) => updateAnswer(question.id, a)}
           isUnanswered={unansweredIds.has(question.id)}
           drawingScope={drawingScope}
+          locked={Boolean(checked)}
         />
+        {checked && (
+          <PracticeFeedbackCard
+            feedback={checked}
+            continueLabel={isLast ? 'Finish practice' : 'Continue'}
+            onContinue={() =>
+              isLast ? void handleSubmit() : setCurrentIndex((i) => i + 1)
+            }
+          />
+        )}
         <div className={styles.navRow}>
           <button
             className="btn btn-secondary"
@@ -299,7 +401,17 @@ export function QuizStep({
           >
             Back
           </button>
-          {isLast ? (
+          {isPractice ? (
+            !checked && (
+              <button
+                className="btn btn-primary"
+                onClick={() => void handleCheck(question.id)}
+                disabled={isChecking || !isAnswered(question, answers[question.id])}
+              >
+                {isChecking ? 'Checking…' : 'Check Answer'}
+              </button>
+            )
+          ) : isLast ? (
             <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
               {isSubmitting ? 'Submitting…' : 'Submit Quiz'}
             </button>
@@ -315,21 +427,41 @@ export function QuizStep({
 
   return (
     <div className={styles.quizPanel}>
+      {practiceBanner}
       {saveIndicator}
       <ErrorBanner message={error} />
-      {questions.map((question, index) => (
-        <QuestionInput
-          key={question.id}
-          question={question}
-          index={index}
-          answer={answers[question.id]}
-          onChange={(a) => updateAnswer(question.id, a)}
-          isUnanswered={unansweredIds.has(question.id)}
-          drawingScope={drawingScope}
-        />
-      ))}
+      {questions.map((question, index) => {
+        const checked = feedback[question.id];
+        return (
+          <div key={question.id}>
+            <QuestionInput
+              question={question}
+              index={index}
+              answer={answers[question.id]}
+              onChange={(a) => updateAnswer(question.id, a)}
+              isUnanswered={unansweredIds.has(question.id)}
+              drawingScope={drawingScope}
+              locked={Boolean(checked)}
+            />
+            {isPractice &&
+              (checked ? (
+                // No Continue button on this layout: there is nothing to
+                // advance to - the next question is already on screen.
+                <PracticeFeedbackCard feedback={checked} />
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => void handleCheck(question.id)}
+                  disabled={isChecking || !isAnswered(question, answers[question.id])}
+                >
+                  {isChecking ? 'Checking…' : 'Check Answer'}
+                </button>
+              ))}
+          </div>
+        );
+      })}
       <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting} style={{ width: '100%' }}>
-        {isSubmitting ? 'Submitting…' : 'Submit Quiz'}
+        {isSubmitting ? 'Submitting…' : isPractice ? 'Finish practice' : 'Submit Quiz'}
       </button>
     </div>
   );

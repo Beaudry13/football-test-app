@@ -36,6 +36,8 @@ const activeCode: AccessCode = {
   id: 3,
   quiz_id: 1,
   code: 'ABC234',
+  mode: 'GRADED',
+  is_practice: false,
   activated_at: '2026-08-01T00:00:00Z',
   expires_at: '2026-08-02T00:00:00Z',
   is_active: true,
@@ -58,7 +60,7 @@ describe('AccessCodesTab group selection', () => {
     await screen.findByText('This Quiz has no active access code.');
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, []));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'GRADED'));
   });
 
   it('passes the checked group ids through to activateQuiz', async () => {
@@ -71,7 +73,7 @@ describe('AccessCodesTab group selection', () => {
     await user.click(await screen.findByRole('checkbox', { name: /Defense/ }));
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7]));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7], 'GRADED'));
   });
 
   it('shows which groups the active code is restricted to', async () => {
@@ -142,5 +144,39 @@ describe('AccessCodesTab activation guard', () => {
     render(<AccessCodesTab quiz={{ ...quiz, question_count: 1 }} />);
 
     expect(await screen.findByRole('button', { name: /Activate/ })).toBeEnabled();
+  });
+
+  it('defaults to Graded, so an activation that says nothing still counts', async () => {
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText('This Quiz has no active access code.');
+
+    expect(screen.getByRole('radio', { name: /Graded/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Practice/ })).not.toBeChecked();
+  });
+
+  it('sends PRACTICE when the coach picks it', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    const activateSpy = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText('This Quiz has no active access code.');
+    await user.click(screen.getByRole('radio', { name: /Practice/ }));
+    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'PRACTICE'));
+  });
+
+  it('says on the active code whether it counts', async () => {
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([
+      { ...activeCode, mode: 'PRACTICE', is_practice: true },
+    ]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    // "Did this one count?" is the question a coach asks when a number looks
+    // wrong, and it must be answerable without opening anything.
+    expect(await screen.findAllByText('Practice')).not.toHaveLength(0);
   });
 })

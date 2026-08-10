@@ -311,6 +311,10 @@ def _first_completion_milestone(facts: OnboardingFacts) -> dict:
             .filter(
                 AccessCode.quiz_id.in_(facts.quiz_ids),
                 PlayerAttempt.status == AttemptStatus.SUBMITTED,
+                # THE ONE INTENTIONAL OMISSION of attempt_scope.official_only.
+                # This milestone asks "has a player actually used this?", not
+                # "how did they score", so a practice completion counts. See
+                # the note in app/services/attempt_scope.py.
             )
             .scalar()
         ) or 0

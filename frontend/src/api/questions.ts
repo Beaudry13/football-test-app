@@ -11,6 +11,10 @@ export interface QuestionInput {
   question_type: QuestionType;
   options: QuestionOptionInput[];
   position?: number | null;
+  /** Shown to a player in Practice Mode after they check their answer, and
+   *  never before. Sent as an empty string to clear it; the server stores
+   *  that as null so "no explanation" has one representation, not two. */
+  answer_explanation?: string | null;
 }
 
 /** Creates a question, and its image if one is supplied, in ONE request.

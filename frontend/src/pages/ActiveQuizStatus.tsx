@@ -54,6 +54,11 @@ function QuestionBreakdownTable({ breakdown }: { breakdown: QuestionBreakdown[] 
 
 function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
   const pendingCount = entry.in_progress.length + entry.not_started.length;
+  // Practice has unlimited retakes, so "pending against the roster" is not a
+  // meaningful completion state - a player who has practised three times and
+  // one who never will both sit outside "submitted". The counts are relabelled
+  // rather than removed: a coach still wants to see who is getting reps.
+  const submittedLabel = entry.is_practice ? 'practised' : 'submitted';
   const [isOpen, setIsOpen] = useState(false);
   const [breakdown, setBreakdown] = useState<QuestionBreakdown[] | null>(null);
 
@@ -108,8 +113,17 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
           </div>
         </div>
         <div className={styles.counts}>
-          <span className={`${nb.badge} ${nb.badgeSuccess}`}>{entry.submitted.length} submitted</span>
-          <span className={`${nb.badge} ${nb.badgeWarning}`}>{pendingCount} pending</span>
+          {/* First, and unconditionally: a card reading "12 submitted" that
+              silently meant practice reps would be read as twelve results. */}
+          {entry.is_practice && (
+            <span className={`${nb.badge} ${nb.badgeWarning}`}>Practice</span>
+          )}
+          <span className={`${nb.badge} ${nb.badgeSuccess}`}>
+            {entry.submitted.length} {submittedLabel}
+          </span>
+          {!entry.is_practice && (
+            <span className={`${nb.badge} ${nb.badgeWarning}`}>{pendingCount} pending</span>
+          )}
           <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size={16} />
         </div>
       </div>
@@ -118,7 +132,9 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
         <>
           <div className={styles.statusLists}>
             <div className={styles.statusColumn}>
-              <h3 className={styles.columnHeading}>Submitted ({entry.submitted.length})</h3>
+              <h3 className={styles.columnHeading}>
+                {entry.is_practice ? 'Practised' : 'Submitted'} ({entry.submitted.length})
+              </h3>
               {entry.submitted.length === 0 ? (
                 <p className={styles.emptyNote}>No one yet.</p>
               ) : (
@@ -163,6 +179,14 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
 
           <div className={styles.breakdownSection}>
             <h3 className={styles.columnHeading}>Answer breakdown</h3>
+            {entry.is_practice && (
+              // The breakdown comes from the quiz dashboard, which is official
+              // -only by design. Saying so beats showing an empty table that
+              // looks like nobody has answered anything.
+              <p className={styles.emptyNote}>
+                Practice answers are not included &mdash; this shows graded results only.
+              </p>
+            )}
             {breakdown == null ? (
               <LoadingState variant="inline" />
             ) : breakdown.length === 0 ? (

@@ -47,6 +47,19 @@ class SaveAnswerSchema(Schema):
     selected_option_id = fields.Int(required=False, allow_none=True, load_default=None)
 
 
+class CheckAnswerSchema(Schema):
+    """Practice only: "I'm done with this question, show me how I did."
+
+    Carries no answer of its own - whatever is already saved is what gets
+    checked, so the verdict can never disagree with what was recorded.
+    """
+
+    access_code_id = fields.Int(required=True)
+    player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
+    player_id = fields.Int(required=False, allow_none=True, load_default=None)
+    question_id = fields.Int(required=True)
+
+
 class PlayerResultsSchema(Schema):
     code = fields.Str(required=True, validate=validate.Length(min=1, max=16))
     player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))

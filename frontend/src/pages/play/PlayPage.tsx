@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getQuizTitleByCode } from '../../api/play';
-import type { ResumedAnswer, ValidateCodeResponse } from '../../api/types';
+import { getQuizTitleByCode, startAttempt } from '../../api/play';
+import type {
+  AssessmentMode,
+  PracticeFeedback,
+  ResumedAnswer,
+  ValidateCodeResponse,
+} from '../../api/types';
 import { PeiraLogo } from '../../components/brand/PeiraLogo';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { JoinStep } from './JoinStep';
 import { NameStep } from './NameStep';
+import { PracticeCompleteStep } from './PracticeCompleteStep';
 import { QuizStep } from './QuizStep';
 import { SubmittedStep } from './SubmittedStep';
 import styles from './PlayPage.module.css';
@@ -20,8 +26,24 @@ type Step =
       playerName: string;
       playerId: number | undefined;
       initialAnswers: ResumedAnswer[];
+      mode: AssessmentMode;
+      initialFeedback: PracticeFeedback[];
+      /** Bumped on Try Again. Remounts QuizStep so its answers, feedback and
+       * lock state all reset - the alternative, resetting each piece from
+       * outside, is the kind of partial reset that leaves one stale field
+       * behind and makes a retake look like it kept the last one's marks. */
+      run: number;
     }
-  | { name: 'submitted'; code: string; playerName: string; playerId: number | undefined };
+  | { name: 'submitted'; code: string; playerName: string; playerId: number | undefined }
+  | {
+      name: 'practice-complete';
+      code: string;
+      joined: ValidateCodeResponse;
+      playerName: string;
+      playerId: number | undefined;
+      feedback: PracticeFeedback[];
+      run: number;
+    };
 
 export function PlayPage() {
   const { code } = useParams<{ code?: string }>();
@@ -48,8 +70,34 @@ export function PlayPage() {
     };
   }, [code]);
 
-  const quizTitle = step.name === 'name' || step.name === 'quiz' ? step.joined.quiz.title : prefetchedTitle;
+  const quizTitle =
+    step.name === 'name' || step.name === 'quiz' || step.name === 'practice-complete'
+      ? step.joined.quiz.title
+      : prefetchedTitle;
   useDocumentTitle(quizTitle ? `${quizTitle} | Peira` : undefined);
+
+  async function handleTryAgain() {
+    if (step.name !== 'practice-complete') return;
+    // A new attempt, not a cleared one. Practice retakes are unlimited
+    // because the database's uniqueness rule covers graded attempts only,
+    // so this simply starts another - the finished one stays as history.
+    const attempt = await startAttempt({
+      access_code_id: step.joined.access_code_id,
+      player_name: step.playerName,
+      player_id: step.playerId,
+    });
+    setStep({
+      name: 'quiz',
+      code: step.code,
+      joined: step.joined,
+      playerName: step.playerName,
+      playerId: step.playerId,
+      initialAnswers: attempt.answers,
+      mode: attempt.mode,
+      initialFeedback: attempt.feedback,
+      run: step.run + 1,
+    });
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -75,6 +123,11 @@ export function PlayPage() {
               playerName,
               playerId,
               initialAnswers: attempt.answers,
+              // From the ATTEMPT, not the access code: the attempt froze its
+              // mode when it started, and that is what governs it.
+              mode: attempt.mode,
+              initialFeedback: attempt.feedback,
+              run: 0,
             })
           }
           onAlreadySubmitted={(playerName, playerId) =>
@@ -84,14 +137,34 @@ export function PlayPage() {
       )}
       {step.name === 'quiz' && (
         <QuizStep
+          key={step.run}
           quiz={step.joined.quiz}
           accessCodeId={step.joined.access_code_id}
           playerName={step.playerName}
           playerId={step.playerId}
           initialAnswers={step.initialAnswers}
+          mode={step.mode}
+          initialFeedback={step.initialFeedback}
           onSubmitted={() =>
             setStep({ name: 'submitted', code: step.code, playerName: step.playerName, playerId: step.playerId })
           }
+          onPracticeComplete={(feedback) =>
+            setStep({
+              name: 'practice-complete',
+              code: step.code,
+              joined: step.joined,
+              playerName: step.playerName,
+              playerId: step.playerId,
+              feedback,
+              run: step.run,
+            })
+          }
+        />
+      )}
+      {step.name === 'practice-complete' && (
+        <PracticeCompleteStep
+          feedback={step.feedback}
+          onTryAgain={() => void handleTryAgain()}
         />
       )}
       {step.name === 'submitted' && (

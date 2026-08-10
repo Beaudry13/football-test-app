@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { activateQuiz, deactivateAccessCode, listAccessCodes } from '../../api/accessCodes';
 import { listGroups } from '../../api/groups';
 import { getErrorMessage } from '../../api/client';
-import type { AccessCode, Group, Quiz } from '../../api/types';
+import type { AccessCode, AssessmentMode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import nb from '../../styles/notebook.module.css';
@@ -12,10 +12,72 @@ function playLink(code: string): string {
   return `${window.location.origin}/play/${code}`;
 }
 
+/** Says plainly whether an activation counts. Deliberately shown on the
+ *  active code and on every row of the history: "did this one count?" is the
+ *  question a coach asks when a number looks wrong, and it should be
+ *  answerable without opening anything. */
+function ModeBadge({ mode }: { mode: AssessmentMode }) {
+  const isPractice = mode === 'PRACTICE';
+  return (
+    <span className={`${nb.badge} ${isPractice ? nb.badgeWarning : nb.badgeSuccess}`}>
+      {isPractice ? 'Practice' : 'Graded'}
+    </span>
+  );
+}
+
+const MODE_OPTIONS: { value: AssessmentMode; label: string; hint: string }[] = [
+  {
+    value: 'GRADED',
+    label: 'Graded',
+    hint: 'Counts toward results, averages and reports. One attempt each.',
+  },
+  {
+    value: 'PRACTICE',
+    label: 'Practice',
+    hint: 'Instant feedback, unlimited retakes, and never affects a grade.',
+  },
+];
+
+/** Radio buttons rather than a toggle or a dropdown: both options are named
+ *  and their consequences stated, because picking the wrong one silently
+ *  either loses a real assessment or pollutes the coach's averages. */
+function ModePicker({
+  mode,
+  onChange,
+}: {
+  mode: AssessmentMode;
+  onChange: (mode: AssessmentMode) => void;
+}) {
+  return (
+    <fieldset className={styles.modePicker}>
+      <legend>How should this count?</legend>
+      {MODE_OPTIONS.map((option) => (
+        <label key={option.value} className={styles.modeOption}>
+          <input
+            type="radio"
+            name="assessment-mode"
+            value={option.value}
+            checked={mode === option.value}
+            onChange={() => onChange(option.value)}
+          />
+          <span>
+            <strong>{option.label}</strong>
+            <span className={styles.modeHint}>{option.hint}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [codes, setCodes] = useState<AccessCode[] | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>([]);
+  // GRADED is the default, and reverting to it after each activation is
+  // deliberate: sending a practice quiz is the deliberate act, and a sticky
+  // PRACTICE would make the next real assessment silently not count.
+  const [mode, setMode] = useState<AssessmentMode>('GRADED');
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
@@ -61,8 +123,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     setError(null);
     setIsActivating(true);
     try {
-      await activateQuiz(quiz.id, selectedGroupIds);
+      await activateQuiz(quiz.id, selectedGroupIds, mode);
       await load();
+      setMode('GRADED');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -105,6 +168,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
           <>
             <p>Share this code and link with players</p>
             <div className={styles.codeDisplay}>{activeCode.code}</div>
+            <ModeBadge mode={activeCode.mode} />
             {activeCode.groups.length > 0 && (
               <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
             )}
@@ -122,6 +186,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
             <div className={styles.expiry}>
               Expires {new Date(activeCode.expires_at).toLocaleString()}
             </div>
+            <ModePicker mode={mode} onChange={setMode} />
             <div className={styles.historyActions}>
               <button className={nb.btnSm} onClick={() => handleDeactivate(activeCode.id)}>
                 Deactivate now
@@ -158,6 +223,8 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               </div>
             )}
 
+            <ModePicker mode={mode} onChange={setMode} />
+
             <button
               className={nb.btnPrimary}
               onClick={handleActivate}
@@ -184,6 +251,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 <th>Activated</th>
                 <th>Expires</th>
                 <th>Groups</th>
+                <th>Mode</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -194,6 +262,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                   <td>{new Date(code.activated_at).toLocaleString()}</td>
                   <td>{new Date(code.expires_at).toLocaleString()}</td>
                   <td>{code.groups.length > 0 ? code.groups.map((g) => g.name).join(', ') : '—'}</td>
+                  <td>
+                    <ModeBadge mode={code.mode} />
+                  </td>
                   <td>
                     {code.is_active && code.is_valid ? (
                       <span className={`${nb.badge} ${nb.badgeSuccess}`}>Active</span>

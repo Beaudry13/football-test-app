@@ -24,6 +24,8 @@ const baseEntry: ActiveQuizStatus = {
   expires_at: new Date(Date.now() + 90 * 60000).toISOString(), // 1h30m from now
   group_names: [],
   roster_size: 2,
+  mode: 'GRADED',
+  is_practice: false,
   submitted: [{ player_name: 'Jordan Smith', submitted_at: '2026-01-01T00:00:00Z' }],
   in_progress: [{ player_name: 'Alex Lee', started_at: '2026-01-01T00:00:00Z' }],
   not_started: [],
@@ -162,5 +164,28 @@ describe('ActiveQuizStatusSection', () => {
     await screen.findByText('Week 1 Prep');
     await user.click(screen.getByText('1 submitted'));
     expect(await screen.findByText('What gap does the 3-tech attack?')).toBeInTheDocument();
+  });
+
+  it('says plainly when the live quiz is practice', async () => {
+    vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([
+      { ...baseEntry, mode: 'PRACTICE', is_practice: true },
+    ]);
+    renderSection();
+
+    // A card reading "1 submitted" that silently meant practice reps would be
+    // read as one real result.
+    expect(await screen.findByText('Practice')).toBeInTheDocument();
+    expect(screen.getByText('1 practised')).toBeInTheDocument();
+    // "Pending against the roster" is meaningless with unlimited retakes.
+    expect(screen.queryByText(/pending/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the graded card exactly as it was', async () => {
+    vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([baseEntry]);
+    renderSection();
+
+    expect(await screen.findByText('1 submitted')).toBeInTheDocument();
+    expect(screen.getByText('1 pending')).toBeInTheDocument();
+    expect(screen.queryByText('Practice')).not.toBeInTheDocument();
   });
 });

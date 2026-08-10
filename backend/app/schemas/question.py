@@ -22,17 +22,30 @@ class QuestionOptionSchema(Schema):
     is_correct_answer = fields.Bool(required=False, load_default=False)
 
 
+#: Optional coaching note shown in Practice Mode after a player answers.
+#: Declared once and reused, so create and edit cannot drift apart -
+#: a coach must be able to write it in the same flow either way.
+_ANSWER_EXPLANATION = fields.Str(
+    required=False, allow_none=True, load_default=None, validate=validate.Length(max=2000)
+)
+
+
 class QuestionCreateSchema(Schema):
     question_text = fields.Str(required=True, validate=validate.Length(min=1))
     question_type = fields.Str(required=True, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False, load_default=list)
     position = fields.Int(required=False, load_default=None)
+    answer_explanation = _ANSWER_EXPLANATION
 
 
 class QuestionUpdateSchema(Schema):
     question_text = fields.Str(required=False, validate=validate.Length(min=1))
     question_type = fields.Str(required=False, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False)
+    # Editable in the same form that created it - no second screen.
+    answer_explanation = fields.Str(
+        required=False, allow_none=True, validate=validate.Length(max=2000)
+    )
 
 
 class RegionSchema(Schema):
@@ -66,6 +79,10 @@ class RegionQuestionCreateSchema(Schema):
     )
     region = fields.Nested(RegionSchema, required=True)
     position = fields.Int(required=False, load_default=None)
+    # Fill in the Blank is auto-graded, which makes it the type where a
+    # practice explanation is most useful - so it is offered here too rather
+    # than only on the plain question form.
+    answer_explanation = _ANSWER_EXPLANATION
 
 
 class RegionQuestionUpdateSchema(Schema):
@@ -80,6 +97,9 @@ class RegionQuestionUpdateSchema(Schema):
         required=False, allow_none=True, validate=validate.OneOf(MATCHING_MODES)
     )
     region = fields.Nested(RegionSchema, required=False)
+    answer_explanation = fields.Str(
+        required=False, allow_none=True, validate=validate.Length(max=2000)
+    )
 
 
 class QuestionReorderSchema(Schema):

@@ -50,8 +50,8 @@ describe('QuizStep', () => {
 
   it('seeds answers from a resumed attempt instead of starting blank', () => {
     const initialAnswers: ResumedAnswer[] = [
-      { question_id: 1, selected_option_id: 10, answer_text: null },
-      { question_id: 2, selected_option_id: null, answer_text: 'I set the edge.' },
+      { question_id: 1, selected_option_id: 10, answer_text: null, checked: false },
+      { question_id: 2, selected_option_id: null, answer_text: 'I set the edge.', checked: false },
     ];
     vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
 

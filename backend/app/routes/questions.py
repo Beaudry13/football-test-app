@@ -134,6 +134,7 @@ def create_question(quiz_id: int):
     question = Question(
         quiz_id=quiz.id,
         question_text=data["question_text"],
+        answer_explanation=(data.get("answer_explanation") or None),
         question_type=QuestionType(data["question_type"]),
         position=next_position,
     )
@@ -257,6 +258,7 @@ def create_region_question(quiz_id: int):
         position=position,
         expected_answers=expected,
         answer_matching=data["answer_matching"] or DEFAULT_MODE,
+        answer_explanation=(data.get("answer_explanation") or None),
     )
     db.session.add(question)
     db.session.flush()
@@ -282,6 +284,12 @@ def update_region_question(quiz_id: int, question_id: int):
 
     if "question_text" in data:
         question.question_text = data["question_text"]
+
+    # Deliberately NOT guarded by _reject_if_already_answered: the explanation
+    # is teaching material shown after the fact, so improving it changes
+    # nobody's score and a coach should be able to refine it at any time.
+    if "answer_explanation" in data:
+        question.answer_explanation = data["answer_explanation"] or None
     if "expected_answers" in data:
         expected = clean_expected_answers(data["expected_answers"])
         if not expected:
@@ -311,6 +319,12 @@ def update_question(quiz_id: int, question_id: int):
 
     if "question_text" in data:
         question.question_text = data["question_text"]
+
+    # Deliberately NOT guarded by _reject_if_already_answered: the explanation
+    # is teaching material shown after the fact, so improving it changes
+    # nobody's score and a coach should be able to refine it at any time.
+    if "answer_explanation" in data:
+        question.answer_explanation = data["answer_explanation"] or None
     if "question_type" in data:
         question.question_type = QuestionType(data["question_type"])
     if "options" in data:

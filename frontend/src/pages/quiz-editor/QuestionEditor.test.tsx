@@ -103,6 +103,9 @@ describe('QuestionEditor', () => {
           { option_text: 'True', is_correct_answer: false },
           { option_text: 'False', is_correct_answer: true },
         ],
+        // Sent as an empty string when the coach left it blank; the server
+        // stores that as null so "no explanation" has one representation.
+        answer_explanation: '',
       },
       null,
     );
@@ -231,5 +234,43 @@ describe('QuestionEditor image upload on create', () => {
       'accept',
       'image/png,image/jpeg,image/webp',
     );
+  });
+
+  it('sends the coach explanation with a new question', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor();
+
+    await user.type(screen.getByLabelText('Question'), 'Which coverage?');
+    await user.type(
+      screen.getByLabelText(/Explanation/),
+      'Two deep safeties means Cover 2.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ answer_explanation: 'Two deep safeties means Cover 2.' }),
+        null,
+      ),
+    );
+  });
+
+  it('offers the explanation on every type, including the ones Peira cannot score', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    // Short Answer is exactly where a coach's own explanation does the whole
+    // job of teaching, because the player is only told "Response recorded".
+    await user.selectOptions(screen.getByLabelText('Type'), 'written');
+    expect(screen.getByLabelText(/Explanation/)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Type'), 'draw_response');
+    expect(screen.getByLabelText(/Explanation/)).toBeInTheDocument();
+  });
+
+  it('loads an existing explanation when editing', () => {
+    renderEditor({ initialExplanation: 'Look at the safety depth.', submitLabel: 'Save question' });
+
+    expect(screen.getByLabelText(/Explanation/)).toHaveValue('Look at the safety depth.');
   });
 });

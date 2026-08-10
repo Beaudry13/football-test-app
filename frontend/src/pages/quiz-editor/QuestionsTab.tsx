@@ -100,6 +100,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                 option_text: o.option_text,
                 is_correct_answer: Boolean(o.is_correct_answer),
               }))}
+              initialExplanation={question.answer_explanation ?? null}
               submitLabel="Save question"
               onSave={(input) => handleUpdate(question.id, input)}
               onCancel={() => setEditingId(null)}
