@@ -47,6 +47,16 @@ export function MasterRosterPage() {
     try {
       const result = await listPlayers({ active: showInactive ? 'all' : 'true' });
       setPlayers(result);
+      // Selection is scoped to the players currently listed. Without this a
+      // deactivated player stays selected while invisible: the count reports
+      // somebody the coach cannot see, and the report quietly includes them.
+      const listed = new Set(result.map((player) => player.id));
+      setSelectedIds((prev) => {
+        const kept = new Set([...prev].filter((id) => listed.has(id)));
+        // Same Set when nothing was dropped, so this never causes a needless
+        // re-render on an ordinary refresh.
+        return kept.size === prev.size ? prev : kept;
+      });
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -133,9 +143,10 @@ export function MasterRosterPage() {
     return true;
   });
 
-  // Selection is tracked across the whole roster, but "select all" acts on
-  // what the coach can currently SEE. Selecting rows hidden behind a search
-  // would put players in the report that never appeared on screen.
+  // Selection only ever covers what the coach can currently SEE - both here
+  // and in `load`, which prunes anything that has left the list. Selecting
+  // rows hidden behind a search or an inactive filter would put players in
+  // the report who never appeared on screen, so the control says "shown".
   const visibleIds = filtered.map((p) => p.id);
   const selectedCount = selectedIds.size;
   const allVisibleSelected =
@@ -272,9 +283,9 @@ export function MasterRosterPage() {
                   if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected;
                 }}
                 onChange={(e) => toggleAllVisible(e.target.checked)}
-                aria-label="Select all players"
+                aria-label="Select all shown"
               />
-              Select all
+              Select all shown
             </label>
             <span className={styles.selectedCount}>
               {selectedCount === 0
@@ -348,11 +359,22 @@ export function MasterRosterPage() {
                   </td>
                   <td>
                     {player.is_active ? (
-                      <button className={nb.btnSm} onClick={() => handleDeactivate(player)}>
+                      <button
+                        className={nb.btnSm}
+                        onClick={() => handleDeactivate(player)}
+                        // Every row's button read simply "Deactivate", so a
+                        // screen reader announced a column of identical
+                        // controls with no way to tell whose row it was on.
+                        aria-label={`Deactivate ${player.full_name}`}
+                      >
                         Deactivate
                       </button>
                     ) : (
-                      <button className={nb.btnSm} onClick={() => handleReactivate(player)}>
+                      <button
+                        className={nb.btnSm}
+                        onClick={() => handleReactivate(player)}
+                        aria-label={`Reactivate ${player.full_name}`}
+                      >
                         Reactivate
                       </button>
                     )}

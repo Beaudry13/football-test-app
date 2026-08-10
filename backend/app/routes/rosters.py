@@ -9,11 +9,40 @@ from app.models import Player, Quiz, Roster, RosterPlayer
 from app.schemas.player import GroupMembersAddSchema
 from app.schemas.roster import RosterUpsertSchema
 from app.services.csv_roster import parse_roster_csv
+from app.services.player_matching import resolve_or_create_players
 from app.services.player_names import normalize_and_validate_names
 from app.utils.auth import current_coach, get_editable_quiz, get_org_player, get_visible_quiz
 from app.utils.validation import load_json_body
 
 rosters_bp = Blueprint("rosters", __name__)
+
+
+def _add_canonical_roster_members(quiz: Quiz, players: list) -> Roster:
+    """Adds canonical Players to a quiz's roster, skipping anyone present.
+
+    Additive, matching add_roster_members - a CSV naming the players who
+    should take this quiz should not silently remove anyone it omits.
+    """
+    if quiz.roster is None:
+        quiz.roster = Roster(quiz_id=quiz.id)
+
+    existing = {rp.player_id for rp in quiz.roster.players if rp.player_id is not None}
+    next_position = max((rp.position for rp in quiz.roster.players), default=-1) + 1
+
+    for player in players:
+        if player.id in existing:
+            continue
+        existing.add(player.id)
+        quiz.roster.players.append(
+            RosterPlayer(
+                player_id=player.id,
+                player_name=player.full_name,
+                position=next_position,
+            )
+        )
+        next_position += 1
+
+    return quiz.roster
 
 
 def _replace_roster(quiz: Quiz, raw_names: list[str]) -> Roster:
@@ -66,8 +95,18 @@ def upload_roster_csv(quiz_id: int):
     if "file" not in request.files:
         raise ApiError("No CSV file provided under the 'file' field", status_code=400)
 
-    names = parse_roster_csv(request.files["file"].read())
-    roster = _replace_roster(quiz, names)
+    names = normalize_and_validate_names(parse_roster_csv(request.files["file"].read()))
+    # Duplicate rows are still rejected before anything resolves. Two rows
+    # for one name usually mean two different people, and collapsing them to
+    # one canonical Player would silently drop somebody - see
+    # services/player_names for the original reasoning, which canonical
+    # linking does not change.
+    # Canonical, for the same reason as the group CSV: a name-only roster row
+    # produces an attempt with no player_id, which no canonical analytics
+    # surface can see. See services/player_matching.
+    coach = current_coach()
+    players = resolve_or_create_players(coach.organization_id, names)
+    roster = _add_canonical_roster_members(quiz, players)
     db.session.commit()
     return jsonify(roster.to_dict())
 

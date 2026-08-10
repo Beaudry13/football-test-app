@@ -15,12 +15,19 @@ export function RosterTab({ quiz }: { quiz: Quiz }) {
   return (
     <>
       <PlayerPickerPanel load={load} onAdd={onAddMember} onRemove={onRemoveMember} />
+      {/* No free-text name box. The Master Roster is the source of truth,
+          and a typed name here would create a roster row with no canonical
+          Player - which makes the resulting attempt invisible to the player
+          profile and the cumulative report. CSV import stays because it now
+          resolves every row to a Player. `onSave` is still wired: the
+          endpoint remains for backward compatibility and old data. */}
       <PlayerListEditor
         load={load}
         onSave={onSave}
         onUploadCsv={onUploadCsv}
-        currentListTitle="Legacy roster (no master-roster link)"
-        editTitle="Edit legacy roster"
+        allowNameEntry={false}
+        currentListTitle="Quiz roster"
+        editTitle="Import from CSV"
       />
     </>
   );

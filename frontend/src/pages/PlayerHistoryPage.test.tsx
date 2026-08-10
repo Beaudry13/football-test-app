@@ -62,7 +62,8 @@ describe('PlayerHistoryPage', () => {
     expect(screen.getByText('3 / 4')).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
 
-    const summary = screen.getByRole('heading', { level: 2 });
+    // Named, because the page now also carries a "Legacy quiz history" h2.
+    const summary = screen.getByRole('heading', { level: 2, name: /taken/ });
     expect(summary.textContent?.replace(/\s+/g, ' ').trim()).toBe('2 Quizzes taken · 75% correct overall');
   });
 
@@ -96,7 +97,8 @@ describe('PlayerHistoryPage', () => {
     expect(await screen.findByText('2 / 2')).toBeInTheDocument();
     expect(screen.getByText('1 to grade')).toBeInTheDocument();
     // 2/2 graded is 100%, unaffected by the still-ungraded answer.
-    const summary = screen.getByRole('heading', { level: 2 });
+    // Named, because the page now also carries a "Legacy quiz history" h2.
+    const summary = screen.getByRole('heading', { level: 2, name: /taken/ });
     expect(summary.textContent).toContain('100% correct overall');
     expect(screen.getByText(/pending grading$/)).toBeInTheDocument();
     expect(screen.getByText(/doesn't include these yet/)).toBeInTheDocument();
@@ -120,5 +122,20 @@ describe('PlayerHistoryPage', () => {
     await screen.findByText('2 / 2');
     expect(screen.queryByText('to grade')).not.toBeInTheDocument();
     expect(screen.queryByText(/doesn't include these yet/)).not.toBeInTheDocument();
+  });
+});
+
+describe('PlayerHistoryPage legacy framing', () => {
+  it('says these records are name-matched and may not be in the profile', async () => {
+    // It must never imply Peira knows these attempts belong to the canonical
+    // player of that name - two people can share a name, which is exactly
+    // why they were never linked.
+    vi.spyOn(gradingApi, 'getPlayerHistory').mockResolvedValue({ history: [] } as never);
+    renderPage('Mike Smith');
+
+    expect(await screen.findByText('Legacy quiz history')).toBeInTheDocument();
+    expect(screen.getByText(/saved by player name/)).toBeInTheDocument();
+    expect(screen.getByText(/may not appear/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Roster' })).toBeInTheDocument();
   });
 });

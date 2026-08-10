@@ -37,7 +37,26 @@ export function PlayerHistoryPage() {
       </Link>
 
       <h1 className={nb.heading}>{playerName}</h1>
-      <p className={styles.subheading}>Quiz history across your whole organization</p>
+      <p className={styles.subheading}>Quiz history matched by player name</p>
+
+      {/* Named history, not canonical history. These results are found by
+          matching the name on the attempt, so Peira does NOT know they
+          belong to the player of that name on the Master Roster - two people
+          can share a name. The wording therefore says "may not appear" and
+          never claims the records are theirs. The authoritative surface is
+          the Player Profile, reached from the Roster. */}
+      <div className={`${nb.card} ${styles.legacyNotice}`}>
+        <h2 className={nb.subheading}>Legacy quiz history</h2>
+        <p>
+          These results came from older quiz rosters that were saved by player name instead of
+          being linked to the Master Roster. They may not appear in the player&rsquo;s main
+          profile.
+        </p>
+        <p>
+          For a player&rsquo;s full, up-to-date record, open them from your{' '}
+          <Link to="/roster">Roster</Link>.
+        </p>
+      </div>
 
       <ErrorBanner message={error} />
 

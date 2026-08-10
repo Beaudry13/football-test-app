@@ -15,11 +15,41 @@ from app.models import Group, GroupPlayer, Player
 from app.schemas.group import GroupCreateSchema, GroupPlayersUpsertSchema, GroupUpdateSchema
 from app.schemas.player import GroupMembersAddSchema
 from app.services.csv_roster import parse_roster_csv
+from app.services.player_matching import resolve_or_create_players
 from app.services.player_names import normalize_and_validate_names
 from app.utils.auth import current_coach, get_org_group, get_org_player
 from app.utils.validation import load_json_body
 
 groups_bp = Blueprint("groups", __name__)
+
+
+def _add_canonical_group_members(group: Group, players: list) -> Group:
+    """Adds canonical Players to a group, skipping anyone already in it.
+
+    Additive, like add_group_members - NOT the legacy editor's clear-and-
+    rebuild. A CSV upload says "these players are in this group", and
+    dropping members who happen not to be in the file would be a destructive
+    reading of an additive action.
+    """
+    existing = {gp.player_id for gp in group.players if gp.player_id is not None}
+    next_position = max((gp.position for gp in group.players), default=-1) + 1
+
+    for player in players:
+        if player.id in existing:
+            continue
+        existing.add(player.id)
+        group.players.append(
+            GroupPlayer(
+                player_id=player.id,
+                # Display snapshot, exactly as add_group_members stores it -
+                # Player.full_name stays the live value.
+                player_name=player.full_name,
+                position=next_position,
+            )
+        )
+        next_position += 1
+
+    return group
 
 
 def _replace_group_players(group: Group, raw_names: list[str]) -> Group:
@@ -104,8 +134,21 @@ def upload_group_players_csv(group_id: int):
     if "file" not in request.files:
         raise ApiError("No CSV file provided under the 'file' field", status_code=400)
 
-    names = parse_roster_csv(request.files["file"].read())
-    _replace_group_players(group, names)
+    names = normalize_and_validate_names(parse_roster_csv(request.files["file"].read()))
+    # Duplicate rows are still rejected before anything resolves. Two rows
+    # for one name usually mean two different people, and collapsing them to
+    # one canonical Player would silently drop somebody - see
+    # services/player_names for the original reasoning, which canonical
+    # linking does not change.
+    # Canonical, not name-only. A CSV upload looks like an ordinary bulk
+    # action to a coach, but it used to create GroupPlayer rows with no
+    # player_id - and every attempt made through them was invisible to the
+    # player profile and the cumulative report. Names now resolve to master
+    # roster Players (creating any the roster lacks, refusing on an ambiguous
+    # name) so participation is attributable.
+    coach = current_coach()
+    players = resolve_or_create_players(coach.organization_id, names)
+    _add_canonical_group_members(group, players)
     db.session.commit()
     return jsonify(group.to_dict())
 

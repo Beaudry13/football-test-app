@@ -16,6 +16,18 @@ interface PlayerListEditorProps {
   load: () => Promise<PlayerListLike>;
   onSave: (names: string[]) => Promise<PlayerListLike>;
   onUploadCsv: (file: File) => Promise<PlayerListLike>;
+  /** Whether the free-text name box is offered.
+   *
+   *  False on the modern surfaces. A name typed here becomes a roster row
+   *  with no canonical Player, and an attempt made through one is invisible
+   *  to the player profile and the cumulative report - so the coach is no
+   *  longer offered a way to create them. CSV import stays: it now resolves
+   *  every row to a master-roster Player (see services/player_matching), so
+   *  it is a canonical workflow rather than a legacy one.
+   *
+   *  Still true where legacy names already exist, so they can be read and
+   *  removed. Nothing is deleted or migrated. */
+  allowNameEntry?: boolean;
   currentListTitle?: string;
   editTitle?: string;
   saveButtonLabel?: string;
@@ -37,6 +49,7 @@ export function PlayerListEditor({
   load,
   onSave,
   onUploadCsv,
+  allowNameEntry = true,
   currentListTitle = 'Current roster',
   editTitle = 'Edit roster',
   saveButtonLabel = 'Save roster',
@@ -161,16 +174,29 @@ export function PlayerListEditor({
 
         <div className={nb.card}>
           <h2 className={nb.subheading}>{editTitle}</h2>
-          <p>One player name per line. Saving replaces the full list.</p>
-          <textarea
-            className={styles.textarea}
-            value={namesText}
-            onChange={(e) => setNamesText(e.target.value)}
-          />
+          {allowNameEntry ? (
+            <>
+              <p>One player name per line. Saving replaces the full list.</p>
+              <textarea
+                className={styles.textarea}
+                value={namesText}
+                onChange={(e) => setNamesText(e.target.value)}
+              />
+            </>
+          ) : (
+            <p>
+              Upload a CSV of player names. Each row is matched to a player on your Master
+              Roster, and anyone new is added to it.
+            </p>
+          )}
           <div className={styles.hint}>
-            <button className={nb.btnSm} onClick={handleSaveManual} disabled={isSaving}>
-              {isSaving ? 'Saving…' : saveButtonLabel}
-            </button>{' '}
+            {allowNameEntry && (
+              <>
+                <button className={nb.btnSm} onClick={handleSaveManual} disabled={isSaving}>
+                  {isSaving ? 'Saving…' : saveButtonLabel}
+                </button>{' '}
+              </>
+            )}
             <label className={nb.btnSm} style={{ cursor: 'pointer' }}>
               Upload CSV
               <input

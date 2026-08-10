@@ -26,7 +26,6 @@ export function GroupDetailPage() {
   const [nameValue, setNameValue] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showLegacy, setShowLegacy] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   const loadGroup = useCallback(async () => {
@@ -145,20 +144,20 @@ export function GroupDetailPage() {
       <RosterSelectPanel members={group.players} onAddMany={onAddMany} onRemove={onRemoveMember} />
 
       {legacyCount === 0 ? (
+        /* No legacy members: CSV import only. The free-text name box is not
+           offered, because a typed name creates a membership with no
+           canonical Player and an attempt made through it never reaches the
+           player profile or the cumulative report. */
         <div className={styles.legacySection}>
-          <button type="button" className={nb.btnSm} onClick={() => setShowLegacy((v) => !v)}>
-            {showLegacy ? 'Hide Advanced / Legacy Members' : 'Advanced / Legacy Members'}
-          </button>
-          {showLegacy && (
-            <PlayerListEditor
-              load={load}
-              onSave={onSave}
-              onUploadCsv={onUploadCsv}
-              currentListTitle="Legacy members (no master-roster link)"
-              editTitle="Edit legacy members"
-              saveButtonLabel="Save members"
-            />
-          )}
+          <PlayerListEditor
+            load={load}
+            onSave={onSave}
+            onUploadCsv={onUploadCsv}
+            allowNameEntry={false}
+            currentListTitle="Group members"
+            editTitle="Import from CSV"
+            saveButtonLabel="Save members"
+          />
         </div>
       ) : (
         <div className={styles.legacySection}>

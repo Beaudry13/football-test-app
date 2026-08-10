@@ -129,7 +129,7 @@ describe('MasterRosterPage', () => {
     renderPage();
 
     await screen.findByText('Jordan Lee');
-    await user.click(screen.getByRole('button', { name: 'Deactivate' }));
+    await user.click(screen.getByRole('button', { name: 'Deactivate Jordan Lee' }));
     await acceptConfirm(user, 'Deactivate');
 
     await waitFor(() => expect(deactivateSpy).toHaveBeenCalledWith(1));
@@ -142,7 +142,7 @@ describe('MasterRosterPage', () => {
     renderPage();
 
     await screen.findByText('Jordan Lee');
-    await user.click(screen.getByRole('button', { name: 'Reactivate' }));
+    await user.click(screen.getByRole('button', { name: 'Reactivate Jordan Lee' }));
 
     await waitFor(() => expect(reactivateSpy).toHaveBeenCalledWith(1));
   });
@@ -229,7 +229,7 @@ describe('MasterRosterPage performance report', () => {
   it('selects and clears every visible player', async () => {
     const user = await renderWithPlayers();
 
-    await user.click(screen.getByRole('checkbox', { name: 'Select all players' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select all shown' }));
     expect(screen.getByText('2 selected')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Clear all' }));
@@ -243,7 +243,7 @@ describe('MasterRosterPage performance report', () => {
     await user.type(screen.getByPlaceholderText(/search/i), 'Marcus');
     await waitFor(() => expect(screen.queryByText('Jordan Lee')).not.toBeInTheDocument());
 
-    await user.click(screen.getByRole('checkbox', { name: 'Select all players' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select all shown' }));
 
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
@@ -268,3 +268,48 @@ describe('MasterRosterPage performance report', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('MasterRosterPage selection scope', () => {
+  const jordan = makePlayer({ id: 1, full_name: 'Jordan Lee' });
+  const marcus = makePlayer({ id: 2, first_name: 'Marcus', last_name: 'Hill', full_name: 'Marcus Hill' });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:x'), writable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), writable: true });
+  });
+
+  it('drops a player from the selection once they leave the list', async () => {
+    // Deactivating a selected player used to leave them selected but
+    // invisible: the count reported somebody the coach could not see, and
+    // the report quietly included them.
+    const list = vi
+      .spyOn(playersApi, 'listPlayers')
+      .mockResolvedValueOnce([jordan, marcus])
+      .mockResolvedValue([jordan]);
+    vi.spyOn(playersApi, 'deactivatePlayer').mockResolvedValue({ ...marcus, is_active: false });
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Marcus Hill');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Marcus Hill' }));
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Deactivate Marcus Hill' }));
+    await acceptConfirm(user, 'Deactivate');
+
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('No players selected')).toBeInTheDocument());
+  });
+
+  it('keeps a selection that is still on screen', async () => {
+    vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([jordan, marcus]);
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Jordan Lee');
+
+    await user.click(screen.getByRole('checkbox', { name: 'Select Jordan Lee' }));
+
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+  });
+})

@@ -199,6 +199,27 @@ def start_attempt():
         if data["player_name"] not in roster_names:
             raise ApiError("Player name is not on this quiz's roster", status_code=422)
 
+    # SAFETY NET. If this activation's roster knows the chosen name as
+    # exactly one canonical player, the attempt must carry that id - even
+    # when the client omitted it (an older cached bundle, or a hand-made
+    # request). An attempt with player_id NULL is invisible to the player
+    # profile and the cumulative report, so losing it here silently costs a
+    # coach the result of a quiz they watched somebody take.
+    #
+    # Derived from THIS ACTIVATION'S ROSTER, never guessed from the name at
+    # large: the candidates come from `effective_roster_players`, and a name
+    # matching two of them is left alone rather than resolved - picking one
+    # would attribute a real player's score to someone else.
+    if player_id is None:
+        wanted = data["player_name"].strip().casefold()
+        canonical = [
+            entry["player_id"]
+            for entry in effective_roster_players(access_code)
+            if entry["player_id"] is not None and entry["name"].strip().casefold() == wanted
+        ]
+        if len(canonical) == 1:
+            player_id = canonical[0]
+
     existing = find_attempt(access_code.id, data["player_name"], player_id)
     if existing is not None:
         if existing.status == AttemptStatus.SUBMITTED:

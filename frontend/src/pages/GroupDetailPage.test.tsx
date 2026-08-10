@@ -53,24 +53,29 @@ describe('GroupDetailPage', () => {
     vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([makePlayer()]);
   });
 
-  it('collapses the Legacy Members section behind Advanced when there are none', async () => {
+  it('offers no way to type a name-only member', async () => {
+    // The Master Roster is the source of truth. A typed name would create a
+    // membership with no canonical Player, and an attempt made through it
+    // never reaches the player profile or the cumulative report.
     vi.spyOn(groupsApi, 'getGroup').mockResolvedValue(makeGroup({ players: [] }));
     renderPage();
 
     expect(await screen.findByText('Add Players from Master Roster')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Advanced / Legacy Members' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Advanced / Legacy Members' })).not.toBeInTheDocument();
     expect(screen.queryByText('Edit legacy members')).not.toBeInTheDocument();
+    // The legacy bulk box specifically - the page still has a rename field
+    // and the picker's search box, which are not name-only membership.
+    expect(screen.queryByText(/One player name per line/)).not.toBeInTheDocument();
   });
 
-  it('expands the Legacy Members editor when Advanced is clicked', async () => {
-    const user = userEvent.setup();
+  it('still offers CSV import, which now links to the Master Roster', async () => {
+    // CSV is a canonical workflow now - every row resolves to a Player - so
+    // retiring the name box must not take the bulk path with it.
     vi.spyOn(groupsApi, 'getGroup').mockResolvedValue(makeGroup({ players: [] }));
     renderPage();
 
-    await screen.findByText('Add Players from Master Roster');
-    await user.click(screen.getByRole('button', { name: 'Advanced / Legacy Members' }));
-
-    expect(await screen.findByText('Edit legacy members')).toBeInTheDocument();
+    expect(await screen.findByText('Import from CSV')).toBeInTheDocument();
+    expect(screen.getByText(/matched to a player on your Master Roster/)).toBeInTheDocument();
   });
 
   it('shows Legacy Members directly with an explanatory note when they exist', async () => {
@@ -90,8 +95,15 @@ describe('GroupDetailPage', () => {
     vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([player]);
     vi.spyOn(groupsApi, 'getGroup')
       .mockResolvedValueOnce(makeGroup({ players: [] }))
-      .mockResolvedValueOnce(makeGroup({ players: [{ id: 1, player_name: 'John Smith', position: 0, player }] }));
+      // Persistent, not Once: the CSV panel mounts and fetches too, so the
+      // page makes more than two calls and the last must not resolve
+      // undefined.
+      .mockResolvedValue(makeGroup({ players: [{ id: 1, player_name: 'John Smith', position: 0, player }] }));
     const addSpy = vi.spyOn(playersApi, 'addGroupMembers').mockResolvedValue(makeGroup());
+    // NOTE: the CSV panel is now always mounted (it used to sit behind the
+    // Advanced toggle), and it fetches the group once on mount. So the page
+    // issues one more getGroup than it used to - counted explicitly here
+    // rather than left as a surprise.
     renderPage();
 
     await screen.findByText('John Smith');
@@ -99,7 +111,7 @@ describe('GroupDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Add Selected Players' }));
 
     await waitFor(() => expect(addSpy).toHaveBeenCalledWith(1, [5]));
-    await waitFor(() => expect(groupsApi.getGroup).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(groupsApi.getGroup).toHaveBeenCalledTimes(3));
     expect(await screen.findByTestId('stat-in-group')).toHaveTextContent('In This Group: 1');
   });
 });

@@ -33,3 +33,18 @@
   font-size: 0.85em;
   color: var(--nb-text-muted);
 }
+
+/* Legacy notice: these records are name-matched, not canonical. Styled as a
+   quiet statement of fact rather than a warning - the data is real, it is
+   just not attributable to a Master Roster player. */
+.legacyNotice {
+  margin-bottom: 1.5em;
+  border-left: 3px solid var(--nb-accent);
+}
+
+.legacyNotice p {
+  color: var(--nb-text-muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 6px 0 0;
+}
