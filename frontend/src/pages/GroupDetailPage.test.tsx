@@ -78,15 +78,20 @@ describe('GroupDetailPage', () => {
     expect(screen.getByText(/matched to a player on your Master Roster/)).toBeInTheDocument();
   });
 
-  it('shows Legacy Members directly with an explanatory note when they exist', async () => {
+  it('shows existing legacy members with an explanation, and only lets them be removed', async () => {
     vi.spyOn(groupsApi, 'getGroup').mockResolvedValue(
       makeGroup({ players: [{ id: 9, player_name: 'Legacy Name', position: 0 }] }),
     );
     renderPage();
 
-    expect(await screen.findByText('Edit legacy members')).toBeInTheDocument();
-    expect(screen.getByText(/aren't connected to a canonical Player/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Advanced / Legacy Members' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Legacy Name')).toBeInTheDocument();
+    expect(
+      screen.getByText(/added before Peira linked quiz rosters to the Master Roster/),
+    ).toBeInTheDocument();
+    // Removable...
+    expect(screen.getByRole('button', { name: 'Remove Legacy Name' })).toBeInTheDocument();
+    // ...but there is no way to add another.
+    expect(screen.queryByText(/One player name per line/)).not.toBeInTheDocument();
   });
 
   it('reloads group membership after adding players from the roster picker', async () => {

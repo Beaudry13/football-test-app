@@ -47,3 +47,19 @@
   font-size: 0.85em;
   margin-top: 0.5em;
 }
+
+/* Legacy section: removable, never addable.
+ *
+ * The Remove button sits inline with the name rather than in its own column -
+ * this list is short-lived by design, and a column of buttons would give it
+ * more visual weight than a legacy remnant deserves. */
+.removeLegacy {
+  margin-left: 10px;
+}
+
+.legacyExplainer {
+  color: var(--nb-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+}

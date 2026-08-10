@@ -173,3 +173,86 @@ describe('PlayerListEditor', () => {
     expect(await findInList('Casey Jones')).toBeDefined();
   });
 });
+
+describe('PlayerListEditor removal-only mode', () => {
+  const legacyList = {
+    players: [
+      { id: 1, player_name: 'Old Name', position: 0 },
+      { id: 2, player_name: 'Another Old', position: 1 },
+    ],
+  };
+
+  function renderRemovalOnly(overrides: Record<string, unknown> = {}) {
+    const onSave = vi.fn().mockResolvedValue({ players: [legacyList.players[1]] });
+    render(
+      <PlayerListEditor
+        load={vi.fn().mockResolvedValue(legacyList)}
+        onSave={onSave}
+        onUploadCsv={vi.fn()}
+        allowNameEntry={false}
+        currentListTitle="Legacy roster entries"
+        editTitle="Import from CSV"
+        {...overrides}
+      />,
+    );
+    return { onSave };
+  }
+
+  it('offers no way to type a new name', async () => {
+    renderRemovalOnly();
+    await screen.findByText('Old Name');
+
+    expect(screen.queryByText(/One player name per line/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('explains why the section is there, in coach language', async () => {
+    renderRemovalOnly();
+
+    expect(
+      await screen.findByText(/added before Peira linked quiz rosters to the Master Roster/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/added through the Master Roster/)).toBeInTheDocument();
+  });
+
+  it('removes one legacy entry, keeping the rest', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderRemovalOnly();
+    await screen.findByText('Old Name');
+
+    await user.click(screen.getByRole('button', { name: 'Remove Old Name' }));
+    await acceptConfirm(user, 'Remove');
+
+    // Saved as "everything except this one" - the legacy endpoint replaces
+    // the whole legacy list.
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(['Another Old']));
+  });
+
+  it('can clear the last legacy entry', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue({ players: [] });
+    render(
+      <PlayerListEditor
+        load={vi.fn().mockResolvedValue({ players: [{ id: 1, player_name: 'Only One', position: 0 }] })}
+        onSave={onSave}
+        onUploadCsv={vi.fn()}
+        allowNameEntry={false}
+        currentListTitle="Legacy roster entries"
+        editTitle="Import from CSV"
+      />,
+    );
+    await screen.findByText('Only One');
+
+    await user.click(screen.getByRole('button', { name: 'Remove Only One' }));
+    await acceptConfirm(user, 'Remove');
+
+    // An empty list must be accepted, or the final legacy row is permanent.
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith([]));
+  });
+
+  it('still offers CSV import', async () => {
+    renderRemovalOnly();
+
+    expect(await screen.findByText('Upload CSV')).toBeInTheDocument();
+  });
+});

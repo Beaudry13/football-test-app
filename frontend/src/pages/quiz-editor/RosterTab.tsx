@@ -26,7 +26,7 @@ export function RosterTab({ quiz }: { quiz: Quiz }) {
         onSave={onSave}
         onUploadCsv={onUploadCsv}
         allowNameEntry={false}
-        currentListTitle="Quiz roster"
+        currentListTitle="Legacy roster entries"
         editTitle="Import from CSV"
       />
     </>

@@ -143,39 +143,21 @@ export function GroupDetailPage() {
 
       <RosterSelectPanel members={group.players} onAddMany={onAddMany} onRemove={onRemoveMember} />
 
-      {legacyCount === 0 ? (
-        /* No legacy members: CSV import only. The free-text name box is not
-           offered, because a typed name creates a membership with no
-           canonical Player and an attempt made through it never reaches the
-           player profile or the cumulative report. */
-        <div className={styles.legacySection}>
-          <PlayerListEditor
-            load={load}
-            onSave={onSave}
-            onUploadCsv={onUploadCsv}
-            allowNameEntry={false}
-            currentListTitle="Group members"
-            editTitle="Import from CSV"
-            saveButtonLabel="Save members"
-          />
-        </div>
-      ) : (
-        <div className={styles.legacySection}>
-          <p className={styles.legacyNote}>
-            Legacy members are plain names carried over from before the Master Roster - they aren't
-            connected to a canonical Player, so photos, unified history, and roster-picker selection
-            don't apply to them.
-          </p>
-          <PlayerListEditor
-            load={load}
-            onSave={onSave}
-            onUploadCsv={onUploadCsv}
-            currentListTitle="Legacy members (no master-roster link)"
-            editTitle="Edit legacy members"
-            saveButtonLabel="Save members"
-          />
-        </div>
-      )}
+      {/* Removal-only, always. Existing legacy members stay visible so they
+          can be reviewed and removed; there is no way to type a new one,
+          because a name-only membership produces an attempt that never
+          reaches the player profile or the cumulative report. */}
+      <div className={styles.legacySection}>
+        <PlayerListEditor
+          load={load}
+          onSave={onSave}
+          onUploadCsv={onUploadCsv}
+          allowNameEntry={false}
+          currentListTitle={legacyCount > 0 ? 'Legacy roster entries' : 'Group members'}
+          editTitle="Import from CSV"
+          saveButtonLabel="Save members"
+        />
+      </div>
     </div>
   );
 }

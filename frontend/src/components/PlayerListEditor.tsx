@@ -132,6 +132,31 @@ export function PlayerListEditor({
     }
   }
 
+  /** Removes one legacy row by saving the list without it.
+   *
+   *  The legacy endpoint replaces the whole legacy list, so "remove" is
+   *  "save everything except this". Canonical members are never in this
+   *  list and are untouched by that call. */
+  async function handleRemoveLegacy(target: { id: number; player_name: string }) {
+    setError(null);
+    try {
+      await confirm({
+        title: 'Remove legacy entry?',
+        body: `"${target.player_name}" will be removed from this list. Quiz results they have already recorded are not deleted.`,
+        confirmLabel: 'Remove',
+        action: async () => {
+          const remaining = players.filter((p) => p.id !== target.id);
+          const result = await onSave(remaining.map((p) => p.player_name));
+          const legacy = result.players.filter((p) => !p.player);
+          setPlayers(legacy);
+          setNamesText(legacy.map((p) => p.player_name).join('\n'));
+        },
+      });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
   const filteredPlayers = filterText.trim()
     ? players.filter((p) => p.player_name.toLowerCase().includes(filterText.trim().toLowerCase()))
     : players;
@@ -145,8 +170,19 @@ export function PlayerListEditor({
           <h2 className={nb.subheading}>
             {currentListTitle} ({players.length})
           </h2>
+          {!allowNameEntry && players.length > 0 && (
+            <p className={styles.legacyExplainer}>
+              These players were added before Peira linked quiz rosters to the Master Roster.
+              You can remove old entries here, but new players should be added through the
+              Master Roster.
+            </p>
+          )}
           {players.length === 0 ? (
-            <div className={nb.empty}>No players yet. Add names in the box on the right.</div>
+            <div className={nb.empty}>
+              {allowNameEntry
+                ? 'No players yet. Add names in the box on the right.'
+                : 'No legacy entries. Players are added from the Master Roster.'}
+            </div>
           ) : (
             <>
               {players.length > 8 && (
@@ -164,7 +200,21 @@ export function PlayerListEditor({
               ) : (
                 <ul className={styles.playerList}>
                   {filteredPlayers.map((player) => (
-                    <li key={player.id}>{player.player_name}</li>
+                    <li key={player.id}>
+                      {player.player_name}
+                      {!allowNameEntry && (
+                        <button
+                          type="button"
+                          className={`${nb.btnSm} ${styles.removeLegacy}`}
+                          onClick={() => handleRemoveLegacy(player)}
+                          // Named per row: a column of buttons all called
+                          // "Remove" tells a screen reader nothing.
+                          aria-label={`Remove ${player.player_name}`}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </li>
                   ))}
                 </ul>
               )}
