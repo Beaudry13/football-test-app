@@ -68,6 +68,44 @@ the common case.
 
 ---
 
+## Quiz Editor
+
+### Mirror every activation guard in the frontend
+
+The server refuses to activate a quiz in three cases. The Activate button
+currently mirrors only the first:
+
+1. **No questions** — mirrored. `question_count` is on the payload the tab
+   already has, so the button is disabled with a reason.
+2. **A Draw Response question with no image** — *not* mirrored. That lives on
+   the questions, which the access-codes tab does not load.
+3. **No roster and no group selected** — *not* mirrored. It depends on the
+   quiz's own roster, and `roster_size` is omitted from the single-quiz
+   response (it is computed only for the quiz *list*).
+
+*Do not hack around this.* Fetching the questions or the roster from that tab
+just to grey out a button would add requests and put a second copy of the
+server's rules in the client, which is how the two start disagreeing.
+
+The clean fix is to expose activation readiness in the single-quiz payload —
+a small object the server derives from the rules it already enforces, e.g.
+`{ can_activate: bool, blockers: [...] }`. The frontend then mirrors the
+server's own truth with no extra request and no duplicated rule. Until then
+the note under the button states both remaining requirements, and the server
+is still the enforcement point.
+
+### Response rate with an empty roster
+
+Results shows **0%** response rate when roster size is zero. Nobody was
+eligible to respond, so 0% implies a failure that did not happen — "—" would
+be truthful, matching the rule that a score is never fabricated when there is
+nothing to score (see `_score_percent` in `services/export.py`).
+
+Cosmetic, and a copy decision rather than a correctness one, which is why it
+was left alone during the reliability audit.
+
+---
+
 ## Onboarding / Help
 
 ### What's New

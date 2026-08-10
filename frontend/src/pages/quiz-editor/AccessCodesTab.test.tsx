@@ -121,3 +121,26 @@ describe('AccessCodesTab deactivation', () => {
     await waitFor(() => expect(deactivateSpy).toHaveBeenCalledWith(1, 3));
   });
 });
+
+describe('AccessCodesTab activation guard', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+  });
+
+  it('will not offer to activate a quiz with no questions', async () => {
+    // The API refuses this with a 422. Offering the button anyway sent the
+    // coach into an error they could have been told about up front.
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    render(<AccessCodesTab quiz={{ ...quiz, question_count: 0 }} />);
+
+    expect(await screen.findByRole('button', { name: /Activate/ })).toBeDisabled();
+  });
+
+  it('offers activation as soon as there is a question', async () => {
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    render(<AccessCodesTab quiz={{ ...quiz, question_count: 1 }} />);
+
+    expect(await screen.findByRole('button', { name: /Activate/ })).toBeEnabled();
+  });
+})

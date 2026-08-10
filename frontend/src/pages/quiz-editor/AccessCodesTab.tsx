@@ -21,6 +21,18 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [isActivating, setIsActivating] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // The API refuses to activate a quiz with no questions (422). That one is
+  // unambiguous from data this tab already has, so the button says so rather
+  // than letting the coach click into an error.
+  //
+  // The other two refusals are deliberately NOT mirrored here: a missing
+  // Draw Response image lives on the questions, which this tab does not
+  // load, and the roster requirement depends on the quiz's own roster, which
+  // the single-quiz response omits. Guessing either would risk disabling a
+  // button on a quiz that could in fact be activated - worse than the error
+  // it would prevent. The note under the button covers both.
+  const hasNoQuestions = quiz.question_count === 0;
+
   const load = useCallback(async () => {
     try {
       setCodes(await listAccessCodes(quiz.id));
@@ -114,7 +126,12 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               <button className={nb.btnSm} onClick={() => handleDeactivate(activeCode.id)}>
                 Deactivate now
               </button>
-              <button className={nb.btnSm} onClick={handleActivate} disabled={isActivating}>
+              <button
+                className={nb.btnSm}
+                onClick={handleActivate}
+                disabled={isActivating || hasNoQuestions}
+                title={hasNoQuestions ? 'Add a question first' : undefined}
+              >
                 {isActivating ? 'Generating…' : 'Reactivate with new code'}
               </button>
             </div>
@@ -141,7 +158,12 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               </div>
             )}
 
-            <button className={nb.btnPrimary} onClick={handleActivate} disabled={isActivating}>
+            <button
+              className={nb.btnPrimary}
+              onClick={handleActivate}
+              disabled={isActivating || hasNoQuestions}
+              title={hasNoQuestions ? 'Add a question first' : undefined}
+            >
               {isActivating ? 'Activating…' : 'Activate Quiz'}
             </button>
             <p className={styles.activateHint}>
