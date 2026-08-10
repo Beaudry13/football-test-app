@@ -50,7 +50,9 @@ def _replace_roster(quiz: Quiz, raw_names: list[str]) -> Roster:
     groups.py::_replace_group_players for why canonical rows must survive
     this whole-list legacy editor's clear-and-rebuild.
     """
-    names = normalize_and_validate_names(raw_names)
+    # allow_empty: this editor is how a coach removes legacy entries, and
+    # removing the last one means saving an empty list.
+    names = normalize_and_validate_names(raw_names, allow_empty=True)
 
     if quiz.roster is None:
         quiz.roster = Roster(quiz_id=quiz.id)

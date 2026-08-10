@@ -66,12 +66,22 @@ def test_csv_roster_upload_without_header(client, coach_headers):
     assert [p["player_name"] for p in players] == ["Jordan Smith", "Alex Lee"]
 
 
-def test_empty_roster_list_is_rejected(client, coach_headers):
+def test_an_empty_list_clears_the_legacy_roster(client, coach_headers):
+    """Used to be rejected. The legacy editor is removal-only in the UI now,
+    and removing the final legacy entry means saving an empty list - so an
+    empty list is a legitimate instruction, not a mistake. An empty CSV is
+    still refused, because that is a bad file rather than an intent."""
     quiz = create_quiz(client, coach_headers)
+    client.put(
+        f"/api/quizzes/{quiz['id']}/roster",
+        json={"players": ["Legacy Name"]},
+        headers=coach_headers,
+    )
 
     response = client.put(f"/api/quizzes/{quiz['id']}/roster", json={"players": []}, headers=coach_headers)
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.get_json()["players"] == []
 
 
 def test_whitespace_only_names_are_dropped(client, coach_headers):

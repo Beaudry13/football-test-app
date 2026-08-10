@@ -293,3 +293,70 @@ class TestAttemptLinkage:
         with app.app_context():
             attempt = PlayerAttempt.query.filter_by(quiz_id=quiz_id).one()
             assert attempt.player_id is None
+
+
+class TestLegacyRemoval:
+    """The legacy section is removal-only in the UI, so removal has to work -
+    including for the very last entry."""
+
+    def test_the_final_legacy_group_member_can_be_removed(self, app, client, coach_headers):
+        group_id = make_group(client, coach_headers)
+        client.put(
+            f"/api/groups/{group_id}/players",
+            json={"players": ["Old Legacy Name"]},
+            headers=coach_headers,
+        )
+
+        response = client.put(
+            f"/api/groups/{group_id}/players", json={"players": []}, headers=coach_headers
+        )
+
+        assert response.status_code == 200, response.get_json()
+        with app.app_context():
+            assert GroupPlayer.query.filter_by(group_id=group_id).count() == 0
+
+    def test_removing_legacy_names_leaves_canonical_members_alone(
+        self, app, client, coach_headers
+    ):
+        player_id = make_player(client, coach_headers, "Dre", "Vance")
+        group_id = make_group(client, coach_headers)
+        client.post(
+            f"/api/groups/{group_id}/members",
+            json={"player_ids": [player_id]},
+            headers=coach_headers,
+        )
+        client.put(
+            f"/api/groups/{group_id}/players",
+            json={"players": ["Old Legacy Name"]},
+            headers=coach_headers,
+        )
+
+        client.put(
+            f"/api/groups/{group_id}/players", json={"players": []}, headers=coach_headers
+        )
+
+        with app.app_context():
+            rows = GroupPlayer.query.filter_by(group_id=group_id).all()
+            assert [row.player_id for row in rows] == [player_id]
+
+    def test_the_final_legacy_quiz_roster_entry_can_be_removed(self, app, client, coach_headers):
+        quiz_id = make_quiz(client, coach_headers)
+        client.put(
+            f"/api/quizzes/{quiz_id}/roster",
+            json={"players": ["Old Legacy Name"]},
+            headers=coach_headers,
+        )
+
+        response = client.put(
+            f"/api/quizzes/{quiz_id}/roster", json={"players": []}, headers=coach_headers
+        )
+
+        assert response.status_code == 200, response.get_json()
+
+    def test_an_empty_csv_is_still_rejected(self, client, coach_headers):
+        # Removal is an intent; an empty file is a mistake.
+        group_id = make_group(client, coach_headers)
+
+        # Rejected by the CSV parser itself (400), before name resolution is
+        # ever reached.
+        assert upload_group_csv(client, coach_headers, group_id, "\n").status_code == 400

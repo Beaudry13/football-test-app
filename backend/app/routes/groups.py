@@ -59,7 +59,9 @@ def _replace_group_players(group: Group, raw_names: list[str]) -> Group:
     survive a save from this whole-list legacy editor, so they're excluded
     from the clear-and-rebuild rather than wiped by it.
     """
-    names = normalize_and_validate_names(raw_names)
+    # allow_empty: this editor is how a coach removes legacy entries, and
+    # removing the last one means saving an empty list.
+    names = normalize_and_validate_names(raw_names, allow_empty=True)
 
     for gp in [gp for gp in group.players if gp.player_id is None]:
         group.players.remove(gp)

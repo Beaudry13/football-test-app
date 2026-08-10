@@ -5,7 +5,9 @@ player-list saves (`app/routes/rosters.py`, `app/routes/groups.py`).
 from app.errors import ApiError
 
 
-def normalize_and_validate_names(raw_names: list[str]) -> list[str]:
+def normalize_and_validate_names(
+    raw_names: list[str], allow_empty: bool = False
+) -> list[str]:
     """Trims whitespace, drops empties, and rejects duplicate names
     (case-insensitive).
 
@@ -18,7 +20,11 @@ def normalize_and_validate_names(raw_names: list[str]) -> list[str]:
     """
     names = [name.strip() for name in raw_names]
     names = [name for name in names if name]
-    if not names:
+    if not names and not allow_empty:
+        # `allow_empty` is passed by the legacy whole-list editors, which are
+        # now removal-only in the UI: clearing the final legacy entry sends an
+        # empty list and must succeed, or that last row is permanent. An empty
+        # CSV upload still fails - that is a mistaken file, not an intent.
         raise ApiError("List must have at least one player name", status_code=422)
 
     seen_lower: set[str] = set()
