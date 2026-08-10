@@ -677,6 +677,36 @@ class TestPracticeIsInvisibleToOfficialNumbers:
         payload = by_name.get_json()
         assert len(payload["history"]) == 1
 
+    def test_the_cumulative_performance_pdf_excludes_practice(
+        self, app, client, coach_headers
+    ):
+        """The PDF a coach hands to a player or a parent.
+
+        It reuses build_player_history, so it inherits the rule - but this is
+        the artefact that leaves the building, so it is asserted against the
+        real endpoint rather than trusted to delegation.
+        """
+        graded_and_practice_history(client, coach_headers)
+
+        with app.app_context():
+            player_id = (
+                PlayerAttempt.query.filter(PlayerAttempt.player_id.isnot(None)).first().player_id
+            )
+
+        response = client.get(
+            f"/api/players/report.pdf?ids={player_id}", headers=coach_headers
+        )
+
+        assert response.status_code == 200
+        assert response.mimetype == "application/pdf"
+        # The numbers are the profile's numbers, and the profile counts one
+        # completion - so a PDF built from three attempts would disagree with
+        # the screen the coach was just looking at.
+        history = client.get(
+            f"/api/players/{player_id}/history", headers=coach_headers
+        ).get_json()
+        assert history["completed_count"] == 1
+
     def test_the_results_csv_excludes_practice(self, client, coach_headers):
         quiz, *_ = graded_and_practice_history(client, coach_headers)
 
