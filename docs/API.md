@@ -211,7 +211,7 @@ effect on play. A quiz's `folder_id` is `null` when it's uncategorized.
 
 ### `GET /api/folders`
 
-The coach's folders, ordered by name, each with a `quiz_count`.
+The coach's folders, ordered by name. No counts: a folder's quiz total depends on who is asking (Coach View counts only that coach's quizzes, Admin View counts the organization's), so it is computed client-side from already-scoped data - see frontend/src/pages/folderTotals.ts.
 
 ### `POST /api/folders`
 

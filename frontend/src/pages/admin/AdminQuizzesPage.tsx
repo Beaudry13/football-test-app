@@ -98,8 +98,8 @@ export function AdminQuizzesPage() {
           ? quiz.is_unassigned
           : quiz.owner?.id === Number(coachId));
       return byCoach && quizMatchesSearch(quiz, search);
-    });
-  }, [fullTree, coachFilter, search, searching]);
+    }, folders ?? []);
+  }, [fullTree, folders, coachFilter, search, searching]);
 
   // Any active filter reveals the path to whatever survived it, rather than
   // switching to a flat result list with breadcrumbs: the tree already

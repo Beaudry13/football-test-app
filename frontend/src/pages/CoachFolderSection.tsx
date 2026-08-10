@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from 'react';
 import type { Folder, Quiz } from '../api/types';
 import { Icon } from '../components/ui/Icon';
+import { countQuizzesInFolderTree } from './folderTotals';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
@@ -58,7 +59,12 @@ export function CoachFolderSection({
   onCreateSubfolder: (event: FormEvent, parentId: number) => void;
   renderQuizCard: (quiz: Quiz) => ReactNode;
 }) {
+  // Rendered here: this folder's OWN quizzes. Subfolders render theirs, so
+  // showing descendants again would list every quiz twice.
   const folderQuizzes = quizzes.filter((q) => q.folder_id === folder.id);
+  // Displayed in the badge: the whole tree. A folder holding four quizzes one
+  // level down read "(0)" while plainly containing them.
+  const totalInTree = countQuizzesInFolderTree(folder.id, allFolders, quizzes);
   const subfolders = allFolders.filter((f) => f.parent_folder_id === folder.id);
   const isCollapsed = collapsedIds.has(folder.id);
 
@@ -74,7 +80,7 @@ export function CoachFolderSection({
           <span className={styles.folderCollapseIcon}>
             <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={16} />
           </span>
-          {folder.name} <span className={styles.folderCount}>({folderQuizzes.length})</span>
+          {folder.name} <span className={styles.folderCount}>({totalInTree})</span>
         </button>
         <div className={styles.folderActions}>
           {renamingId === folder.id ? (
@@ -88,7 +94,13 @@ export function CoachFolderSection({
                 onKeyDown={(e) => e.key === 'Enter' && onRename(folder.id)}
                 aria-label={`Rename folder "${folder.name}"`}
               />
-              <button className={nb.btnSm} onClick={() => onRename(folder.id)}>
+              <button
+                className={nb.btnSm}
+                onClick={() => onRename(folder.id)}
+                // Without this the handler silently returns on an empty name
+                // and the coach sees a Save button that does nothing.
+                disabled={!renameValue.trim()}
+              >
                 Save
               </button>
               <button className={nb.btnSm} onClick={onCancelRename}>
@@ -100,9 +112,20 @@ export function CoachFolderSection({
               Rename
             </button>
           )}
+          {/* The API refuses to delete a folder that still has subfolders
+              (422, see routes/folders.delete_folder). Offering the button
+              anyway meant a confirmation dialog promising the quizzes would
+              move to Uncategorized, followed by an error - so it is disabled
+              here, and says why. */}
           <button
             className={`${nb.btnSm} ${nb.btnDanger}`}
             onClick={() => onDelete(folder.id, folder.name)}
+            disabled={subfolders.length > 0}
+            title={
+              subfolders.length > 0
+                ? 'Delete or empty this folder&apos;s subfolders first'
+                : undefined
+            }
           >
             Delete folder
           </button>

@@ -55,8 +55,6 @@ const sampleFolder: Folder = {
   coach_id: 1,
   name: 'Fall Camp',
   parent_folder_id: null,
-  quiz_count: 1,
-  subfolder_count: 0,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -282,8 +280,6 @@ describe('DashboardPage', () => {
     coach_id: 1,
     name: 'Week 1',
     parent_folder_id: 10,
-    quiz_count: 1,
-    subfolder_count: 0,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   };
@@ -391,7 +387,7 @@ describe('DashboardPage', () => {
     expect(await screen.findByRole('heading', { name: 'Fall Camp' })).toBeInTheDocument();
   });
 
-  it('lists a subfolder as an option (grouped under its root) in the move-quiz select', async () => {
+  it('lists a subfolder as an option in the move-quiz select', async () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
@@ -399,10 +395,30 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
+    // Selected by value, not by visible text: options are indented by depth,
+    // and a test that matches the indentation breaks every time the tree's
+    // presentation changes without the behaviour changing.
     const select = screen.getByLabelText('Move "Week 1 Prep" to folder');
-    await user.selectOptions(select, '↳ Week 1');
+    await user.selectOptions(select, '20');
 
     await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { folder_id: 20 }));
+  });
+
+  it('offers a deeply nested folder as a move destination', async () => {
+    // Before the nesting cap was lifted the picker listed roots and their
+    // direct children only, so anything three or more levels down could not
+    // be chosen at all.
+    const user = userEvent.setup();
+    const deep = { ...sampleSubfolder, id: 30, name: 'Install 1', parent_folder_id: 20 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder, deep]);
+    const updateSpy = vi.spyOn(quizzesApi, 'updateQuiz').mockResolvedValue(sampleQuiz);
+    renderDashboard();
+    await screen.findByText('Week 1 Prep');
+
+    await user.selectOptions(screen.getByLabelText('Move "Week 1 Prep" to folder'), '30');
+
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { folder_id: 30 }));
   });
 
   // --- organization sharing: see all, edit own ---------------------------

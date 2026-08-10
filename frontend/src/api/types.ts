@@ -113,8 +113,6 @@ export interface Folder {
   /** Null = root folder. Fixed at creation - there is no route to change
    * it afterward, so nesting is arbitrarily deep but can never form a cycle. */
   parent_folder_id: number | null;
-  quiz_count: number;
-  subfolder_count: number;
   created_at: string;
   updated_at: string;
 }

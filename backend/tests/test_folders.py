@@ -49,9 +49,6 @@ def test_assign_quiz_to_folder_and_back_to_uncategorized(client, coach_headers):
     assert patch_response.status_code == 200
     assert patch_response.get_json()["folder_id"] == folder["id"]
 
-    folders = client.get("/api/folders", headers=coach_headers).get_json()
-    assert next(f for f in folders if f["id"] == folder["id"])["quiz_count"] == 1
-
     back_response = client.patch(
         f"/api/quizzes/{quiz['id']}", json={"folder_id": None}, headers=coach_headers
     )
@@ -112,16 +109,17 @@ def test_create_subfolder_inside_a_root_folder(client, coach_headers):
     assert sub["parent_folder_id"] == root["id"]
 
 
-def test_listing_folders_reports_subfolder_and_quiz_counts(client, coach_headers):
+def test_listing_folders_reports_each_subfolders_parent(client, coach_headers):
+    # The listing carries the tree's SHAPE - ids and parents. It deliberately
+    # carries no counts: see Folder.to_dict for why totals are the client's
+    # job, and frontend/src/pages/folderTotals.ts for the counting rule.
     root = create_folder(client, coach_headers, name="2026 Season")
     create_folder(client, coach_headers, name="Week 1", parent_folder_id=root["id"])
     create_folder(client, coach_headers, name="Week 2", parent_folder_id=root["id"])
 
     folders = client.get("/api/folders", headers=coach_headers).get_json()
-    root_listed = next(f for f in folders if f["id"] == root["id"])
     subfolders = [f for f in folders if f["parent_folder_id"] == root["id"]]
 
-    assert root_listed["subfolder_count"] == 2
     assert {f["name"] for f in subfolders} == {"Week 1", "Week 2"}
 
 
@@ -136,10 +134,11 @@ def test_assign_quiz_directly_to_a_subfolder(client, coach_headers):
     assert response.status_code == 200
     assert response.get_json()["folder_id"] == sub["id"]
 
-    folders = client.get("/api/folders", headers=coach_headers).get_json()
-    assert next(f for f in folders if f["id"] == sub["id"])["quiz_count"] == 1
-    # It counts against the subfolder only, not its parent.
-    assert next(f for f in folders if f["id"] == root["id"])["quiz_count"] == 0
+    # There used to be a pair of assertions here stating that the quiz
+    # "counts against the subfolder only, not its parent" - which is exactly
+    # the bug a coach reported: a parent folder showing (0) while plainly
+    # containing four quizzes. The counting rule now lives in
+    # frontend/src/pages/folderTotals.ts and is tested there, recursively.
 
 
 def test_move_quiz_between_root_folder_and_subfolder(client, coach_headers):
@@ -294,9 +293,10 @@ def test_deleting_a_subfolder_does_not_affect_its_parent_or_its_quizzes(client, 
     quiz_after = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()
     assert quiz_after["folder_id"] is None
 
-    # The parent root folder is completely unaffected.
+    # The parent root folder survives, and no longer has the subfolder.
     folders = client.get("/api/folders", headers=coach_headers).get_json()
-    assert next(f for f in folders if f["id"] == root["id"])["subfolder_count"] == 0
+    assert any(f["id"] == root["id"] for f in folders)
+    assert not any(f["parent_folder_id"] == root["id"] for f in folders)
 
 
 def test_deleting_a_root_folder_with_subfolders_is_blocked(client, coach_headers):
@@ -329,4 +329,3 @@ def test_existing_flat_folders_are_unaffected_by_nesting(client, coach_headers):
     assert response.status_code == 201
     body = response.get_json()
     assert body["parent_folder_id"] is None
-    assert body["subfolder_count"] == 0

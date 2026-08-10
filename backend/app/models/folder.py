@@ -53,8 +53,14 @@ class Folder(TimestampMixin, db.Model):
             "coach_id": self.coach_id,
             "name": self.name,
             "parent_folder_id": self.parent_folder_id,
-            "quiz_count": len(self.quizzes),
-            "subfolder_count": len(self.subfolders),
+            # No quiz_count/subfolder_count here on purpose. They used to be
+            # serialised and were read by nothing: both counted DIRECT
+            # children only, and quiz_count counted the whole organization's
+            # quizzes rather than the requesting coach's - so wiring either
+            # into Coach View would have reported a teammate's work. Folder
+            # totals are computed client-side from data already scoped for
+            # the viewer (frontend/src/pages/folderTotals.ts), which is the
+            # only place that can know whose quizzes are being counted.
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

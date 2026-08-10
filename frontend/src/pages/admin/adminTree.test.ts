@@ -17,8 +17,6 @@ function folder(id: number, name: string, parent: number | null = null): Folder 
     coach_id: 1,
     name,
     parent_folder_id: parent,
-    quiz_count: 0,
-    subfolder_count: 0,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   } as Folder;
@@ -180,7 +178,7 @@ describe('filterTree', () => {
       quiz(1, "Smith's Quiz", 3, smith),
       quiz(2, "Jones's Quiz", 4, jones),
     ]);
-    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id);
+    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id, structure);
 
     expect(filtered.map((n) => n.name)).toEqual(['2026 Season']);
     expect(find(filtered, 'Week 3')).toBeTruthy();
@@ -192,13 +190,13 @@ describe('filterTree', () => {
       quiz(1, "Smith's Quiz", 3, smith),
       quiz(2, "Jones's Quiz", 4, jones),
     ]);
-    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id);
+    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id, structure);
     expect(tryFind(filtered, 'Week 1')).toBeNull();
   });
 
   it('does not flatten the tree just because a filter is active', () => {
     const tree = buildTree(structure, [quiz(1, "Smith's Quiz", 3, smith)]);
-    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id);
+    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id, structure);
     // Still 2026 Season > Week 3 > Redzone, not a flat list of one quiz.
     expect(filtered[0].children[0].children[0].name).toBe('Redzone');
   });
@@ -209,7 +207,7 @@ describe('filterTree', () => {
       quiz(2, "Smith's B", 4, smith),
       quiz(3, "Jones's", 4, jones),
     ]);
-    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id);
+    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id, structure);
     // 2 of Smith's, not the 3 that exist - a stale count would misrepresent
     // the filter.
     expect(find(filtered, '2026 Season').totalQuizzes).toBe(2);
@@ -217,13 +215,13 @@ describe('filterTree', () => {
 
   it('keeps Uncategorized when the match lives there', () => {
     const tree = buildTree(structure, [quiz(1, "Smith's Loose Quiz", null, smith)]);
-    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id);
+    const filtered = filterTree(tree, (q) => q.owner?.id === smith.id, structure);
     expect(filtered.map((n) => n.name)).toEqual([UNCATEGORISED_NAME]);
   });
 
   it('returns nothing when a coach owns nothing', () => {
     const tree = buildTree(structure, [quiz(1, "Jones's", 4, jones)]);
-    expect(filterTree(tree, (q) => q.owner?.id === smith.id)).toEqual([]);
+    expect(filterTree(tree, (q) => q.owner?.id === smith.id, structure)).toEqual([]);
   });
 
   it('filters to unassigned quizzes wherever they live', () => {
@@ -231,7 +229,7 @@ describe('filterTree', () => {
       quiz(1, 'Nobody owns me', 3, null),
       quiz(2, "Jones's", 4, jones),
     ]);
-    const filtered = filterTree(tree, (q) => q.is_unassigned);
+    const filtered = filterTree(tree, (q) => q.is_unassigned, structure);
     expect(find(filtered, 'Redzone').quizzes.map((q) => q.title)).toEqual(['Nobody owns me']);
     expect(tryFind(filtered, 'Week 1')).toBeNull();
   });

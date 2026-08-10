@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 import type { Coach, Folder, Quiz } from '../api/types';
 import { Icon } from './ui/Icon';
+import { folderTreeOrder } from '../pages/folderTotals';
 import nb from '../styles/notebook.module.css';
 import styles from '../pages/DashboardPage.module.css';
 
 interface QuizCardProps {
   quiz: Quiz;
   coach: Coach | null;
-  /** All folders in the org (root + subfolders) - used to build the move
-   * dropdown's options, grouped under each root. */
+  /** All folders in the org, at any depth - used to build the move
+   * dropdown, which lists the whole tree indented by level. */
   folders: Folder[] | null;
   onMoveToFolder: (quizId: number, folderId: number | null) => void;
   onDuplicate: (quizId: number) => void;
@@ -27,8 +28,9 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
   const canEdit = coach != null && (quiz.coach_id === coach.id || coach.role === 'admin');
   const isTeammates = coach != null && quiz.coach_id !== coach.id;
 
-  const rootFolders = folders?.filter((f) => f.parent_folder_id === null) ?? [];
-  const subfoldersOf = (rootId: number) => folders?.filter((f) => f.parent_folder_id === rootId) ?? [];
+  // The WHOLE tree, indented - not roots plus their direct children. A
+  // folder five levels deep is a perfectly ordinary place to file a quiz.
+  const folderOptions = folderTreeOrder(folders ?? []);
 
   return (
     <div className={`${nb.card} ${nb.cardHoverable} ${styles.quizCard}`}>
@@ -67,7 +69,7 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
         )}
       </Link>
       <div className={styles.actions}>
-        {canEdit && rootFolders.length > 0 && (
+        {canEdit && folderOptions.length > 0 && (
           <select
             className={styles.folderSelect}
             value={quiz.folder_id ?? ''}
@@ -75,15 +77,14 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
             aria-label={`Move "${quiz.title}" to folder`}
           >
             <option value="">Uncategorized</option>
-            {rootFolders.map((root) => (
-              <optgroup key={root.id} label={root.name}>
-                <option value={root.id}>{root.name}</option>
-                {subfoldersOf(root.id).map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    ↳ {sub.name}
-                  </option>
-                ))}
-              </optgroup>
+            {folderOptions.map(({ folder, depth }) => (
+              <option key={folder.id} value={folder.id}>
+                {/* Non-breaking spaces: a <select> collapses ordinary ones,
+                    so plain indentation would render flat. */}
+                {'  '.repeat(depth)}
+                {depth > 0 ? '↳ ' : ''}
+                {folder.name}
+              </option>
             ))}
           </select>
         )}

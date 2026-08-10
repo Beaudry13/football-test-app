@@ -38,8 +38,6 @@ const root: Folder = {
   coach_id: 1,
   name: '2026 Season',
   parent_folder_id: null,
-  quiz_count: 0,
-  subfolder_count: 1,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -50,8 +48,6 @@ const subfolder: Folder = {
   coach_id: 1,
   name: 'Week 1',
   parent_folder_id: 10,
-  quiz_count: 1,
-  subfolder_count: 0,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -117,7 +113,7 @@ describe('FolderPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     renderAtFolder(20);
 
-    expect(await screen.findByText('No Quizzes in this folder yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No Quizzes directly in this folder yet.')).toBeInTheDocument();
   });
 
   it('renames a subfolder', async () => {

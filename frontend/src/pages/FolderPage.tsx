@@ -8,6 +8,7 @@ import type { Folder, Quiz } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { QuizCard } from '../components/QuizCard';
+import { countQuizzesInFolderTree } from './folderTotals';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
 import nb from '../styles/notebook.module.css';
@@ -246,7 +247,12 @@ export function FolderPage() {
     );
   }
 
+  // Listed below: this folder's own quizzes, because its subfolders are
+  // rendered underneath and list theirs.
   const folderQuizzes = quizzes.filter((q) => q.folder_id === folder.id);
+  // The count in the header covers the whole tree, matching the dashboard and
+  // Admin View - see pages/folderTotals.
+  const totalInTree = countQuizzesInFolderTree(folder.id, folders ?? [], quizzes);
   const subfolders = folders.filter((f) => f.parent_folder_id === folder.id);
 
   function renderQuizCard(quiz: Quiz) {
@@ -319,7 +325,7 @@ export function FolderPage() {
         <div className={dashboardStyles.contentHeader}>
           <h1 className={nb.heading}>{folder.name}</h1>
           <span className={nb.countBadge}>
-            {folderQuizzes.length} Quiz{folderQuizzes.length === 1 ? '' : 'zes'}
+            {totalInTree} Quiz{totalInTree === 1 ? '' : 'zes'}
           </span>
         </div>
 
@@ -391,7 +397,7 @@ export function FolderPage() {
         </form>
 
         {folderQuizzes.length === 0 ? (
-          <EmptyState message="No Quizzes in this folder yet." />
+          <EmptyState message="No Quizzes directly in this folder yet." />
         ) : (
           <div className={dashboardStyles.list}>{folderQuizzes.map(renderQuizCard)}</div>
         )}

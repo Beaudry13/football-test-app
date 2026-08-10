@@ -1,5 +1,6 @@
 import type { OrganizationQuiz } from '../../api/organizations';
 import type { Folder } from '../../api/types';
+import { countQuizzesInFolderTree, countSubfoldersInTree } from '../folderTotals';
 
 /** A node in Admin View's folder tree. Recursive with no depth limit.
  *
@@ -31,11 +32,24 @@ export interface FolderNode {
 export const UNCATEGORISED_ID = null;
 export const UNCATEGORISED_NAME = 'Uncategorized';
 
-function collectSummary(node: FolderNode): FolderNode {
-  // Depth-first, so a parent's totals are computed from children that already
-  // know their own. Recursion rather than a loop because the shape is a tree
-  // of unknown depth and this is the one place that matters.
-  node.children = node.children.map(collectSummary);
+/** Fills in each node's summary numbers.
+ *
+ * The quiz and subfolder totals come from pages/folderTotals - the SAME
+ * helper Coach View and FolderPage use - rather than a second recursion here.
+ * Admin View aggregated correctly on its own for months while Coach View
+ * counted direct children only, and the two quietly disagreed about the same
+ * folder. One implementation is the only way that stays fixed.
+ *
+ * `coachCount` keeps its own walk: it is a distinct-owner count over the
+ * quizzes already attached to the tree, which is not folder-tree arithmetic
+ * and has no second implementation to drift from.
+ */
+function collectSummary(
+  node: FolderNode,
+  folders: Folder[],
+  quizzes: OrganizationQuiz[],
+): FolderNode {
+  node.children = node.children.map((child) => collectSummary(child, folders, quizzes));
 
   const ownerIds = new Set<number | 'unassigned'>();
   const walk = (n: FolderNode) => {
@@ -44,10 +58,14 @@ function collectSummary(node: FolderNode): FolderNode {
   };
   walk(node);
 
+  // The Uncategorized node is virtual: it has no folder row and can have no
+  // descendants, so its own quizzes ARE its total.
   node.totalQuizzes =
-    node.quizzes.length + node.children.reduce((sum, child) => sum + child.totalQuizzes, 0);
+    node.id === UNCATEGORISED_ID
+      ? node.quizzes.length
+      : countQuizzesInFolderTree(node.id, folders, quizzes);
   node.totalSubfolders =
-    node.children.length + node.children.reduce((sum, child) => sum + child.totalSubfolders, 0);
+    node.id === UNCATEGORISED_ID ? 0 : countSubfoldersInTree(node.id, folders);
   node.coachCount = ownerIds.size;
   return node;
 }
@@ -100,21 +118,25 @@ export function buildTree(folders: Folder[], quizzes: OrganizationQuiz[]): Folde
   };
   roots.forEach((root) => stamp(root, []));
 
-  const tree = roots.map(collectSummary);
+  const tree = roots.map((root) => collectSummary(root, folders, quizzes));
   sortTree(tree);
 
   if (uncategorised.length > 0) {
     tree.push(
-      collectSummary({
-        id: UNCATEGORISED_ID,
-        name: UNCATEGORISED_NAME,
-        children: [],
-        quizzes: uncategorised,
-        totalQuizzes: 0,
-        totalSubfolders: 0,
-        coachCount: 0,
-        path: [],
-      }),
+      collectSummary(
+        {
+          id: UNCATEGORISED_ID,
+          name: UNCATEGORISED_NAME,
+          children: [],
+          quizzes: uncategorised,
+          totalQuizzes: 0,
+          totalSubfolders: 0,
+          coachCount: 0,
+          path: [],
+        },
+        folders,
+        quizzes,
+      ),
     );
   }
   return tree;
@@ -140,20 +162,41 @@ function sortTree(nodes: FolderNode[]): void {
 export function filterTree(
   nodes: FolderNode[],
   matches: (quiz: OrganizationQuiz) => boolean,
+  folders: Folder[],
 ): FolderNode[] {
-  const filtered: FolderNode[] = [];
+  const pruned = pruneTree(nodes, matches);
+  // Totals are recomputed against the quizzes that SURVIVED the filter, not
+  // the organization's full list - filtering to one coach must show that
+  // coach's totals. Same helper, different input; that is the whole point of
+  // the helper taking its quizzes as an argument.
+  const surviving = flattenQuizzes(pruned);
+  return pruned.map((node) => collectSummary(node, folders, surviving));
+}
+
+/** Shape only: drops nodes with no match anywhere beneath them. Totals are
+ *  left stale here and refilled by the caller, so there is no second place
+ *  computing them. */
+function pruneTree(
+  nodes: FolderNode[],
+  matches: (quiz: OrganizationQuiz) => boolean,
+): FolderNode[] {
+  const kept: FolderNode[] = [];
 
   for (const node of nodes) {
-    const children = filterTree(node.children, matches);
+    const children = pruneTree(node.children, matches);
     const quizzes = node.quizzes.filter(matches);
     // Kept when it holds a match itself, or when something below it does -
     // the second half is what preserves the ancestor path.
     if (children.length > 0 || quizzes.length > 0) {
-      filtered.push(collectSummary({ ...node, children, quizzes }));
+      kept.push({ ...node, children, quizzes });
     }
   }
 
-  return filtered;
+  return kept;
+}
+
+function flattenQuizzes(nodes: FolderNode[]): OrganizationQuiz[] {
+  return nodes.flatMap((node) => [...node.quizzes, ...flattenQuizzes(node.children)]);
 }
 
 /** Every folder id in the tree - what search uses to reveal matching paths.
