@@ -289,3 +289,143 @@ describe('DocumentPage tap-to-select authoring', () => {
     );
   });
 });
+
+describe('DocumentPage undo after redo', () => {
+  const quiz = { id: 7, title: 'Install 1' };
+  const page1 = makePage(1, { has_full_render: true, image_url: '/api/media/v1.page1.sig' });
+  const runs = [{ text: 'COVER 3', x: 0.4, y: 0.2, width: 0.08, height: 0.015 }];
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800,
+      toJSON: () => ({}),
+    } as DOMRect);
+  });
+
+  it('undoes the question redo actually re-created, not the original id', async () => {
+    // THE bug: redo creates a NEW server row, but the history entry's undo
+    // closed over the id from the FIRST creation. Undo then asked the server
+    // to delete a row that no longer existed - a 404 banner, and the
+    // re-created question left sitting in the coach's quiz.
+    vi.spyOn(documentsApi, 'getDocument').mockResolvedValue({ ...sampleDocument, pages: [page1] });
+    vi.spyOn(documentsApi, 'getDocumentPage').mockResolvedValue(page1);
+    vi.spyOn(documentsApi, 'getPageTextRuns').mockResolvedValue(runs);
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([quiz] as never);
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({ ...quiz, questions: [] } as never);
+
+    const region = { document_page_id: 101, x: 0.4, y: 0.2, width: 0.08, height: 0.015 };
+    const create = vi
+      .spyOn(questionsApi, 'createRegionQuestion')
+      .mockResolvedValueOnce({ id: 55, question_text: 'Q', expected_answers: ['COVER 3'], region } as never)
+      .mockResolvedValueOnce({ id: 77, question_text: 'Q', expected_answers: ['COVER 3'], region } as never);
+    const remove = vi.spyOn(questionsApi, 'deleteQuestion').mockResolvedValue(undefined as never);
+
+    render(
+      <MemoryRouter initialEntries={['/documents/3']}>
+        <Routes>
+          <Route path="/documents/:documentId" element={<DocumentPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const image = await screen.findByAltText('CROWN, page 1');
+    const surface = image.parentElement as HTMLElement;
+    surface.setPointerCapture = vi.fn();
+    await userEvent.selectOptions(screen.getByLabelText('Add questions to'), '7');
+
+    const opts = { bubbles: true, button: 0, pointerId: 1 };
+    const at = { clientX: 440, clientY: 165 };
+    surface.dispatchEvent(new PointerEvent('pointerdown', { ...opts, ...at }));
+    surface.dispatchEvent(new PointerEvent('pointerup', { ...opts, ...at }));
+
+    await screen.findByLabelText('Accepted answers');
+    await userEvent.type(screen.getByLabelText('Question'), 'Q');
+    await userEvent.click(screen.getByRole('button', { name: 'Save question' }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+
+    // Undo, then redo (which creates id 77), then undo again.
+    await userEvent.keyboard('{Control>}z{/Control}');
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(7, 55));
+
+    await userEvent.keyboard('{Control>}{Shift>}z{/Shift}{/Control}');
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+
+    await userEvent.keyboard('{Control>}z{/Control}');
+
+    // The second undo must remove 77 - the row that actually exists.
+    await waitFor(() => expect(remove).toHaveBeenLastCalledWith(7, 77));
+  });
+});
+
+describe('DocumentPage delete history with identical questions', () => {
+  const quiz = { id: 7, title: 'Install 1' };
+  const page1 = makePage(1, { has_full_render: true, image_url: '/api/media/v1.page1.sig' });
+
+  /** Two questions that are indistinguishable by content: same rectangle,
+   *  same wording. Matching on region.x or question_text cannot tell them
+   *  apart - only their ids can. */
+  const SAME_REGION = { document_page_id: 101, x: 0.4, y: 0.2, width: 0.08, height: 0.015 };
+  const twin = (id: number) => ({
+    id,
+    question_text: 'Name the coverage',
+    expected_answers: ['COVER 3'],
+    region: SAME_REGION,
+  });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800,
+      toJSON: () => ({}),
+    } as DOMRect);
+  });
+
+  it('delete, undo and redo touch only the intended twin', async () => {
+    vi.spyOn(documentsApi, 'getDocument').mockResolvedValue({ ...sampleDocument, pages: [page1] });
+    vi.spyOn(documentsApi, 'getDocumentPage').mockResolvedValue(page1);
+    vi.spyOn(documentsApi, 'getPageTextRuns').mockResolvedValue([]);
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([quiz] as never);
+    // The quiz already holds both twins.
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({
+      ...quiz,
+      questions: [twin(55), twin(56)],
+    } as never);
+
+    const remove = vi.spyOn(questionsApi, 'deleteQuestion').mockResolvedValue(undefined as never);
+    // Undo re-creates the deleted twin, and the server issues a NEW id.
+    const create = vi
+      .spyOn(questionsApi, 'createRegionQuestion')
+      .mockResolvedValue(twin(90) as never);
+
+    render(
+      <MemoryRouter initialEntries={['/documents/3']}>
+        <Routes>
+          <Route path="/documents/:documentId" element={<DocumentPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await screen.findByAltText('CROWN, page 1');
+    await userEvent.selectOptions(screen.getByLabelText('Add questions to'), '7');
+
+    // Select the SECOND twin and delete it. The two are indistinguishable
+    // by content in the list - which is the whole point - so it is picked by
+    // position here and identified by id everywhere that matters.
+    const items = await screen.findAllByRole('button', { name: /COVER 3/ });
+    expect(items).toHaveLength(2);
+    await userEvent.click(items[1]);
+    await userEvent.keyboard('{Delete}');
+    await waitFor(() => expect(remove).toHaveBeenCalledWith(7, 56));
+
+    // Undo re-creates it as id 90.
+    await userEvent.keyboard('{Control>}z{/Control}');
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+
+    // Redo must delete 90 - the row undo actually made - and must never
+    // touch 55, the twin that was never part of this history entry.
+    await userEvent.keyboard('{Control>}{Shift>}z{/Shift}{/Control}');
+    await waitFor(() => expect(remove).toHaveBeenLastCalledWith(7, 90));
+    expect(remove).not.toHaveBeenCalledWith(7, 55);
+  });
+});

@@ -61,7 +61,14 @@ export function DocumentsPage() {
     try {
       await confirm({
         title: 'Delete playbook?',
-        body: `"${document.title}" and its rendered pages will be permanently removed.`,
+        // Does not promise success. The API refuses to delete a playbook any
+        // quiz question was built from, and names those quizzes - but the
+        // list payload carries no usage signal, so the button cannot know in
+        // advance. Better to say the condition than to assert an outcome and
+        // then fail.
+        body:
+          `"${document.title}" and its rendered pages will be permanently removed. ` +
+          `A playbook that a quiz question was built from cannot be deleted.`,
         confirmLabel: 'Delete Playbook',
         action: async () => {
           await deleteDocument(document.id);

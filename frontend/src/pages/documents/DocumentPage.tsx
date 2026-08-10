@@ -190,11 +190,17 @@ export function DocumentPage() {
       setDraft(null);
       flash(`Added "${input.expected_answers[0]}"`);
 
+      // The id undo must delete changes when redo re-creates the question:
+      // the server issues a NEW row, so a closure fixed to the first id would
+      // ask the server to delete something that no longer exists. That failed
+      // silently in the worst way - a 404 banner, and the re-created question
+      // left sitting in the coach's quiz after they pressed undo.
+      let liveId = created.id;
       history.push({
         label: 'Add question',
         undo: async () => {
-          await deleteQuestion(targetQuizId, created.id);
-          setQuestions((current) => current.filter((q) => q.id !== created.id));
+          await deleteQuestion(targetQuizId, liveId);
+          setQuestions((current) => current.filter((q) => q.id !== liveId));
         },
         redo: async () => {
           const again = await createRegionQuestion(targetQuizId, {
@@ -203,6 +209,7 @@ export function DocumentPage() {
             expected_answers: input.expected_answers,
             region: draft.rect,
           });
+          liveId = again.id;
           setQuestions((current) => [...current, again]);
         },
       });
@@ -256,29 +263,36 @@ export function DocumentPage() {
         width: question.region!.width,
         height: question.region!.height,
       };
-      const restore = async () => {
-        const again = await createRegionQuestion(targetQuizId, {
-          document_page_id: openPage.id,
-          question_text: question.question_text,
-          expected_answers: question.expected_answers ?? [],
-          region: rect,
-        });
-        setQuestions((current) => [...current, again]);
-      };
+      // The live row this entry acts on. Null while the question is
+      // deleted; set to the NEW id each time undo re-creates it.
+      //
+      // Redo used to re-fetch the quiz and find the row by matching
+      // region.x and question_text. That is identity inferred from content,
+      // and it is wrong twice over: two questions can legitimately share
+      // both (duplicate a question, then drag it back), and the match would
+      // then delete whichever the server happened to list first. A row the
+      // server created has a real id - this tracks it.
+      let liveId: number | null = null;
       history.push({
         label: 'Delete question',
         // Undo re-creates rather than restoring: the row is gone from the
         // server, so there is nothing to put back - only something to remake.
-        undo: restore,
+        undo: async () => {
+          const again = await createRegionQuestion(targetQuizId, {
+            document_page_id: openPage.id,
+            question_text: question.question_text,
+            expected_answers: question.expected_answers ?? [],
+            region: rect,
+          });
+          liveId = again.id;
+          setQuestions((current) => [...current, again]);
+        },
         redo: async () => {
-          const latest = await getQuiz(targetQuizId);
-          const match = (latest.questions ?? []).find(
-            (q) => q.region?.x === rect.x && q.question_text === question.question_text,
-          );
-          if (match) {
-            await deleteQuestion(targetQuizId, match.id);
-            setQuestions((current) => current.filter((q) => q.id !== match.id));
-          }
+          if (liveId === null) return;
+          const doomed = liveId;
+          await deleteQuestion(targetQuizId, doomed);
+          setQuestions((current) => current.filter((q) => q.id !== doomed));
+          liveId = null;
         },
       });
     } catch (err) {
@@ -310,11 +324,17 @@ export function DocumentPage() {
       setQuestions((current) => [...current, created]);
       setSelectedId(created.id);
       flash('Duplicated');
+      // The id undo must delete changes when redo re-creates the question:
+      // the server issues a NEW row, so a closure fixed to the first id would
+      // ask the server to delete something that no longer exists. That failed
+      // silently in the worst way - a 404 banner, and the re-created question
+      // left sitting in the coach's quiz after they pressed undo.
+      let liveId = created.id;
       history.push({
         label: 'Duplicate question',
         undo: async () => {
-          await deleteQuestion(targetQuizId, created.id);
-          setQuestions((current) => current.filter((q) => q.id !== created.id));
+          await deleteQuestion(targetQuizId, liveId);
+          setQuestions((current) => current.filter((q) => q.id !== liveId));
         },
         redo: async () => {
           const again = await createRegionQuestion(targetQuizId, {
@@ -323,6 +343,7 @@ export function DocumentPage() {
             expected_answers: question.expected_answers ?? [],
             region: rect,
           });
+          liveId = again.id;
           setQuestions((current) => [...current, again]);
         },
       });
