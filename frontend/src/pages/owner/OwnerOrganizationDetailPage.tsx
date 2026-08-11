@@ -50,6 +50,15 @@ export function OwnerOrganizationDetailPage() {
 
       <div className={styles.detailHead}>
         <h2 className={styles.detailName}>{detail.name}</h2>
+        {/* The destination is the organization you are looking at; the source
+            is chosen on the next screen. Direction is never inferred. */}
+        <Link
+          className={styles.toggle}
+          to={`/owner/organizations/${detail.id}/merge`}
+          style={{ float: 'right', textDecoration: 'none' }}
+        >
+          Merge organization
+        </Link>
         <div className={styles.detailMeta}>
           <span>
             Created <strong title={exactTime(detail.created_at)}>{shortDate(detail.created_at)}</strong>

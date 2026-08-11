@@ -599,3 +599,73 @@ export interface ApiErrorBody {
    * branch on the specific failure rather than just relay `error`. */
   reason?: string;
 }
+
+// --- Organization merge --------------------------------------------------
+// Owner-only. Preview writes nothing; execute is the single destructive
+// operation in the owner area. See backend/app/services/organization_merge.py.
+
+export interface MergeOrganizationCounts {
+  coaches: number;
+  players: number;
+  quizzes: number;
+  groups: number;
+  folders: number;
+  playbooks: number;
+  invitations: number;
+  questions: number;
+  access_codes: number;
+  graded_attempts: number;
+  practice_attempts: number;
+  answers: number;
+  answer_drawings: number;
+  document_pages: number;
+}
+
+export interface MergeCoachPlan {
+  coach_id: number;
+  username: string;
+  email: string;
+  current_role: string;
+  /** MEMBER unless the operator explicitly chose otherwise. */
+  new_role: 'ADMIN' | 'MEMBER';
+  is_platform_owner: boolean;
+  /** True when this coach is currently an ADMIN, so a decision is required. */
+  requires_decision: boolean;
+  /** True when the chosen role grants Admin View over the destination. */
+  widens_access: boolean;
+}
+
+export interface MergeDuplicatePlayer {
+  normalized_name: string;
+  source_player_ids: number[];
+  destination_player_ids: number[];
+}
+
+export interface MergePreview {
+  source: { id: number; name: string; counts: MergeOrganizationCounts };
+  destination: { id: number; name: string; counts: MergeOrganizationCounts };
+  coaches: MergeCoachPlan[];
+  possible_duplicate_players: MergeDuplicatePlayer[];
+  name_collisions: { type: string; name: string }[];
+  invitations_to_revoke: number;
+  resulting_destination_counts: MergeOrganizationCounts;
+  warnings: string[];
+  blockers: string[];
+  requires_acknowledgement: {
+    collisions: boolean;
+    duplicate_players: boolean;
+    coach_roles: number[];
+  };
+  /** Must be handed back to execute; the server refuses if either
+   *  organization changed since the preview was generated. */
+  fingerprint: string;
+}
+
+export interface MergeResult {
+  merged: boolean;
+  audit_id: number;
+  source: { id: number; name: string };
+  destination: { id: number; name: string };
+  counts_moved: Record<string, number>;
+  invitations_revoked: number;
+}

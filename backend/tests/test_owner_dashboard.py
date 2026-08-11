@@ -200,15 +200,29 @@ class TestPermissionMatrix:
                     "so the blueprint's before_request gate does not protect it"
                 )
 
-    def test_owner_routes_are_read_only(self, app):
-        """V1 is read-only. A mutating verb appearing here is a design change,
-        not an oversight, and should fail until it is a decision."""
+    #: The ONLY owner endpoints allowed to accept a mutating verb. Organization
+    #: merge is a deliberate exception to the read-only rule: preview is a POST
+    #: because it carries a body and writes nothing, execute is the one
+    #: destructive owner operation. Pinned here so a THIRD mutating route
+    #: cannot appear without someone changing this list on purpose.
+    MUTATING_ALLOWLIST = {"/api/owner/merges/preview", "/api/owner/merges/execute"}
+
+    def test_no_unexpected_mutating_owner_route_exists(self, app):
         with app.app_context():
             for rule in app.url_map.iter_rules():
                 if not rule.rule.startswith("/api/owner"):
                     continue
                 mutating = rule.methods & {"POST", "PUT", "PATCH", "DELETE"}
-                assert not mutating, f"{rule.rule} exposes {mutating}"
+                if mutating and rule.rule not in self.MUTATING_ALLOWLIST:
+                    raise AssertionError(f"{rule.rule} exposes {mutating} and is not allow-listed")
+
+    def test_the_allowlisted_merge_routes_actually_exist(self, app):
+        """Keeps the allow-list honest: if a merge route is renamed or
+        removed, this fails rather than leaving a permanent blanket exemption
+        for a path nothing serves."""
+        with app.app_context():
+            existing = {rule.rule for rule in app.url_map.iter_rules()}
+            assert self.MUTATING_ALLOWLIST <= existing
 
 
 # ---------------------------------------------------------------------------

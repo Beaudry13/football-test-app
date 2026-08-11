@@ -1,5 +1,7 @@
 import { api } from './client';
 import type {
+  MergePreview,
+  MergeResult,
   OwnerCoachRow,
   OwnerOrganizationDetail,
   OwnerOrganizationRow,
@@ -59,4 +61,27 @@ export function listOwnerCoaches(
   if (query.filter) params.set('filter', query.filter);
   const suffix = params.toString() ? `?${params}` : '';
   return api.get<{ coaches: OwnerCoachRow[]; count: number }>(`/owner/coaches${suffix}`);
+}
+
+export interface MergeRequest {
+  source_organization_id: number;
+  destination_organization_id: number;
+  coach_roles?: Record<string, 'ADMIN' | 'MEMBER'>;
+}
+
+/** Writes nothing. A POST only because it carries a body. */
+export function previewMerge(body: MergeRequest): Promise<MergePreview> {
+  return api.post<MergePreview>('/owner/merges/preview', body);
+}
+
+/** The one destructive owner operation. `fingerprint` comes from a preview -
+ *  the server refuses if either organization changed since. */
+export function executeMerge(
+  body: MergeRequest & {
+    fingerprint: string;
+    acknowledge_collisions: boolean;
+    acknowledge_duplicate_players: boolean;
+  },
+): Promise<MergeResult> {
+  return api.post<MergeResult>('/owner/merges/execute', body);
 }

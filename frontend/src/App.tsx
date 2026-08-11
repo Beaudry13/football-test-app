@@ -25,6 +25,7 @@ import { OwnerOverviewPage } from './pages/owner/OwnerOverviewPage';
 import { OwnerOrganizationsPage } from './pages/owner/OwnerOrganizationsPage';
 import { OwnerOrganizationDetailPage } from './pages/owner/OwnerOrganizationDetailPage';
 import { OwnerCoachesPage } from './pages/owner/OwnerCoachesPage';
+import { OwnerMergePage } from './pages/owner/OwnerMergePage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { DocumentPage } from './pages/documents/DocumentPage';
 import { PlayPage } from './pages/play/PlayPage';
@@ -74,6 +75,10 @@ function App() {
                 <Route
                   path="organizations/:organizationId"
                   element={<OwnerOrganizationDetailPage />}
+                />
+                <Route
+                  path="organizations/:organizationId/merge"
+                  element={<OwnerMergePage />}
                 />
                 <Route path="coaches" element={<OwnerCoachesPage />} />
               </Route>

@@ -16,9 +16,12 @@ walks the url_map and fails if any /api/owner rule escapes the gate.
 
 Non-owners get 404, not 403 - see require_platform_owner for why.
 
-READ-ONLY, AND CONTENT-FREE
----------------------------
-Every route is a GET. Payloads come from services/platform_metrics.py, which
+ALMOST ENTIRELY READ-ONLY, AND CONTENT-FREE
+--------------------------------------------
+Every route is a GET except the two merge endpoints. `/merges/preview` is a
+POST only because it takes a body; it writes nothing. `/merges/execute` is the
+one deliberately destructive operation in the owner area, and a guard test
+pins that list so a third mutating route cannot appear by accident. Payloads come from services/platform_metrics.py, which
 selects aggregates and account metadata and never serializes a content model:
 no quiz titles, questions, answers, explanations, drawings, playbook
 filenames or player names. The dashboard answers who is using Peira and how
@@ -29,9 +32,11 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import verify_jwt_in_request
 
 from app.errors import ApiError
+from app.schemas.owner import MergeExecuteSchema, MergePreviewSchema
+from app.utils.validation import load_json_body
 from app.extensions import db
 from app.models import Organization
-from app.services import platform_metrics
+from app.services import organization_merge, platform_metrics
 from app.utils.auth import require_platform_owner
 
 owner_bp = Blueprint("owner", __name__)
@@ -136,3 +141,57 @@ def coaches():
         rows = [row for row in rows if row["last_attributed_activity"] is None]
 
     return jsonify({"coaches": rows, "count": len(rows)})
+
+
+# ---------------------------------------------------------------------------
+# Organization merge
+#
+# The only mutating capability in the owner area, and deliberately two steps:
+# a preview that writes nothing, then an execution that re-verifies the
+# preview still describes reality. See services/organization_merge.py.
+# ---------------------------------------------------------------------------
+
+
+@owner_bp.post("/merges/preview")
+def merge_preview():
+    """What WOULD happen. Writes nothing.
+
+    A POST purely because it carries a body - there is no state change here,
+    and a test asserts the database is byte-identical across a preview.
+    """
+    data = load_json_body(MergePreviewSchema())
+    try:
+        return jsonify(
+            organization_merge.preview(
+                data["source_organization_id"],
+                data["destination_organization_id"],
+                data.get("coach_roles"),
+            )
+        )
+    except organization_merge.MergeRefused as refused:
+        raise ApiError(str(refused), status_code=422, reason="merge_refused") from refused
+
+
+@owner_bp.post("/merges/execute")
+def merge_execute():
+    """Perform the merge. One transaction, or nothing at all.
+
+    Requires the fingerprint from a preview: if either organization changed in
+    the meantime the merge is refused and a fresh preview must be reviewed,
+    because the operator approved a picture that no longer matches reality.
+    """
+    coach = require_platform_owner()
+    data = load_json_body(MergeExecuteSchema())
+    try:
+        result = organization_merge.execute(
+            data["source_organization_id"],
+            data["destination_organization_id"],
+            expected_fingerprint=data["fingerprint"],
+            performed_by=coach,
+            decisions=data.get("coach_roles"),
+            acknowledge_collisions=data["acknowledge_collisions"],
+            acknowledge_duplicate_players=data["acknowledge_duplicate_players"],
+        )
+    except organization_merge.MergeRefused as refused:
+        raise ApiError(str(refused), status_code=422, reason="merge_refused") from refused
+    return jsonify(result), 200

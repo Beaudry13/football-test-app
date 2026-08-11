@@ -16,6 +16,7 @@ from app.models.source_document import SourceDocument
 from app.models.document_page import DocumentPage
 from app.models.response import Answer, AttemptStatus, PlayerAttempt
 from app.models.grade_audit_log import GradeAuditLog
+from app.models.organization_merge import OrganizationMerge
 
 __all__ = [
     "Organization",
@@ -41,6 +42,7 @@ __all__ = [
     "Answer",
     "AnswerDrawing",
     "GradeAuditLog",
+    "OrganizationMerge",
     "SourceDocument",
     "DocumentPage",
 ]
