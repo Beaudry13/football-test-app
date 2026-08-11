@@ -42,7 +42,13 @@ export function OwnerMergePage() {
   const [organizations, setOrganizations] = useState<OwnerOrganizationRow[] | null>(null);
   const [sourceId, setSourceId] = useState<number | null>(null);
   const [preview, setPreview] = useState<MergePreview | null>(null);
-  const [roles, setRoles] = useState<Record<number, 'ADMIN' | 'MEMBER'>>({});
+  // The operator's DECISIONS, not the server's computed roles. `undefined`
+  // means "not yet decided", which is a state the server's payload cannot
+  // express - it always reports a concrete new_role, defaulting to MEMBER.
+  // Binding the control to that value was the bug: it made "defaulted to
+  // MEMBER" and "chose MEMBER" indistinguishable, so choosing MEMBER selected
+  // an already-selected option and fired no change event at all.
+  const [decisions, setDecisions] = useState<Record<number, 'ADMIN' | 'MEMBER'>>({});
   const [ackCollisions, setAckCollisions] = useState(false);
   const [ackDuplicates, setAckDuplicates] = useState(false);
   const [typed, setTyped] = useState('');
@@ -57,14 +63,14 @@ export function OwnerMergePage() {
   }, []);
 
   const loadPreview = useCallback(
-    (nextRoles: Record<number, 'ADMIN' | 'MEMBER'>) => {
+    (nextDecisions: Record<number, 'ADMIN' | 'MEMBER'>) => {
       if (!sourceId) return;
       setError(null);
       previewMerge({
         source_organization_id: sourceId,
         destination_organization_id: destinationId,
         coach_roles: Object.fromEntries(
-          Object.entries(nextRoles).map(([id, role]) => [String(id), role]),
+          Object.entries(nextDecisions).map(([id, role]) => [String(id), role]),
         ),
       })
         .then(setPreview)
@@ -77,21 +83,46 @@ export function OwnerMergePage() {
   );
 
   useEffect(() => {
-    if (sourceId) loadPreview(roles);
-    // Re-previewing on every role change is the point: the operator sees the
+    if (sourceId) loadPreview(decisions);
+    // Re-previewing on every decision is the point: the operator sees the
     // consequence of keeping an ADMIN before they commit to it.
-  }, [sourceId, roles, loadPreview]);
+  }, [sourceId, decisions, loadPreview]);
 
   const needsCollisionAck = preview?.requires_acknowledgement.collisions ?? false;
   const needsDuplicateAck = preview?.requires_acknowledgement.duplicate_players ?? false;
 
+  /** Source admins still awaiting an explicit MEMBER/ADMIN decision.
+   *
+   * The server refuses the merge until every one of these is decided. Before,
+   * the UI did not check it at all - so with no collisions and no duplicate
+   * players the button enabled on the typed name alone and the refusal only
+   * appeared as an error after clicking Merge. */
+  const undecided = useMemo(
+    () =>
+      (preview?.requires_acknowledgement.coach_roles ?? []).filter(
+        (id) => decisions[id] === undefined,
+      ),
+    [preview, decisions],
+  );
+
   const ready = useMemo(() => {
     if (!preview || busy) return false;
+    if (preview.blockers.length > 0) return false;
+    if (undecided.length > 0) return false;
     if (needsCollisionAck && !ackCollisions) return false;
     if (needsDuplicateAck && !ackDuplicates) return false;
     // Typing the source name is the last gate, and it is exact.
     return typed.trim() === preview.source.name;
-  }, [preview, busy, needsCollisionAck, ackCollisions, needsDuplicateAck, ackDuplicates, typed]);
+  }, [
+    preview,
+    busy,
+    undecided,
+    needsCollisionAck,
+    ackCollisions,
+    needsDuplicateAck,
+    ackDuplicates,
+    typed,
+  ]);
 
   function handleMerge() {
     if (!preview || !sourceId) return;
@@ -102,7 +133,7 @@ export function OwnerMergePage() {
       destination_organization_id: destinationId,
       fingerprint: preview.fingerprint,
       coach_roles: Object.fromEntries(
-        Object.entries(roles).map(([id, role]) => [String(id), role]),
+        Object.entries(decisions).map(([id, role]) => [String(id), role]),
       ),
       acknowledge_collisions: ackCollisions,
       acknowledge_duplicate_players: ackDuplicates,
@@ -161,7 +192,7 @@ export function OwnerMergePage() {
             value={sourceId ?? ''}
             onChange={(e) => {
               setSourceId(e.target.value ? Number(e.target.value) : null);
-              setRoles({});
+              setDecisions({});
               setTyped('');
               setAckCollisions(false);
               setAckDuplicates(false);
@@ -221,12 +252,20 @@ export function OwnerMergePage() {
           </section>
 
           <section className={styles.section}>
-            <h3 className={styles.sectionHeading}>Coach roles</h3>
+            <h3 className={styles.sectionHeading}>Coach roles after merge</h3>
             <p className={styles.sectionNote}>
-              Every source coach becomes a <strong>MEMBER</strong> by default. Keeping ADMIN gives
-              that coach Admin View over {preview.destination.name}&rsquo;s quizzes and results —
-              choose it deliberately.
+              Every coach below moves into <strong>{preview.destination.name}</strong>. Keeping
+              ADMIN grants that coach Admin View over the destination&rsquo;s quizzes, rosters and
+              results — access they do not have today. <strong>Member</strong> is the safe choice,
+              but it must be chosen explicitly: nothing is decided for you.
             </p>
+
+            {undecided.length > 0 && (
+              <p className={`${styles.sectionNote} ${styles.tagEmpty}`} role="status">
+                {undecided.length} coach role decision(s) still required before this merge can run.
+              </p>
+            )}
+
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
@@ -234,43 +273,101 @@ export function OwnerMergePage() {
                     <th>Coach</th>
                     <th>Email</th>
                     <th>Current</th>
-                    <th>After merge</th>
+                    <th>Role after merge</th>
+                    <th>Effect</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.coaches.map((coach) => (
-                    <tr key={coach.coach_id}>
-                      <td>{coach.username}</td>
-                      <td>{coach.email}</td>
-                      <td>
-                        <span className={styles.tag}>
-                          {coach.current_role} — {preview.source.name}
-                        </span>
-                      </td>
-                      <td>
-                        <select
-                          aria-label={`Role for ${coach.email} after merge`}
-                          value={coach.new_role}
-                          onChange={(e) =>
-                            setRoles((prev) => ({
-                              ...prev,
-                              [coach.coach_id]: e.target.value as 'ADMIN' | 'MEMBER',
-                            }))
-                          }
-                        >
-                          <option value="MEMBER">MEMBER — {preview.destination.name}</option>
-                          <option value="ADMIN">ADMIN — {preview.destination.name}</option>
-                        </select>
-                        {coach.widens_access && (
-                          <span className={`${styles.tag} ${styles.tagEmpty}`}>Widens access</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {preview.coaches.map((coach) => {
+                    const decided = decisions[coach.coach_id];
+                    return (
+                      <tr key={coach.coach_id}>
+                        <td>{coach.username}</td>
+                        <td>{coach.email}</td>
+                        <td>
+                          <span className={styles.tag}>
+                            {coach.current_role} — {preview.source.name}
+                          </span>
+                        </td>
+                        <td>
+                          {coach.requires_decision ? (
+                            // Radios, NOT a select bound to the server's value.
+                            // With nothing preselected, choosing Member is a
+                            // real event - a select already showing MEMBER
+                            // fires no onChange when MEMBER is picked, which
+                            // made the safe choice literally unselectable.
+                            <fieldset
+                              style={{ border: 'none', margin: 0, padding: 0 }}
+                              aria-label={`Role for ${coach.email} after merge`}
+                            >
+                              <label style={{ marginRight: 12 }}>
+                                <input
+                                  type="radio"
+                                  name={`role-${coach.coach_id}`}
+                                  value="MEMBER"
+                                  checked={decided === 'MEMBER'}
+                                  onChange={() =>
+                                    setDecisions((prev) => ({
+                                      ...prev,
+                                      [coach.coach_id]: 'MEMBER',
+                                    }))
+                                  }
+                                />{' '}
+                                Member — {preview.destination.name} <em>(recommended)</em>
+                              </label>
+                              <label>
+                                <input
+                                  type="radio"
+                                  name={`role-${coach.coach_id}`}
+                                  value="ADMIN"
+                                  checked={decided === 'ADMIN'}
+                                  onChange={() =>
+                                    setDecisions((prev) => ({
+                                      ...prev,
+                                      [coach.coach_id]: 'ADMIN',
+                                    }))
+                                  }
+                                />{' '}
+                                Admin — {preview.destination.name}
+                              </label>
+                            </fieldset>
+                          ) : (
+                            <span className={styles.tag}>
+                              {coach.new_role} — {preview.destination.name}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          {coach.requires_decision && decided === undefined ? (
+                            <span className={`${styles.tag} ${styles.tagEmpty}`}>
+                              Decision required
+                            </span>
+                          ) : coach.widens_access ? (
+                            <span className={`${styles.tag} ${styles.tagEmpty}`}>
+                              Widens access
+                            </span>
+                          ) : (
+                            <span className={styles.tag}>Does not widen access</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </section>
+
+          {preview.blockers.length > 0 && (
+            <section className={styles.section}>
+              <h3 className={styles.sectionHeading}>Blockers</h3>
+              <ul className={`${styles.sectionNote} ${styles.tagEmpty}`}>
+                {preview.blockers.map((blocker) => (
+                  <li key={blocker}>{blocker}</li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {preview.warnings.length > 0 && (
             <section className={styles.section}>
@@ -357,6 +454,18 @@ export function OwnerMergePage() {
               onChange={(e) => setTyped(e.target.value)}
               placeholder={preview.source.name}
             />
+            {!ready && preview && (
+              <ul className={styles.sectionNote}>
+                {undecided.length > 0 && <li>Choose a role for every source coach above.</li>}
+                {needsDuplicateAck && !ackDuplicates && (
+                  <li>Acknowledge the possible duplicate players.</li>
+                )}
+                {needsCollisionAck && !ackCollisions && <li>Acknowledge the name collisions.</li>}
+                {typed.trim() !== preview.source.name && (
+                  <li>Type “{preview.source.name}” exactly.</li>
+                )}
+              </ul>
+            )}
             <div style={{ marginTop: 12 }}>
               <button
                 type="button"

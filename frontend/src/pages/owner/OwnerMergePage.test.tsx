@@ -56,7 +56,7 @@ const preview: MergePreview = {
   coaches: [
     {
       coach_id: 9,
-      username: 'will',
+      username: 'willhoge3',
       email: 'will.hoge3@gmail.com',
       current_role: 'ADMIN',
       new_role: 'MEMBER',
@@ -114,14 +114,18 @@ describe('Owner merge page', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the role change for a source admin in both directions', async () => {
+  it('shows the current role and offers both destination roles', async () => {
     const user = userEvent.setup();
     renderPage();
     await selectSource(user);
 
     expect(screen.getByText('ADMIN — Cincinnati')).toBeInTheDocument();
-    const select = screen.getByLabelText('Role for will.hoge3@gmail.com after merge');
-    expect(select).toHaveValue('MEMBER');
+    expect(
+      screen.getByRole('radio', { name: /Member — University of Cincinnati/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('radio', { name: /Admin — University of Cincinnati/ }),
+    ).toBeInTheDocument();
   });
 
   it('keeps the merge button disabled until every gate is satisfied', async () => {
@@ -132,6 +136,9 @@ describe('Owner merge page', () => {
     const button = screen.getByRole('button', {
       name: 'Merge Cincinnati into University of Cincinnati',
     });
+    expect(button).toBeDisabled();
+
+    await user.click(screen.getByRole('radio', { name: /Member — University of Cincinnati/ }));
     expect(button).toBeDisabled();
 
     await user.click(screen.getByRole('checkbox', { name: /remain separate people/i }));
@@ -177,6 +184,7 @@ describe('Owner merge page', () => {
     });
     renderPage();
     await selectSource(user);
+    await user.click(screen.getByRole('radio', { name: /Member — University of Cincinnati/ }));
     await user.click(screen.getByRole('checkbox', { name: /remain separate people/i }));
     await user.click(screen.getByRole('checkbox', { name: /both copies will survive/i }));
     await user.type(
@@ -207,10 +215,7 @@ describe('Owner merge page', () => {
     await selectSource(user);
     spy.mockClear();
 
-    await user.selectOptions(
-      screen.getByLabelText('Role for will.hoge3@gmail.com after merge'),
-      'ADMIN',
-    );
+    await user.click(screen.getByRole('radio', { name: /Admin — University of Cincinnati/ }));
 
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith(
@@ -237,5 +242,142 @@ describe('Owner merge page', () => {
 
     expect(within(select).queryByText('University of Cincinnati')).not.toBeInTheDocument();
     expect(within(select).getByText('Cincinnati')).toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------
+  // REGRESSION: the exact production dead end.
+  //
+  // Destination has coaches, source has one ADMIN, no decision supplied.
+  // The old UI bound a <select> to the server's computed new_role - already
+  // "MEMBER" - so picking Member selected an already-selected option and
+  // fired no change event. The safe choice was literally unselectable, and
+  // `ready` never checked coach_roles, so the merge button enabled anyway and
+  // the backend's refusal surfaced only after clicking Merge.
+  // -------------------------------------------------------------------
+
+  it('renders the source admin and an undecided role control', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectSource(user);
+
+    expect(screen.getByText('Coach roles after merge')).toBeInTheDocument();
+    expect(screen.getByText('willhoge3')).toBeInTheDocument();
+    expect(screen.getByText('will.hoge3@gmail.com')).toBeInTheDocument();
+    expect(screen.getByText('ADMIN — Cincinnati')).toBeInTheDocument();
+
+    const member = screen.getByRole('radio', { name: /Member — University of Cincinnati/ });
+    const admin = screen.getByRole('radio', { name: /Admin — University of Cincinnati/ });
+    // NEITHER is preselected - that is what makes choosing Member a real event.
+    expect(member).not.toBeChecked();
+    expect(admin).not.toBeChecked();
+    expect(screen.getByText('Decision required')).toBeInTheDocument();
+  });
+
+  it('blocks the merge until the role decision is made', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectSource(user);
+    await user.click(screen.getByRole('checkbox', { name: /remain separate people/i }));
+    await user.click(screen.getByRole('checkbox', { name: /both copies will survive/i }));
+    await user.type(
+      screen.getByLabelText('Type the source organization name to confirm'),
+      'Cincinnati',
+    );
+
+    // Everything else satisfied, but the role is still undecided.
+    expect(
+      screen.getByRole('button', { name: 'Merge Cincinnati into University of Cincinnati' }),
+    ).toBeDisabled();
+    expect(screen.getByText(/Choose a role for every source coach/i)).toBeInTheDocument();
+  });
+
+  it('selecting MEMBER re-previews with the explicit decision and clears the blocker', async () => {
+    const user = userEvent.setup();
+    const spy = vi.spyOn(ownerApi, 'previewMerge').mockResolvedValue(preview);
+    renderPage();
+    await selectSource(user);
+    spy.mockClear();
+
+    await user.click(screen.getByRole('radio', { name: /Member — University of Cincinnati/ }));
+
+    // The decision reaches the server - the whole point of the fix.
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ coach_roles: { '9': 'MEMBER' } }),
+      ),
+    );
+    expect(
+      screen.getByRole('radio', { name: /Member — University of Cincinnati/ }),
+    ).toBeChecked();
+    await waitFor(() =>
+      expect(screen.queryByText(/still required before this merge/i)).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText('Decision required')).not.toBeInTheDocument();
+    expect(screen.getByText('Does not widen access')).toBeInTheDocument();
+  });
+
+  it('shows the full merge preview alongside the decision, not instead of it', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await selectSource(user);
+
+    // The rest of the preview must remain visible while a decision is pending.
+    expect(screen.getByText('What moves')).toBeInTheDocument();
+    expect(screen.getByText(/WILL BE REMOVED/)).toBeInTheDocument();
+    expect(screen.getByText('Possible duplicate players')).toBeInTheDocument();
+  });
+
+  it('choosing ADMIN warns that access is widened', async () => {
+    const user = userEvent.setup();
+    const widened: MergePreview = {
+      ...preview,
+      coaches: [{ ...preview.coaches[0], new_role: 'ADMIN', widens_access: true }],
+      warnings: [
+        ...preview.warnings,
+        "will.hoge3@gmail.com will KEEP ADMIN and gain Admin View over University of Cincinnati's data.",
+      ],
+    };
+    const spy = vi.spyOn(ownerApi, 'previewMerge').mockResolvedValue(preview);
+    renderPage();
+    await selectSource(user);
+    spy.mockResolvedValue(widened);
+
+    await user.click(screen.getByRole('radio', { name: /Admin — University of Cincinnati/ }));
+
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ coach_roles: { '9': 'ADMIN' } })),
+    );
+    await waitFor(() => expect(screen.getByText('Widens access')).toBeInTheDocument());
+    expect(screen.getByText(/will KEEP ADMIN and gain Admin View/i)).toBeInTheDocument();
+  });
+
+  it('an explicit MEMBER decision is what reaches execute', async () => {
+    const user = userEvent.setup();
+    const execute = vi.spyOn(ownerApi, 'executeMerge').mockResolvedValue({
+      merged: true,
+      audit_id: 1,
+      source: { id: 11, name: 'Cincinnati' },
+      destination: { id: 2, name: 'University of Cincinnati' },
+      counts_moved: {},
+      invitations_revoked: 1,
+    });
+    renderPage();
+    await selectSource(user);
+    await user.click(screen.getByRole('radio', { name: /Member — University of Cincinnati/ }));
+    await user.click(screen.getByRole('checkbox', { name: /remain separate people/i }));
+    await user.click(screen.getByRole('checkbox', { name: /both copies will survive/i }));
+    await user.type(
+      screen.getByLabelText('Type the source organization name to confirm'),
+      'Cincinnati',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Merge Cincinnati into University of Cincinnati' }),
+    );
+
+    await waitFor(() =>
+      expect(execute).toHaveBeenCalledWith(
+        expect.objectContaining({ coach_roles: { '9': 'MEMBER' } }),
+      ),
+    );
   });
 });
