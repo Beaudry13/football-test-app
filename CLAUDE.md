@@ -229,6 +229,38 @@ section. This one is easy to repeat, because the wrong command looks
 - Tests live beside the code (`Foo.test.tsx`, `tests/test_foo.py`).
 - Prefer extending an existing service over adding a parallel one.
 
+### Do not create throwaway organizations in production
+
+**Production verification must not leave test data behind.** Probe
+organizations accumulated for months — `ZZ Prod Probe`, `Smoke Test Org`,
+`SmokeTest-20260804155445`, `Bug Repro` and a dozen more — until they
+outnumbered the real customers and made the Owner Dashboard's adoption
+numbers meaningless. Cleaning them up required an audit tool, a guarded
+deletion tool, and a careful ordered delete across 22 tables, because
+organizations do not cascade.
+
+Exhaust these first, in order:
+
+1. **Automated tests.** Almost every "does the permission hold" question is a
+   test, not a production request. Registering a coach against production to
+   check that a non-owner gets a 404 proves nothing the test suite doesn't.
+2. **Local/dev seeded organizations.** The docker stack builds any shape of
+   tenant in seconds, including ones that would be reckless to create live.
+3. **Read-only checks against real production data.** Content markers in the
+   deployed bundle, an unauthenticated status code, `/api/health`, or a
+   read-only script run from a Render shell.
+4. **An existing throwaway account, if one already exists.** Reuse beats
+   creating a second one — this rule was written after doing exactly that.
+
+Only create production data when a production-specific behaviour genuinely
+cannot be verified any other way. **If it will leave a record that cannot be
+removed through the normal coach UI — an organization, a coach account, an
+attempt — ASK FIRST.** An organization is the worst case: nothing in the
+product deletes one, so it persists until an owner-level tool removes it.
+
+This is not a rule about being tidy. Every leftover organization inflates the
+platform totals the owner uses to understand whether Peira is being adopted.
+
 ---
 
 ## Deployment
