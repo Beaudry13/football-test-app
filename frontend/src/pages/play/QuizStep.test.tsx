@@ -557,3 +557,181 @@ describe('QuizStep drawing autosave', () => {
     expect(payload.answers[0].drawing).toMatchObject({ format: 'peira.drawing' });
   });
 });
+
+// ---------------------------------------------------------------------------
+// require_all_answers under a RANDOMIZED presented order.
+//
+// This is the one place presentation and identity meet. The "jump to the first
+// missing question" logic finds a question by id, then converts it to an index
+// - and that index must be into the PRESENTED array, not the authored one. If
+// it ever indexed the authored order, a randomized attempt would send the
+// player to a question they had already answered while the blank one stayed
+// hidden.
+// ---------------------------------------------------------------------------
+
+describe('require_all_answers with a randomized question order', () => {
+  /** Four questions, authored 1..4, each identifiable on screen. */
+  const fourQuestions: Quiz = {
+    ...quiz,
+    require_all_answers: true,
+    one_question_at_a_time: true,
+    question_count: 4,
+    questions: [1, 2, 3, 4].map((id) => ({
+      id,
+      quiz_id: 1,
+      question_text: `Authored ${id}`,
+      question_type: 'written' as const,
+      position: id - 1,
+      image: null,
+      options: [],
+    })),
+  };
+
+  function renderReordered(order: number[], initialAnswers: ResumedAnswer[] = []) {
+    return render(
+      <QuizStep
+        quiz={fourQuestions}
+        questionOrder={order}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={501}
+        initialAnswers={initialAnswers}
+        onSubmitted={vi.fn()}
+      />,
+    );
+  }
+
+  beforeEach(() => {
+    vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
+  });
+
+  it('presents the questions in the frozen order, not the authored one', () => {
+    renderReordered([4, 3, 2, 1]);
+
+    // First screen is authored #4 because the attempt was given that order.
+    expect(screen.getByText('Authored 4')).toBeInTheDocument();
+    expect(screen.queryByText('Authored 1')).not.toBeInTheDocument();
+  });
+
+  it('jumps to the first missing question in PRESENTED order, not authored order', async () => {
+    const user = userEvent.setup();
+    // Presented 4, 3, 2, 1. Everything answered except authored #3, which is
+    // SECOND in the presented order but THIRD by authored position - so an
+    // authored-order jump would land somewhere else entirely.
+    renderReordered(
+      [4, 3, 2, 1],
+      [
+        { question_id: 4, selected_option_id: null, answer_text: 'a', checked: false },
+        { question_id: 2, selected_option_id: null, answer_text: 'b', checked: false },
+        { question_id: 1, selected_option_id: null, answer_text: 'c', checked: false },
+      ],
+    );
+
+    // Walk to the end so Submit is reachable.
+    for (let i = 0; i < 3; i += 1) {
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+    }
+    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+
+    expect(
+      await screen.findByText('Please answer all questions before submitting.'),
+    ).toBeInTheDocument();
+    // Landed on the blank question itself - identified by id, shown at its
+    // PRESENTED index.
+    expect(screen.getByText('Authored 3')).toBeInTheDocument();
+    expect(screen.queryByText('Authored 4')).not.toBeInTheDocument();
+  });
+
+  it('uses question ids, so answers map to the right questions after reordering', async () => {
+    const user = userEvent.setup();
+    const saveSpy = vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
+    renderReordered([4, 3, 2, 1]);
+
+    await user.type(screen.getByRole('textbox'), 'answer for four');
+    await waitFor(() =>
+      expect(saveSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ question_id: 4 }),
+      ),
+    );
+  });
+
+  it('keeps the same order and the same missing question after a resume', async () => {
+    const user = userEvent.setup();
+    // A resume re-renders from the server's frozen order and the saved
+    // answers - the identical inputs a refresh produces.
+    const answers: ResumedAnswer[] = [
+      { question_id: 4, selected_option_id: null, answer_text: 'a', checked: false },
+      { question_id: 2, selected_option_id: null, answer_text: 'b', checked: false },
+      { question_id: 1, selected_option_id: null, answer_text: 'c', checked: false },
+    ];
+    const { unmount } = renderReordered([4, 3, 2, 1], answers);
+    expect(screen.getByText('Authored 4')).toBeInTheDocument();
+    unmount();
+
+    renderReordered([4, 3, 2, 1], answers);
+
+    expect(screen.getByText('Authored 4')).toBeInTheDocument();
+    for (let i = 0; i < 3; i += 1) {
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+    }
+    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+
+    expect(
+      await screen.findByText('Please answer all questions before submitting.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Authored 3')).toBeInTheDocument();
+  });
+
+  it('ignores a stored id whose question was deleted, and appends a new one', async () => {
+    const user = userEvent.setup();
+    // The attempt froze [4, 3, 2, 1]. Since then #3 was deleted and #9 added.
+    // Reconciliation should present 4, 2, 1 then 9 - and the missing-question
+    // check must never look for the deleted one.
+    const changedQuiz: Quiz = {
+      ...fourQuestions,
+      questions: [
+        ...fourQuestions.questions!.filter((q) => q.id !== 3),
+        {
+          id: 9,
+          quiz_id: 1,
+          question_text: 'Authored 9',
+          question_type: 'written' as const,
+          position: 9,
+          image: null,
+          options: [],
+        },
+      ],
+    };
+
+    render(
+      <QuizStep
+        quiz={changedQuiz}
+        questionOrder={[4, 3, 2, 1]}
+        accessCodeId={42}
+        playerName="Jordan Smith"
+        playerId={501}
+        initialAnswers={[
+          { question_id: 4, selected_option_id: null, answer_text: 'a', checked: false },
+          { question_id: 2, selected_option_id: null, answer_text: 'b', checked: false },
+          { question_id: 1, selected_option_id: null, answer_text: 'c', checked: false },
+        ]}
+        onSubmitted={vi.fn()}
+      />,
+    );
+
+    // Deleted question is simply gone from the sequence.
+    expect(screen.getByText('Authored 4')).toBeInTheDocument();
+    for (let i = 0; i < 3; i += 1) {
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+    }
+    // The appended question is last, and it is the one still unanswered.
+    expect(screen.getByText('Authored 9')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    expect(
+      await screen.findByText('Please answer all questions before submitting.'),
+    ).toBeInTheDocument();
+    // Landed on the appended question, never on the deleted one.
+    expect(screen.getByText('Authored 9')).toBeInTheDocument();
+  });
+});

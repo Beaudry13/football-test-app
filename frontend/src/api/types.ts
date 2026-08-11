@@ -416,6 +416,9 @@ export interface AccessCode {
   groups: { id: number; name: string }[];
   mode: AssessmentMode;
   is_practice: boolean;
+  /** Practice-only: each new attempt gets its own shuffled question
+   *  order. Ignored for graded, which always uses the authored order. */
+  randomize_questions: boolean;
 }
 
 /** A player's submitted drawing, as the coach-facing routes return it. */
@@ -524,6 +527,7 @@ export interface ActiveQuizStatus {
   roster_size: number;
   mode: AssessmentMode;
   is_practice: boolean;
+  randomize_questions: boolean;
   submitted: ActiveAttemptSummary[];
   in_progress: ActiveAttemptSummary[];
   not_started: string[];
@@ -586,6 +590,9 @@ export interface AttemptState {
   /** The attempt's own frozen mode. A coach editing the code mid-session
    *  does not change the rules of work already in progress. */
   mode: AssessmentMode;
+  /** The order this attempt was given, as question ids. Empty means the
+   *  quiz's authored order. */
+  question_order: number[];
   answers: ResumedAnswer[];
   /** Feedback already earned this attempt, so a refresh does not wipe the
    *  explanations the player was reading. Empty on a graded attempt. */

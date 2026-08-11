@@ -4,6 +4,7 @@ both need identical question/option validation and identical is_correct
 computation, so it lives here once rather than being duplicated per route.
 """
 
+import random
 from datetime import datetime, timezone
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -292,3 +293,69 @@ def practice_feedback(attempt, answer) -> dict:
         "is_correct": answer.is_correct if auto_gradable else None,
         "answer_explanation": question.answer_explanation or None,
     }
+
+# ---------------------------------------------------------------------------
+# Question order
+# ---------------------------------------------------------------------------
+
+
+def authored_question_ids(quiz) -> list[int]:
+    """The quiz's own order. `Quiz.questions` is ordered by Question.position,
+    so this is simply what the coach authored."""
+    return [question.id for question in quiz.questions]
+
+
+def frozen_question_order(quiz, *, randomize: bool, rng=None) -> list[int] | None:
+    """The order to FREEZE on a new attempt, or None for authored order.
+
+    Returning None rather than the authored list is deliberate: NULL already
+    means "authored order" for every pre-existing attempt and every graded
+    one, so storing an explicit copy would create a second representation of
+    the same thing - and one that silently goes stale when the coach reorders
+    the quiz.
+
+    `rng` is the test seam. Production passes nothing and gets Python's
+    `random.shuffle`, which is a Fisher-Yates over a Mersenne Twister - an
+    unbiased permutation. The `sort(() => Math.random() - 0.5)` idiom is not
+    just biased, it is undefined behaviour for a comparator; nothing here does
+    that, and no ordering is ever computed in a SELECT.
+    """
+    if not randomize:
+        return None
+    ids = authored_question_ids(quiz)
+    # Nothing to shuffle: an empty list would be indistinguishable from "no
+    # questions yet" downstream, and a single question has exactly one order.
+    if len(ids) < 2:
+        return None
+    shuffled = list(ids)
+    (rng or random).shuffle(shuffled)
+    return shuffled
+
+
+def presented_question_ids(attempt, quiz) -> list[int]:
+    """The order to SHOW, reconciled against the quiz as it exists now.
+
+    The stored order is a historical fact and is never rewritten - a coach
+    editing the quiz mid-attempt must not retroactively change what the player
+    was given. So reconciliation happens here, at read time:
+
+      1. stored ids that still exist, in the order they were frozen
+      2. then any question added since, in current authored order
+      3. deleted questions simply fall out
+
+    That covers both directions of drift without corrupting the attempt: a
+    deleted question disappears rather than 404-ing mid-quiz, and an added one
+    appears at the end rather than vanishing from a quiz that claims to have
+    it.
+    """
+    live = authored_question_ids(quiz)
+    stored = attempt.question_order
+    if not stored:
+        return live
+
+    live_set = set(live)
+    kept = [qid for qid in stored if qid in live_set]
+    seen = set(kept)
+    appended = [qid for qid in live if qid not in seen]
+    return kept + appended
+

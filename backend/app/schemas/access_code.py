@@ -12,6 +12,10 @@ class ActivateQuizSchema(Schema):
     group_ids = fields.List(fields.Int(), required=False, load_default=list)
     # Defaults to GRADED so every existing client, and every existing
     # integration, keeps producing graded assignments untouched.
+    #: Practice-only: shuffle the question order for each new attempt.
+    #: Defaults FALSE, so an existing client that never sends it activates
+    #: exactly as it does today.
+    randomize_questions = fields.Bool(required=False, load_default=False)
     mode = fields.Str(
         required=False,
         load_default=DEFAULT_MODE,

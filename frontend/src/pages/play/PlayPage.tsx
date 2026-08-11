@@ -27,6 +27,9 @@ type Step =
       playerId: number | undefined;
       initialAnswers: ResumedAnswer[];
       mode: AssessmentMode;
+      /** The attempt's frozen question order. Re-read from the server on every
+       *  start/resume rather than remembered, so a refresh cannot drift. */
+      questionOrder?: number[];
       initialFeedback: PracticeFeedback[];
       /** Bumped on Try Again. Remounts QuizStep so its answers, feedback and
        * lock state all reset - the alternative, resetting each piece from
@@ -94,6 +97,9 @@ export function PlayPage() {
       playerId: step.playerId,
       initialAnswers: attempt.answers,
       mode: attempt.mode,
+      // Try Again created a NEW attempt, so this is a new order - which is
+      // exactly the point of randomized practice.
+      questionOrder: attempt.question_order,
       initialFeedback: attempt.feedback,
       run: step.run + 1,
     });
@@ -124,8 +130,11 @@ export function PlayPage() {
               playerId,
               initialAnswers: attempt.answers,
               // From the ATTEMPT, not the access code: the attempt froze its
-              // mode when it started, and that is what governs it.
+              // mode when it started, and that is what governs it. The same
+              // is true of the order - a refresh re-reads it from the server
+              // rather than re-deriving or remembering it here.
               mode: attempt.mode,
+              questionOrder: attempt.question_order,
               initialFeedback: attempt.feedback,
               run: 0,
             })
@@ -144,6 +153,7 @@ export function PlayPage() {
           playerId={step.playerId}
           initialAnswers={step.initialAnswers}
           mode={step.mode}
+          questionOrder={step.questionOrder}
           initialFeedback={step.initialFeedback}
           onSubmitted={() =>
             setStep({ name: 'submitted', code: step.code, playerName: step.playerName, playerId: step.playerId })

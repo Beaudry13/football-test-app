@@ -61,6 +61,15 @@ class PlayerAttempt(db.Model):
     # every attempt made under it - moving real graded results out of
     # official analytics, or practice results in. Freezing it here is what
     # makes "an attempt's mode is immutable" true rather than aspirational.
+    #: The question order this attempt started with, as a list of question
+    #: ids. NULL means the quiz's authored order - which is what every graded
+    #: attempt and every pre-existing row uses, so no backfill was needed.
+    #:
+    #: Frozen at creation and never rewritten, even when the quiz changes
+    #: underneath it. Reconciliation against the live quiz happens at read
+    #: time (services/attempts.presented_question_ids) so this column stays a
+    #: historical record of what the player was actually given.
+    question_order = db.Column(db.JSON, nullable=True)
     mode = db.Column(
         db.String(16), nullable=False, server_default=DEFAULT_MODE, default=DEFAULT_MODE
     )

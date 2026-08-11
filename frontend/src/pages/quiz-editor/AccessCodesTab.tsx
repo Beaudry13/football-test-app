@@ -25,6 +25,20 @@ function ModeBadge({ mode }: { mode: AssessmentMode }) {
   );
 }
 
+/** How the questions were ordered for this activation.
+ *
+ * Shown wherever the mode is, and for the same reason: a coach looking at a
+ * code weeks later should not have to remember how they set it up. Rendered
+ * for graded too - "Standard" is the honest answer there, and hiding it would
+ * make its absence ambiguous. */
+function OrderBadge({ randomized }: { randomized: boolean }) {
+  return (
+    <span className={styles.orderBadge}>
+      Question order: {randomized ? 'Randomized' : 'Standard'}
+    </span>
+  );
+}
+
 const MODE_OPTIONS: { value: AssessmentMode; label: string; hint: string }[] = [
   {
     value: 'GRADED',
@@ -78,6 +92,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   // deliberate: sending a practice quiz is the deliberate act, and a sticky
   // PRACTICE would make the next real assessment silently not count.
   const [mode, setMode] = useState<AssessmentMode>('GRADED');
+  // Practice-only. Reset when the coach switches back to graded so a
+  // toggle left on cannot travel silently into a graded activation.
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
@@ -123,7 +140,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     setError(null);
     setIsActivating(true);
     try {
-      await activateQuiz(quiz.id, selectedGroupIds, mode);
+      await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions);
       await load();
       setMode('GRADED');
     } catch (err) {
@@ -169,6 +186,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
             <p>Share this code and link with players</p>
             <div className={styles.codeDisplay}>{activeCode.code}</div>
             <ModeBadge mode={activeCode.mode} />
+            <OrderBadge randomized={activeCode.randomize_questions} />
             {activeCode.groups.length > 0 && (
               <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
             )}
@@ -186,7 +204,36 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
             <div className={styles.expiry}>
               Expires {new Date(activeCode.expires_at).toLocaleString()}
             </div>
-            <ModePicker mode={mode} onChange={setMode} />
+            <>
+              <ModePicker
+                mode={mode}
+                onChange={(next) => {
+                  setMode(next);
+                  // Clearing on the way back to graded matters: a toggle left
+                  // on would otherwise ride along invisibly into an activation
+                  // whose form never showed it.
+                  if (next !== 'PRACTICE') setRandomizeQuestions(false);
+                }}
+              />
+              {/* Practice only, and HIDDEN rather than disabled for graded -
+                  a greyed control still asks the coach to think about
+                  something that does not apply. */}
+              {mode === 'PRACTICE' && (
+                <label className={styles.randomizeOption}>
+                  <input
+                    type="checkbox"
+                    checked={randomizeQuestions}
+                    onChange={(event) => setRandomizeQuestions(event.target.checked)}
+                  />
+                  <span>
+                    <span className={styles.randomizeLabel}>Randomize questions</span>
+                    <span className={styles.modeHint}>
+                      Mix the question order for each new practice attempt.
+                    </span>
+                  </span>
+                </label>
+              )}
+            </>
             <div className={styles.historyActions}>
               <button className={nb.btnSm} onClick={() => handleDeactivate(activeCode.id)}>
                 Deactivate now
@@ -223,7 +270,36 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               </div>
             )}
 
-            <ModePicker mode={mode} onChange={setMode} />
+            <>
+              <ModePicker
+                mode={mode}
+                onChange={(next) => {
+                  setMode(next);
+                  // Clearing on the way back to graded matters: a toggle left
+                  // on would otherwise ride along invisibly into an activation
+                  // whose form never showed it.
+                  if (next !== 'PRACTICE') setRandomizeQuestions(false);
+                }}
+              />
+              {/* Practice only, and HIDDEN rather than disabled for graded -
+                  a greyed control still asks the coach to think about
+                  something that does not apply. */}
+              {mode === 'PRACTICE' && (
+                <label className={styles.randomizeOption}>
+                  <input
+                    type="checkbox"
+                    checked={randomizeQuestions}
+                    onChange={(event) => setRandomizeQuestions(event.target.checked)}
+                  />
+                  <span>
+                    <span className={styles.randomizeLabel}>Randomize questions</span>
+                    <span className={styles.modeHint}>
+                      Mix the question order for each new practice attempt.
+                    </span>
+                  </span>
+                </label>
+              )}
+            </>
 
             <button
               className={nb.btnPrimary}
@@ -264,6 +340,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                   <td>{code.groups.length > 0 ? code.groups.map((g) => g.name).join(', ') : '—'}</td>
                   <td>
                     <ModeBadge mode={code.mode} />
+                    <OrderBadge randomized={code.randomize_questions} />
                   </td>
                   <td>
                     {code.is_active && code.is_valid ? (

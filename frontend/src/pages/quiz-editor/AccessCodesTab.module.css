@@ -102,3 +102,28 @@
   font-size: 0.85em;
   color: var(--nb-text-muted);
 }
+
+/* Practice-only randomization control. Sits directly under the mode picker
+   so the dependency reads top-to-bottom: choose Practice, then choose how. */
+.randomizeOption {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  cursor: pointer;
+}
+
+.randomizeLabel {
+  display: block;
+  font-weight: 600;
+  color: var(--nb-text);
+  font-size: 14px;
+}
+
+/* Shown for graded too - "Standard" is the honest answer there, and omitting
+   it would make the absence ambiguous rather than informative. */
+.orderBadge {
+  font-size: 11px;
+  color: var(--nb-text-muted);
+  white-space: nowrap;
+}

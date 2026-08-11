@@ -13,10 +13,14 @@ export function activateQuiz(
   quizId: number,
   groupIds: number[] = [],
   mode: AssessmentMode = 'GRADED',
+  randomizeQuestions = false,
 ): Promise<AccessCode> {
   return api.post<AccessCode>(`/quizzes/${quizId}/access-codes`, {
     group_ids: groupIds,
     mode,
+    // Practice-only, and the server ignores it for graded - but sending it
+    // unconditionally keeps this call one shape rather than two.
+    randomize_questions: randomizeQuestions,
   });
 }
 

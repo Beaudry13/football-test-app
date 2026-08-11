@@ -41,6 +41,18 @@ class AccessCode(db.Model):
     attempts = db.relationship("PlayerAttempt", back_populates="access_code")
     groups = db.relationship("Group", secondary=access_code_groups)
 
+    #: Shuffle the question order for each new PRACTICE attempt.
+    #:
+    #: Assignment intent, like `mode` - it says what future attempts should
+    #: do, never what a particular attempt DID. The order a player actually
+    #: received is frozen on their attempt, so toggling this afterwards cannot
+    #: reorder work already in progress.
+    #:
+    #: Ignored entirely for GRADED, which always uses the authored order.
+    randomize_questions = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     @property
     def is_practice(self) -> bool:
         return self.mode == PRACTICE
@@ -66,4 +78,5 @@ class AccessCode(db.Model):
             "groups": [{"id": g.id, "name": g.name} for g in self.groups],
             "mode": self.mode,
             "is_practice": self.is_practice,
+            "randomize_questions": self.randomize_questions,
         }

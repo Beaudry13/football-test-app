@@ -238,6 +238,9 @@ def active_status():
                 # would be read as twelve real results.
                 "mode": code.mode,
                 "is_practice": code.is_practice,
+                # So the live board says how the code was set up, not just
+                # what mode it is.
+                "randomize_questions": code.randomize_questions,
                 # Sorted so the "sent to" line doesn't visually reorder on a
                 # background poll when nothing actually changed - a poll
                 # that reorders things nobody touched reads as a bug.

@@ -8,6 +8,7 @@ import { PracticeFeedbackCard } from './PracticeFeedbackCard';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import { QuizProgress } from './QuizProgress';
 import styles from './PlayPage.module.css';
+import { orderQuestions } from './questionOrder';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 /** Longer than the text debounce. A drawing payload is orders of magnitude
@@ -28,6 +29,7 @@ function seedAnswers(initialAnswers: ResumedAnswer[]): Record<number, PlayerAnsw
 
 export function QuizStep({
   quiz,
+  questionOrder,
   accessCodeId,
   playerName,
   playerId,
@@ -49,6 +51,13 @@ export function QuizStep({
    * editing the code mid-session must not change the rules of work already
    * in progress. Defaults to GRADED so any caller that has not been taught
    * about practice gets the behaviour that existed before it. */
+  /** The order this ATTEMPT was given, as question ids, from
+   *  /play/start. Undefined or empty means the quiz's authored order.
+   *
+   *  The questions themselves still arrive from /play/validate-code - this
+   *  only arranges what is already loaded, which is why randomization needed
+   *  no change to the join flow. */
+  questionOrder?: number[];
   mode?: AssessmentMode;
   /** Feedback already earned before a reload, so a refresh mid-practice does
    * not wipe the explanations the player was reading. */
@@ -59,7 +68,7 @@ export function QuizStep({
   onPracticeComplete?: (feedback: PracticeFeedback[]) => void;
 }) {
   const isPractice = mode === 'PRACTICE';
-  const questions = quiz.questions ?? [];
+  const questions = orderQuestions(quiz.questions ?? [], questionOrder);
   const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => seedAnswers(initialAnswers));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);

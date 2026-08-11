@@ -47,6 +47,8 @@ from app.services.access_codes import (
 from app.services.attempts import (
     DrawingConflict,
     find_attempt,
+    frozen_question_order,
+    presented_question_ids,
     is_answered,
     is_checked,
     mark_checked,
@@ -128,6 +130,15 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
         # coach edits the code mid-session the work already done keeps the
         # rules it was started under.
         "mode": attempt.mode,
+        # The order this attempt was given, reconciled against the quiz as it
+        # exists now. Returned on BOTH a fresh start and a resume, which is
+        # what makes a refresh reproduce the identical sequence without the
+        # client storing anything.
+        #
+        # Question DELIVERY stays in /validate-code - this is only the order
+        # to arrange the already-loaded questions by, so the join flow is
+        # untouched.
+        "question_order": presented_question_ids(attempt, attempt.quiz),
         "answers": [
             {
                 "question_id": a.question_id,
@@ -265,6 +276,13 @@ def start_attempt():
         # the assignment decides, and this freezes that decision so a later
         # edit to the code cannot reclassify work already done.
         mode=access_code.mode,
+        # Shuffled ONCE, here, and never again. Graded attempts always get
+        # None, so graded ordering is unchanged by construction rather than by
+        # a filter somebody could forget to apply.
+        question_order=frozen_question_order(
+            access_code.quiz,
+            randomize=access_code.is_practice and access_code.randomize_questions,
+        ),
     )
     db.session.add(attempt)
     try:

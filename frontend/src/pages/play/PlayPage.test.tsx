@@ -49,6 +49,7 @@ const startedAttempt: AttemptState = {
   attempt_id: 900,
   status: 'in_progress',
   mode: 'GRADED',
+  question_order: [],
   feedback: [],
   answers: [],
 };

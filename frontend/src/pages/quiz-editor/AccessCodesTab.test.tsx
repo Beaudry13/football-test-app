@@ -38,6 +38,7 @@ const activeCode: AccessCode = {
   code: 'ABC234',
   mode: 'GRADED',
   is_practice: false,
+  randomize_questions: false,
   activated_at: '2026-08-01T00:00:00Z',
   expires_at: '2026-08-02T00:00:00Z',
   is_active: true,
@@ -60,7 +61,7 @@ describe('AccessCodesTab group selection', () => {
     await screen.findByText('This Quiz has no active access code.');
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'GRADED'));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'GRADED', false));
   });
 
   it('passes the checked group ids through to activateQuiz', async () => {
@@ -73,7 +74,7 @@ describe('AccessCodesTab group selection', () => {
     await user.click(await screen.findByRole('checkbox', { name: /Defense/ }));
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7], 'GRADED'));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7], 'GRADED', false));
   });
 
   it('shows which groups the active code is restricted to', async () => {
@@ -166,7 +167,7 @@ describe('AccessCodesTab activation guard', () => {
     await user.click(screen.getByRole('radio', { name: /Practice/ }));
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'PRACTICE'));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'PRACTICE', false));
   });
 
   it('says on the active code whether it counts', async () => {

@@ -26,6 +26,7 @@ const baseEntry: ActiveQuizStatus = {
   roster_size: 2,
   mode: 'GRADED',
   is_practice: false,
+  randomize_questions: false,
   submitted: [{ player_name: 'Jordan Smith', submitted_at: '2026-01-01T00:00:00Z' }],
   in_progress: [{ player_name: 'Alex Lee', started_at: '2026-01-01T00:00:00Z' }],
   not_started: [],

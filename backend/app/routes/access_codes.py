@@ -136,6 +136,10 @@ def activate_quiz(quiz_id: int):
         # The assignment decides how the quiz is being used. Every attempt
         # started under this code copies it and freezes it.
         mode=data["mode"],
+        # Practice-only. Stored regardless of mode so the value survives if a
+        # coach flips the mode while filling the form, but frozen_question_order
+        # ignores it for anything graded.
+        randomize_questions=data["randomize_questions"],
         groups=groups,
     )
     db.session.add(access_code)
