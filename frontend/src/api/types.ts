@@ -43,7 +43,112 @@ export interface Coach {
   organization: string;
   organization_id: number;
   role: CoachRole;
+  /** Peira PLATFORM ownership - a different axis from `role`, which is this
+   *  coach's rank inside their own organization. Used only to decide whether
+   *  to render the Owner nav control; hiding that control is cosmetic, and
+   *  every /api/owner route enforces the permission server-side regardless. */
+  is_platform_owner: boolean;
   created_at: string;
+}
+
+// --- Peira Owner Dashboard ------------------------------------------------
+// Platform-level adoption metadata. Deliberately contains no customer
+// content: no quiz titles, questions, answers, player names or playbook
+// filenames. See backend/app/services/platform_metrics.py.
+
+export interface PlatformTotals {
+  organizations: number;
+  coaches: number;
+  active_players: number;
+  players: number;
+  quizzes: number;
+  graded_attempts: number;
+  practice_attempts: number;
+  documents: number;
+}
+
+export interface PlatformWindow {
+  new_organizations: number;
+  new_coaches: number;
+  new_quizzes: number;
+  documents_uploaded: number;
+  graded_attempts: number;
+  practice_attempts: number;
+  active_organizations: number;
+}
+
+/** How many organizations have EVER used a feature. Adoption, not frequency. */
+export interface FeatureAdoption {
+  key: string;
+  label: string;
+  organizations: number;
+  /** Present only on the organization detail payload. */
+  used?: boolean;
+}
+
+export interface PlatformOverview {
+  totals: PlatformTotals;
+  /** Keyed by window length in days - "7" and "30". */
+  windows: Record<string, PlatformWindow>;
+  feature_adoption: FeatureAdoption[];
+  generated_at: string;
+}
+
+export interface OwnerOrganizationRow {
+  id: number;
+  /** The organization's own registered name. Never inferred from an email
+   *  domain, IP or location. */
+  name: string;
+  coaches: number;
+  active_players: number;
+  quizzes: number;
+  graded_attempts: number;
+  practice_attempts: number;
+  /** Null when the organization has never done anything meaningful. */
+  last_activity: string | null;
+  created_at: string;
+  /** DATA-derived: no players, no quizzes, no attempts. Not name-derived -
+   *  this is how leftover probe organizations are found. */
+  is_empty: boolean;
+}
+
+export interface OwnerCoachRow {
+  id: number;
+  username: string;
+  email: string;
+  role: CoachRole;
+  is_platform_owner: boolean;
+  organization_id: number;
+  organization_name: string;
+  joined_at: string;
+  quizzes_created: number;
+  /** Last activity ATTRIBUTABLE to this coach - quiz created, playbook
+   *  uploaded, or answer graded. NOT a login or "last seen"; Peira records
+   *  neither. Null means nothing attributable exists, rendered as an em dash
+   *  rather than guessed at. */
+  last_attributed_activity: string | null;
+}
+
+export interface OwnerOrganizationUsage {
+  coaches: number;
+  active_players: number;
+  players: number;
+  groups: number;
+  folders: number;
+  quizzes: number;
+  documents: number;
+  graded_attempts: number;
+  practice_attempts: number;
+}
+
+export interface OwnerOrganizationDetail {
+  id: number;
+  name: string;
+  created_at: string;
+  last_activity: string | null;
+  usage: OwnerOrganizationUsage;
+  features: FeatureAdoption[];
+  coaches: OwnerCoachRow[];
 }
 
 export interface OrganizationMember {

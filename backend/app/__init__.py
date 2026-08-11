@@ -28,6 +28,10 @@ def create_app(env_name: str | None = None) -> Flask:
 
     register_blueprints(app)
 
+    from app.cli import register_cli
+
+    register_cli(app)
+
     @app.get("/api/health")
     def health_check():
         # Render's healthCheckPath (see render.yaml) hits this to decide

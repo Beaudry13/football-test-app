@@ -26,6 +26,25 @@ class Coach(TimestampMixin, db.Model):
         db.Integer, db.ForeignKey("organizations.id"), nullable=False, index=True
     )
     role = db.Column(db.Enum(CoachRole), nullable=False, default=CoachRole.MEMBER)
+    # PLATFORM OWNERSHIP - deliberately a separate boolean, NOT a third
+    # CoachRole value.
+    #
+    # Two reasons. `coachrole` is a native Postgres enum, and adding a value
+    # to one is a one-way door (see CLAUDE.md). More importantly it would be
+    # semantically wrong: the Peira operator is an ADMIN of their own
+    # organization *and* the platform owner, and a role column holds one
+    # value - making OWNER a role would force giving up org-admin rights to
+    # gain platform rights.
+    #
+    # Orthogonal by construction: is_admin(), own_quizzes_query() and every
+    # tenancy helper ignore this column, so Coach View, Admin View and
+    # organization boundaries cannot be widened by setting it. The elevated
+    # permission exists only on /api/owner routes.
+    #
+    # Granted by `flask owner grant <email>`, never by a migration.
+    is_platform_owner = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
     # The ONLY piece of onboarding state that is stored. Every checklist step
     # is derived from real data on each request (see services/onboarding.py);
     # dismissal is a preference, so there is nothing to derive it from.
@@ -60,6 +79,7 @@ class Coach(TimestampMixin, db.Model):
         return bcrypt.check_password_hash(self.password_hash, raw_password)
 
     def is_admin(self) -> bool:
+        """Organization admin. Says nothing about platform ownership."""
         return self.role == CoachRole.ADMIN
 
     def to_dict(self) -> dict:
@@ -73,5 +93,9 @@ class Coach(TimestampMixin, db.Model):
             "organization": self.organization.name if self.organization else None,
             "organization_id": self.organization_id,
             "role": self.role.value,
+            # Needed so the client can render the Owner nav control. Hiding
+            # the control is cosmetic - every /api/owner route enforces this
+            # server-side regardless of what the client believes.
+            "is_platform_owner": self.is_platform_owner,
             "created_at": self.created_at.isoformat(),
         }

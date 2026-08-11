@@ -990,6 +990,14 @@ class TestOfficialScopeGuard:
         # "Has this coach's product ever been used", not "how did anyone do".
         # Documented at the call site.
         "app/services/onboarding.py",
+        # Peira Owner Dashboard. Reports graded and practice attempt volume as
+        # two SEPARATE platform metrics, each with an explicit
+        # `PlayerAttempt.mode == ...` filter - so practice is never folded
+        # into a graded figure. official_only would be wrong here rather than
+        # merely unnecessary: it would silently zero the practice column the
+        # dashboard exists to show. These are adoption numbers for the
+        # operator, not performance numbers for a coach.
+        "app/services/platform_metrics.py",
     }
 
     def test_every_reporting_query_goes_through_attempt_scope(self):

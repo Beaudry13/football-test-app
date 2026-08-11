@@ -15,6 +15,7 @@ const mockCoach: Coach = {
   organization: 'Wildcats',
   organization_id: 1,
   role: 'admin',
+  is_platform_owner: false,
   created_at: '2026-01-01T00:00:00Z',
 };
 

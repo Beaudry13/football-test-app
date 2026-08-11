@@ -1,0 +1,418 @@
+/* Peira Owner Dashboard.
+
+   A PLATFORM OPS CONSOLE, NOT ANOTHER COACH PAGE. The coach app is a
+   notebook: warm accents, generous padding, card-per-thing. This is a
+   different job - scanning a table of tenants and spotting the one that
+   went quiet - so it is compact, monospaced where numbers matter, and
+   dense by default.
+
+   NAMING NOTE (see styles/tokens.css): every custom property referenced
+   here is an existing --peira-* token. This file declares NO :root
+   variables. Two :root blocks declaring the same property name are not
+   scoped - load order wins everywhere - which is exactly how coach pages
+   once silently rendered with the player palette. */
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 20px 64px;
+}
+
+.headerRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--peira-text);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.subtitle {
+  color: var(--peira-text-muted);
+  font-size: 13px;
+  margin: 0 0 18px;
+}
+
+/* --- Owner sub-navigation ------------------------------------------------
+   Deliberately its own strip rather than the coach tab bar: this is a
+   different level of the product, and it should not read as another
+   section of Coach View. */
+
+.subnav {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--peira-border);
+  margin-bottom: 20px;
+}
+
+.subnavLink {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--peira-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.subnavLink:hover {
+  color: var(--peira-text);
+}
+
+.subnavLinkActive {
+  color: var(--peira-text);
+  border-bottom-color: var(--color-accent);
+}
+
+/* --- Metric strip --------------------------------------------------------
+   Small tiles in a tight grid. Numbers are the content; labels are
+   deliberately quiet and the tiles do not grow to fill space, because a
+   giant card per number is exactly what makes an ops page unscannable. */
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px;
+  background: var(--peira-border);
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-md);
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+
+.metric {
+  background: var(--peira-surface);
+  padding: 12px 14px;
+}
+
+.metricValue {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--peira-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.metricLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--peira-text-muted);
+  margin-top: 3px;
+}
+
+/* --- Section blocks ------------------------------------------------------ */
+
+.section {
+  margin-bottom: 26px;
+}
+
+.sectionHeading {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--peira-text-muted);
+  margin: 0 0 8px;
+}
+
+.sectionNote {
+  font-size: 12px;
+  color: var(--peira-text-muted);
+  margin: 0 0 10px;
+  line-height: 1.5;
+  max-width: 78ch;
+}
+
+.windowGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.windowCard {
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+  padding: 12px 14px;
+}
+
+.windowTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-accent);
+  margin-bottom: 8px;
+}
+
+.windowRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: 13px;
+  color: var(--peira-text-muted);
+}
+
+.windowRow strong {
+  color: var(--peira-text);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+
+/* --- Tables --------------------------------------------------------------
+   The core of the dashboard. Tight rows, tabular numerals so columns of
+   digits line up, and a horizontal scroll container so a narrow window
+   never makes the page itself scroll sideways. */
+
+.tableWrap {
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-md);
+  overflow-x: auto;
+  background: var(--peira-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--peira-text-muted);
+  font-weight: 700;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--peira-border);
+  background: var(--peira-bg);
+  position: sticky;
+  top: 0;
+}
+
+.table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--peira-border);
+  color: var(--peira-text);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sortButton {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.sortButton:hover {
+  color: var(--peira-text);
+}
+
+.orgLink {
+  color: var(--color-accent-bright);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.orgLink:hover {
+  text-decoration: underline;
+}
+
+/* An em dash for "we genuinely do not know", never a zero or a guessed
+   date - the distinction is the whole point of the activity metrics. */
+.unknown {
+  color: var(--peira-text-muted);
+}
+
+/* --- Toolbar ------------------------------------------------------------- */
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.search {
+  flex: 1 1 240px;
+  min-width: 200px;
+  padding: 7px 10px;
+  font-size: 13px;
+  background: var(--peira-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--peira-radius-sm);
+  color: var(--peira-text);
+}
+
+.search::placeholder {
+  color: var(--peira-text-muted);
+}
+
+.toggle {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--peira-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--peira-radius-sm);
+  color: var(--peira-text-muted);
+  cursor: pointer;
+}
+
+.toggleActive {
+  color: var(--peira-text);
+  border-color: var(--color-accent);
+}
+
+.resultCount {
+  font-size: 12px;
+  color: var(--peira-text-muted);
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Badges -------------------------------------------------------------- */
+
+.tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--peira-text-muted);
+}
+
+.tagEmpty {
+  background: var(--peira-warning-bg);
+  color: var(--peira-text);
+}
+
+.tagOwner {
+  background: var(--peira-success-bg);
+  color: var(--peira-success);
+}
+
+/* --- Feature adoption ---------------------------------------------------- */
+
+.adoptionList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.adoptionRow {
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-sm);
+  background: var(--peira-surface);
+  padding: 10px 12px;
+}
+
+.adoptionCount {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--peira-text);
+}
+
+.adoptionLabel {
+  font-size: 12px;
+  color: var(--peira-text-muted);
+  margin-top: 2px;
+}
+
+.adoptionUsed {
+  color: var(--peira-success);
+}
+
+/* --- Detail page --------------------------------------------------------- */
+
+.detailHead {
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+
+.detailName {
+  font-family: var(--font-heading);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--peira-text);
+  margin: 0 0 6px;
+}
+
+.detailMeta {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--peira-text-muted);
+}
+
+.detailMeta strong {
+  color: var(--peira-text);
+  font-weight: 600;
+}
+
+.backLink {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--peira-text-muted);
+  text-decoration: none;
+  margin-bottom: 10px;
+}
+
+.backLink:hover {
+  color: var(--peira-text);
+}
+
+.empty {
+  padding: 22px;
+  text-align: center;
+  color: var(--peira-text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 14px 12px 48px;
+  }
+
+  .metricValue {
+    font-size: 19px;
+  }
+}

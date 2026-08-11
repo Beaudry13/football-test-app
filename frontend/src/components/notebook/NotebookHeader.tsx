@@ -43,6 +43,17 @@ const ADMIN_LINK = {
   isActive: (path: string) => path.startsWith('/admin'),
 };
 
+// Shown only to Peira PLATFORM owners, and kept separate from ADMIN_LINK
+// because it is a different level entirely: Admin View is one organization's
+// view of itself, this is the product's view of every organization. An org
+// admin never sees it, and hiding it is cosmetic anyway - /api/owner enforces
+// the permission server-side.
+const OWNER_LINK = {
+  to: '/owner',
+  label: 'Owner',
+  isActive: (path: string) => path.startsWith('/owner'),
+};
+
 /** Shared header for every notebook-themed page. Reads auth state itself
  * (no props needed) so it can be dropped into any page: shows the full
  * nav + coach name + logout when signed in, or just the brand when not
@@ -99,6 +110,23 @@ export function NotebookHeader() {
                 data-tour="admin-view"
               >
                 {ADMIN_LINK.label}
+              </Link>
+            </>
+          )}
+          {/* Peira platform owners only - a level above the organization,
+              rendered after Admin View so the escalation reads left to
+              right: my work, my organization, the product. Hiding it is
+              cosmetic; /api/owner enforces the permission server-side. */}
+          {coach.is_platform_owner && (
+            <>
+              <span className={styles.navDivider} />
+              <Link
+                to={OWNER_LINK.to}
+                className={`${styles.navLink} ${
+                  OWNER_LINK.isActive(location.pathname) ? styles.navLinkActive : ''
+                }`}
+              >
+                {OWNER_LINK.label}
               </Link>
             </>
           )}

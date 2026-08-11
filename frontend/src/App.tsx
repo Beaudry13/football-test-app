@@ -20,6 +20,11 @@ import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { AdminQuizzesPage } from './pages/admin/AdminQuizzesPage';
+import { OwnerLayout } from './pages/owner/OwnerLayout';
+import { OwnerOverviewPage } from './pages/owner/OwnerOverviewPage';
+import { OwnerOrganizationsPage } from './pages/owner/OwnerOrganizationsPage';
+import { OwnerOrganizationDetailPage } from './pages/owner/OwnerOrganizationDetailPage';
+import { OwnerCoachesPage } from './pages/owner/OwnerCoachesPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { DocumentPage } from './pages/documents/DocumentPage';
 import { PlayPage } from './pages/play/PlayPage';
@@ -58,6 +63,20 @@ function App() {
             <Route element={<NotebookLayout />}>
               <Route path="/team" element={<TeamPage />} />
               <Route path="/admin/quizzes" element={<AdminQuizzesPage />} />
+              {/* PEIRA OWNER DASHBOARD - a level above organizations, not a
+                  section of Admin View. Rendering these routes is not a
+                  permission: every screen fetches from /api/owner, which
+                  enforces platform ownership server-side, so a non-owner who
+                  types the URL gets 404s and an empty page rather than data. */}
+              <Route path="/owner" element={<OwnerLayout />}>
+                <Route index element={<OwnerOverviewPage />} />
+                <Route path="organizations" element={<OwnerOrganizationsPage />} />
+                <Route
+                  path="organizations/:organizationId"
+                  element={<OwnerOrganizationDetailPage />}
+                />
+                <Route path="coaches" element={<OwnerCoachesPage />} />
+              </Route>
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:documentId" element={<DocumentPage />} />
               <Route path="/roster" element={<MasterRosterPage />} />

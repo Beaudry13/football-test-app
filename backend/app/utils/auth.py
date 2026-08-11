@@ -42,6 +42,29 @@ def require_admin() -> Coach:
     return coach
 
 
+def require_platform_owner() -> Coach:
+    """The authenticated coach, who must be a Peira PLATFORM owner.
+
+    A DIFFERENT AXIS FROM require_admin(). That one asks "may you administer
+    your organization"; this asks "do you operate Peira itself". They are
+    independent booleans on purpose - see Coach.is_platform_owner - and
+    nothing in this module's tenancy helpers reads the owner flag, so
+    granting it cannot widen Coach View, Admin View, or any organization
+    boundary. The elevated permission exists only on /api/owner routes.
+
+    404, NOT 403, and that differs from require_admin on purpose. A 403 tells
+    a customer "this area exists and you are not allowed in", which confirms
+    the owner dashboard's existence to anyone probing URLs. Admin View is a
+    feature coaches already know about; the owner area is not. This follows
+    the same rule get_visible_quiz documents: an error must not teach the
+    caller that something exists.
+    """
+    coach = current_coach()
+    if not coach.is_platform_owner:
+        raise ApiError("Not found", status_code=404)
+    return coach
+
+
 def own_quizzes_query(coach: Coach | None = None):
     """THE scope for every Coach View list. Quizzes this coach created.
 
