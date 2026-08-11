@@ -83,6 +83,26 @@
    to the top on scroll (position: sticky rather than fixed, so it never
    needs a compensating top-padding hack on the content below it). */
 
+/* THE STICKY GLOBAL HEADER, AND WHY IT IS OPAQUE.
+
+   It used to be `rgba(20, 20, 20, 0.7)` with a 16px backdrop blur - a frosted
+   pill. Frosted works over photography; it does not work over a dense grid of
+   high-contrast cards. Quiz titles, folder controls and Duplicate/Delete
+   buttons scrolled underneath and stayed legible THROUGH the navigation, so
+   the header read as a transparency bug rather than a design.
+
+   Two separate leaks had to be closed, and missing either one leaves the
+   other visible:
+
+     1. The pill itself was 30% transparent. It is now a solid surface.
+     2. The pill FLOATS - 16px below the viewport top, 24px in from each side.
+        Those margins were pure gaps: content scrolled through the band above
+        and beside the pill with nothing covering it at all. The ::before
+        below masks exactly that band.
+
+   The z-index is deliberately UNCHANGED at 10. It was never the problem -
+   content sits at 1, the Help menu at 40 and modals at 100, and raising the
+   header would put it over its own dropdowns. */
 .header {
   position: sticky;
   top: var(--space-4);
@@ -95,10 +115,33 @@
   margin: var(--space-4) var(--space-6) 0;
   padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-pill);
-  background: rgba(20, 20, 20, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  /* Opaque. `backdrop-filter` is gone with the translucency it existed to
+     soften - it also created a containing block for fixed-position
+     descendants, which is a hazard for the dropdowns living inside here. */
+  background: var(--peira-surface);
   border: 1px solid var(--color-border);
+}
+
+/* The mask for the gap AROUND the floating pill.
+
+   Inset negatively by exactly the header's own offsets, so it spans from the
+   viewport top down to the bottom of the pill and out to both page edges.
+   Painted in the PAGE background, so it is invisible at rest - it only ever
+   hides content that has scrolled up into the band.
+
+   `z-index: -1` keeps it behind the pill's own background while staying
+   INSIDE the header's stacking context, so it still covers page content
+   without needing a z-index of its own that could outrank an overlay. */
+.header::before {
+  content: '';
+  position: absolute;
+  top: calc(-1 * var(--space-4));
+  left: calc(-1 * var(--space-6));
+  right: calc(-1 * var(--space-6));
+  bottom: 0;
+  background: var(--peira-bg);
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* Wraps a <PeiraLogo/> (see components/brand/PeiraLogo.tsx), which styles
