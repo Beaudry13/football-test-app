@@ -428,4 +428,111 @@ describe('DocumentPage delete history with identical questions', () => {
     await waitFor(() => expect(remove).toHaveBeenLastCalledWith(7, 90));
     expect(remove).not.toHaveBeenCalledWith(7, 55);
   });
+
+  // -----------------------------------------------------------------------
+  // REGRESSION: the TIGER white screen.
+  //
+  //   TypeError: Cannot read properties of undefined (reading 'x')
+  //     at DocumentPage.tsx:148  (question.region!.x)
+  //
+  // The filter was `q.region?.document_page_id === openPage?.id`. With no
+  // page open, `openPage?.id` is undefined - and an ordinary question with no
+  // region also yields undefined. `undefined === undefined` passed every
+  // non-region question through, and the next memo dereferenced a region that
+  // was never there. Nothing caught the throw, so React unmounted the whole
+  // app.
+  // -----------------------------------------------------------------------
+
+  const ordinaryQuestion = {
+    id: 55,
+    question_text: 'Which coverage?',
+    question_type: 'multiple_choice',
+    options: [],
+  };
+
+  function mockRememberedQuiz() {
+    sessionStorage.setItem('peira.playbook.lastQuizId', '7');
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([
+      { id: 7, title: 'Install' },
+    ] as never);
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({
+      id: 7,
+      title: 'Install',
+      questions: [ordinaryQuestion],
+    } as never);
+  }
+
+  it('survives a playbook with no pages while a quiz is remembered', async () => {
+    mockRememberedQuiz();
+    vi.spyOn(documentsApi, 'getDocument').mockResolvedValue({
+      ...sampleDocument,
+      title: 'TIGER',
+      page_count: 4,
+      pages: [],
+    });
+
+    renderDocument();
+
+    // The page renders instead of the app disappearing.
+    expect(await screen.findByText('TIGER')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText(/no pages available to display/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('does not treat an ordinary question as belonging to the open page', async () => {
+    mockRememberedQuiz();
+    vi.spyOn(documentsApi, 'getDocument').mockResolvedValue(sampleDocument);
+    vi.spyOn(documentsApi, 'getDocumentPage').mockResolvedValue(
+      makePage(1, { image_url: '/api/media/v1.page1.sig' }),
+    );
+    vi.spyOn(documentsApi, 'getPageTextRuns').mockResolvedValue([]);
+
+    renderDocument();
+    await screen.findByText('CROWN');
+
+    // A question with no region belongs to no page - the count must be 0, not
+    // 1, and the page must not crash reading its non-existent region.
+    await waitFor(() => expect(screen.getByText(/0 on this page/)).toBeInTheDocument());
+  });
+
+  it('survives a page that fails to open while a quiz is remembered', async () => {
+    mockRememberedQuiz();
+    vi.spyOn(documentsApi, 'getDocument').mockResolvedValue({
+      ...sampleDocument,
+      title: 'TIGER',
+    });
+    vi.spyOn(documentsApi, 'getDocumentPage').mockRejectedValue(new Error('render failed'));
+    vi.spyOn(documentsApi, 'getPageTextRuns').mockResolvedValue([]);
+
+    renderDocument();
+
+    expect(await screen.findByText('TIGER')).toBeInTheDocument();
+    // An error banner, not a blank application.
+    await waitFor(() => expect(screen.getByText(/render failed/i)).toBeInTheDocument());
+  });
+
+  it('skips a region-typed question whose region is missing rather than crashing', async () => {
+    sessionStorage.setItem('peira.playbook.lastQuizId', '7');
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([{ id: 7, title: 'Install' }] as never);
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({
+      id: 7,
+      title: 'Install',
+      questions: [
+        // Shaped like a playbook question but with the region absent - the
+        // exact condition the non-null assertion promised could not happen.
+        { id: 56, question_text: 'Name it', question_type: 'fill_blank', region: null },
+      ],
+    } as never);
+    vi.spyOn(documentsApi, 'getDocument').mockResolvedValue(sampleDocument);
+    vi.spyOn(documentsApi, 'getDocumentPage').mockResolvedValue(
+      makePage(1, { image_url: '/api/media/v1.page1.sig' }),
+    );
+    vi.spyOn(documentsApi, 'getPageTextRuns').mockResolvedValue([]);
+
+    renderDocument();
+
+    expect(await screen.findByText('CROWN')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/0 on this page/)).toBeInTheDocument());
+  });
 });

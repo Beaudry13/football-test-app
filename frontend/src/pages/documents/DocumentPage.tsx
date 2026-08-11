@@ -134,23 +134,49 @@ export function DocumentPage() {
     };
   }, [targetQuizId]);
 
+  /** Region-backed questions belonging to the page currently open.
+   *
+   * BOTH GUARDS ARE LOad-BEARING, and their absence white-screened the app.
+   *
+   * The old test was `q.region?.document_page_id === openPage?.id`. When no
+   * page is open, `openPage?.id` is undefined - and an ORDINARY question
+   * (multiple choice, written, anything with no region) also yields undefined
+   * for `q.region?.document_page_id`. `undefined === undefined` is true, so
+   * every non-region question in the selected quiz passed the filter, and the
+   * next memo dereferenced `question.region!.x` on a question that has no
+   * region at all.
+   *
+   * Requiring an open page AND an actual region makes the comparison one
+   * between two real ids, never between two absences. */
   const pageQuestions = useMemo(
-    () => questions.filter((q) => q.region?.document_page_id === openPage?.id),
+    () =>
+      openPage === null
+        ? []
+        : questions.filter((q) => !!q.region && q.region.document_page_id === openPage.id),
     [questions, openPage],
   );
 
   const regions = useMemo(
     () =>
-      pageQuestions.map((question, index) => ({
-        id: question.id,
-        label: String(index + 1),
-        rect: {
-          x: question.region!.x,
-          y: question.region!.y,
-          width: question.region!.width,
-          height: question.region!.height,
-        },
-      })),
+      pageQuestions.flatMap((question, index) => {
+        // Narrowed rather than asserted. `region!` was a promise to the type
+        // checker that the data did not keep; a question whose region is
+        // missing is skipped instead of crashing the page.
+        const region = question.region;
+        if (!region) return [];
+        return [
+          {
+            id: question.id,
+            label: String(index + 1),
+            rect: {
+              x: region.x,
+              y: region.y,
+              width: region.width,
+              height: region.height,
+            },
+          },
+        ];
+      }),
     [pageQuestions],
   );
 
@@ -257,11 +283,13 @@ export function DocumentPage() {
       setSelectedId(null);
       flash('Deleted');
 
+      // Same reasoning as `regions`: never assert a field the server may omit.
+      if (!question.region) return;
       const rect = {
-        x: question.region!.x,
-        y: question.region!.y,
-        width: question.region!.width,
-        height: question.region!.height,
+        x: question.region.x,
+        y: question.region.y,
+        width: question.region.width,
+        height: question.region.height,
       };
       // The live row this entry acts on. Null while the question is
       // deleted; set to the NEW id each time undo re-creates it.
@@ -494,6 +522,21 @@ export function DocumentPage() {
 
         <div className={styles.viewer} ref={surfaceRef}>
           {isRendering && <LoadingState label="Rendering page" />}
+          {/* A playbook whose pages are missing or failed to render still has
+              a usable screen: the title, the page count, and a plain
+              explanation - rather than an empty frame that reads as a hang. */}
+          {!isRendering && document_.pages.length === 0 && (
+            <p className={styles.instruction}>
+              This playbook has no pages available to display. The file may still be processing, or
+              its pages may have failed to render. Nothing has been lost - try again shortly, and
+              re-upload it if the problem persists.
+            </p>
+          )}
+          {!isRendering && document_.pages.length > 0 && !openPage && !error && (
+            <p className={styles.instruction}>
+              This page could not be opened. Choose another page from the strip.
+            </p>
+          )}
           {!isRendering && openPage?.image_url && (
             <RegionDraw
               existing={regions}

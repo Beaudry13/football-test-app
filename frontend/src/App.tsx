@@ -28,6 +28,7 @@ import { OwnerCoachesPage } from './pages/owner/OwnerCoachesPage';
 import { OwnerMergePage } from './pages/owner/OwnerMergePage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { DocumentPage } from './pages/documents/DocumentPage';
+import { RoutedErrorBoundary } from './components/RouteErrorBoundary';
 import { PlayPage } from './pages/play/PlayPage';
 import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
 
@@ -39,6 +40,10 @@ function App() {
             dashboard, and inside auth because both launchers are behind
             login. Mounts the overlay once for the whole app. */}
         <TourProvider>
+        {/* One broken screen must never blank the whole application. A
+            playbook did exactly that in production: a render throw unmounted
+            the entire tree, header and navigation included. */}
+        <RoutedErrorBoundary>
         <Routes>
           {/* "/" is always the public marketing homepage, signed in or not -
               a coach who wants their dashboard uses the nav/logo (which
@@ -99,6 +104,7 @@ function App() {
 
           <Route path="*" element={<NotFoundRedirect />} />
         </Routes>
+        </RoutedErrorBoundary>
         </TourProvider>
       </AuthProvider>
     </BrowserRouter>
