@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { QuestionEditor } from './QuestionEditor';
@@ -272,5 +272,230 @@ describe('QuestionEditor image upload on create', () => {
     renderEditor({ initialExplanation: 'Look at the safety depth.', submitLabel: 'Save question' });
 
     expect(screen.getByLabelText(/Explanation/)).toHaveValue('Look at the safety depth.');
+  });
+
+  // -----------------------------------------------------------------------
+  // Attaching an image: paste, drop and pick are ONE path.
+  //
+  // The coach's workflow is Snipping Tool then Ctrl+V. Before this, a
+  // screenshot had to be saved to disk and browsed for - three steps to avoid
+  // one. Nothing here uploads: every route produces a File and hands it to the
+  // same state the file input writes to, so the create request is unchanged
+  // and stays atomic (question + image commit together, server-side).
+  // -----------------------------------------------------------------------
+
+  function imageFile(name = 'shot.png', type = 'image/png') {
+    return new File([new Uint8Array([1, 2, 3])], name, { type });
+  }
+
+  /** A paste payload shaped like a real ClipboardEvent's clipboardData. */
+  function clipboardWith(items: { kind: string; type: string; file?: File }[]) {
+    return {
+      items: items.map((i) => ({
+        kind: i.kind,
+        type: i.type,
+        getAsFile: () => i.file ?? null,
+      })),
+      getData: () => '',
+    };
+  }
+
+  function formOf() {
+    return screen.getByLabelText('Question').closest('form') as HTMLFormElement;
+  }
+
+  it('pastes a PNG screenshot straight onto the unsaved question', async () => {
+    renderEditor({ allowImage: true });
+
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([{ kind: 'file', type: 'image/png', file: imageFile() }]),
+    });
+
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+  });
+
+  it('pastes a JPEG', async () => {
+    renderEditor({ allowImage: true });
+
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([
+        { kind: 'file', type: 'image/jpeg', file: imageFile('shot.jpg', 'image/jpeg') },
+      ]),
+    });
+
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+  });
+
+  it('attaches a pasted image while the question textarea has focus', async () => {
+    const user = userEvent.setup();
+    renderEditor({ allowImage: true });
+    const textarea = screen.getByLabelText('Question');
+    await user.type(textarea, 'Which coverage is this?');
+
+    // Pasting from the field the cursor is actually in - the realistic case.
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([{ kind: 'file', type: 'image/png', file: imageFile() }]),
+    });
+
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+    expect(textarea).toHaveValue('Which coverage is this?');
+  });
+
+  it('leaves an ordinary text paste completely alone', async () => {
+    renderEditor({ allowImage: true });
+    const form = formOf();
+
+    const event = createEvent.paste(form, {
+      clipboardData: clipboardWith([{ kind: 'string', type: 'text/plain' }]),
+    });
+    fireEvent(form, event);
+
+    // Not prevented, so the browser performs its normal insertion.
+    expect(event.defaultPrevented).toBe(false);
+    expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument();
+  });
+
+  it('lets text through when the clipboard carries BOTH text and an image', async () => {
+    renderEditor({ allowImage: true });
+    const form = formOf();
+
+    const event = createEvent.paste(form, {
+      clipboardData: clipboardWith([
+        { kind: 'string', type: 'text/plain' },
+        { kind: 'file', type: 'image/png', file: imageFile() },
+      ]),
+    });
+    fireEvent(form, event);
+
+    // The image attaches AND the text still pastes - swallowing the text
+    // would be the surprising half.
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('accepts a dropped image', async () => {
+    renderEditor({ allowImage: true });
+    const zone = screen.getByRole('button', { name: /Attach an image/ });
+
+    fireEvent.drop(zone, { dataTransfer: { files: [imageFile()] } });
+
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+  });
+
+  it('still accepts a file chosen through the picker', async () => {
+    const user = userEvent.setup();
+    renderEditor({ allowImage: true });
+
+    await user.upload(screen.getByLabelText('Question image'), imageFile());
+
+    expect(await screen.findByAltText('Selected question image')).toBeInTheDocument();
+  });
+
+  it('ignores non-image clipboard content safely', async () => {
+    renderEditor({ allowImage: true });
+
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([
+        {
+          kind: 'file',
+          type: 'application/pdf',
+          file: new File(['x'], 'a.pdf', { type: 'application/pdf' }),
+        },
+      ]),
+    });
+
+    expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('rejects a disallowed image type that arrives by drop', async () => {
+    // The file PICKER is already filtered by its accept attribute, so a bad
+    // type cannot reach the validator that way. Paste and drop bypass accept
+    // entirely - which is precisely where the check earns its place.
+    renderEditor({ allowImage: true });
+    const zone = screen.getByRole('button', { name: /Attach an image/ });
+
+    fireEvent.drop(zone, {
+      dataTransfer: { files: [new File(['x'], 'evil.svg', { type: 'image/svg+xml' })] },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/PNG, JPEG or WebP/);
+    expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument();
+  });
+
+  it('rejects a disallowed image type that arrives by paste', async () => {
+    renderEditor({ allowImage: true });
+
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([
+        {
+          kind: 'file',
+          type: 'image/svg+xml',
+          file: new File(['x'], 'evil.svg', { type: 'image/svg+xml' }),
+        },
+      ]),
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/PNG, JPEG or WebP/);
+    expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument();
+  });
+
+  it('replaces a pasted image with another before saving', async () => {
+    renderEditor({ allowImage: true });
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([
+        { kind: 'file', type: 'image/png', file: imageFile('first.png') },
+      ]),
+    });
+    await screen.findByAltText('Selected question image');
+
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([
+        { kind: 'file', type: 'image/png', file: imageFile('second.png') },
+      ]),
+    });
+
+    // Still exactly one preview - replaced, not appended.
+    await waitFor(() => expect(screen.getAllByAltText('Selected question image')).toHaveLength(1));
+  });
+
+  it('removes a pasted image and saves the question without one', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ allowImage: true });
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([{ kind: 'file', type: 'image/png', file: imageFile() }]),
+    });
+    await screen.findByAltText('Selected question image');
+
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    await user.type(screen.getByLabelText('Question'), 'No image needed');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][1]).toBeNull();
+  });
+
+  it('hands the pasted File to onSave, so it takes the file picker route exactly', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({ allowImage: true });
+    const pasted = imageFile('screenshot.png');
+    fireEvent.paste(formOf(), {
+      clipboardData: clipboardWith([{ kind: 'file', type: 'image/png', file: pasted }]),
+    });
+    await screen.findByAltText('Selected question image');
+
+    await user.type(screen.getByLabelText('Question'), 'Which coverage?');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    // The SAME File the picker would have produced - one upload path.
+    expect(onSave.mock.calls[0][1]).toBe(pasted);
+  });
+
+  it('offers no image area at all when the caller does not allow one', () => {
+    renderEditor();
+
+    expect(screen.queryByRole('button', { name: /Attach an image/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Question image')).not.toBeInTheDocument();
   });
 });

@@ -27,6 +27,18 @@ interface QuestionEditorProps {
   allowImage?: boolean;
 }
 
+/** The image types Peira accepts, in ONE place.
+ *
+ * Feeds the file picker's `accept` attribute and the validator that paste and
+ * drop go through, so the three entry points cannot drift into accepting
+ * different things. Mirrors the server's ALLOWED_IMAGE_EXTENSIONS - the server
+ * remains the authority and rejects anything that gets past this.
+ *
+ * Module-local: exporting it from a component file trips fast-refresh
+ * linting, and nothing outside needs it - the point is that all three
+ * entry points inside THIS form share one list. */
+const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
 export function QuestionEditor({
   initialText = '',
   initialType = 'true_false',
@@ -49,6 +61,8 @@ export function QuestionEditor({
   // what makes Cancel leave nothing behind: nothing was ever created.
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,9 +79,68 @@ export function QuestionEditor({
 
   function clearImage() {
     setImage(null);
+    setImageError(null);
     // Without this, re-picking the SAME file after removing it fires no change
     // event at all and the picker appears broken.
     if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  /** THE ONE DOOR every image comes through - picked, pasted or dropped.
+   *
+   * Deliberately a single function rather than three. The brief's real risk
+   * was a second, weaker upload path growing beside the first; here paste and
+   * drop do not upload anything at all. They produce a File and hand it to the
+   * same state the file input writes to, so the request, the validation and
+   * the storage behaviour downstream are not just similar - they are the same
+   * code.
+   *
+   * Type is checked here for a fast, clear message. SIZE deliberately is not:
+   * the server owns that limit, and duplicating the number here would create
+   * exactly the second source of truth this is trying to avoid. An oversized
+   * paste fails identically to an oversized pick, with the server's message. */
+  function acceptImage(file: File | null | undefined): boolean {
+    if (!file) return false;
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setImageError(
+        `That file is a ${file.type || 'unknown type'}. Images must be PNG, JPEG or WebP.`,
+      );
+      return false;
+    }
+    setImageError(null);
+    setImage(file);
+    return true;
+  }
+
+  /** Paste anywhere in the form attaches an image; text still pastes normally.
+   *
+   * Bound to the FORM, so it catches a paste while the question textarea has
+   * focus - which is where a coach's cursor actually is after typing the
+   * question. React's synthetic event bubbles from the field to here.
+   *
+   * The clipboard is only ever READ through the event's own clipboardData, and
+   * only for items whose type is an image. Nothing asks the system clipboard
+   * for anything it was not handed.
+   *
+   * If the clipboard carries text as well as an image - copying from a slide,
+   * say - the default is NOT prevented, so the text still lands in the field
+   * the coach was typing in AND the image attaches. Swallowing the text would
+   * be the surprising half of that. */
+  function handlePaste(event: React.ClipboardEvent<HTMLFormElement>) {
+    const items = Array.from(event.clipboardData?.items ?? []);
+    const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+    if (!imageItem) return; // No image: ordinary text paste, untouched.
+
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    const carriesText = items.some((item) => item.kind === 'string');
+    if (!carriesText) event.preventDefault();
+    acceptImage(file);
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    setIsDragging(false);
+    acceptImage(event.dataTransfer.files?.[0]);
   }
 
   function handleTypeChange(type: QuestionType) {
@@ -132,7 +205,7 @@ export function QuestionEditor({
   }
 
   return (
-    <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit}>
+    <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit} onPaste={handlePaste}>
       <ErrorBanner message={error} />
 
       <div className={nb.field}>
@@ -262,21 +335,14 @@ export function QuestionEditor({
         </p>
       </div>
 
-      {/* TODO (future UX, deliberately not built now): accept a drag-and-drop
-          image onto this form as well as the click-to-upload below. The
-          click path stays either way - drag-and-drop is an addition, not a
-          replacement, and a coach on a trackpad or a tablet still needs the
-          button. The plumbing already suits it: the file is held in state
-          until save, so a dropped File would take exactly the same path as a
-          picked one and need no server change. */}
       {allowImage && (
         <div className={nb.field}>
-          <span className={nb.fieldLabel}>Image</span>
+          <span className={nb.fieldLabel}>Image (optional)</span>
           {preview ? (
             <div className={styles.imagePreview}>
               {/* Previewed from the file itself, so the coach sees exactly what
-                  they picked without a round-trip - and without anything having
-                  been created yet. */}
+                  they attached without a round-trip - and without anything
+                  having been created yet. */}
               <img src={preview} alt="Selected question image" />
               <div className={styles.imageActions}>
                 <button
@@ -296,18 +362,53 @@ export function QuestionEditor({
               </div>
             </div>
           ) : (
-            <p className={styles.imageHint}>
-              Optional. Added when you save this question &mdash; you can annotate it afterwards.
+            /* A drop target and an explanation, not a bare file input. The
+               coach's real workflow is Snipping Tool then Ctrl+V, so paste is
+               named FIRST and the file picker last - the reverse of the
+               control's technical prominence. */
+            <div
+              className={`${styles.dropZone} ${isDragging ? styles.dropZoneActive : ''}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              aria-label="Attach an image: paste, drag and drop, or choose a file"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+            >
+              <span className={styles.dropZoneTitle}>Paste an image here</span>
+              <span className={styles.dropZoneKeys}>Ctrl+V / Cmd+V</span>
+              <span className={styles.dropZoneOr}>or drag &amp; drop, or choose a file</span>
+            </div>
+          )}
+
+          {imageError && (
+            <p className={styles.imageError} role="alert">
+              {imageError}
             </p>
           )}
+
+          <p className={styles.imageHint}>
+            Attached when you save this question &mdash; you can annotate it afterwards.
+          </p>
+
           <input
             ref={fileInputRef}
             id="question_image"
             type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className={preview ? nb.srOnly : undefined}
+            accept={ACCEPTED_IMAGE_TYPES.join(',')}
+            className={nb.srOnly}
             aria-label="Question image"
-            onChange={(event) => setImage(event.target.files?.[0] ?? null)}
+            onChange={(event) => acceptImage(event.target.files?.[0])}
           />
         </div>
       )}
