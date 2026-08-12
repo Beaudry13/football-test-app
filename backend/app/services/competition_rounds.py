@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import CompetitionSession
+from app.models import CompetitionSession, Question
 from app.models.competition import (
     COMPLETE,
     LEADERBOARD,
@@ -45,6 +45,8 @@ from app.models.competition import (
     QUESTION_REVEAL,
 )
 from app.services.competition import COMPETITION_QUESTION_TYPES, CompetitionError
+from app.services import competition_scoring as scoring
+from app.services.competition_answers import score_round
 
 #: How long the room gets to breathe between the coach pressing the button and
 #: the answering window opening. Rendered as a 3-2-1 by every client from
@@ -119,6 +121,26 @@ def _freeze_question_order(session: CompetitionSession) -> None:
     session.question_order = order
 
 
+def playable_round_from(session: CompetitionSession, start_index: int) -> int | None:
+    """The first round at or after `start_index` whose question still exists.
+
+    A coach can delete a question from the quiz while the competition is
+    running. The frozen order is deliberately NOT rewritten - it is the
+    historical record of what this competition was built to play - so instead
+    the hole is stepped over when advancing.
+
+    That keeps two things true at once: `current_round` is only ever set to a
+    round that can actually be opened, so it can never point into a gap; and
+    rounds never shift, so a later round still plays the question it always
+    would have. What is lost is only the deleted round itself.
+    """
+    order = session.question_order or []
+    for index in range(max(0, start_index), len(order)):
+        if db.session.get(Question, order[index]) is not None:
+            return index
+    return None
+
+
 def _open_question(session: CompetitionSession, round_index: int) -> None:
     """Point the session at a round and start its clock.
 
@@ -127,12 +149,14 @@ def _open_question(session: CompetitionSession, round_index: int) -> None:
     a refresh mid-question cannot restart anything and a reconnecting player
     cannot gain a second.
     """
-    if session.question_id_for_round(round_index) is None:
+    # Step over any question deleted since the order was frozen.
+    target = playable_round_from(session, round_index)
+    if target is None:
         raise CompetitionError(
             "There is no question for that round.", status_code=409, reason="no_such_round"
         )
     opens_at = _now() + LEAD_IN
-    session.current_round = round_index
+    session.current_round = target
     session.question_opened_at = opens_at
     session.question_closes_at = opens_at + timedelta(seconds=session.question_time_seconds)
 
@@ -152,8 +176,12 @@ def _apply(session: CompetitionSession, action: str) -> None:
         # status other than QUESTION_OPEN, so revealing early - because
         # everyone was already in - shuts answering without a second rule.
         #
-        # M2.2 scores the round HERE, once, in this transaction.
-        pass
+        # THE ROUND IS SCORED HERE, once. Reaching this line at all already
+        # required the version guard to pass, so a double-clicked reveal is
+        # refused before it arrives; score_round is idempotent as well, so
+        # neither a replay nor a retry can double-award.
+        session.scoring_version = scoring.SCORING_VERSION
+        score_round(session)
 
     elif action == FINISH:
         session.podium_step = 0
@@ -236,7 +264,7 @@ def available_actions(session: CompetitionSession) -> list[str]:
         actions = [a for a in actions if a != ADVANCE_PODIUM]
     if session.status in (QUESTION_REVEAL, LEADERBOARD):
         # NEXT_QUESTION is only real if there is another question.
-        if session.question_id_for_round(session.current_round + 1) is None:
+        if playable_round_from(session, session.current_round + 1) is None:
             actions = [a for a in actions if a != NEXT_QUESTION]
     return sorted(actions)
 

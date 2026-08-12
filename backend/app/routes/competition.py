@@ -36,9 +36,11 @@ from app.models.competition import LOBBY
 from app.schemas.competition import (
     CreateCompetitionSchema,
     JoinCompetitionSchema,
+    SubmitAnswerSchema,
     TransitionSchema,
 )
 from app.services import competition as svc
+from app.services import competition_answers as answers
 from app.services import competition_rounds as rounds
 from app.utils.auth import current_coach, get_visible_quiz
 from app.utils.validation import load_json_body, load_optional_json_body
@@ -331,6 +333,36 @@ def join(join_code: str):
     ), 200
 
 
+@competition_bp.post("/<join_code>/answer")
+def submit_answer(join_code: str):
+    """Answer the current question.
+
+    Returns ONLY that the answer was accepted and what was chosen. Never
+    whether it was right, never the correct option, never the explanation and
+    never the points - a phone that knew the answer before the room did would
+    leak it to anyone standing nearby. All of that arrives at the reveal.
+    """
+    session = svc.session_by_code(join_code)
+    participant = svc.participant_by_token(session, _player_token())
+    data = load_json_body(SubmitAnswerSchema())
+    answer = answers.submit_answer(
+        session,
+        participant,
+        round_index=data["round_index"],
+        option_id=data["option_id"],
+    )
+    return jsonify(
+        {
+            "accepted": True,
+            "locked": True,
+            "round_index": answer.round_index,
+            "selected_option_id": answer.selected_option_id,
+            "status": session.status,
+            "version": session.version,
+        }
+    ), 201
+
+
 @competition_bp.get("/<join_code>/me")
 def resume(join_code: str):
     """Reconnect. Addressed by TOKEN, never by player id.
@@ -353,5 +385,8 @@ def resume(join_code: str):
             "status": session.status,
             "version": session.version,
             "server_now": _now().isoformat(),
+            # So a refresh mid-question comes back to a locked screen rather
+            # than an answerable one. Carries no verdict - see answer_state.
+            "answer": answers.answer_state(session, participant),
         }
     )

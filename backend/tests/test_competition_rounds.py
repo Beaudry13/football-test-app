@@ -179,7 +179,14 @@ class TestIllegalTransitions:
         session.status = status
         # A podium test needs room to advance; everything else is unaffected.
         session.podium_step = 0
-        session.question_order = [1, 2, 3]
+        # REAL question ids. Literal [1, 2, 3] used to work because nothing
+        # checked whether a frozen question still existed; M2.2 steps over
+        # deleted rounds, so a made-up order now correctly reads as "every
+        # round has been deleted" and NEXT_QUESTION is refused.
+        quiz = client.get(
+            f"/api/quizzes/{env['quiz_id']}", headers=env["headers"]
+        ).get_json()
+        session.question_order = [q["id"] for q in quiz["questions"]]
         session.current_round = 0
         db.session.commit()
 

@@ -47,3 +47,21 @@ class TransitionSchema(Schema):
 
     action = fields.Str(required=True, validate=validate.OneOf(sorted(ACTIONS)))
     expected_version = fields.Integer(required=True)
+
+
+class SubmitAnswerSchema(Schema):
+    """A player answering the current question.
+
+    NOTE WHAT IS ABSENT. No participant_id, no player_id, no is_correct, no
+    response_ms, no points. Those are not "ignored" - there is no field for
+    them, so there is nothing to tamper with. Identity comes from the
+    X-Competition-Token header; correctness, timing and points are decided by
+    the server from its own records.
+
+    `round_index` is required rather than assumed so a stale phone answering
+    the previous question is refused explicitly (`wrong_round`) instead of
+    silently having its answer applied to whatever is on screen now.
+    """
+
+    round_index = fields.Integer(required=True)
+    option_id = fields.Integer(required=True)

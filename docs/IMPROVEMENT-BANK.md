@@ -177,3 +177,32 @@ demand. If it recurs, capture the run with `--pool=forks --poolOptions...`
 diagnostics rather than re-running until it passes.
 
 **Deferred deliberately: not blocking, and not to be picked up mid-Competition.**
+
+---
+
+## Competition history needs immutable question snapshots (revisit in M3)
+
+`competition_answers.question_id` has `ON DELETE CASCADE`. So if a coach deletes
+a quiz question after a competition has played it:
+
+- the participant's **points remain correct** - they are already accumulated on
+  `competition_participants.total_points`, and deliberately not recomputed,
+  because a coach tidying their quiz afterwards must never restate a result
+  the room already watched happen;
+- but the **answer rows for that question disappear**, so the audit trail
+  explaining *how* those points were earned is gone.
+
+The score survives; the explanation does not. Today that is the right trade -
+M2 has no history UI, so nothing reads the audit trail, and the alternative
+(blocking question deletion, or recomputing standings) is worse.
+
+**Revisit when Competition History is built in M3.** A history screen that
+cannot explain a score is barely a history screen. The likely answer is that a
+competition should snapshot what it played - question text, options, and which
+was correct - at the moment the order is frozen, so a finished competition
+stays fully explainable no matter what happens to the quiz afterwards. That is
+a schema change and a data-migration decision, which is exactly why it is not
+being made mid-feature.
+
+Related: `question_order` already snapshots WHICH questions were played, so
+the ordering half of the problem is solved. What is missing is the CONTENT.
