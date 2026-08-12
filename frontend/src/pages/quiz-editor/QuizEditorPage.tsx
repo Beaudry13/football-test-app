@@ -113,6 +113,16 @@ export function QuizEditorPage() {
         >
           Preview as player
         </Link>
+        {/* The entry point into Competition. Same tab, because the coach is
+            about to run the room from this screen - a background tab is the
+            last place a live join code should live. */}
+        <Link
+          to={`/quizzes/${quiz.id}/compete`}
+          className={nb.btnSm}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          Start Competition
+        </Link>
       </div>
       <textarea
         className={styles.descriptionInput}

@@ -31,6 +31,10 @@ import { DocumentPage } from './pages/documents/DocumentPage';
 import { RoutedErrorBoundary } from './components/RouteErrorBoundary';
 import { PlayPage } from './pages/play/PlayPage';
 import { ResultsCheckPage } from './pages/play/ResultsCheckPage';
+import { CompetitionJoinPage } from './pages/compete/CompetitionJoinPage';
+import { WaitingRoomPage } from './pages/compete/WaitingRoomPage';
+import { HostLobbyPage } from './pages/compete/HostLobbyPage';
+import { CompetitionSetupPage } from './pages/compete/CompetitionSetupPage';
 
 function App() {
   return (
@@ -56,6 +60,11 @@ function App() {
           <Route path="/play" element={<PlayPage />} />
           <Route path="/play/:code" element={<PlayPage />} />
           <Route path="/results" element={<ResultsCheckPage />} />
+          {/* Competition: public player routes. No auth - the join code is the
+              address and the per-seat token is the credential. */}
+          <Route path="/compete" element={<CompetitionJoinPage />} />
+          <Route path="/compete/:code/join" element={<CompetitionJoinPage />} />
+          <Route path="/compete/:code" element={<WaitingRoomPage />} />
           <Route path="/results/:code/:playerName" element={<ResultsCheckPage />} />
 
           <Route element={<ProtectedRoute />}>
@@ -64,6 +73,16 @@ function App() {
                 gated behind login via ProtectedRoute directly. */}
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/quizzes/:quizId/preview" element={<QuizPreviewPage />} />
+            {/* Competition host screens sit here, NOT inside <NotebookLayout>,
+                for the same reason Dashboard and Preview do: they render their
+                own chrome. The host lobby is a projector screen - the ordinary
+                Peira nav bar across the top of it would undercut the whole
+                point of a distinct Competition stage.
+
+                Still behind ProtectedRoute, and every host API route re-checks
+                organization ownership server-side regardless of what renders. */}
+            <Route path="/quizzes/:quizId/compete" element={<CompetitionSetupPage />} />
+            <Route path="/compete/:code/host" element={<HostLobbyPage />} />
             <Route path="/folders/:folderId" element={<FolderPage />} />
 
             <Route element={<NotebookLayout />}>

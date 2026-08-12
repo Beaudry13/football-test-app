@@ -20,6 +20,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.onboarding import onboarding_bp
     from app.routes.whats_new import whats_new_bp
     from app.routes.owner import owner_bp
+    from app.routes.competition import competition_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -41,3 +42,6 @@ def register_blueprints(app: Flask) -> None:
     # A level above organizations, not inside them - see routes/owner.py.
     # Every route is gated by the blueprint itself.
     app.register_blueprint(owner_bp, url_prefix="/api/owner")
+    # Coach and player routes share one prefix because they drive one state
+    # machine; the coach half is @jwt_required, the player half is public.
+    app.register_blueprint(competition_bp, url_prefix="/api/competition")

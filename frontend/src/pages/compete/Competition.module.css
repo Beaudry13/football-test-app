@@ -1,0 +1,564 @@
+/*
+ * THE COMPETITION STAGE
+ * =====================
+ *
+ * A self-contained visual shell. Competition styling lives HERE and is not
+ * sprinkled through ordinary Peira components - M2 adds a game to this stage
+ * rather than redesigning the product again.
+ *
+ * WHY ITS OWN TOKENS, AND WHY THEY ARE PREFIXED
+ * ----------------------------------------------
+ * tokens.css (coach, dark) and index.css (player, light) are two :root blocks,
+ * and two :root declarations of the same name are not scoped - load order wins
+ * everywhere. That has already silently repainted coach pages with the player
+ * palette once. Every name below therefore carries --comp-, and they are
+ * declared on .stage rather than :root so they cannot collide at all.
+ *
+ * Read the NAMING NOTE at the top of tokens.css before adding a token here.
+ *
+ * THE LOOK: a lit stage, not a toy. Deep near-black ground, one warm Peira
+ * accent doing the lighting, tight condensed numerals for the join code and
+ * counts. Mature and athletic - a team meeting room at night, not a cartoon.
+ */
+
+.stage {
+  /* Peira's accent, carried through so the room is recognisably ours. */
+  --comp-accent: #ff7a1a;
+  --comp-accent-soft: rgba(255, 122, 26, 0.16);
+  --comp-accent-line: rgba(255, 122, 26, 0.42);
+
+  --comp-ground: #08090c;
+  --comp-surface: #12141a;
+  --comp-surface-raised: #1a1d26;
+  --comp-border: rgba(255, 255, 255, 0.09);
+
+  --comp-text: #f4f5f7;
+  --comp-text-dim: #9ba1af;
+  --comp-live: #38d17a;
+  --comp-danger: #ff5c5c;
+
+  --comp-radius: 14px;
+
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--comp-ground);
+  color: var(--comp-text);
+  padding: clamp(1rem, 3vw, 2.5rem);
+  overflow-x: hidden;
+  /* Numerals that line up: a join code and a count are read at a glance from
+     across a room, and proportional digits shift as they change. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* The lighting. Two soft pools rather than a flat wash, so the screen has a
+   direction and a focal point instead of looking like a dark rectangle. */
+.stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60% 45% at 50% -5%, var(--comp-accent-soft), transparent 70%),
+    radial-gradient(45% 35% at 105% 100%, rgba(255, 122, 26, 0.07), transparent 70%);
+}
+
+.stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Identity strip ------------------------------------------------------ */
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+.brandMark {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--comp-accent);
+  box-shadow: 0 0 0 4px var(--comp-accent-soft);
+}
+
+/* "LIVE" only ever renders while the session really is live. */
+.liveTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 209, 122, 0.35);
+  background: rgba(56, 209, 122, 0.1);
+  color: var(--comp-live);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.livePulse {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--comp-live);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --- The join code: the biggest thing in the room ------------------------ */
+
+.codePanel {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(1.5rem, 4vw, 2.75rem);
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-accent-line);
+  background: linear-gradient(180deg, var(--comp-surface-raised), var(--comp-surface));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+
+.codeLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+.code {
+  /* Sized against the viewport: this is read from the back row of a room on a
+     projector, and from arm's length on a phone. */
+  font-size: clamp(3rem, 13vw, 8rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  color: var(--comp-text);
+  text-shadow: 0 0 44px rgba(255, 122, 26, 0.34);
+}
+
+.codeHint {
+  color: var(--comp-text-dim);
+  font-size: 0.9rem;
+}
+
+/* --- Counters ------------------------------------------------------------ */
+
+.countRow {
+  display: flex;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  flex-wrap: wrap;
+  margin: clamp(1.25rem, 3vw, 2rem) 0;
+}
+
+.countCard {
+  flex: 1 1 10rem;
+  padding: clamp(0.9rem, 2vw, 1.4rem);
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface);
+}
+
+.countValue {
+  font-size: clamp(2rem, 6vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.countLabel {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+/* --- Player tiles: names arriving in the room ---------------------------- */
+
+.tileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  font-weight: 600;
+  /* Each arrival animates in once. Subtle - a room filling up, not confetti. */
+  animation: arrive 340ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(6px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Anyone who prefers reduced motion gets the room without the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .tile { animation: none; }
+  .livePulse { animation: none; }
+}
+
+.tileName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tileRemove {
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--comp-text-dim);
+  font-size: 1.1rem;
+  line-height: 1;
+  /* 44px: a coach removing someone is tapping this on a laptop trackpad or a
+     phone, and a 16px glyph is not a target. */
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.tileRemove:hover,
+.tileRemove:focus-visible {
+  color: var(--comp-danger);
+  border-color: rgba(255, 92, 92, 0.4);
+  background: rgba(255, 92, 92, 0.08);
+}
+
+.waitingTile {
+  opacity: 0.42;
+  animation: none;
+}
+
+/* --- Sections ------------------------------------------------------------ */
+
+.section {
+  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.sectionTitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+  margin-bottom: 0.85rem;
+}
+
+.panel {
+  padding: clamp(1rem, 3vw, 1.75rem);
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface);
+}
+
+.headline {
+  font-size: clamp(1.6rem, 5vw, 2.6rem);
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0 0 0.5rem;
+}
+
+.subhead {
+  color: var(--comp-text-dim);
+  margin: 0;
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+.controls {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: clamp(1.25rem, 3vw, 2rem);
+}
+
+.button {
+  min-height: 3rem;
+  padding: 0.8rem 1.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  color: var(--comp-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled),
+.button:focus-visible:not(:disabled) {
+  border-color: var(--comp-accent-line);
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.buttonPrimary {
+  background: var(--comp-accent);
+  border-color: var(--comp-accent);
+  /* Near-black on orange: the accent is bright, so dark text is what actually
+     passes contrast here. */
+  color: #17120c;
+}
+
+.buttonDanger {
+  border-color: rgba(255, 92, 92, 0.45);
+  color: var(--comp-danger);
+}
+
+/* Visible focus on a dark ground, for keyboard and switch users. */
+.button:focus-visible,
+.tileRemove:focus-visible,
+.identityButton:focus-visible,
+.codeInput:focus-visible {
+  outline: 3px solid var(--comp-accent);
+  outline-offset: 2px;
+}
+
+/* --- Player: code entry (phone first) ------------------------------------ */
+
+.joinForm {
+  display: grid;
+  gap: 1rem;
+  max-width: 26rem;
+  margin: 0 auto;
+}
+
+.codeInput {
+  width: 100%;
+  padding: 1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-accent-line);
+  background: var(--comp-surface);
+  color: var(--comp-text);
+  /* 1.1em+ so iOS Safari does not zoom the viewport on focus, and centred
+     caps because a join code is read off a screen and typed in one go. */
+  font-size: clamp(1.6rem, 7vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.codeInput::placeholder {
+  color: rgba(255, 255, 255, 0.22);
+  letter-spacing: 0.28em;
+}
+
+/* --- Player: identity picker --------------------------------------------- */
+
+.identityList {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 30rem;
+  margin: 0 auto;
+}
+
+.identityButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  /* Comfortably above the 44px minimum: this is the one control every player
+     uses, standing up, on a phone, in a hurry. */
+  min-height: 3.5rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  color: var(--comp-text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.identityButton:hover:not(:disabled),
+.identityButton:focus-visible:not(:disabled) {
+  border-color: var(--comp-accent-line);
+  background: var(--comp-surface);
+}
+
+.identityButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.takenTag {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+/* --- Player: waiting room ------------------------------------------------ */
+
+.waitingRoom {
+  display: grid;
+  gap: 1.25rem;
+  justify-items: center;
+  text-align: center;
+  padding-top: clamp(1.5rem, 8vh, 5rem);
+}
+
+.youreIn {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--comp-accent);
+}
+
+.playerName {
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.waitingDots {
+  color: var(--comp-text-dim);
+  font-size: 1.05rem;
+}
+
+/* --- Messages ------------------------------------------------------------ */
+
+.notice {
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface);
+  color: var(--comp-text-dim);
+  font-size: 0.92rem;
+}
+
+.noticeError {
+  border-color: rgba(255, 92, 92, 0.4);
+  background: rgba(255, 92, 92, 0.08);
+  color: #ffc9c9;
+}
+
+.noticeWarn {
+  border-color: rgba(255, 122, 26, 0.4);
+  background: var(--comp-accent-soft);
+  color: #ffd8b8;
+}
+
+.blockerList {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* --- Setup --------------------------------------------------------------- */
+
+.field {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.fieldLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+.select {
+  min-height: 3rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  color: var(--comp-text);
+  font-size: 1rem;
+}
+
+.radioRow {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.radioOption {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 3rem;
+  padding: 0.7rem 1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  cursor: pointer;
+}
+
+.radioOption input {
+  accent-color: var(--comp-accent);
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* --- Host layout: laptop and projector first ----------------------------- */
+
+.hostGrid {
+  display: grid;
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+@media (min-width: 60rem) {
+  /* The code panel holds the left rail at a fixed, readable width while the
+     room fills the rest - a projector's job is the code and the names. */
+  .hostGrid {
+    grid-template-columns: minmax(20rem, 26rem) 1fr;
+    align-items: start;
+  }
+}
+
+/* Small screens: the host view is not the priority, but a coach checking their
+   phone must still get something usable rather than a squeezed desktop. */
+@media (max-width: 30rem) {
+  .code { letter-spacing: 0.08em; }
+  .controls .button { width: 100%; }
+}

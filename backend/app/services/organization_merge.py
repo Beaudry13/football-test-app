@@ -59,6 +59,11 @@ ORG_OWNED_TABLES = (
     "groups",
     "folders",
     "source_documents",
+    # Live competitions are re-pointed like anything else the organization
+    # owns. Their participants and answers reference the SESSION, not the
+    # organization, so they follow without a rule of their own - which is the
+    # whole reason the coverage test below is keyed on organization_id.
+    "competition_sessions",
 )
 
 #: Counted for the preview but NOT re-pointed - unused invitations to a
@@ -83,6 +88,9 @@ COUNT_QUERIES = {
     "coaches": "SELECT count(*) FROM coaches WHERE organization_id=:o",
     "players": "SELECT count(*) FROM players WHERE organization_id=:o",
     "quizzes": "SELECT count(*) FROM quizzes WHERE organization_id=:o",
+    "competition_sessions": (
+        "SELECT count(*) FROM competition_sessions WHERE organization_id=:o"
+    ),
     "groups": "SELECT count(*) FROM groups WHERE organization_id=:o",
     "folders": "SELECT count(*) FROM folders WHERE organization_id=:o",
     "playbooks": "SELECT count(*) FROM source_documents WHERE organization_id=:o",

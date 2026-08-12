@@ -17,6 +17,11 @@ from app.models.document_page import DocumentPage
 from app.models.response import Answer, AttemptStatus, PlayerAttempt
 from app.models.grade_audit_log import GradeAuditLog
 from app.models.organization_merge import OrganizationMerge
+from app.models.competition import (
+    CompetitionAnswer,
+    CompetitionParticipant,
+    CompetitionSession,
+)
 
 __all__ = [
     "Organization",
@@ -43,6 +48,9 @@ __all__ = [
     "AnswerDrawing",
     "GradeAuditLog",
     "OrganizationMerge",
+    "CompetitionSession",
+    "CompetitionParticipant",
+    "CompetitionAnswer",
     "SourceDocument",
     "DocumentPage",
 ]

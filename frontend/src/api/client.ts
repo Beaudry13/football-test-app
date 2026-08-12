@@ -41,13 +41,20 @@ interface RequestOptions {
   body?: unknown;
   formData?: FormData;
   auth?: boolean;
+  /**
+   * Extra request headers. Added for Competition Mode's `X-Competition-Token`,
+   * which is a per-seat credential that must travel in a header rather than
+   * the URL - a path or query parameter would be recorded in access logs,
+   * browser history and `Referer`.
+   */
+  headers?: Record<string, string>;
 }
 
 /** Thin fetch wrapper: JSON in/out, auth header injection, and a typed ApiError on failure. */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, formData, auth = true } = options;
+  const { method = 'GET', body, formData, auth = true, headers: extraHeaders } = options;
 
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extraHeaders };
   if (auth) {
     const token = getToken();
     if (token) headers.Authorization = `Bearer ${token}`;

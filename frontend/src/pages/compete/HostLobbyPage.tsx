@@ -1,0 +1,269 @@
+/**
+ * The host lobby - the screen on the projector while the room fills up.
+ *
+ * REBUILT FROM THE SERVER, ALWAYS.
+ * The route carries the join code, not the session id, because a coach who
+ * refreshes (or reopens the tab, or opens it on a different laptop) must get
+ * the room back. Nothing here is recovered from React state or navigation
+ * state alone: the code resolves to a session id through the server, and the
+ * session id fetches the full view. `location.state` is used only as a
+ * first-paint shortcut when we happen to have just created the session.
+ *
+ * START COMPETITION IS DISABLED, AND HONESTLY SO.
+ * M1 has no round transitions. A Start button that appeared to work would be
+ * a broken half-game, so it says what it is waiting for instead.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import { ApiError } from '../../api/client';
+import * as competitionApi from '../../api/competition';
+import type { CompetitionHostView, CompetitionPollState } from '../../api/competition';
+import { isTerminal } from '../../api/competition';
+import { CompetitionShell } from './CompetitionShell';
+import { useCompetitionPoll } from './useCompetitionPoll';
+import styles from './Competition.module.css';
+
+export function HostLobbyPage() {
+  const { code = '' } = useParams<{ code: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const [sessionId, setSessionId] = useState<number | null>(
+    (location.state as { sessionId?: number } | null)?.sessionId ?? null,
+  );
+  const [view, setView] = useState<CompetitionHostView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  /**
+   * THE COACH RECONNECT. Resolve the code in the URL to a session this coach
+   * owns, entirely from the server - no reliance on React memory or on the
+   * navigation state that only exists right after creation.
+   *
+   * A coach from another organization gets a 404 here, exactly as they would
+   * from a session id, so the code grants no access it did not already imply.
+   */
+  useEffect(() => {
+    if (sessionId !== null) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const hostView = await competitionApi.getHostViewByCode(code);
+        if (cancelled) return;
+        setView(hostView);
+        setSessionId(hostView.id);
+        setError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError && err.status === 404
+            ? 'That competition is not available to your account.'
+            : 'Could not load this competition.',
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [code, sessionId]);
+
+  const loadView = useCallback(async () => {
+    if (sessionId === null) return;
+    try {
+      setView(await competitionApi.getHostView(sessionId));
+      setError(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setError('This competition is not available to your account.');
+      }
+    }
+  }, [sessionId]);
+
+  const { state, degraded, refresh } = useCompetitionPoll({
+    enabled: sessionId !== null,
+    poll: useCallback(
+      () => competitionApi.getHostState(sessionId as number),
+      [sessionId],
+    ),
+    // The heavy view is fetched here and ONLY here - on mount and whenever the
+    // version moves. A player joining bumps it, so names appear without the
+    // coach touching anything, and without a per-second roster fetch.
+    onVersionChange: useCallback(
+      (_next: CompetitionPollState) => loadView(),
+      [loadView],
+    ),
+    onFatal: useCallback(() => setError('This competition is no longer available.'), []),
+  });
+
+  const remove = useCallback(
+    async (participantId: number, name: string) => {
+      if (sessionId === null) return;
+      if (!window.confirm(`Remove ${name} from this competition?`)) return;
+      setBusy(true);
+      try {
+        setView(await competitionApi.removeParticipant(sessionId, participantId));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not remove that player.');
+      } finally {
+        setBusy(false);
+        refresh();
+      }
+    },
+    [sessionId, refresh],
+  );
+
+  const end = useCallback(async () => {
+    if (sessionId === null) return;
+    if (!window.confirm('End this competition? Players will be returned to the join screen.')) return;
+    setBusy(true);
+    try {
+      setView(await competitionApi.endSession(sessionId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not end the competition.');
+    } finally {
+      setBusy(false);
+    }
+  }, [sessionId]);
+
+  const status = view?.status ?? state?.status;
+  const ended = status ? isTerminal(status) : false;
+
+  if (error && !view) {
+    return (
+      <CompetitionShell>
+        <h1 className={styles.headline}>Competition unavailable</h1>
+        <p className={styles.subhead}>{error}</p>
+        <div className={styles.controls}>
+          <button type="button" className={styles.button} onClick={() => navigate('/dashboard')}>
+            Back to dashboard
+          </button>
+        </div>
+      </CompetitionShell>
+    );
+  }
+
+  if (ended) {
+    return (
+      <CompetitionShell>
+        <h1 className={styles.headline}>Competition ended</h1>
+        <p className={styles.subhead}>
+          The join code no longer works and every player has been returned to the join screen.
+        </p>
+        <div className={styles.controls}>
+          <button type="button" className={styles.button} onClick={() => navigate('/dashboard')}>
+            Back to dashboard
+          </button>
+        </div>
+      </CompetitionShell>
+    );
+  }
+
+  const participants = view?.participants ?? [];
+
+  return (
+    <CompetitionShell live>
+      <div className={styles.hostGrid}>
+        <div>
+          <div className={styles.codePanel}>
+            <div className={styles.codeLabel}>Join code</div>
+            {/* The code comes from the URL so it renders immediately, before
+                any request settles - a projector should never show a blank. */}
+            <div className={styles.code}>{(view?.join_code ?? code).toUpperCase()}</div>
+            <div className={styles.codeHint}>Go to this site and tap Join a competition</div>
+          </div>
+
+          <div className={styles.countRow}>
+            <div className={styles.countCard}>
+              <div className={styles.countValue}>{participants.length}</div>
+              <div className={styles.countLabel}>Players joined</div>
+            </div>
+            <div className={styles.countCard}>
+              <div className={styles.countValue}>{view?.eligible_count ?? '—'}</div>
+              <div className={styles.countLabel}>On the roster</div>
+            </div>
+          </div>
+
+          <div className={styles.controls}>
+            {/* Disabled, with the reason on the button. M1 has no rounds and
+                pretending otherwise would be a broken half-game. */}
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              disabled
+              title="Competition rounds arrive in M2"
+            >
+              Start Competition
+            </button>
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonDanger}`}
+              onClick={end}
+              disabled={busy}
+            >
+              End lobby
+            </button>
+          </div>
+          <p className={styles.subhead} style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
+            Competition rounds arrive in the next release. The lobby, join codes and roster are live
+            now.
+          </p>
+
+          {degraded && (
+            <div className={styles.notice} style={{ marginTop: '1rem' }} role="status">
+              Reconnecting… the room is still live.
+            </div>
+          )}
+          {error && (
+            <div className={`${styles.notice} ${styles.noticeError}`} style={{ marginTop: '1rem' }} role="alert">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className={styles.sectionTitle}>In the room</div>
+          {participants.length === 0 ? (
+            <div className={styles.notice}>Waiting for the first player to join…</div>
+          ) : (
+            <div className={styles.tileGrid}>
+              {participants.map((participant) => (
+                <div key={participant.id} className={styles.tile}>
+                  <span className={styles.tileName}>{participant.display_name}</span>
+                  <button
+                    type="button"
+                    className={styles.tileRemove}
+                    onClick={() => remove(participant.id, participant.display_name)}
+                    disabled={busy}
+                    aria-label={`Remove ${participant.display_name}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(view?.not_joined?.length ?? 0) > 0 && (
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>Not here yet</div>
+              <div className={styles.tileGrid}>
+                {view?.not_joined.map((entry) => (
+                  <div
+                    key={entry.player_id}
+                    className={`${styles.tile} ${styles.waitingTile}`}
+                  >
+                    <span className={styles.tileName}>{entry.display_name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </CompetitionShell>
+  );
+}
+
+export default HostLobbyPage;

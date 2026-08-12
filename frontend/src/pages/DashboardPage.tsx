@@ -11,6 +11,7 @@ import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
 import { Icon } from '../components/ui/Icon';
 import { CoachFolderSection } from './CoachFolderSection';
+import { ActiveCompetitionBanner } from './compete/ActiveCompetitionBanner';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
@@ -213,6 +214,9 @@ export function DashboardPage() {
       <NotebookHeader />
 
       <div className={nb.content}>
+        {/* Recovery for a live competition. Renders nothing when there is
+            none, so the ordinary dashboard is unchanged. */}
+        <ActiveCompetitionBanner />
         <FirstSuccessChecklist reloadSignal={onboardingSignal} />
 
         <ActiveQuizStatusSection />

@@ -1,0 +1,326 @@
+"""Competition Mode HTTP surface.
+
+TWO AUDIENCES, ONE BLUEPRINT
+-----------------------------
+Coach routes are JWT-authenticated and organization-scoped. Player routes are
+public and authenticated by the join code alone - a player has no account, the
+same as `/play`. They live together because they operate on one state machine
+and splitting them invites a rule enforced on one side only.
+
+THE POLL IS SEPARATE FROM THE PAYLOAD, DELIBERATELY
+----------------------------------------------------
+`GET /<code>/state` is the once-a-second heartbeat: one indexed row read, five
+scalars, no joins. `GET /<code>` is the heavier view - roster, participants,
+quiz title - and clients fetch it only when the poll's `version` changes.
+Collapsing the two would put a participant join on every phone every second.
+
+RATE LIMITING IS HANDLED, NOT DISABLED
+---------------------------------------
+A whole team shares one Wi-Fi NAT, so an IP-keyed limit would treat thirty
+players as one abusive client and lock the room out of its own competition.
+The rules below are therefore keyed by join code or by the acting player, and
+the heartbeat carries no limit at all - it is cheaper than the 429 response
+would be. Nothing global is loosened: `default_limits` is already empty and
+stays that way.
+"""
+
+from datetime import datetime, timezone
+
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
+
+from app.errors import ApiError
+from app.extensions import db, limiter
+from app.models import Group, Player
+from app.models.competition import LOBBY
+from app.schemas.competition import CreateCompetitionSchema, JoinCompetitionSchema
+from app.services import competition as svc
+from app.utils.auth import current_coach, get_visible_quiz
+from app.utils.validation import load_json_body, load_optional_json_body
+
+competition_bp = Blueprint("competition", __name__)
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+#: Player-private requests carry the seat token in a header rather than the URL.
+#: A path or query parameter would land in access logs, browser history and
+#: Referer headers - a credential should not be written down in any of those.
+PLAYER_TOKEN_HEADER = "X-Competition-Token"
+
+
+def _player_token() -> str:
+    return (request.headers.get(PLAYER_TOKEN_HEADER) or "").strip()
+
+
+# ===========================================================================
+# COACH
+# ===========================================================================
+
+
+@competition_bp.get("/quizzes/<int:quiz_id>/readiness")
+@jwt_required()
+def readiness(quiz_id: int):
+    """Can this quiz be run as a competition, and if not, exactly why.
+
+    The setup screen calls this before offering a Start button, so the coach
+    learns which questions are unsupported while they can still act on it -
+    not after gathering a room.
+    """
+    quiz = get_visible_quiz(quiz_id)
+    return jsonify(svc.launch_readiness(quiz))
+
+
+@competition_bp.post("/quizzes/<int:quiz_id>")
+@jwt_required()
+def create(quiz_id: int):
+    quiz = get_visible_quiz(quiz_id)
+    # load_json_body, not schema.load: the shared helper is what turns a
+    # marshmallow ValidationError into a 422. Calling load() directly lets
+    # it escape as a 500 - which is exactly what it did until a test caught it.
+    data = load_optional_json_body(CreateCompetitionSchema())
+
+    # Group ids are re-checked against this organization before they are
+    # stored: a stored id from another tenant would be a permanent hole in
+    # eligibility, and eligible_players() would have to defend against it on
+    # every read instead of once here.
+    group_ids = data.get("group_ids") or []
+    if group_ids:
+        coach = current_coach()
+        owned = {
+            g.id
+            for g in Group.query.filter(
+                Group.organization_id == coach.organization_id, Group.id.in_(group_ids)
+            ).all()
+        }
+        unknown = set(group_ids) - owned
+        if unknown:
+            raise ApiError("One or more selected groups no longer exist.", status_code=404)
+
+    session = svc.create_session(
+        quiz,
+        current_coach(),
+        group_ids=group_ids,
+        question_time_seconds=data.get("question_time_seconds"),
+    )
+    return jsonify(_host_view(session)), 201
+
+
+@competition_bp.get("/sessions/<int:session_id>")
+@jwt_required()
+def host_view(session_id: int):
+    """The host's full view. Fetched on version change, not on a timer."""
+    session = svc.coach_session(session_id, current_coach())
+    return jsonify(_host_view(session))
+
+
+@competition_bp.get("/active")
+@jwt_required()
+def active():
+    """Is there a competition this coach should be pulled back into?
+
+    THE SMALLEST DISCOVERY SURFACE THAT WORKS. It answers one question - what
+    is live for me right now - and returns only what a "Return to competition"
+    banner needs to render: the code to navigate to, the quiz name, and how
+    many players are waiting. No history, no other coach's rooms, no
+    participant identities.
+
+    Called on the coach screens where recovery makes sense, not polled.
+    """
+    sessions = svc.active_sessions_for(current_coach())
+    return jsonify(
+        [
+            {
+                "id": session.id,
+                "join_code": session.join_code,
+                "quiz_id": session.quiz_id,
+                "quiz_title": session.quiz.title if session.quiz else None,
+                "status": session.status,
+                # A count, not a roster - the same rule as the poll.
+                "participant_count": session.participant_count,
+                "created_at": session.created_at.isoformat(),
+                "expires_at": session.expires_at.isoformat(),
+            }
+            for session in sessions
+        ]
+    )
+
+
+@competition_bp.get("/sessions/by-code/<join_code>")
+@jwt_required()
+def host_view_by_code(join_code: str):
+    """Resolve a join code to the host view - the coach's reconnect path.
+
+    The host lobby is addressed by join code (that is what is on the
+    projector and in the coach's URL bar), but every other host route is
+    addressed by session id, and the PUBLIC lobby payload deliberately does
+    not carry an id. Without this, a coach who refreshed the page had no way
+    back into their own room - which frontend work surfaced immediately.
+
+    Ownership is not relaxed to make that convenient: this goes through the
+    same coach_session() check as every other host route, so a coach from
+    another organization gets the same 404 they would get from an id, and the
+    join code reveals nothing it did not already reveal publicly.
+    """
+    session = svc.session_by_code(join_code)
+    session = svc.coach_session(session.id, current_coach())
+    return jsonify(_host_view(session))
+
+
+@competition_bp.get("/sessions/<int:session_id>/state")
+@jwt_required()
+def host_state(session_id: int):
+    """The host's heartbeat - the same tiny payload the players get."""
+    session = svc.coach_session(session_id, current_coach())
+    return jsonify(session.poll_state(_now()))
+
+
+@competition_bp.delete("/sessions/<int:session_id>/participants/<int:participant_id>")
+@jwt_required()
+def remove_participant(session_id: int, participant_id: int):
+    session = svc.coach_session(session_id, current_coach())
+    svc.remove_participant(session, participant_id)
+    return jsonify(_host_view(session))
+
+
+@competition_bp.post("/sessions/<int:session_id>/end")
+@jwt_required()
+def end(session_id: int):
+    session = svc.coach_session(session_id, current_coach())
+    # A lobby that never started is ABANDONED rather than COMPLETE: calling an
+    # event that never happened "complete" would misreport it forever.
+    svc.end_session(session, abandoned=session.status == LOBBY)
+    return jsonify(_host_view(session))
+
+
+def _host_view(session) -> dict:
+    data = session.to_dict(include_participants=True)
+    eligible = svc.eligible_players(session)
+    joined = {p.player_id for p in session.participants}
+    data["eligible_count"] = len(eligible)
+    # Who has NOT arrived yet - the thing a coach actually scans the room for.
+    data["not_joined"] = [e for e in eligible if e["player_id"] not in joined]
+    return data
+
+
+# ===========================================================================
+# PLAYER (public - the join code is the only credential)
+# ===========================================================================
+
+
+@competition_bp.get("/<join_code>/state")
+def poll(join_code: str):
+    """THE HOT PATH. One indexed row, five scalars, no joins, no rate limit.
+
+    Thirty phones at 1 Hz is thirty requests a second, each cheaper than the
+    429 an IP-keyed limit would have to generate for a team behind one NAT.
+    Adding a limit here would not protect the database; it would break the
+    feature for exactly the rooms it is built for.
+    """
+    session = svc.session_by_code(join_code)
+    return jsonify(session.poll_state(_now()))
+
+
+@competition_bp.get("/<join_code>")
+# Keyed by join code, not IP: a whole team behind one Wi-Fi router must not
+# share a bucket.
+#
+# THE NUMBER IS ARITHMETIC, NOT A GUESS. This is fetched on version change,
+# and every arrival bumps the version, so an N-player lobby filling up costs
+# roughly N x N fetches concentrated in the join window. A 60-player room is
+# ~3600 requests over two or three minutes. The first version of this limit
+# was 240/min and the load harness produced 150 rate-limited players in a
+# thirty-player room - the feature limiting itself out of its own lobby.
+#
+# 1800/min covers a room twice the size we expect while still bounding a
+# scripted client hammering one code. The client also coalesces these to at
+# most one every two seconds (see useCompetitionPoll), so the realistic peak
+# is well under this - the headroom is for the burst, not the steady state.
+@limiter.limit("1800 per minute", key_func=lambda: (request.view_args or {}).get("join_code", ""))
+def lobby(join_code: str):
+    """The player-facing view: who may play, who has joined, and the state."""
+    session = svc.session_by_code(join_code)
+    if session.is_terminal:
+        raise svc.CompetitionError(
+            "This competition has ended.", status_code=410, reason="session_ended"
+        )
+    joined = {p.player_id for p in session.participants}
+    return jsonify(
+        {
+            "join_code": session.join_code,
+            "status": session.status,
+            "version": session.version,
+            "quiz_title": session.quiz.title if session.quiz else None,
+            "question_time_seconds": session.question_time_seconds,
+            "server_now": _now().isoformat(),
+            # The identity picker. Canonical ids only - no free-text name box,
+            # so a player cannot invent an identity or claim someone else's.
+            "roster": [
+                {**entry, "taken": entry["player_id"] in joined}
+                for entry in svc.eligible_players(session)
+            ],
+            "participants": [
+                {"id": p.id, "display_name": p.display_name} for p in session.participants
+            ],
+        }
+    )
+
+
+@competition_bp.post("/<join_code>/join")
+# Keyed by (code, player) so one phone retrying cannot lock out the room, and
+# so a script cannot walk the roster from a single IP unchecked.
+@limiter.limit(
+    "30 per minute",
+    key_func=lambda: (
+        f"{(request.view_args or {}).get('join_code', '')}:"
+        f"{(request.get_json(silent=True) or {}).get('player_id', '')}"
+    ),
+)
+def join(join_code: str):
+    session = svc.session_by_code(join_code)
+    data = load_json_body(JoinCompetitionSchema())
+    participant = svc.join(
+        session,
+        data["player_id"],
+        reconnect_token=data.get("reconnect_token") or _player_token() or None,
+    )
+    return jsonify(
+        {
+            "participant": participant.to_dict(),
+            # THE ONLY RESPONSE THAT EVER CONTAINS THE TOKEN. The client stores
+            # it and replays it as X-Competition-Token; it appears in no list,
+            # no host view, and no other player's payload.
+            "reconnect_token": participant.reconnect_token,
+            "join_code": session.join_code,
+            "status": session.status,
+            "version": session.version,
+        }
+    ), 200
+
+
+@competition_bp.get("/<join_code>/me")
+def resume(join_code: str):
+    """Reconnect. Addressed by TOKEN, never by player id.
+
+    The previous version of this route took the player id in the path and
+    authenticated with (join_code, player_id). Both are public - the code is
+    read off a projector and the roster endpoint publishes every id so the
+    picker can render - so it authenticated with nothing at all. It is gone.
+
+    A refresh or a locked screen must not cost a player their seat, so this
+    stays a cheap GET; it just requires the secret the seat was issued with.
+    """
+    session = svc.session_by_code(join_code)
+    participant = svc.participant_by_token(session, _player_token())
+    participant.last_seen_at = _now()
+    db.session.commit()
+    return jsonify(
+        {
+            "participant": participant.to_dict(),
+            "status": session.status,
+            "version": session.version,
+            "server_now": _now().isoformat(),
+        }
+    )
