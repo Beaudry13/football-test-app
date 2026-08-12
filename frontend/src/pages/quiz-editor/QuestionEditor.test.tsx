@@ -499,3 +499,158 @@ describe('QuestionEditor image upload on create', () => {
     expect(screen.queryByLabelText('Question image')).not.toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// A REJECTED SAVE MUST NOT LOOK LIKE A DEAD BUTTON.
+//
+// The banner sits at the top of a form that runs past a screen. A coach
+// clicking Add question from the bottom would otherwise watch nothing happen
+// while the reason scrolled off above them - and, critically, nothing about
+// the form may be cleared, or they lose a typed question and a pasted
+// screenshot along with it.
+// ---------------------------------------------------------------------------
+
+describe('when saving fails', () => {
+  function pasteInto(form: HTMLFormElement, file: File) {
+    fireEvent.paste(form, {
+      clipboardData: {
+        items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+        getData: () => '',
+      },
+    });
+  }
+
+  it('shows the error, scrolls it into view, and focuses it', async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    // jsdom implements neither, so both are stubbed to observe the calls.
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const onSave = vi.fn().mockRejectedValue(new Error('That image is too large.'));
+    render(
+      <QuestionEditor
+        submitLabel="Add question"
+        onSave={onSave}
+        onCancel={vi.fn()}
+        allowImage
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Question'), 'Which coverage?');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('That image is too large.');
+    expect(scrollIntoView).toHaveBeenCalled();
+    // Focus lands on the anchor wrapping the alert, so the message is
+    // announced rather than merely scrolled to.
+    expect(document.activeElement).toContainElement(alert);
+  });
+
+  it('keeps every unsaved field intact, including a pasted image', async () => {
+    const user = userEvent.setup();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    const onSave = vi.fn().mockRejectedValue(new Error('Server said no.'));
+    render(
+      <QuestionEditor
+        submitLabel="Add question"
+        onSave={onSave}
+        onCancel={vi.fn()}
+        allowImage
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText('Type'), 'multiple_choice');
+    await user.type(screen.getByLabelText('Question'), 'Which coverage?');
+    await user.type(screen.getByPlaceholderText('Option 1'), 'Cover 2');
+    await user.type(screen.getByPlaceholderText('Option 2'), 'Cover 3');
+    await user.type(screen.getByLabelText(/Explanation/i), 'Two deep safeties.');
+    const form = screen.getByLabelText('Question').closest('form') as HTMLFormElement;
+    pasteInto(form, new File([new Uint8Array([1])], 'shot.png', { type: 'image/png' }));
+    await screen.findByAltText('Selected question image');
+
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+    await screen.findByRole('alert');
+
+    // Nothing reset. Losing a typed question and a pasted screenshot to a
+    // failed save is worse than the failure itself.
+    expect(screen.getByLabelText('Question')).toHaveValue('Which coverage?');
+    expect(screen.getByPlaceholderText('Option 1')).toHaveValue('Cover 2');
+    expect(screen.getByPlaceholderText('Option 2')).toHaveValue('Cover 3');
+    expect(screen.getByLabelText(/Explanation/i)).toHaveValue('Two deep safeties.');
+    expect(screen.getByAltText('Selected question image')).toBeInTheDocument();
+    expect(screen.getByLabelText('Type')).toHaveValue('multiple_choice');
+  });
+
+  it('re-submits the same image after a failure, so nothing has to be re-attached', async () => {
+    const user = userEvent.setup();
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    const onSave = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Temporary failure.'))
+      .mockResolvedValueOnce(undefined);
+    render(
+      <QuestionEditor
+        submitLabel="Add question"
+        onSave={onSave}
+        onCancel={vi.fn()}
+        allowImage
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Question'), 'Which coverage?');
+    const form = screen.getByLabelText('Question').closest('form') as HTMLFormElement;
+    const file = new File([new Uint8Array([1])], 'shot.png', { type: 'image/png' });
+    pasteInto(form, file);
+    await screen.findByAltText('Selected question image');
+
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+    await screen.findByRole('alert');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+    // The SAME File both times - the retry is a retry, not a re-attach.
+    expect(onSave.mock.calls[0][1]).toBe(file);
+    expect(onSave.mock.calls[1][1]).toBe(file);
+  });
+
+  it('does not scroll when the save succeeds', async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <QuestionEditor submitLabel="Add question" onSave={onSave} onCancel={vi.fn()} allowImage />,
+    );
+
+    await user.type(screen.getByLabelText('Question'), 'Which coverage?');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    // A jarring jump on every successful save would be its own bug.
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('does not scroll while the coach is simply editing the form', async () => {
+    const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    render(
+      <QuestionEditor
+        submitLabel="Add question"
+        onSave={vi.fn().mockResolvedValue(undefined)}
+        onCancel={vi.fn()}
+        allowImage
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Question'), 'Typing away');
+    await user.selectOptions(screen.getByLabelText('Type'), 'written');
+    const form = screen.getByLabelText('Question').closest('form') as HTMLFormElement;
+    pasteInto(form, new File([new Uint8Array([1])], 'shot.png', { type: 'image/png' }));
+    await screen.findByAltText('Selected question image');
+
+    // No submit attempted, so nothing should move.
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});

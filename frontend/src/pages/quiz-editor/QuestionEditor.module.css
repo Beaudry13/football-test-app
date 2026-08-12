@@ -144,3 +144,10 @@
   font-size: 13px;
   color: var(--peira-danger);
 }
+
+/* Focus target for a failed save. Outline suppressed because the alert inside
+   is already the visible signal - a focus ring around it would read as a
+   second, competing one. */
+.errorAnchor:focus {
+  outline: none;
+}

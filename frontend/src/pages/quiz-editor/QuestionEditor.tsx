@@ -64,6 +64,34 @@ export function QuestionEditor({
   const [imageError, setImageError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  /** Bring a failed save into view.
+   *
+   * The banner sits at the top of a form that can run well past a screen -
+   * question, type, options, explanation, image. A coach who clicks Add
+   * question from the bottom would otherwise watch nothing happen while the
+   * reason scrolled off above them, which reads as a dead button rather than
+   * a rejected save.
+   *
+   * Keyed on `error`, which is set in exactly two places and cleared at the
+   * start of every submit - so this fires on a failed save attempt and on
+   * nothing else. A successful save leaves it null and never scrolls.
+   *
+   * Focus moves with it so the message is announced rather than merely
+   * visible; the container is tabIndex={-1} so it can receive focus
+   * programmatically without joining the tab order.
+   */
+  useEffect(() => {
+    if (!error) return;
+    // Feature-detected rather than assumed: scrollIntoView is absent in jsdom
+    // and not guaranteed in every embedded webview. An unhandled throw inside
+    // this effect would take the whole form down - trading a scrolled-off
+    // error for a broken screen, which is strictly worse than the bug it
+    // exists to fix.
+    errorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    errorRef.current?.focus?.({ preventScroll: true });
+  }, [error]);
 
   useEffect(() => {
     if (!image) {
@@ -206,7 +234,18 @@ export function QuestionEditor({
 
   return (
     <form className={`${nb.card} ${styles.form}`} onSubmit={handleSubmit} onPaste={handlePaste}>
-      <ErrorBanner message={error} />
+      {/* role=alert so the message is announced the moment it appears, and
+          tabIndex=-1 so focus can be moved here programmatically without
+          adding a stop to the tab order. */}
+      {/* A focus/scroll target only. ErrorBanner's Alert already carries
+          role=alert, and duplicating it here would announce the same message
+          twice and make "which alert?" ambiguous. Rendered only when there IS
+          an error so an empty region never sits in the tree. */}
+      {error && (
+        <div ref={errorRef} tabIndex={-1} className={styles.errorAnchor}>
+          <ErrorBanner message={error} />
+        </div>
+      )}
 
       <div className={nb.field}>
         <label className={nb.fieldLabel} htmlFor="question_text">
