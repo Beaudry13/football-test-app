@@ -691,9 +691,18 @@ class TestPolling:
             "status",
             "server_now",
             "current_round",
+            # M2.1 widened this from five keys to twelve. Every addition is a
+            # SCALAR, TIMESTAMP OR BOOLEAN - the rule that matters is not the
+            # size of the payload but that nothing identifying anyone, and no
+            # question content, ever rides the 1 Hz path.
+            "question_opened_at",
             "question_closes_at",
-            # A SCALAR COUNT ONLY - see the identity-leak test below.
             "participant_count",
+            "answered_count",
+            "all_in",
+            "answering_open",
+            "total_rounds",
+            "podium_step",
         }
         # If any of these ever appear here, someone has moved heavy work onto
         # the one-second path.

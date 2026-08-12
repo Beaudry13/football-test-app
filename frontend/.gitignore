@@ -25,3 +25,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Written by `npm run test:ci` so the collection guard can verify what
+# actually ran. Regenerated every run; never useful in a commit.
+.vitest-report.json

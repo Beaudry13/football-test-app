@@ -134,3 +134,46 @@ auto-opening "What is Peira?" modal removed.
 
 The alternative already built instead: an opt-in link inside the checklist
 ("New here? Take the dashboard tour").
+
+---
+
+## Frontend jsdom unhandled errors (deferred until Competition Mode ships)
+
+`npx vitest run` exits non-zero on a fully passing suite, from ~8 unhandled
+errors raised by jsdom rather than by any test. Two sources:
+
+- `Image given has not completed loading` — Fabric calling canvas `drawImage`
+  in `AnnotationCanvas.test.tsx`.
+- `scrollIntoView is not a function` — jsdom implements no layout, so
+  `QuizStep.tsx` and `QuestionEditor.tsx` hit it during real submit paths.
+
+**Why this matters more than ordinary noise.** A permanently red exit code is
+an unreadable one. A full run silently executed 75 of 76 files - dropping
+`QuestionEditor.test.tsx` and its 39 tests - and nothing surfaced it, because
+the only channel that could have was already failing for an unrelated reason.
+That is now caught by `npm run test:ci`
+(`frontend/scripts/verify-test-collection.mjs`), which asserts from the run's
+own JSON report that every test file on disk actually ran and nothing failed.
+
+**The guard makes the gate trustworthy; it does not remove the debt.** While
+these errors exist, vitest's own exit code still cannot be used for anything.
+
+### Known specific issue to fix as part of this
+
+`QuestionEditor.test.tsx` assigns `window.HTMLElement.prototype.scrollIntoView`
+in five places and never restores it - the only global prototype mutation in
+the whole suite. It leaks into every file that runs after it, which is why the
+unhandled-error count varies with test ordering (`QuizStep`'s rejection appears
+only in orderings where `QuestionEditor` has not run yet). Restore it in an
+`afterEach`, or stub it once in `src/test/setup.ts` where every file gets the
+same environment.
+
+### Also worth investigating at the same time
+
+Both observed file-drops happened while a full backend `pytest` was saturating
+the machine; three controlled runs on an idle machine were clean. Worker
+starvation under host load is strongly indicated but was never reproduced on
+demand. If it recurs, capture the run with `--pool=forks --poolOptions...`
+diagnostics rather than re-running until it passes.
+
+**Deferred deliberately: not blocking, and not to be picked up mid-Competition.**

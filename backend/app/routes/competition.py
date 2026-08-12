@@ -33,8 +33,13 @@ from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import Group, Player
 from app.models.competition import LOBBY
-from app.schemas.competition import CreateCompetitionSchema, JoinCompetitionSchema
+from app.schemas.competition import (
+    CreateCompetitionSchema,
+    JoinCompetitionSchema,
+    TransitionSchema,
+)
 from app.services import competition as svc
+from app.services import competition_rounds as rounds
 from app.utils.auth import current_coach, get_visible_quiz
 from app.utils.validation import load_json_body, load_optional_json_body
 
@@ -185,6 +190,22 @@ def remove_participant(session_id: int, participant_id: int):
     return jsonify(_host_view(session))
 
 
+@competition_bp.post("/sessions/<int:session_id>/transition")
+@jwt_required()
+def transition(session_id: int):
+    """THE ONLY WAY THE ROOM MOVES FORWARD.
+
+    One endpoint rather than six (start / reveal / leaderboard / next /
+    finish / advance), because the legality of a move depends on the state
+    it is made from, and that rule lives in exactly one table. Six endpoints
+    would be six places for it to drift.
+    """
+    session = svc.coach_session(session_id, current_coach())
+    data = load_json_body(TransitionSchema())
+    rounds.transition(session, data["action"], data["expected_version"])
+    return jsonify(_host_view(session))
+
+
 @competition_bp.post("/sessions/<int:session_id>/end")
 @jwt_required()
 def end(session_id: int):
@@ -201,7 +222,17 @@ def _host_view(session) -> dict:
     joined = {p.player_id for p in session.participants}
     data["eligible_count"] = len(eligible)
     # Who has NOT arrived yet - the thing a coach actually scans the room for.
+    # NOTE this is the LOBBY roster, not "who has not answered": names of
+    # players still answering are never published, on the projector or here.
     data["not_joined"] = [e for e in eligible if e["player_id"] not in joined]
+    # The buttons this screen may offer, derived from the same transition
+    # table the server enforces - so a button can never exist for a move that
+    # would be refused.
+    data["available_actions"] = rounds.available_actions(session)
+    data["leaderboard_hint"] = rounds.leaderboard_hint(session)
+    data["answered_count"] = session.answered_count
+    data["all_in"] = session.all_in
+    data["answering_open"] = session.answering_open
     return data
 
 

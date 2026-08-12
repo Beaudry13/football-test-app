@@ -30,6 +30,10 @@ LOBBY = "LOBBY"
 QUESTION_OPEN = "QUESTION_OPEN"
 QUESTION_REVEAL = "QUESTION_REVEAL"
 LEADERBOARD = "LEADERBOARD"
+#: The coach-paced ending. A real server state rather than a client animation
+#: because every phone must agree on which place has been revealed - a
+#: client-side sequence would desync the room mid-suspense.
+PODIUM = "PODIUM"
 COMPLETE = "COMPLETE"
 ABANDONED = "ABANDONED"
 
@@ -38,9 +42,19 @@ COMPETITION_STATUSES = (
     QUESTION_OPEN,
     QUESTION_REVEAL,
     LEADERBOARD,
+    PODIUM,
     COMPLETE,
     ABANDONED,
 )
+
+#: Podium reveal steps. Coach-advanced, one at a time, so the room experiences
+#: third/second/first together rather than seeing all three at once.
+PODIUM_COMPLETE_CARD = 0
+PODIUM_THIRD = 1
+PODIUM_SECOND = 2
+PODIUM_FIRST = 3
+PODIUM_STANDINGS = 4
+PODIUM_LAST_STEP = PODIUM_STANDINGS
 
 #: Statuses in which the session is finished and accepts no further action.
 TERMINAL_STATUSES = (COMPLETE, ABANDONED)
@@ -94,6 +108,24 @@ class CompetitionSession(db.Model):
     question_opened_at = db.Column(db.DateTime(timezone=True), nullable=True)
     question_closes_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    #: THE QUESTIONS THIS COMPETITION PLAYS, IN ORDER, frozen when the first
+    #: question starts. Rounds index into THIS, never into quiz.questions - a
+    #: coach editing the quiz mid-competition would otherwise shift every later
+    #: round and score answers against questions nobody saw. Same reasoning as
+    #: PlayerAttempt.question_order in Practice Mode.
+    question_order = db.Column(db.JSON, nullable=False, default=list, server_default="[]")
+
+    #: Which scoring formula produced this competition's points. Recorded so a
+    #: future model cannot silently rewrite what an old result meant.
+    scoring_version = db.Column(
+        db.SmallInteger, nullable=False, default=1, server_default="1"
+    )
+
+    #: How far through the podium reveal the coach has advanced.
+    podium_step = db.Column(
+        db.SmallInteger, nullable=False, default=0, server_default="0"
+    )
+
     #: Eligibility scope and future options. JSON because the shape is young;
     #: a column per setting would be a migration per idea.
     settings = db.Column(db.JSON, nullable=False, default=dict)
@@ -133,6 +165,68 @@ class CompetitionSession(db.Model):
     def accepts_joins(self) -> bool:
         return self.status in JOINABLE_STATUSES and not self.is_expired
 
+    # -- the answering window ---------------------------------------------
+
+    @property
+    def answering_open(self) -> bool:
+        """Whether an answer submitted RIGHT NOW would be in time.
+
+        DERIVED, NOT A STATE. Answering closes because the clock ran out, not
+        because anything transitioned - which is exactly what lets the coach
+        keep control of the reveal without a background worker moving the room
+        on before they are ready. The session sits in QUESTION_OPEN with the
+        window shut, and the coach reveals when the teaching moment is right.
+
+        Both conditions matter: a reveal closes answering immediately even if
+        seconds remain (the coach moved on early because everyone was already
+        in), and the clock closes it even though the status has not changed.
+        """
+        if self.status != QUESTION_OPEN:
+            return False
+        if self.question_opened_at is None or self.question_closes_at is None:
+            return False
+        opens = self.question_opened_at
+        closes = self.question_closes_at
+        if opens.tzinfo is None:
+            opens = opens.replace(tzinfo=timezone.utc)
+        if closes.tzinfo is None:
+            closes = closes.replace(tzinfo=timezone.utc)
+        # BOTH ends. Checking only the close time would leave the window open
+        # during the 3-2-1 lead-in, when `question_opened_at` is still in the
+        # future and the question is not yet on anyone's screen - a player
+        # could have answered a question they had not been shown.
+        return opens <= datetime.now(timezone.utc) < closes
+
+    @property
+    def all_in(self) -> bool:
+        """Every seat in the room has answered this round.
+
+        Informational only - it does NOT close the window and does NOT reveal
+        anything. It exists so the host can stop watching a clock that no
+        longer has anyone left to wait for, and move into the reveal when the
+        coach chooses. Server authority and coach control both survive
+        because this changes no state on its own.
+        """
+        if self.status != QUESTION_OPEN:
+            return False
+        total = self.participant_count or 0
+        return total > 0 and (self.answered_count or 0) >= total
+
+    @property
+    def total_rounds(self) -> int:
+        return len(self.question_order or [])
+
+    def question_id_for_round(self, round_index: int) -> int | None:
+        """The question a round plays, or None if the round is out of range.
+
+        Reads the frozen order rather than the quiz, so this answer cannot
+        change while the competition is running.
+        """
+        order = self.question_order or []
+        if 0 <= round_index < len(order):
+            return order[round_index]
+        return None
+
     def bump(self) -> None:
         """Record that something changed.
 
@@ -165,10 +259,22 @@ class CompetitionSession(db.Model):
             "status": self.status,
             "server_now": now.isoformat(),
             "current_round": self.current_round,
+            "question_opened_at": (
+                self.question_opened_at.isoformat() if self.question_opened_at else None
+            ),
             "question_closes_at": (
                 self.question_closes_at.isoformat() if self.question_closes_at else None
             ),
             "participant_count": self.participant_count,
+            # Counters ride the poll; VERSION marks structural change. These
+            # two move constantly during a round, and bumping the version for
+            # each would make every phone in the room refetch heavy state on
+            # every submission - the stampede the M1 load harness caught.
+            "answered_count": self.answered_count,
+            "all_in": self.all_in,
+            "answering_open": self.answering_open,
+            "total_rounds": self.total_rounds,
+            "podium_step": self.podium_step,
         }
 
     def to_dict(self, *, include_participants: bool = False) -> dict:
@@ -180,6 +286,9 @@ class CompetitionSession(db.Model):
             "status": self.status,
             "version": self.version,
             "current_round": self.current_round,
+            "total_rounds": self.total_rounds,
+            "podium_step": self.podium_step,
+            "scoring_version": self.scoring_version,
             "question_time_seconds": self.question_time_seconds,
             # The column_property, NOT len(self.participants): counting via
             # the relationship would load every participant row just to
@@ -365,4 +474,34 @@ CompetitionSession.participant_count = db.column_property(
     .scalar_subquery(),
     # deferred=False is the default and is what we want: the poll must get the
     # count in its single SELECT, not in a follow-up.
+)
+
+
+# ---------------------------------------------------------------------------
+# answered_count
+# ---------------------------------------------------------------------------
+#
+# The same inlined-subquery trick as participant_count, scoped to whichever
+# round the session is currently on. Declared here because it references both
+# CompetitionSession and CompetitionAnswer.
+#
+# WHY IT IS NOT A STORED COUNTER
+# -------------------------------
+# It would have to be incremented on every submission and reset on every round
+# change, and a counter that disagrees with the answer rows is a scoreboard
+# nobody can explain. Derived from the rows, it cannot drift.
+#
+# WHY IT IS SAFE ON THE 1 Hz PATH
+# --------------------------------
+# It is inlined into the session SELECT, so the poll stays ONE statement even
+# though it now reports two counts. `current_round` is a column on the same
+# row, so the correlation needs no join.
+CompetitionSession.answered_count = db.column_property(
+    db.select(db.func.count(CompetitionAnswer.id))
+    .where(
+        CompetitionAnswer.session_id == CompetitionSession.id,
+        CompetitionAnswer.round_index == CompetitionSession.current_round,
+    )
+    .correlate_except(CompetitionAnswer)
+    .scalar_subquery()
 )

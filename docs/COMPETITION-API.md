@@ -61,6 +61,7 @@ server cannot.
 | `GET` | `/active` | **coach recovery** — live sessions this coach may control |
 | `GET` | `/sessions/<id>/state` | host heartbeat — same tiny payload as players |
 | `DELETE` | `/sessions/<id>/participants/<pid>` | lobby only |
+| `POST` | `/sessions/<id>/transition` | **M2** move the room forward |
 | `POST` | `/sessions/<id>/end` | idempotent |
 
 Ownership: `get_visible_quiz()` for creation (organization + quiz visibility),
@@ -106,13 +107,30 @@ matched case-insensitively.
   "join_code": "9K6JTM", "status": "LOBBY", "version": 4 }
 ```
 
-**D. Poll** `GET /<code>/state` — **exactly these six keys**
+**D. Poll** `GET /<code>/state` — **exactly these twelve keys** *(M2.1)*
 ```json
-{ "version": 4, "status": "LOBBY",
+{ "version": 9, "status": "QUESTION_OPEN",
   "server_now": "2026-08-12T13:20:08.055732+00:00",
-  "current_round": 0, "question_closes_at": null,
-  "participant_count": 12 }
+  "current_round": 2, "total_rounds": 10,
+  "question_opened_at": "…", "question_closes_at": "…",
+  "participant_count": 22, "answered_count": 18,
+  "all_in": false, "answering_open": true, "podium_step": 0 }
 ```
+
+Every field is a scalar, timestamp or boolean. **No names, no ids, no question
+content, no options, no tokens** — the 1 Hz path stays free of anything
+identifying and anything expensive.
+
+`answered_count` and `all_in` **do not bump `version`.** Counters ride the
+poll; `version` marks structural change only. Bumping per submission would
+make 30 phones refetch heavy state 30 times a round — the stampede the M1
+harness caught.
+
+`answering_open` is **derived, not a state**: it requires
+`question_opened_at ≤ now < question_closes_at` **and** status
+`QUESTION_OPEN`. Checking only the close time would have left the window open
+during the 3‑2‑1 lead-in — a player could answer a question not yet on screen.
+A test caught exactly that.
 No roster, no participants, no leaderboard, no question, no player-private
 state. A test asserts the key set exactly, and asserts one `SELECT` and zero
 writes. `server_now` exists so a client renders a countdown from the server's
@@ -165,15 +183,51 @@ or `ABANDONED`.
 
 ---
 
+## 4a. The M2 state machine
+
+`LOBBY → QUESTION_OPEN ⇄ QUESTION_REVEAL → [LEADERBOARD] → … → PODIUM → COMPLETE`
+
+| From | Action | To |
+|---|---|---|
+| `LOBBY` | `START_QUESTION` | `QUESTION_OPEN` |
+| `QUESTION_OPEN` | `SHOW_ANSWER` | `QUESTION_REVEAL` |
+| `QUESTION_REVEAL` | `SHOW_LEADERBOARD` / `NEXT_QUESTION` / `FINISH` | `LEADERBOARD` / `QUESTION_OPEN` / `PODIUM` |
+| `LEADERBOARD` | `NEXT_QUESTION` / `FINISH` | `QUESTION_OPEN` / `PODIUM` |
+| `PODIUM` | `ADVANCE_PODIUM` / `COMPLETE` | `PODIUM` / `COMPLETE` |
+
+Anything absent from that table is impossible by construction, not by a check.
+A test walks the **entire** product of states × actions.
+
+`POST /sessions/<id>/transition` takes `{action, expected_version}`.
+**`expected_version` is required**: it is what makes two host tabs, and one
+double-clicked button, safe — the loser gets `409 stale_transition` carrying
+the current version so it can resync. Version rather than status, because two
+clicks of NEXT QUESTION arrive in the same status and must still not both
+apply.
+
+**No transition is automatic.** The only time-driven behaviour in Competition
+is `answering_open` flipping to false, which changes no state and bumps no
+version — that is precisely what lets the clock close answering while the
+coach still controls when the room sees the answer.
+
+**`all_in`** (every seat answered) is informational. It does not close the
+window and does not reveal anything; it exists so the host can stop watching a
+clock with nobody left to wait for.
+
+**`question_order`** is frozen at the first `START_QUESTION`. Rounds index into
+it, never into `quiz.questions`, so a coach editing the quiz mid-competition
+cannot shift which question a round plays.
+
 ## 5. Version — what bumps it
 
 The frontend refetches heavy state **only** when `version` changes.
 
 **Bumps:** participant joins (new seat only) · participant removed · session
-ends/abandons · expiry sweep. M2 adds the round transitions.
+ends/abandons · expiry sweep · **every M2 round transition**.
 
 **Does not bump:** any `GET`, the 1 Hz poll, a token-verified rejoin, a
-reconnect, `last_seen_at`. A rejoin loop that bumped the version would make
+reconnect, `last_seen_at`, **an answer being submitted**, **the clock
+expiring**. A rejoin loop that bumped the version would make
 every phone in the room refetch continuously — there is a test for it.
 
 ## 6. Expiry — no background worker

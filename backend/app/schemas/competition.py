@@ -3,6 +3,7 @@
 from marshmallow import Schema, fields, validate
 
 from app.models.competition import QUESTION_TIME_CHOICES
+from app.services.competition_rounds import ACTIONS
 
 
 class CreateCompetitionSchema(Schema):
@@ -32,3 +33,17 @@ class JoinCompetitionSchema(Schema):
     #: network can lose the response to a successful join. Absent on a genuine
     #: first join. Never required, because a first-time player has nothing yet.
     reconnect_token = fields.Str(load_default=None, allow_none=True)
+
+
+class TransitionSchema(Schema):
+    """A coach moving the room forward.
+
+    `expected_version` is required and has no default ON PURPOSE. It is the
+    version the host screen was showing when the button was clicked, and it is
+    what makes two open host tabs - or one double-clicked button - safe. A
+    caller that could omit it would be a caller that can silently double-apply
+    a transition.
+    """
+
+    action = fields.Str(required=True, validate=validate.OneOf(sorted(ACTIONS)))
+    expected_version = fields.Integer(required=True)

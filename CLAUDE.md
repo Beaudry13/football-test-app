@@ -81,7 +81,7 @@ through Bash.
 # Frontend
 cd frontend
 npm run build                          # THE GATE — see below. tsc -b + vite build
-npx vitest run --no-file-parallelism   # see the note below — use this form
+npm run test:ci                        # THE TEST GATE — see below. Use this, not `vitest run`
 npx oxlint .
 
 # Backend
@@ -114,14 +114,34 @@ what must pass before saying the frontend is ready.
 Both of these predate any given session. Do not "fix" them and do not report
 them as regressions:
 
-- **Frontend: run with `--no-file-parallelism`.** Under default parallelism
-  2–5 files (`AnnotationCanvas`, `shapeFactories`, sometimes `LoginPage`/
-  `JoinOrgPage`/`FolderPage`) fail from host-load timing. Each passes in
-  isolation; sequential gives a clean run.
-- **Vitest exits non-zero with ~6 "unhandled errors" while every test
-  passes.** These are jsdom limitations — `Image given has not completed
-  loading` from canvas `drawImage`, and `scrollIntoView is not a function`.
-  Verified identical on `master`, and the count varies run to run.
+- **Frontend: use `npm run test:ci`, not `npx vitest run`.**
+  `scripts/verify-test-collection.mjs` runs the suite (sequentially — see
+  below) and then asserts, from the run's own JSON report, that **every
+  `*.test.ts(x)` on disk actually ran** and that **nothing failed**. It exits
+  0 or 1 accordingly, so the frontend finally has a usable exit code.
+
+  It exists because a run reported `75 files / 867 tests` on a tree that had
+  just reported `76 / 906`, with no failure and nothing in the summary:
+  `QuestionEditor.test.tsx` (39 tests) had silently not run. Both observed
+  omissions happened while a full backend pytest was saturating the machine;
+  three controlled runs on an idle machine were clean. **Probable cause is
+  worker starvation under load — strongly indicated, not proven.** The guard
+  makes it loud either way.
+
+  Do NOT "fix" a guard failure by re-running until it passes.
+- **`npx vitest run` exits non-zero even when every test passes**, from ~8
+  jsdom unhandled errors (`Image given has not completed loading` via canvas
+  `drawImage`; `scrollIntoView is not a function`). That is why the missing
+  file was invisible: the one signal that should have flagged it was already
+  permanently red. It is also why `test:ci` cannot chain with `&&`, and why
+  the guard — not the exit code — is the gate.
+- **Sequential is deliberate.** Under default parallelism 2–5 files
+  (`AnnotationCanvas`, `shapeFactories`, sometimes `LoginPage`/`JoinOrgPage`/
+  `FolderPage`) fail from host-load timing. Each passes in isolation.
+- **`QuestionEditor.test.tsx` mutates `HTMLElement.prototype.scrollIntoView`
+  and never restores it** — the only global prototype mutation in the suite.
+  It is why the unhandled-error count varies with test order. Harmless today;
+  worth cleaning if that file is touched anyway.
 - **oxlint reports 2 warnings** (`AuthContext` fast-refresh, an
   `AnnotationCanvas.test` this-alias). Both pre-existing.
 
