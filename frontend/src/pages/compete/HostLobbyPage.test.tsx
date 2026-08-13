@@ -272,3 +272,101 @@ describe('scan to join', () => {
     expect(screen.queryByRole('img', { name: /scan to join/i })).not.toBeInTheDocument();
   });
 });
+
+describe('finishing early', () => {
+  /** A revealed round with more questions still to play. */
+  function midRunReveal(roundNumber = 3, totalRounds = 13) {
+    return view({
+      status: 'QUESTION_REVEAL',
+      current_round: roundNumber - 1,
+      available_actions: ['FINISH', 'NEXT_QUESTION', 'SHOW_LEADERBOARD'],
+      round: {
+        round_index: roundNumber - 1,
+        round_number: roundNumber,
+        total_rounds: totalRounds,
+        question: {
+          id: 9,
+          question_text: 'Which coverage?',
+          question_type: 'multiple_choice',
+          image: null,
+          options: [{ id: 1, option_text: 'Cover 2', position: 0 }],
+        },
+        answered_count: 1,
+        participant_count: 1,
+        all_in: false,
+        answering_open: false,
+        question_opened_at: '2026-08-12T13:00:00+00:00',
+        question_closes_at: '2026-08-12T13:00:20+00:00',
+        distribution: null,
+      },
+    } as Partial<competitionApi.CompetitionHostView>);
+  }
+
+  it('REGRESSION: offers Finish before the last question', async () => {
+    // This button used to carry `&& !actions.includes('NEXT_QUESTION')`, so it
+    // appeared only once the quiz ran out of questions. A coach playing five
+    // questions from a bank of thirty then had NO way to reach the podium -
+    // the only early exit was End competition, which abandons the room and
+    // replaces every player's result with "your coach has ended this".
+    byCode.mockResolvedValue(midRunReveal());
+    hostView.mockResolvedValue(midRunReveal());
+    hostState.mockResolvedValue(state(2, 'QUESTION_REVEAL'));
+    renderHost();
+
+    expect(
+      await screen.findByRole('button', { name: /finish competition/i }),
+    ).toBeInTheDocument();
+    // And it sits alongside the ordinary continue control, not instead of it.
+    expect(screen.getByRole('button', { name: /next question/i })).toBeInTheDocument();
+  });
+
+  it('warns before throwing away the questions that remain', async () => {
+    const user = userEvent.setup();
+    byCode.mockResolvedValue(midRunReveal(3, 13));
+    hostView.mockResolvedValue(midRunReveal(3, 13));
+    hostState.mockResolvedValue(state(2, 'QUESTION_REVEAL'));
+    renderHost();
+
+    await user.click(await screen.findByRole('button', { name: /finish competition/i }));
+
+    // FINISH is a one-way door - there is no row back into QUESTION_OPEN from
+    // PODIUM - and this button now sits next to Next question.
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('10 questions'));
+    await waitFor(() =>
+      expect(transition).toHaveBeenCalledWith(7, 'FINISH', expect.any(Number)),
+    );
+  });
+
+  it('does not finish if the coach cancels the warning', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    byCode.mockResolvedValue(midRunReveal());
+    hostView.mockResolvedValue(midRunReveal());
+    hostState.mockResolvedValue(state(2, 'QUESTION_REVEAL'));
+    renderHost();
+
+    await user.click(await screen.findByRole('button', { name: /finish competition/i }));
+
+    expect(transition).not.toHaveBeenCalled();
+  });
+
+  it('does not nag on the last question, where nothing is lost', async () => {
+    const user = userEvent.setup();
+    // The server drops NEXT_QUESTION once no playable round remains.
+    const last = view({
+      ...midRunReveal(13, 13),
+      available_actions: ['FINISH', 'SHOW_LEADERBOARD'],
+    } as Partial<competitionApi.CompetitionHostView>);
+    byCode.mockResolvedValue(last);
+    hostView.mockResolvedValue(last);
+    hostState.mockResolvedValue(state(2, 'QUESTION_REVEAL'));
+    renderHost();
+
+    await user.click(await screen.findByRole('button', { name: /finish competition/i }));
+
+    expect(window.confirm).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(transition).toHaveBeenCalledWith(7, 'FINISH', expect.any(Number)),
+    );
+  });
+});

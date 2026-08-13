@@ -149,6 +149,33 @@ export function HostLobbyPage() {
     [sessionId, state, loadView, refresh],
   );
 
+  /**
+   * Finish now, and confirm first if the coach is leaving questions unplayed.
+   *
+   * FINISH is a one-way door: the transition table has no row back into
+   * QUESTION_OPEN from PODIUM, by design. Now that this button sits next to
+   * Next question on every reveal rather than only on the last one, a misclick
+   * in front of a live room would end the competition several questions early
+   * with no way to undo it - so the same guard End competition already uses
+   * applies here, but ONLY when there is something left to lose. On the last
+   * question there is nothing to warn about and a prompt would just be noise.
+   */
+  const finish = useCallback(async () => {
+    const played = view?.round?.round_number ?? 0;
+    const total = view?.round?.total_rounds ?? 0;
+    const remaining = Math.max(0, total - played);
+    if (
+      remaining > 0 &&
+      !window.confirm(
+        `Finish now and go to the podium? ${remaining} ` +
+          `${remaining === 1 ? 'question' : 'questions'} will not be played.`,
+      )
+    ) {
+      return;
+    }
+    await advance('FINISH');
+  }, [view, advance]);
+
   const end = useCallback(async () => {
     if (sessionId === null) return;
     if (!window.confirm('End this competition? Players will be returned to the join screen.')) return;
@@ -280,13 +307,25 @@ export function HostLobbyPage() {
               Show standings
             </button>
           )}
-          {actions.includes('FINISH') && !actions.includes('NEXT_QUESTION') && (
-            /* The last question has been revealed. This hands the room to the
-               podium, which the coach then walks a place at a time. */
+          {actions.includes('FINISH') && (
+            /* SHOWN WHENEVER THE SERVER OFFERS IT, which is every reveal.
+               This used to carry `&& !actions.includes('NEXT_QUESTION')`, so
+               it appeared only once the quiz ran out of questions - encoding
+               "finish means there is nothing left to play" when the rule is
+               "finish means the coach has decided to stop". The server never
+               shared that reading: (QUESTION_REVEAL, FINISH) -> PODIUM has no
+               round condition.
+
+               The cost was a coach running a short competition off a long
+               quiz - five questions from a bank of thirty - having NO way to
+               end it properly. The only early exit was End competition, which
+               always abandons, so the room lost its podium and every player
+               got "your coach has ended this competition" instead of a result.
+               Found on a real projector at round 3 of 13. */
             <button
               type="button"
               className={styles.button}
-              onClick={() => advance('FINISH')}
+              onClick={finish}
               disabled={busy}
             >
               Finish competition
