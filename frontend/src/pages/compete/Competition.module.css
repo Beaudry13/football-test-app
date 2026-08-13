@@ -195,6 +195,52 @@
   font-size: 0.9rem;
 }
 
+/* --- Scan to join -------------------------------------------------------- */
+
+.qrBlock {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: center;
+}
+
+/*
+ * The white plate the matrix sits on.
+ *
+ * SIZED FROM THE SAME CONTAINER AS THE CODE, for the same reason: a share of
+ * the card can never outgrow the card, whatever the display does. The 42cqi
+ * share sits well inside the code's own 13.5cqi x 6 characters, so adding this
+ * cannot squeeze the hero or bring back the overflow fixed in edcfa70 - the
+ * code's size depends on the card's width, which this does not change.
+ *
+ * The 17rem ceiling is a scanning judgement rather than a layout one. A phone
+ * camera reads a QR from roughly ten times its printed width, so ~270px on a
+ * 1920 frame projected three metres wide is about 40cm of matrix - readable
+ * from the back of an ordinary meeting room. Bigger buys little and starts
+ * competing with the code.
+ *
+ * WHITE, NOT THE STAGE PALETTE. The plate is deliberately outside the
+ * Competition colours: the stage is near-black and warm, and a tinted or
+ * gradient matrix loses contrast under projector glare. Scan reliability wins
+ * over decoration here - the padding also gives the spec's quiet zone real
+ * optical room on top of the four modules the SVG already carries.
+ */
+.qrPlate {
+  width: min(17rem, 42cqi);
+  padding: 0.6rem;
+  border-radius: 10px;
+  background: #ffffff;
+  /* Lifts the white plate off the dark stage without touching the matrix. */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.qrCaption {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
 /* --- Counters ------------------------------------------------------------ */
 
 .countRow {

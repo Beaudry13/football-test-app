@@ -27,6 +27,7 @@ import { CompetitionShell } from './CompetitionShell';
 import { HostQuestionStage, HostRevealStage } from './HostRoundStages';
 import { HostLeaderboard } from './LeaderboardStages';
 import { HostPodium } from './PodiumStages';
+import { JoinQr } from './JoinQr';
 import { useCompetitionPoll } from './useCompetitionPoll';
 import styles from './Competition.module.css';
 
@@ -340,7 +341,20 @@ export function HostLobbyPage() {
             {/* The code comes from the URL so it renders immediately, before
                 any request settles - a projector should never show a blank. */}
             <div className={styles.code}>{(view?.join_code ?? code).toUpperCase()}</div>
-            <div className={styles.codeHint}>Go to this site and tap Join a competition</div>
+            {/* The scannable shortcut to the same public join screen, rendered
+                from the same code as the letters above so the two cannot
+                disagree.
+
+                SHOWN ONLY WHILE THE ROOM ACCEPTS JOINS. The gate is the
+                server's own rule - JOINABLE_STATUSES is (LOBBY,) - not "which
+                branch of this component happened to render". Those differ: if
+                the current question disappears mid-competition the host falls
+                back to this grid, and without the status check the projector
+                would invite a room to join a competition already in progress.
+                `undefined` is included so the first paint, before any request
+                settles, still shows it rather than flashing it in. */}
+            {(!status || status === 'LOBBY') && <JoinQr code={view?.join_code ?? code} />}
+            <div className={styles.codeHint}>Or go to this site and tap Join a competition</div>
           </div>
 
           <div className={styles.countRow}>

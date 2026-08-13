@@ -228,3 +228,47 @@ describe('host controls', () => {
     expect(await screen.findByRole('heading', { name: /competition ended/i })).toBeInTheDocument();
   });
 });
+
+describe('scan to join', () => {
+  it('offers a QR pointing at this competition, on the lobby', async () => {
+    renderHost();
+
+    const qr = await screen.findByRole('img', { name: /scan to join competition ABC123/i });
+    expect(qr).toBeInTheDocument();
+    // The code stays the hero and the typed route stays available - the QR is
+    // a shortcut, never the only way in.
+    expect(screen.getByText('ABC123')).toBeInTheDocument();
+    expect(screen.getByText(/scan or enter the code/i)).toBeInTheDocument();
+  });
+
+  it('follows the competition, not a hard-coded room', async () => {
+    byCode.mockResolvedValue(view({ join_code: 'ZLMU88' }));
+    hostView.mockResolvedValue(view({ join_code: 'ZLMU88' }));
+    renderHost();
+
+    expect(
+      await screen.findByRole('img', { name: /scan to join competition ZLMU88/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('is gone once the room is playing', async () => {
+    // There is nobody left to let in mid-question, and the projector needs the
+    // whole screen for the question.
+    byCode.mockResolvedValue(view({ status: 'QUESTION_OPEN' }));
+    hostView.mockResolvedValue(view({ status: 'QUESTION_OPEN' }));
+    hostState.mockResolvedValue(state(2, 'QUESTION_OPEN'));
+    renderHost();
+
+    await waitFor(() => expect(hostState).toHaveBeenCalled());
+    expect(screen.queryByRole('img', { name: /scan to join/i })).not.toBeInTheDocument();
+  });
+
+  it('is gone once the competition has ended', async () => {
+    byCode.mockResolvedValue(view({ status: 'ABANDONED' }));
+    hostView.mockResolvedValue(view({ status: 'ABANDONED' }));
+    renderHost();
+
+    await screen.findByRole('heading', { name: /competition ended/i });
+    expect(screen.queryByRole('img', { name: /scan to join/i })).not.toBeInTheDocument();
+  });
+});
