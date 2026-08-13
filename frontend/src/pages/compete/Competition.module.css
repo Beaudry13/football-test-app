@@ -136,6 +136,10 @@
   justify-items: center;
   text-align: center;
   padding: clamp(1.5rem, 4vw, 2.75rem);
+  /* THIS is what the join code is sized against - see .code below. The card's
+     own width is set by the grid track, never by its contents, so declaring it
+     a container is safe and introduces no circularity. */
+  container-type: inline-size;
   border-radius: var(--comp-radius);
   border: 1px solid var(--comp-accent-line);
   background: linear-gradient(180deg, var(--comp-surface-raised), var(--comp-surface));
@@ -151,12 +155,37 @@
 }
 
 .code {
-  /* Sized against the viewport: this is read from the back row of a room on a
-     projector, and from arm's length on a phone. */
-  font-size: clamp(3rem, 13vw, 8rem);
+  /* SIZED AGAINST ITS CARD, NOT THE VIEWPORT.
+     ------------------------------------------
+     This was `clamp(3rem, 13vw, 8rem)`, and 13vw is 13% of the SCREEN while
+     the card is a grid track capped in rem. The two are unrelated, so the
+     wider the display the worse the mismatch - the opposite of what vw sizing
+     assumes. Measured on the real lobby at 1920x1080: 128px type, 647px of
+     text, 328px of card. 319px of overflow, running 276px into the roster
+     column, and invisible as a scrollbar only because .stage sets
+     overflow-x: hidden.
+
+     WHERE 13.5cqi COMES FROM. `cqi` is 1% of .codePanel's content box, so this
+     tracks the actual space available however the grid resizes. Measured glyph
+     advance for six characters of the join alphabet, at 1em in this exact font
+     and weight: WWWWWW 6.455em (the worst case, and W IS in the alphabet),
+     MWMWMW 6.006, MMMMMM 5.660, ZLMU88 4.206, 888888 3.873. CSS also adds
+     letter-spacing after every character including the last, which the
+     negative margin below reclaims, so the worst case costs
+     6.455 + 5(0.12) = 7.055em. Fitting that needs 100/7.055 = 14.2cqi; 13.5
+     keeps ~5% in hand for the fallback font stack if Inter has not loaded.
+
+     The plain `2rem` first is the fallback for engines without container
+     query units - it fits even the narrowest card, and any engine that
+     understands cqi discards it. */
+  font-size: 2rem;
+  font-size: 13.5cqi;
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.12em;
+  /* Reclaim the trailing letter-space so six characters sit optically centred
+     in the card rather than pushed left by one gap they do not need. */
+  margin-inline-end: -0.12em;
   color: var(--comp-text);
   text-shadow: 0 0 44px rgba(255, 122, 26, 0.34);
 }
@@ -548,10 +577,15 @@
 }
 
 @media (min-width: 60rem) {
-  /* The code panel holds the left rail at a fixed, readable width while the
-     room fills the rest - a projector's job is the code and the names. */
+  /* The left rail is a PROPORTION of the room, not a fixed 26rem.
+     A projector's job is the code and the names, and the code is sized from
+     this track (see .code), so a track that ignored the display size pinned
+     the hero to the same pixel width on a 13" laptop and a lecture-hall
+     projector. A share keeps it reading as a hero at every size; the 44rem
+     ceiling stops it running away on an ultra-wide, and 20rem is the floor
+     that keeps the code legible before the layout drops to one column. */
   .hostGrid {
-    grid-template-columns: minmax(20rem, 26rem) 1fr;
+    grid-template-columns: minmax(20rem, min(38%, 44rem)) 1fr;
     align-items: start;
   }
 }

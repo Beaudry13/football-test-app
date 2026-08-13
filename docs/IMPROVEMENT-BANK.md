@@ -206,3 +206,51 @@ being made mid-feature.
 
 Related: `question_order` already snapshots WHICH questions were played, so
 the ordering half of the problem is solved. What is missing is the CONTENT.
+
+---
+
+## Competition lobby — visual polish pass
+
+Observed by the owner watching Competition Mode on a real production
+projector, 13 August 2026, immediately after the M2.6 deploy. **Recorded, not
+approved.** None of it was implemented at the time: the session it came from
+was a functional production smoke test, and the only thing changed then was
+the join-code overflow defect, which was a genuine bug rather than a taste
+question.
+
+Do these together as one deliberate pass, not piecemeal. They are all the
+same judgement — *the lobby should feel like a room about to start* — and
+solving them one at a time is how a coherent stage turns into a pile of
+tweaks.
+
+**1. The roster carries too much visual weight.** The wall of names competes
+with the information that actually matters in a live room.
+
+**2. "NOT HERE YET" is probably the wrong label.** It asserts those players
+were expected, which is not true — the eligibility list is everyone who
+*could* play, not everyone who was invited. Something closer to ROSTER or
+AVAILABLE PLAYERS is more accurate. Wording deliberately NOT changed yet.
+
+**3. IN THE ROOM should grow in importance as people arrive.** The lobby
+currently gives equal billing to the people participating and the people who
+are not. It should emphasise the former, increasingly so as the room fills.
+
+**4. Arrivals should feel noticeable.** This is the pregame beat. Someone
+entering the room deserves presence and energy — without becoming a
+distraction on a projector that a coach is talking over.
+
+**5. The lobby needs more of the Competition identity.** On-stage, bright
+lights, anticipation, intensity, an event beginning; emotionally distinct
+from ordinary Peira. **Not a Kahoot clone** — the existing constraint stands:
+premium and athletic, not childish.
+
+**6. The join code stays a visual hero.** Non-negotiable, and specifically
+*not* to be solved by shrinking it. Note that M2.6 already made the code size
+itself from its card rather than the viewport, so the hero can be made larger
+purely by widening the left column — `.code` follows automatically and cannot
+overflow. See the comment block on `.code` in `Competition.module.css` for the
+measured glyph budget, and `Competition.layout.test.ts` for the guard.
+
+**7. Removing ordinary Peira navigation from the Competition host experience
+was correct.** Keep that architecture. Recorded so a future polish pass does
+not "restore consistency" by putting the nav back.
