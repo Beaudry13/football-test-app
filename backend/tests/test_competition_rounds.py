@@ -344,6 +344,89 @@ class TestQuestionOrder:
 
 
 # ---------------------------------------------------------------------------
+# Host recovery across the lobby deadline  (M2.6 cross-milestone review)
+# ---------------------------------------------------------------------------
+
+
+class TestHostRecoveryLifetime:
+    """A room that is RUNNING must stay recoverable, however old its lobby is.
+
+    `/competition/active` is the only route back to the projector for a coach
+    who closed the tab and does not remember the join code. In M1 a session
+    could only ever sit in LOBBY, so bounding that list by the lobby deadline
+    was exactly right. Once M2.1 gave a session a life after LOBBY, the same
+    deadline started deleting the way back into a competition that was still
+    mid-question.
+    """
+
+    def _age_lobby(self, env):
+        """Wind the lobby deadline back, as six hours of wall clock would."""
+        session = _session(env)
+        session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+        db.session.commit()
+
+    def _active_ids(self, client, env):
+        body = client.get("/api/competition/active", headers=env["headers"]).get_json()
+        return [entry["id"] for entry in body]
+
+    def test_an_unstarted_lobby_does_expire_out_of_the_banner(self, client, env):
+        """The rule the deadline exists for, still intact."""
+        self._age_lobby(env)
+
+        assert env["session_id"] not in self._active_ids(client, env)
+
+    def test_starting_the_competition_renews_the_deadline(self, client, env):
+        """REGRESSION.
+
+        `expires_at` was set once, at creation, and never touched again. A
+        coach who opened the lobby before school and ran the competition after
+        practice therefore started a room that was already at its deadline.
+        """
+        _join_all(client, env)
+        self._age_lobby(env)
+
+        _act(client, env, rounds.START_QUESTION)
+
+        session = _session(env)
+        assert not session.is_expired
+        assert session.expires_at > datetime.now(timezone.utc)
+
+    def test_a_running_competition_stays_in_the_recovery_banner(self, client, env):
+        """The user-visible consequence.
+
+        Mid-question, thirty phones connected, and the coach's laptop restarts.
+        Without this the dashboard offers nothing and the room is unreachable.
+        """
+        _join_all(client, env)
+        self._age_lobby(env)
+        _act(client, env, rounds.START_QUESTION)
+
+        assert _session(env).status == QUESTION_OPEN
+        assert env["session_id"] in self._active_ids(client, env)
+
+    def test_recovery_survives_to_the_podium(self, client, env):
+        """Not just the first question - the whole run, including the ending."""
+        _join_all(client, env)
+        self._age_lobby(env)
+        _act(client, env, rounds.START_QUESTION)
+        _act(client, env, rounds.SHOW_ANSWER)
+        _act(client, env, rounds.FINISH)
+
+        assert _session(env).status == PODIUM
+        assert env["session_id"] in self._active_ids(client, env)
+
+    def test_a_finished_competition_is_not_offered_as_recovery(self, client, env):
+        """The banner is a way back into a LIVE room, not a history list."""
+        _join_all(client, env)
+        _act(client, env, rounds.START_QUESTION)
+        client.post(
+            f"/api/competition/sessions/{env['session_id']}/end", headers=env["headers"]
+        )
+
+        assert env["session_id"] not in self._active_ids(client, env)
+
+
+# ---------------------------------------------------------------------------
 # The clock
 # ---------------------------------------------------------------------------
 

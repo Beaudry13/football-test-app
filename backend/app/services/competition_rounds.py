@@ -38,6 +38,7 @@ from app.models import CompetitionSession, Question
 from app.models.competition import (
     COMPLETE,
     LEADERBOARD,
+    LIVE_LIFETIME,
     LOBBY,
     PODIUM,
     PODIUM_LAST_STEP,
@@ -190,6 +191,11 @@ def _apply(session: CompetitionSession, action: str) -> None:
     if action == START_QUESTION:
         _freeze_question_order(session)
         session.started_at = _now()
+        # The lobby deadline stops applying the moment the room is real. See
+        # LIVE_LIFETIME: leaving it in place let a competition that started
+        # late in a long-open lobby vanish from the coach's recovery banner
+        # mid-question.
+        session.expires_at = session.started_at + LIVE_LIFETIME
         _open_question(session, 0)
 
     elif action == NEXT_QUESTION:

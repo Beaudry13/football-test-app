@@ -9,9 +9,11 @@
  * session id fetches the full view. `location.state` is used only as a
  * first-paint shortcut when we happen to have just created the session.
  *
- * START COMPETITION IS DISABLED, AND HONESTLY SO.
- * M1 has no round transitions. A Start button that appeared to work would be
- * a broken half-game, so it says what it is waiting for instead.
+ * ONE SCREEN, EVERY STAGE.
+ * The lobby, the live question, the reveal, the standings and the podium are
+ * all this component, chosen from the SERVER's status rather than from
+ * anything it remembers. That is why a projector recovers correctly from a
+ * refresh at any point in a run - there is no client-side sequence to lose.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -278,8 +280,8 @@ export function HostLobbyPage() {
             </button>
           )}
           {actions.includes('FINISH') && !actions.includes('NEXT_QUESTION') && (
-            /* The last question has been revealed. M2.5 owns the podium; this
-               is the minimum functional control needed to finish a run. */
+            /* The last question has been revealed. This hands the room to the
+               podium, which the coach then walks a place at a time. */
             <button
               type="button"
               className={styles.button}
@@ -299,8 +301,9 @@ export function HostLobbyPage() {
               Next question
             </button>
           )}
-          {/* M2.4 owns the leaderboard and M2.5 the podium; the transitions
-              exist server-side but nothing here pretends to render them. */}
+          {/* END is always available and always ABANDONS - it is the "stop, we
+              are not doing this" control, not a way to finish. A competition
+              finishes by walking the podium to its end. */}
           <button
             type="button"
             className={`${styles.button} ${styles.buttonDanger}`}
@@ -372,8 +375,16 @@ export function HostLobbyPage() {
               End lobby
             </button>
           </div>
+          {/* This caption said "Standings and the final podium arrive in the
+              next release" until M2.6. It was true when M1 shipped the lobby
+              and stopped being true at M2.4 and M2.5, which is exactly the
+              trap: nothing fails when a caption goes stale, so a coach was
+              being told on the projector that shipped features did not exist.
+              It now describes the room, which cannot go out of date. */}
           <p className={styles.subhead} style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
-            Standings and the final podium arrive in the next release.
+            {view
+              ? `${view.question_time_seconds} seconds per question · you control the pace`
+              : 'Players join with the code above.'}
           </p>
 
           {degraded && (

@@ -142,14 +142,36 @@ describe('reconnect', () => {
     expect(await screen.findByRole('button', { name: /join again/i })).toBeInTheDocument();
   });
 
-  it('reports an ended competition honestly', async () => {
+  it('treats an ABANDONED competition as over', async () => {
     writeSeat({ joinCode: 'ABC123', token: TOKEN, displayName: 'Ada Lovelace' });
-    poll.mockResolvedValue(state(2, 'COMPLETE'));
+    poll.mockResolvedValue(state(2, 'ABANDONED'));
 
     renderRoom();
 
     expect(await screen.findByText(/competition ended/i)).toBeInTheDocument();
     expect(readSeat()).toBeNull();
+  });
+
+  it('does NOT throw away the seat when the competition COMPLETES', async () => {
+    // REGRESSION. COMPLETE means the competition finished properly and the
+    // player has just been shown their final result. Clearing the seat here
+    // replaced that payoff with a generic "your coach ended this" card at the
+    // exact moment it arrived - which is what M1's terminal handling did,
+    // because COMPLETE could not yet mean "the podium finished".
+    writeSeat({ joinCode: 'ABC123', token: TOKEN, displayName: 'Ada Lovelace' });
+    poll.mockResolvedValue(state(2, 'COMPLETE'));
+    resume.mockResolvedValue({
+      participant: participant(),
+      status: 'COMPLETE',
+      version: 2,
+      server_now: '2026-08-12T13:00:00+00:00',
+    });
+
+    renderRoom();
+
+    await waitFor(() => expect(poll).toHaveBeenCalled());
+    expect(readSeat()).not.toBeNull();
+    expect(screen.queryByText(/your coach has ended/i)).not.toBeInTheDocument();
   });
 
   it('reports an expired competition distinctly from a removal', async () => {
@@ -225,6 +247,31 @@ describe('the polling contract', () => {
 
     // One dropped request must not white-screen a competition.
     expect(await screen.findByText('Ada Lovelace')).toBeInTheDocument();
+  });
+
+  it('does not blame the coach when the CODE has expired', async () => {
+    // REGRESSION. A fatal poll used to be reported as "your coach has ended
+    // this competition" whatever caused it. That sentence was generic in M1;
+    // M2.6 made it the ABANDONED message specifically, so a 410 started
+    // telling a player something that had not happened - and disagreeing with
+    // the reconnect path, which got the same 410 right all along.
+    writeSeat({ joinCode: 'ABC123', token: TOKEN, displayName: 'Ada Lovelace' });
+    poll.mockRejectedValue(new ApiError('gone', 410, undefined, 'session_expired'));
+
+    renderRoom();
+
+    expect(await screen.findByText(/expired/i)).toBeInTheDocument();
+    expect(screen.queryByText(/your coach has ended/i)).not.toBeInTheDocument();
+  });
+
+  it('reports an unknown code as unavailable, not as an ending', async () => {
+    writeSeat({ joinCode: 'ABC123', token: TOKEN, displayName: 'Ada Lovelace' });
+    poll.mockRejectedValue(new ApiError('gone', 404, undefined, 'invalid_code'));
+
+    renderRoom();
+
+    expect(await screen.findByText(/no longer available/i)).toBeInTheDocument();
+    expect(screen.queryByText(/your coach has ended/i)).not.toBeInTheDocument();
   });
 
   it('stops polling a session that no longer exists', async () => {

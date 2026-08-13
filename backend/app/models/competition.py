@@ -68,6 +68,20 @@ JOINABLE_STATUSES = (LOBBY,)
 #: walks away should not leave a live join code behind indefinitely.
 LOBBY_LIFETIME = timedelta(hours=6)
 
+#: And how long it stays usable once it has actually STARTED, measured from
+#: the first question rather than from when the lobby was opened.
+#:
+#: These are two different clocks because they bound two different mistakes.
+#: The lobby clock exists so a forgotten join code dies; it is measured from
+#: creation, which is correct for a room nobody ever used. Applying that same
+#: deadline to a room that IS being used means a coach who opened the lobby at
+#: breakfast and ran the competition after practice loses `/competition/active`
+#: - the Return to competition banner - WHILE the room is still mid-question,
+#: with no way back to the projector short of remembering the join code.
+#: Nothing else consults the deadline mid-competition, so the room itself keeps
+#: running perfectly; only the coach's route back to it disappears.
+LIVE_LIFETIME = timedelta(hours=6)
+
 #: Allowed per-question durations, in seconds. One session-level setting for
 #: V1 - per-question timing is deliberately not built.
 QUESTION_TIME_CHOICES = (10, 20, 30, 45, 60)

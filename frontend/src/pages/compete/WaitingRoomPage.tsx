@@ -16,7 +16,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import * as competitionApi from '../../api/competition';
 import type { CompetitionPollState } from '../../api/competition';
-import { isTerminal } from '../../api/competition';
 import { useCompetitionPoll } from './useCompetitionPoll';
 import { CompetitionShell } from './CompetitionShell';
 import { PlayerQuestionScreen, PlayerRevealScreen } from './PlayerRoundScreens';
@@ -59,7 +58,11 @@ export function WaitingRoomPage() {
     try {
       const resumed = await competitionApi.resumeCompetition(code, seat.token);
       setDisplayName(resumed.participant.display_name);
-      if (isTerminal(resumed.status)) loseSeat('ended');
+      // ABANDONED only. COMPLETE means the competition FINISHED - the player
+      // has just been shown their final result, and throwing it away for a
+      // generic "your coach ended this" card would delete the payoff at the
+      // exact moment it arrives.
+      if (resumed.status === 'ABANDONED') loseSeat('ended');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // The token is wrong, or the coach removed this participant. The
@@ -99,6 +102,19 @@ export function WaitingRoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** The same server errors, given the same words wherever they arrive.
+   *
+   * `restore()` already distinguished 404 from 410; the poll collapsed both
+   * into "your coach has ended this competition", which was harmless while
+   * that sentence was generic. M2.6 made it specific - it is now the ABANDONED
+   * message - so an expired code started telling a player something that had
+   * not happened.
+   */
+  const lostFromStatus = useCallback(
+    (status: number): Lost => (status === 410 ? 'expired' : 'unknown'),
+    [],
+  );
+
   const { state, degraded } = useCompetitionPollForPlayer(code, lost === null, {
     // NO LOBBY FETCH. The player count now rides along on the cheap poll, so
     // this screen never pulls the roster - it does not need other people's
@@ -113,6 +129,10 @@ export function WaitingRoomPage() {
       await loadRound();
     }, [restore, loadRound]),
     onEnded: useCallback(() => loseSeat('ended'), [loseSeat]),
+    onGone: useCallback(
+      (status: number) => loseSeat(lostFromStatus(status)),
+      [loseSeat, lostFromStatus],
+    ),
   });
 
   const participantCount = state?.participant_count ?? null;
@@ -161,25 +181,44 @@ export function WaitingRoomPage() {
   // Which screen shows is driven by the SERVER's status, not by anything this
   // component remembers - so a refresh, a sleeping phone or a dropped poll all
   // converge on whatever the room is actually doing.
-  if (round && seat && status && status !== 'LOBBY') {
+  //
+  // THE STATUS COMES FROM `round`, NOT FROM THE POLL, AND THAT MATTERS.
+  // The two arrive separately: the 1 Hz poll carries the new status, and the
+  // round payload - question, result, standing, podium - is fetched afterwards
+  // because the version changed. Driving the screen from the poll therefore
+  // rendered one paint with the NEW status and the OLD data, which matched no
+  // branch and fell through to the generic waiting screen.
+  //
+  // Measured with a MutationObserver during the M2.6 walkthrough: 73ms of
+  // "Waiting for your coach..." between the locked question and the reveal -
+  // a full-screen swap at the exact moment the teaching payoff lands. 73ms is
+  // the LOCALHOST floor; that gap is one round-trip, so on a phone over mobile
+  // data it is several hundred milliseconds.
+  //
+  // `round` is internally consistent - its status always describes its own
+  // data - so gating on it means the player holds the last coherent screen
+  // until the next one is genuinely ready. Nothing is ever half-rendered.
+  const roundStatus = round?.status;
+  if (round && seat && roundStatus && roundStatus !== 'LOBBY') {
     return (
       <CompetitionShell live>
-        {status === 'QUESTION_OPEN' ? (
+        {roundStatus === 'QUESTION_OPEN' ? (
           <PlayerQuestionScreen
             round={round}
             joinCode={code}
             token={seat.token}
             onAnswered={loadRound}
           />
-        ) : status === 'QUESTION_REVEAL' && round.result ? (
+        ) : roundStatus === 'QUESTION_REVEAL' && round.result ? (
           <PlayerRevealScreen round={round} />
-        ) : status === 'LEADERBOARD' && round.standing ? (
+        ) : roundStatus === 'LEADERBOARD' && round.standing ? (
           <PlayerStanding standing={round.standing} />
         ) : round.podium && round.final_result ? (
           <PlayerPodium podium={round.podium} result={round.final_result} />
         ) : (
-          // A state this milestone does not render - leaderboard, podium -
-          // must not fake a game screen. M2.4 and M2.5 fill these in.
+          // Genuinely nothing to show for this state. With the gate above
+          // reading `round`, reaching here means the server sent a round whose
+          // own status carries no renderable payload - not a race.
           <div className={styles.waitingRoom}>
             <h1 className={styles.playerName}>{displayName}</h1>
             <p className={styles.waitingDots}>Waiting for your coach…</p>
@@ -236,15 +275,22 @@ export function WaitingRoomPage() {
 function useCompetitionPollForPlayer(
   code: string,
   enabled: boolean,
-  handlers: { onVersionChange: () => Promise<void>; onEnded: () => void },
+  handlers: {
+    onVersionChange: () => Promise<void>;
+    onEnded: () => void;
+    /** The session itself is gone - 404 for an unknown code, 410 for expiry. */
+    onGone: (status: number) => void;
+  },
 ) {
-  const { onVersionChange, onEnded } = handlers;
+  const { onVersionChange, onEnded, onGone } = handlers;
   return useCompetitionPoll({
     enabled,
     poll: useCallback(() => competitionApi.pollState(code), [code]),
     onVersionChange: useCallback(
       async (next: CompetitionPollState) => {
-        if (isTerminal(next.status)) {
+        // A competition that was STOPPED is over for the player. One that ran
+        // to COMPLETE still has a final result to show, so it keeps loading.
+        if (next.status === 'ABANDONED') {
           onEnded();
           return;
         }
@@ -252,7 +298,7 @@ function useCompetitionPollForPlayer(
       },
       [onEnded, onVersionChange],
     ),
-    onFatal: useCallback(() => onEnded(), [onEnded]),
+    onFatal: useCallback((error: ApiError) => onGone(error.status), [onGone]),
   });
 }
 

@@ -454,6 +454,121 @@ class TestPodiumRecovery:
 
 
 # ---------------------------------------------------------------------------
+# COMPLETE vs ABANDONED  (M2.6 cross-milestone review)
+# ---------------------------------------------------------------------------
+
+
+class TestEndingSemantics:
+    """COMPLETE means the competition FINISHED. Nothing else may produce it.
+
+    The distinction only started mattering in M2.6, when COMPLETE gained real
+    meaning for players - a completed competition preserves their seat and
+    shows their final result, where an abandoned one clears it and says the
+    coach stopped. Anything that mislabels a cancellation as a completion
+    therefore shows a whole room a "final result" for an event nobody
+    finished.
+    """
+
+    def test_ending_from_the_lobby_abandons(self, client, env):
+        response = client.post(
+            f"/api/competition/sessions/{env['session_id']}/end", headers=env["headers"]
+        )
+
+        assert response.status_code == 200
+        assert _session(env).status == "ABANDONED"
+
+    def test_ending_mid_question_abandons_rather_than_completing(self, client, env):
+        """REGRESSION.
+
+        `/end` used to compute `abandoned = status == LOBBY`. That was right in
+        M1, where LOBBY was the only non-terminal state and the COMPLETE branch
+        was unreachable. Once rounds existed, a coach stopping mid-question
+        took that branch and the session was marked COMPLETE - a cancelled
+        event recorded, and displayed, as a finished one.
+        """
+        _score(client, env, {"Ada Lovelace": 300})
+        _act(client, env, rounds.NEXT_QUESTION)
+        assert _session(env).status == "QUESTION_OPEN"
+
+        client.post(
+            f"/api/competition/sessions/{env['session_id']}/end", headers=env["headers"]
+        )
+
+        assert _session(env).status == "ABANDONED"
+
+    def test_ending_during_the_reveal_abandons(self, client, env):
+        _score(client, env, {"Ada Lovelace": 300})
+        assert _session(env).status == "QUESTION_REVEAL"
+
+        client.post(
+            f"/api/competition/sessions/{env['session_id']}/end", headers=env["headers"]
+        )
+
+        assert _session(env).status == "ABANDONED"
+
+    def test_ending_during_the_leaderboard_abandons(self, client, env):
+        _score(client, env, {"Ada Lovelace": 300})
+        _act(client, env, rounds.SHOW_LEADERBOARD)
+
+        client.post(
+            f"/api/competition/sessions/{env['session_id']}/end", headers=env["headers"]
+        )
+
+        assert _session(env).status == "ABANDONED"
+
+    def test_only_the_podium_produces_complete(self, client, env):
+        """The one legitimate route to COMPLETE."""
+        _score(client, env, {"Ada Lovelace": 300})
+        _act(client, env, rounds.FINISH)
+        for _ in range(PODIUM_STANDINGS):
+            _act(client, env, rounds.ADVANCE_PODIUM)
+
+        _act(client, env, rounds.COMPLETE_COMPETITION)
+
+        assert _session(env).status == COMPLETE
+
+    def test_an_abandoned_competition_shows_a_player_no_final_result(self, client, env):
+        """The user-visible consequence, checked from the phone's side.
+
+        A cancelled competition must not hand every player a final result and
+        a podium - which is exactly what happened once COMPLETE started
+        preserving them.
+        """
+        _score(client, env, {"Ada Lovelace": 300})
+        _act(client, env, rounds.NEXT_QUESTION)
+        assert _session(env).status == "QUESTION_OPEN"
+        client.post(
+            f"/api/competition/sessions/{env['session_id']}/end", headers=env["headers"]
+        )
+
+        body = client.get(
+            f"/api/competition/{env['code']}/round",
+            headers={"X-Competition-Token": env["tokens"]["Ada Lovelace"]},
+        ).get_json()
+
+        assert body["podium"] is None
+        assert body["final_result"] is None
+        assert body["status"] == "ABANDONED"
+
+    def test_a_completed_competition_does_show_a_player_their_result(self, client, env):
+        """The other half of the same rule."""
+        _score(client, env, {"Ada Lovelace": 300})
+        _act(client, env, rounds.FINISH)
+        for _ in range(PODIUM_STANDINGS):
+            _act(client, env, rounds.ADVANCE_PODIUM)
+        _act(client, env, rounds.COMPLETE_COMPETITION)
+
+        body = client.get(
+            f"/api/competition/{env['code']}/round",
+            headers={"X-Competition-Token": env["tokens"]["Ada Lovelace"]},
+        ).get_json()
+
+        assert body["status"] == COMPLETE
+        assert body["final_result"] is not None
+        assert body["final_result"]["total_points"] == 300
+
+
+# ---------------------------------------------------------------------------
 # Isolation after a COMPLETED competition
 # ---------------------------------------------------------------------------
 

@@ -32,7 +32,7 @@ from flask_jwt_extended import jwt_required
 from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import Group, Player
-from app.models.competition import COMPLETE, LEADERBOARD, LOBBY, PODIUM
+from app.models.competition import COMPLETE, LEADERBOARD, PODIUM
 from app.schemas.competition import (
     CreateCompetitionSchema,
     JoinCompetitionSchema,
@@ -215,9 +215,23 @@ def transition(session_id: int):
 @jwt_required()
 def end(session_id: int):
     session = svc.coach_session(session_id, current_coach())
-    # A lobby that never started is ABANDONED rather than COMPLETE: calling an
-    # event that never happened "complete" would misreport it forever.
-    svc.end_session(session, abandoned=session.status == LOBBY)
+    # THIS CONTROL ALWAYS ABANDONS. It is the "stop, we are not doing this"
+    # button, wherever the room happens to be.
+    #
+    # It used to compute `abandoned = status == LOBBY`, which was correct in M1
+    # because LOBBY was the only non-terminal state a session could be in - the
+    # COMPLETE branch was unreachable. Once M2.1-M2.5 added rounds, standings
+    # and the podium, ending mid-round started taking that branch and marking a
+    # cancelled event COMPLETE.
+    #
+    # That became user-visible once M2.6 gave COMPLETE real meaning for
+    # players: a coach who bailed out mid-question left every phone showing
+    # "YOUR FINAL RESULT" and the projector showing a podium, for a
+    # competition nobody finished.
+    #
+    # COMPLETE is now reachable only by walking the podium to its end, which
+    # is the only place it means what it says.
+    svc.end_session(session, abandoned=True)
     return jsonify(_host_view(session))
 
 
