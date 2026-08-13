@@ -19,6 +19,7 @@ import type { CompetitionPollState } from '../../api/competition';
 import { isTerminal } from '../../api/competition';
 import { useCompetitionPoll } from './useCompetitionPoll';
 import { CompetitionShell } from './CompetitionShell';
+import { PlayerQuestionScreen, PlayerRevealScreen } from './PlayerRoundScreens';
 import { clearSeat, seatFor } from './competitionSeat';
 import styles from './Competition.module.css';
 
@@ -34,6 +35,7 @@ export function WaitingRoomPage() {
   // name rather than a blank screen while the server answers.
   const [displayName, setDisplayName] = useState(seat?.displayName ?? '');
   const [lost, setLost] = useState<Lost | null>(null);
+  const [round, setRound] = useState<competitionApi.PlayerRound | null>(null);
 
   /** Drop the dead credential exactly once, then explain. */
   const loseSeat = useCallback((why: Lost) => {
@@ -71,8 +73,26 @@ export function WaitingRoomPage() {
     }
   }, [code, seat, loseSeat]);
 
+  /** The current question and this player's own state, from the server.
+   *
+   * Fetched on mount and on every version change - never on the 1 Hz timer,
+   * which stays a handful of scalars. A refresh mid-question therefore comes
+   * back to the right screen showing the right remaining time, because the
+   * timestamps come from the server rather than from anything kept locally.
+   */
+  const loadRound = useCallback(async () => {
+    if (!seat) return;
+    try {
+      setRound(await competitionApi.getPlayerRound(code, seat.token));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) loseSeat('removed');
+      // Anything else is transient; the poll keeps trying.
+    }
+  }, [code, seat, loseSeat]);
+
   useEffect(() => {
     void restore();
+    void loadRound();
     // Runs once per mount - this IS the reconnect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -88,7 +108,8 @@ export function WaitingRoomPage() {
     // finds out promptly without any per-second private request.
     onVersionChange: useCallback(async () => {
       await restore();
-    }, [restore]),
+      await loadRound();
+    }, [restore, loadRound]),
     onEnded: useCallback(() => loseSeat('ended'), [loseSeat]),
   });
 
@@ -132,6 +153,40 @@ export function WaitingRoomPage() {
   }
 
   const status = state?.status;
+
+  // --- A round is running --------------------------------------------------
+  //
+  // Which screen shows is driven by the SERVER's status, not by anything this
+  // component remembers - so a refresh, a sleeping phone or a dropped poll all
+  // converge on whatever the room is actually doing.
+  if (round && seat && status && status !== 'LOBBY') {
+    return (
+      <CompetitionShell live>
+        {status === 'QUESTION_OPEN' ? (
+          <PlayerQuestionScreen
+            round={round}
+            joinCode={code}
+            token={seat.token}
+            onAnswered={loadRound}
+          />
+        ) : status === 'QUESTION_REVEAL' && round.result ? (
+          <PlayerRevealScreen round={round} />
+        ) : (
+          // A state this milestone does not render - leaderboard, podium -
+          // must not fake a game screen. M2.4 and M2.5 fill these in.
+          <div className={styles.waitingRoom}>
+            <h1 className={styles.playerName}>{displayName}</h1>
+            <p className={styles.waitingDots}>Waiting for your coach…</p>
+          </div>
+        )}
+        {degraded && (
+          <div className={styles.notice} role="status">
+            Reconnecting… you’re still in the competition.
+          </div>
+        )}
+      </CompetitionShell>
+    );
+  }
 
   return (
     <CompetitionShell live>

@@ -41,6 +41,7 @@ from app.schemas.competition import (
 )
 from app.services import competition as svc
 from app.services import competition_answers as answers
+from app.services import competition_round_view as round_view
 from app.services import competition_rounds as rounds
 from app.utils.auth import current_coach, get_visible_quiz
 from app.utils.validation import load_json_body, load_optional_json_body
@@ -235,6 +236,10 @@ def _host_view(session) -> dict:
     data["answered_count"] = session.answered_count
     data["all_in"] = session.all_in
     data["answering_open"] = session.answering_open
+    # The current question, and - only once revealed - the correct option,
+    # the explanation and the distribution. Gated in one place; see
+    # competition_round_view.
+    data["round"] = round_view.host_round(session)
     return data
 
 
@@ -361,6 +366,21 @@ def submit_answer(join_code: str):
             "version": session.version,
         }
     ), 201
+
+
+@competition_bp.get("/<join_code>/round")
+def player_round(join_code: str):
+    """The current question, for one player's phone.
+
+    Token-addressed, because the payload contains that player's own answer
+    state - and, after the reveal, their own verdict and points. Nothing in
+    here describes anybody else.
+    """
+    session = svc.session_by_code(join_code)
+    participant = svc.participant_by_token(session, _player_token())
+    participant.last_seen_at = _now()
+    db.session.commit()
+    return jsonify(round_view.player_round(session, participant, _now()))
 
 
 @competition_bp.get("/<join_code>/me")

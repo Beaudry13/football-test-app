@@ -41,8 +41,14 @@ function state(
     status,
     server_now: '2026-08-12T13:00:00+00:00',
     current_round: 0,
+    total_rounds: 0,
+    question_opened_at: null,
     question_closes_at: null,
     participant_count: participantCount,
+    answered_count: 0,
+    all_in: false,
+    answering_open: false,
+    podium_step: 0,
   };
 }
 

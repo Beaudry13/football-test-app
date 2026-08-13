@@ -32,19 +32,31 @@ export function isTerminal(status: CompetitionStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
-/** The 1 Hz payload. Exactly six fields - see the contract's §4D. */
+/**
+ * The 1 Hz payload - see the contract's §4D.
+ *
+ * Every field is a scalar, timestamp or boolean: no names, no ids, no question
+ * content. THE LIVE COUNTERS LIVE HERE, not in the heavy payloads, because
+ * they move with the clock and with every submission while `version` only
+ * marks structural change. Reading `answered_count` or `answering_open` off
+ * the version-gated host view froze the projector on ANSWERS LOCKED with 28
+ * seconds still on the clock.
+ */
 export interface CompetitionPollState {
   version: number;
   status: CompetitionStatus;
   server_now: string;
   current_round: number;
+  total_rounds: number;
+  question_opened_at: string | null;
   question_closes_at: string | null;
-  /**
-   * A COUNT, never a roster. This exists so the waiting room can show how many
-   * players are in the room without fetching the room - it is computed as a
-   * correlated subquery inside the poll's single SELECT.
-   */
+  /** A COUNT, never a roster. */
   participant_count: number;
+  answered_count: number;
+  /** Every seat has answered. Informational - it reveals nothing by itself. */
+  all_in: boolean;
+  answering_open: boolean;
+  podium_step: number;
 }
 
 export interface UnsupportedQuestion {
@@ -66,6 +78,72 @@ export interface RosterEntry {
   player_id: number;
   display_name: string;
   taken: boolean;
+}
+
+export interface CompetitionOption {
+  id: number;
+  option_text: string;
+  position: number;
+  /** Present ONLY after the reveal - the server withholds it until then. */
+  is_correct_answer?: boolean;
+}
+
+export interface CompetitionQuestion {
+  id: number;
+  question_text: string;
+  question_type: string;
+  image: { image_url: string; annotations: unknown[]; canvas_width: number | null } | null;
+  options: CompetitionOption[];
+  /** Reveal only. */
+  answer_explanation?: string | null;
+  /** Reveal only. */
+  correct_option_id?: number | null;
+}
+
+export interface DistributionRow {
+  option_id: number;
+  option_text: string;
+  count: number;
+  is_correct_answer: boolean;
+}
+
+/** The host's view of the current round. `distribution` is null until reveal. */
+export interface HostRound {
+  round_index: number;
+  round_number: number;
+  total_rounds: number;
+  question: CompetitionQuestion;
+  answered_count: number;
+  participant_count: number;
+  all_in: boolean;
+  answering_open: boolean;
+  question_opened_at: string | null;
+  question_closes_at: string | null;
+  distribution: DistributionRow[] | null;
+}
+
+/** One player's own view. `result` is null until reveal. */
+export interface PlayerRound {
+  round_index: number;
+  round_number: number;
+  total_rounds: number;
+  status: CompetitionStatus;
+  server_now: string;
+  question: CompetitionQuestion | null;
+  question_opened_at: string | null;
+  question_closes_at: string | null;
+  answering_open: boolean;
+  answered: boolean;
+  selected_option_id: number | null;
+  result: {
+    answered: boolean;
+    /** null when they never answered - not the same as being wrong. */
+    is_correct: boolean | null;
+    points_earned: number;
+    total_points: number;
+    current_streak: number;
+    best_streak: number;
+  } | null;
 }
 
 export interface CompetitionParticipant {
@@ -91,6 +169,12 @@ export interface CompetitionLobby {
 }
 
 export interface CompetitionHostView {
+  round?: HostRound | null;
+  available_actions?: string[];
+  leaderboard_hint?: string | null;
+  answered_count?: number;
+  all_in?: boolean;
+  answering_open?: boolean;
   id: number;
   quiz_id: number;
   quiz_title: string | null;
@@ -238,6 +322,41 @@ export function joinCompetition(joinCode: string, playerId: number, reconnectTok
  * There is deliberately no variant of this that accepts a player id or a
  * participant id - both are public, so both would authenticate nothing.
  */
+/** The coach moving the room forward. `expectedVersion` makes two tabs safe. */
+export function transition(sessionId: number, action: string, expectedVersion: number) {
+  return api.post<CompetitionHostView>(`/competition/sessions/${sessionId}/transition`, {
+    action,
+    expected_version: expectedVersion,
+  });
+}
+
+/** The current question for this player, plus their own state. Token-addressed. */
+export function getPlayerRound(joinCode: string, reconnectToken: string) {
+  return api.get<PlayerRound>(`/competition/${encodeURIComponent(joinCode)}/round`, {
+    auth: false,
+    headers: { 'X-Competition-Token': reconnectToken },
+  });
+}
+
+/**
+ * Submit an answer.
+ *
+ * Carries a round and an option and NOTHING else - no participant id, no
+ * correctness, no timing. The server rejects unknown fields outright.
+ */
+export function submitAnswer(
+  joinCode: string,
+  reconnectToken: string,
+  roundIndex: number,
+  optionId: number,
+) {
+  return api.post<{ accepted: boolean; locked: boolean; selected_option_id: number }>(
+    `/competition/${encodeURIComponent(joinCode)}/answer`,
+    { round_index: roundIndex, option_id: optionId },
+    { auth: false, headers: { 'X-Competition-Token': reconnectToken } },
+  );
+}
+
 export function resumeCompetition(joinCode: string, reconnectToken: string) {
   return api.get<ResumeResult>(`/competition/${encodeURIComponent(joinCode)}/me`, {
     auth: false,

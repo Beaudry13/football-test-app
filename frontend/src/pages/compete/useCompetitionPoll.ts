@@ -33,6 +33,17 @@ const BASE_INTERVAL_MS = 1000;
 const MAX_INTERVAL_MS = 8000;
 
 /**
+ * A tighter backoff ceiling for the states where seconds matter.
+ *
+ * 8s is fine in a lobby - nothing is happening and a slow recovery costs
+ * nobody anything. During a live question it is a disaster: a phone that hit
+ * two failures could sit eight seconds behind a twenty-second countdown, and
+ * discover the question had closed while it was still showing time remaining.
+ */
+const LIVE_MAX_INTERVAL_MS = 2000;
+const LIVE_STATUSES = ['QUESTION_OPEN', 'QUESTION_REVEAL'];
+
+/**
  * Floor between two heavy fetches on one client.
  *
  * THE STAMPEDE THIS PREVENTS, with real numbers. Thirty players joining a
@@ -93,6 +104,7 @@ export function useCompetitionPoll({
   const lastHeavyFetch = useRef(0);
   const heavyPending = useRef<CompetitionPollState | null>(null);
   const heavyInFlight = useRef(false);
+  const liveStatus = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopped = useRef(false);
   const wake = useRef<(() => void) | null>(null);
@@ -126,6 +138,7 @@ export function useCompetitionPoll({
         failures.current = 0;
         setDegraded(false);
         setState(next);
+        liveStatus.current = LIVE_STATUSES.includes(next.status);
 
         // Mount (null) or a real change. Never on every tick.
         if (lastVersion.current === null || next.version !== lastVersion.current) {
@@ -168,9 +181,10 @@ export function useCompetitionPoll({
       }
 
       if (cancelled || stopped.current) return;
+      const live = liveStatus.current;
       const delay = Math.min(
         BASE_INTERVAL_MS * 2 ** Math.max(0, failures.current - 1),
-        MAX_INTERVAL_MS,
+        live ? LIVE_MAX_INTERVAL_MS : MAX_INTERVAL_MS,
       );
       timer.current = setTimeout(cycle, delay);
     };
@@ -181,9 +195,21 @@ export function useCompetitionPoll({
     };
     void cycle();
 
+    /**
+     * A phone that slept through part of a question wakes holding a stale
+     * countdown and a stale state. Waiting up to a second to find out is the
+     * difference between answering and missing the round, so poll the instant
+     * the tab becomes visible again.
+     */
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') wake.current?.();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
       cancelled = true;
       wake.current = null;
+      document.removeEventListener('visibilitychange', onVisible);
       if (timer.current) clearTimeout(timer.current);
     };
   }, [enabled]);

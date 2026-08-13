@@ -22,6 +22,7 @@ vi.mock('../../api/competition', async () => {
     getHostViewByCode: vi.fn(),
     getHostView: vi.fn(),
     getHostState: vi.fn(),
+    transition: vi.fn(),
     removeParticipant: vi.fn(),
     endSession: vi.fn(),
   };
@@ -32,6 +33,7 @@ const hostView = vi.mocked(competitionApi.getHostView);
 const hostState = vi.mocked(competitionApi.getHostState);
 const remove = vi.mocked(competitionApi.removeParticipant);
 const end = vi.mocked(competitionApi.endSession);
+const transition = vi.mocked(competitionApi.transition);
 
 function participant(id: number, name: string) {
   return {
@@ -77,8 +79,14 @@ function state(
     status,
     server_now: '2026-08-12T13:00:00+00:00',
     current_round: 0,
+    total_rounds: 0,
+    question_opened_at: null,
     question_closes_at: null,
     participant_count: participantCount,
+    answered_count: 0,
+    all_in: false,
+    answering_open: false,
+    podium_step: 0,
   };
 }
 
@@ -98,6 +106,7 @@ beforeEach(() => {
   byCode.mockResolvedValue(view());
   hostView.mockResolvedValue(view());
   hostState.mockResolvedValue(state());
+  transition.mockResolvedValue(view());
   vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 
@@ -185,13 +194,28 @@ describe('host controls', () => {
     expect(remove).not.toHaveBeenCalled();
   });
 
-  it('does not pretend rounds exist yet', async () => {
+  it('starts the competition once somebody has joined', async () => {
+    const user = userEvent.setup();
     renderHost();
 
     const start = await screen.findByRole('button', { name: /start competition/i });
-    // An enabled Start that goes nowhere would be a broken half-game.
+    expect(start).toBeEnabled();
+    await user.click(start);
+
+    // The version guard travels with it - that is what makes two host tabs safe.
+    await waitFor(() =>
+      expect(transition).toHaveBeenCalledWith(7, 'START_QUESTION', expect.any(Number)),
+    );
+  });
+
+  it('will not start an empty room', async () => {
+    byCode.mockResolvedValue(view({ participants: [], participant_count: 0 }));
+    hostView.mockResolvedValue(view({ participants: [], participant_count: 0 }));
+    renderHost();
+
+    const start = await screen.findByRole('button', { name: /start competition/i });
+    // Starting with nobody in would burn the first question on an empty room.
     expect(start).toBeDisabled();
-    expect(screen.getByText(/rounds arrive in the next release/i)).toBeInTheDocument();
   });
 
   it('shows the terminal state after ending', async () => {

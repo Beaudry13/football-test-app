@@ -22,6 +22,7 @@ import * as competitionApi from '../../api/competition';
 import type { CompetitionHostView, CompetitionPollState } from '../../api/competition';
 import { isTerminal } from '../../api/competition';
 import { CompetitionShell } from './CompetitionShell';
+import { HostQuestionStage, HostRevealStage } from './HostRoundStages';
 import { useCompetitionPoll } from './useCompetitionPoll';
 import styles from './Competition.module.css';
 
@@ -114,6 +115,28 @@ export function HostLobbyPage() {
     [sessionId, refresh],
   );
 
+  /** Move the room forward. The version guard makes two tabs safe. */
+  const advance = useCallback(
+    async (action: string) => {
+      if (sessionId === null || !state) return;
+      setBusy(true);
+      try {
+        setView(await competitionApi.transition(sessionId, action, state.version));
+      } catch (err) {
+        if (err instanceof ApiError && err.reason === 'stale_transition') {
+          // Another tab moved first. Resync rather than argue.
+          await loadView();
+        } else {
+          setError(err instanceof Error ? err.message : 'Could not move on.');
+        }
+      } finally {
+        setBusy(false);
+        refresh();
+      }
+    },
+    [sessionId, state, loadView, refresh],
+  );
+
   const end = useCallback(async () => {
     if (sessionId === null) return;
     if (!window.confirm('End this competition? Players will be returned to the join screen.')) return;
@@ -161,6 +184,61 @@ export function HostLobbyPage() {
   }
 
   const participants = view?.participants ?? [];
+  const round = view?.round ?? null;
+  const actions = view?.available_actions ?? [];
+
+  // --- A round is running: the stage takes the whole screen ---------------
+  if (round && status && status !== 'LOBBY') {
+    const revealing = status === 'QUESTION_REVEAL';
+    return (
+      <CompetitionShell live>
+        {revealing ? (
+          <HostRevealStage round={round} />
+        ) : (
+          <HostQuestionStage round={round} poll={state} />
+        )}
+
+        <div className={styles.controls}>
+          {actions.includes('SHOW_ANSWER') && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              onClick={() => advance('SHOW_ANSWER')}
+              disabled={busy}
+            >
+              Show answer
+            </button>
+          )}
+          {actions.includes('NEXT_QUESTION') && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              onClick={() => advance('NEXT_QUESTION')}
+              disabled={busy}
+            >
+              Next question
+            </button>
+          )}
+          {/* M2.4 owns the leaderboard and M2.5 the podium; the transitions
+              exist server-side but nothing here pretends to render them. */}
+          <button
+            type="button"
+            className={`${styles.button} ${styles.buttonDanger}`}
+            onClick={end}
+            disabled={busy}
+          >
+            End competition
+          </button>
+        </div>
+
+        {degraded && (
+          <div className={styles.notice} role="status" style={{ marginTop: '1rem' }}>
+            Reconnecting… the room is still live.
+          </div>
+        )}
+      </CompetitionShell>
+    );
+  }
 
   return (
     <CompetitionShell live>
@@ -186,13 +264,14 @@ export function HostLobbyPage() {
           </div>
 
           <div className={styles.controls}>
-            {/* Disabled, with the reason on the button. M1 has no rounds and
-                pretending otherwise would be a broken half-game. */}
             <button
               type="button"
               className={`${styles.button} ${styles.buttonPrimary}`}
-              disabled
-              title="Competition rounds arrive in M2"
+              onClick={() => advance('START_QUESTION')}
+              disabled={busy || participants.length === 0}
+              title={
+                participants.length === 0 ? 'Wait for at least one player to join' : undefined
+              }
             >
               Start Competition
             </button>
@@ -206,8 +285,7 @@ export function HostLobbyPage() {
             </button>
           </div>
           <p className={styles.subhead} style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
-            Competition rounds arrive in the next release. The lobby, join codes and roster are live
-            now.
+            Standings and the final podium arrive in the next release.
           </p>
 
           {degraded && (

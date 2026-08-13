@@ -562,3 +562,428 @@
   .code { letter-spacing: 0.08em; }
   .controls .button { width: 100%; }
 }
+
+/* ===========================================================================
+   THE ROUND - M2.3
+   ===========================================================================
+   Projector first for the host, 375px phone first for the player. Everything
+   that communicates state does so with a WORD and a MARK as well as colour,
+   because a washed-out projector and a colour-blind viewer are both ordinary
+   conditions here rather than edge cases. */
+
+/* --- 3-2-1 --------------------------------------------------------------- */
+
+.leadIn {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: center;
+  text-align: center;
+  padding-top: clamp(2rem, 12vh, 7rem);
+}
+
+.leadInLabel {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+.leadInCount {
+  font-size: clamp(6rem, 26vw, 16rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--comp-accent);
+  text-shadow: 0 0 60px rgba(255, 122, 26, 0.4);
+  animation: countPop 380ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes countPop {
+  from { opacity: 0; transform: scale(1.35); }
+  to { opacity: 1; transform: none; }
+}
+
+/* --- Round chrome -------------------------------------------------------- */
+
+.stageRound { display: grid; gap: clamp(0.75rem, 2vw, 1.5rem); }
+
+.roundBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.roundTag,
+.timerTag,
+.lockedTag,
+.revealTag {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.roundTag { color: var(--comp-text-dim); }
+
+.timerTag {
+  font-size: clamp(1.4rem, 4vw, 2.4rem);
+  letter-spacing: 0.02em;
+  color: var(--comp-text);
+}
+
+.lockedTag {
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--comp-accent-line);
+  background: var(--comp-accent-soft);
+  color: var(--comp-accent);
+}
+
+.revealTag { color: var(--comp-accent); }
+
+.timerBar {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.timerFill {
+  height: 100%;
+  background: var(--comp-accent);
+  /* Linear, and short: the bar should track the clock, not ease behind it. */
+  transition: width 120ms linear;
+}
+
+/* --- Question ------------------------------------------------------------ */
+
+.questionText {
+  font-size: clamp(1.8rem, 4.2vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.playerQuestionText {
+  font-size: clamp(1.1rem, 4.5vw, 1.5rem);
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.questionImageWrap,
+.playerImageWrap {
+  display: flex;
+  justify-content: center;
+}
+
+.questionImage {
+  max-width: 100%;
+  /* Capped by VIEWPORT HEIGHT, not width: a tall portrait image would
+     otherwise push the answer tiles off a projector entirely. */
+  max-height: 34vh;
+  object-fit: contain;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+}
+
+.playerImage {
+  max-width: 100%;
+  /* Tighter on a phone - the answer buttons must stay reachable without
+     scrolling, which matters more than seeing the whole image at once. */
+  max-height: 22vh;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--comp-border);
+}
+
+/* --- Host answer tiles --------------------------------------------------- */
+
+.optionGrid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 48rem) {
+  .optionGrid { grid-template-columns: 1fr 1fr; }
+}
+
+.optionTile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: clamp(0.8rem, 2vw, 1.25rem);
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  font-size: clamp(1.05rem, 2.2vw, 1.6rem);
+  font-weight: 600;
+  overflow: hidden;
+}
+
+.optionLetter {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 10px;
+  background: var(--comp-accent-soft);
+  color: var(--comp-accent);
+  font-weight: 800;
+}
+
+.optionText { flex: 1; min-width: 0; }
+
+.optionCount {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.correctMark {
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--comp-live);
+}
+
+/* Correct is marked by a border, a word and a tick - colour is the third
+   signal, never the only one. */
+.optionCorrect {
+  border-color: var(--comp-live);
+  background: rgba(56, 209, 122, 0.12);
+}
+
+.optionDim { opacity: 0.62; }
+
+.optionBar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--comp-accent);
+  transition: width 320ms ease-out;
+}
+
+/* --- Answered counter ---------------------------------------------------- */
+
+.answeredRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  justify-content: center;
+  padding-top: 0.5rem;
+}
+
+.answeredCount {
+  font-size: clamp(2.2rem, 6vw, 4rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.answeredOf {
+  font-size: 0.5em;
+  color: var(--comp-text-dim);
+}
+
+/* --- Player answering ---------------------------------------------------- */
+
+.playerRound { display: grid; gap: 0.9rem; }
+
+.answerList { display: grid; gap: 0.6rem; }
+
+.answerButton {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  /* 64px minimum: tapped quickly, standing up, often one-handed. */
+  min-height: 4rem;
+  padding: 0.8rem 1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  color: var(--comp-text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.answerButton:disabled { opacity: 0.55; cursor: progress; }
+
+.answerButton:hover:not(:disabled),
+.answerButton:focus-visible:not(:disabled) {
+  border-color: var(--comp-accent-line);
+}
+
+.answerButton:focus-visible {
+  outline: 3px solid var(--comp-accent);
+  outline-offset: 2px;
+}
+
+.answerLetter {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: var(--comp-accent-soft);
+  color: var(--comp-accent);
+  font-weight: 800;
+}
+
+.answerText { flex: 1; min-width: 0; }
+
+.answerState {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+.lockedPanel {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-accent-line);
+  background: var(--comp-accent-soft);
+}
+
+.lockedLabel {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--comp-accent);
+}
+
+.lockedChoice { font-size: 1.2rem; font-weight: 700; }
+
+/* --- Player reveal ------------------------------------------------------- */
+
+.verdict {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.1rem;
+  border-radius: var(--comp-radius);
+  border: 2px solid;
+}
+
+.verdictMark { font-size: 2rem; line-height: 1; }
+
+.verdictWord {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verdictCorrect {
+  border-color: var(--comp-live);
+  background: rgba(56, 209, 122, 0.12);
+  color: var(--comp-live);
+}
+
+.verdictWrong {
+  border-color: var(--comp-danger);
+  background: rgba(255, 92, 92, 0.1);
+  color: #ffc9c9;
+}
+
+/* Never answered is its own outcome, and deliberately neutral - it is not a
+   wrong answer and should not feel like one. */
+.verdictNone {
+  border-color: var(--comp-border);
+  background: var(--comp-surface);
+  color: var(--comp-text-dim);
+}
+
+.revealAnswer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-live);
+  background: rgba(56, 209, 122, 0.08);
+  font-weight: 700;
+}
+
+.pointsRow {
+  display: flex;
+  gap: 1rem;
+  text-align: center;
+}
+
+.pointsRow > div {
+  flex: 1;
+  padding: 0.9rem;
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface);
+}
+
+/* Type, not a cartoon flame. Worth zero points and styled to look like a
+   statistic rather than a reward. */
+.streak {
+  justify-self: center;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--comp-accent-line);
+  background: var(--comp-accent-soft);
+  color: var(--comp-accent);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* --- The teaching moment ------------------------------------------------- */
+
+.explanation {
+  padding: clamp(1rem, 3vw, 1.75rem);
+  border-radius: var(--comp-radius);
+  /* A deliberate accent rule: this is the block the coach stops on, and it
+     should read as the point of the screen rather than as a footnote. */
+  border: 1px solid var(--comp-accent-line);
+  border-left: 5px solid var(--comp-accent);
+  background: linear-gradient(180deg, var(--comp-accent-soft), var(--comp-surface));
+}
+
+.explanationLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--comp-accent);
+  margin-bottom: 0.4rem;
+}
+
+.explanationText {
+  margin: 0;
+  /* Large enough to read from the back of a room - the whole reason this
+     block exists is that somebody is going to talk about it. */
+  font-size: clamp(1.05rem, 2.4vw, 1.75rem);
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadInCount { animation: none; }
+  .optionBar,
+  .timerFill { transition: none; }
+}
