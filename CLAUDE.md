@@ -303,10 +303,23 @@ comes back in `access-control-allow-origin`.
 
 ---
 
+## Competition Mode M2 is FROZEN and production verified
+
+**Baseline: `4be2069dd5cba3244021c2f5ef43a86ca762117f`** (13 August 2026).
+Per-milestone SHAs, what was verified against the real deployment, and the one
+recorded qualification are at the bottom of `docs/KNOWN-ISSUES.md`. The API
+contract is `docs/COMPETITION-API.md`, rewritten from the implementation at
+M2.6 rather than accumulated per milestone - trust it over memory.
+
+**Do not start M3, and do not resume Competition construction, without being
+asked.** Polish items found in production are recorded in
+`docs/IMPROVEMENT-BANK.md` and are deliberately not implemented.
+
 ## Queued next — read before picking up new work
 
-`docs/KNOWN-ISSUES.md` holds two problems reported from real use. Both are
-approved and waiting only on the Competition milestone finishing:
+`docs/KNOWN-ISSUES.md` holds three problems reported from real use. All are
+approved; **none is blocked any more** now Competition M2 is frozen. The owner
+decides the order - do not pick one up unprompted:
 
 1. **Duplicating a quiz loses its images.** Appears objectively broken - the
    duplicate's images did not render on the sent test. Trace the whole path
@@ -316,8 +329,14 @@ approved and waiting only on the Competition milestone finishing:
    defensible; the trap is not. Trace how answers and grading reference
    questions BEFORE designing an override, and stop for approval before
    implementing one.
+3. **"Don't count this question".** Exclude a question from results AFTER
+   players have taken it, preserving the responses for audit. This lands on the
+   shared `score = correct / (correct + incorrect)` rule implemented twice on
+   purpose (see Things That Will Bite You #4) - it changes the DENOMINATOR, so
+   any design touching only one of those two places has already failed.
 
-Do not interrupt Competition work to start either.
+(2) and (3) are two halves of the same gap: a coach who finds a mistake after
+players are already in has no safe move. Consider designing them together.
 
 ## Work in flight
 

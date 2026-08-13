@@ -257,6 +257,51 @@ not "restore consistency" by putting the nav back.
 
 ---
 
+### Found while running Competition in production, 13 August 2026
+
+Three more, from the verification walkthrough itself rather than from looking
+at the screen. Same polish pass, but these are **usability faults with
+evidence**, not taste.
+
+**8. Destructive and terminal controls have the wrong visual weight.** On the
+reveal screen the buttons are `Show standings` (quiet), `Finish competition`
+(quiet), `Next question` (ORANGE, primary) and `End competition` (red). So the
+visually dominant action continues the quiz, while the irreversible ending is
+one of the quiet ones.
+
+*This is not hypothetical.* It cost two production verification runs. Both
+times the intended `Finish competition` click landed on `Next question`
+instead, and the run then had to be ended with `End competition` — the
+ABANDONED path — because `Finish` is not offered during an open question.
+A coach in front of a real room will do the same thing, and will lose a
+competition's podium doing it.
+
+Worth considering together: whether `Finish competition` should be reachable
+during `QUESTION_OPEN` at all (arguably not — finishing with a question open
+and unscored is incoherent), and if not, whether the UI should say so rather
+than leaving the coach hunting for a button that only exists after the reveal.
+A confirm was added to `Finish` in `4be2069`; that guards the misclick but does
+not fix the hierarchy.
+
+**9. "Start Competition" means two different things on consecutive screens.**
+On the setup screen it CREATES the lobby; on the lobby screen a button with the
+identical label OPENS THE FIRST QUESTION. One click apart, same words. This
+also caught us during verification. A coach who has gathered a room and is
+looking for the button that begins play has no way to tell from the label which
+one they are about to press.
+
+**10. The solo-room podium blames a tie that did not happen.** With one
+participant the ranks are just `[1]`, so second and third are genuinely empty —
+correct, and correctly announced rather than promoted into. But the copy reads
+*"A tie at the top means second place was never awarded"* / *"A tie above means
+this place was never awarded"*, and in a one-player room there was no tie;
+there was simply nobody else. `PodiumStages.tsx` chooses that wording purely
+from the place number, without consulting the shape of the standings. Cosmetic,
+and only at an edge case, but it states something untrue on a projector.
+
+
+---
+
 ## Competition session cleanup / deletion / retention
 
 **Not a blocker for M2, and deliberately not implemented.** Raised by the

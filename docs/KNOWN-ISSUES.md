@@ -4,12 +4,13 @@ This file is **not** the Improvement Bank. Everything in that file was
 considered and deliberately deferred. Everything here is a real problem a coach
 hit in real use, is approved to be worked on, and is waiting only on sequencing.
 
-**Sequencing: both are queued behind the current Competition Mode milestone.**
-Do not interrupt Competition work to start them — bouncing between features is
-how regressions get made. When Competition M2 is frozen, take them in the order
-below.
+**Sequencing: Competition Mode M2 is now FROZEN and production verified
+(baseline `4be2069`, see the record at the bottom of this file), so these are
+no longer blocked.** They were queued behind it because bouncing between
+features is how regressions get made. The owner decides the order; nothing here
+should be started without that decision.
 
-Neither has been investigated yet. Nothing in the "what to check" sections is a
+None has been investigated yet. Nothing in the "what to check" sections is a
 conclusion; they are the questions to answer *before* proposing a fix.
 
 ---
@@ -204,3 +205,113 @@ versus dangerous edits, the recommended override model, how existing,
 in-progress and completed attempts behave, and any migration - and **stop for
 approval before implementing the override.** The duplicate-image fix may
 proceed as an ordinary bug fix once its root cause is proven.
+
+---
+
+## PRIORITY 3 — "Don't count this question"
+
+**Status: requested by the owner, approved as work, not designed, not
+investigated.** Recorded 13 August 2026 during the Competition M2 freeze,
+because until now it existed only in conversation.
+
+### What the coach wants
+
+Players point out after the fact that a question was confusing, misleading,
+badly worded, or simply wrong. The coach wants to mark it
+
+> **DO NOT COUNT THIS QUESTION**
+
+and have it drop out of the effective result — **without** deleting attempts,
+deleting the quiz, or hand-editing anybody's score.
+
+The original responses must **remain stored** for audit and history. This is an
+exclusion from scoring, not a deletion of what happened.
+
+### Why this is not a small change
+
+Peira states its grading rule in exactly one form —
+`score = correct / (correct + incorrect)`, never counting ungraded or
+unanswered — and that rule is implemented **twice on purpose**, in
+`services/export.py` and in the player-analytics path, with a note in CLAUDE.md
+that changing one without the other makes the PDF, the CSV, the Results tab and
+the analytics page disagree with each other. An excluded question changes the
+DENOMINATOR, so it lands on precisely that shared rule. Any design that
+implements exclusion in one of those places has already failed.
+
+### Decide these BEFORE writing code
+
+- **Scope.** Is exclusion per-quiz, or per-access-code/assignment? A question
+  that was broken for one group may have been fine for another.
+- **Denominator.** Excluded questions must leave both numerator and denominator
+  — "9/10 with one excluded" is 9/9, not 9/10 and not 90%.
+- **Pass/fail and thresholds**, wherever they are derived from the percentage.
+- **Every surface that reports a score**: Results tab, player profile/history,
+  cumulative performance PDF, CSV export, analytics. All of them, or the
+  product contradicts itself.
+- **Reversibility.** Can a coach un-exclude? Almost certainly yes — the whole
+  point is that this is a judgement call — which means it cannot be modelled as
+  a destructive edit.
+- **Auditability.** Someone must be able to see later that a question was
+  excluded, by whom and when. `GradeAuditLog` already exists; check whether it
+  is the right home before inventing a second mechanism.
+- **Visibility to players.** Does a player's already-seen result silently
+  change? A score that moves with no explanation is its own problem.
+- **Competition Mode is NOT in scope.** Competition uses Model D and its own
+  tables, deliberately isolated from ordinary attempts. Excluding a question
+  there would mean restating a result a room already watched happen, which the
+  design explicitly refuses. Keep this feature on the ordinary quiz path.
+
+### Relationship to the other two
+
+This is the *third* thing the same underlying gap produced: a coach who finds a
+mistake after players are already in has no safe move. PRIORITY 2 is "let me
+fix it going forward", this is "let me neutralise it after the fact". They
+should probably be designed together, or at least sequenced deliberately, since
+a coach hitting a bad question will reach for whichever exists.
+
+---
+
+## The Competition Mode M2 baseline
+
+**Competition Mode M2 is FROZEN and production verified as of 13 August 2026.**
+
+| Milestone | SHA |
+|---|---|
+| M1 | `ade50fb` |
+| M2.1 round state machine | `beda880` |
+| M2.2 answering + scoring | `3dc567e` |
+| M2.3 live question + reveal | `632a02f` |
+| M2.4 standings + rank movement | `dc840d4` |
+| M2.5 podium + final standings | `36f5629` |
+| M2.6 cross-milestone hardening | `41eb745` |
+
+Approved production fixes made during verification:
+
+| Fix | SHA |
+|---|---|
+| Join code sized from its card, not the viewport | `edcfa70` |
+| Scan-to-join QR | `32588d8` |
+| Finish Competition before the questions run out | `4be2069` |
+
+**Production-verified baseline: `4be2069dd5cba3244021c2f5ef43a86ca762117f`**
+(= `origin/master` at the time of the freeze).
+
+Verified against the real deployed frontend and backend, with a coach laptop
+and a physical phone on a real network: QR join, lobby and live arrivals, the
+3-2-1 lead-in, server-authoritative timing, answering and locking, ALL IN, the
+reveal with **no flicker observed under real network conditions**,
+explanations, the leaderboard, an intentional early FINISH, FINISH → PODIUM,
+podium progression through third/second/first, final standings, COMPLETE, the
+player's final result surviving COMPLETE, a refresh at COMPLETE rebuilding the
+same result, recovery disappearing after COMPLETE, and ABANDONED remaining
+distinct from COMPLETE.
+
+Both M2.6 lifecycle defects — COMPLETE preserving the player's result, and
+`/end` never masquerading as a completion — are confirmed fixed **in
+production**.
+
+One qualification recorded honestly: **analytics isolation was verified locally,
+not against production**, because that check needs coach authentication.
+Locally a fully completed 30-player competition produced 285 competition
+answers and zero attempts, answers or access codes, and the winner still reads
+`completed_count = 0` in ordinary Peira.
