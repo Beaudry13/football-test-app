@@ -21,6 +21,7 @@ import { useCompetitionPoll } from './useCompetitionPoll';
 import { CompetitionShell } from './CompetitionShell';
 import { PlayerQuestionScreen, PlayerRevealScreen } from './PlayerRoundScreens';
 import { PlayerStanding } from './LeaderboardStages';
+import { PlayerPodium } from './PodiumStages';
 import { clearSeat, seatFor } from './competitionSeat';
 import styles from './Competition.module.css';
 
@@ -174,6 +175,8 @@ export function WaitingRoomPage() {
           <PlayerRevealScreen round={round} />
         ) : status === 'LEADERBOARD' && round.standing ? (
           <PlayerStanding standing={round.standing} />
+        ) : round.podium && round.final_result ? (
+          <PlayerPodium podium={round.podium} result={round.final_result} />
         ) : (
           // A state this milestone does not render - leaderboard, podium -
           // must not fake a game screen. M2.4 and M2.5 fill these in.

@@ -23,6 +23,9 @@ export type CompetitionStatus =
   | 'QUESTION_OPEN'
   | 'QUESTION_REVEAL'
   | 'LEADERBOARD'
+  // The coach-paced ending. NOT terminal - the room is still live, and the
+  // Active Competition banner must still be able to bring a coach back to it.
+  | 'PODIUM'
   | 'COMPLETE'
   | 'ABANDONED';
 
@@ -137,6 +140,9 @@ export interface PlayerRound {
   selected_option_id: number | null;
   /** This player's own row. Present only during LEADERBOARD. */
   standing?: Standing | null;
+  podium?: Podium | null;
+  /** This player's own ending. Present from PODIUM onwards. */
+  final_result?: (Standing & { best_streak: number; is_winner: boolean }) | null;
   result: {
     answered: boolean;
     /** null when they never answered - not the same as being wrong. */
@@ -167,6 +173,34 @@ export interface Standing {
   scored_rounds: number;
   current_streak: number;
   tied?: number;
+  best_streak?: number;
+}
+
+/** One row of a podium place. Several when the place is shared. */
+export interface PodiumEntry {
+  participant_id: number;
+  display_name: string;
+  rank: number;
+  total_points: number;
+  correct_count: number;
+  scored_rounds: number;
+}
+
+/**
+ * The ending, server-paced.
+ *
+ * `step` is the beat the room is on: 0 = complete card, 1 = 3rd, 2 = 2nd,
+ * 3 = 1st, 4 = final standings. `empty_places` lists places nobody holds -
+ * standard competition ranking means two tied at the top leaves NO second
+ * place, and the screen says so rather than promoting somebody into it.
+ */
+export interface Podium {
+  step: number;
+  last_step: number;
+  places: Record<string, PodiumEntry[]>;
+  empty_places: number[];
+  winners: string[];
+  final_standings: Standing[];
 }
 
 export interface CompetitionParticipant {
@@ -195,6 +229,8 @@ export interface CompetitionHostView {
   round?: HostRound | null;
   /** Present only while the room is in LEADERBOARD. Top 5, ties kept whole. */
   standings?: Standing[] | null;
+  /** Present from PODIUM onwards, and kept at COMPLETE. */
+  podium?: Podium | null;
   scored_rounds?: number;
   last_leaderboard_round?: number | null;
   available_actions?: string[];

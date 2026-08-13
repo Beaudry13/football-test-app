@@ -32,7 +32,7 @@ from flask_jwt_extended import jwt_required
 from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import Group, Player
-from app.models.competition import LEADERBOARD, LOBBY
+from app.models.competition import COMPLETE, LEADERBOARD, LOBBY, PODIUM
 from app.schemas.competition import (
     CreateCompetitionSchema,
     JoinCompetitionSchema,
@@ -42,6 +42,7 @@ from app.schemas.competition import (
 from app.services import competition as svc
 from app.services import competition_answers as answers
 from app.services import competition_round_view as round_view
+from app.services import competition_podium as podium_svc
 from app.services import competition_standings as standings_svc
 from app.services import competition_rounds as rounds
 from app.utils.auth import current_coach, get_visible_quiz
@@ -249,6 +250,11 @@ def _host_view(session) -> dict:
     )
     data["scored_rounds"] = standings_svc.scored_round_count(session)
     data["last_leaderboard_round"] = session.last_leaderboard_round
+    # The ending. Present once the room has reached the podium, and kept
+    # available at COMPLETE so the final screen has something to render.
+    data["podium"] = (
+        podium_svc.podium(session) if session.status in (PODIUM, COMPLETE) else None
+    )
     return data
 
 
@@ -396,6 +402,17 @@ def player_round(join_code: str):
     payload["standing"] = (
         standings_svc.standing_for(session, participant)
         if session.status == LEADERBOARD
+        else None
+    )
+    # During the podium a phone follows the room: the same step, plus this
+    # player's own final result so it can say "that's you" at the right beat.
+    # Resolved from the token, like everything else private.
+    payload["podium"] = (
+        podium_svc.podium(session) if session.status in (PODIUM, COMPLETE) else None
+    )
+    payload["final_result"] = (
+        podium_svc.final_result_for(session, participant)
+        if session.status in (PODIUM, COMPLETE)
         else None
     )
     return jsonify(payload)

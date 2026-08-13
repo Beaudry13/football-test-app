@@ -24,6 +24,7 @@ import { isTerminal } from '../../api/competition';
 import { CompetitionShell } from './CompetitionShell';
 import { HostQuestionStage, HostRevealStage } from './HostRoundStages';
 import { HostLeaderboard } from './LeaderboardStages';
+import { HostPodium } from './PodiumStages';
 import { useCompetitionPoll } from './useCompetitionPoll';
 import styles from './Competition.module.css';
 
@@ -168,6 +169,52 @@ export function HostLobbyPage() {
         <p className={styles.subhead}>{error}</p>
         <div className={styles.controls}>
           <button type="button" className={styles.button} onClick={() => navigate('/dashboard')}>
+            Back to dashboard
+          </button>
+        </div>
+      </CompetitionShell>
+    );
+  }
+
+  // --- The ending -----------------------------------------------------------
+  if (view?.podium && (status === 'PODIUM' || status === 'COMPLETE')) {
+    const podium = view.podium;
+    const atEnd = podium.step >= podium.last_step;
+    return (
+      <CompetitionShell live={status === 'PODIUM'}>
+        <HostPodium podium={podium} />
+        {status === 'COMPLETE' && podium.winners.length > 0 && (
+          <p className={styles.subhead} style={{ textAlign: 'center' }}>
+            {podium.winners.length === 1 ? 'Winner: ' : 'Winners: '}
+            <strong>{podium.winners.join(' · ')}</strong>
+          </p>
+        )}
+        <div className={styles.controls}>
+          {status === 'PODIUM' && !atEnd && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              onClick={() => advance('ADVANCE_PODIUM')}
+              disabled={busy}
+            >
+              Reveal next
+            </button>
+          )}
+          {status === 'PODIUM' && atEnd && (
+            <button
+              type="button"
+              className={`${styles.button} ${styles.buttonPrimary}`}
+              onClick={() => advance('COMPLETE')}
+              disabled={busy}
+            >
+              Finish
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => navigate('/dashboard')}
+          >
             Back to dashboard
           </button>
         </div>
