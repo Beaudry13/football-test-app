@@ -23,8 +23,16 @@ import type { CompetitionHostView, CompetitionPollState } from '../../api/compet
 import { isTerminal } from '../../api/competition';
 import { CompetitionShell } from './CompetitionShell';
 import { HostQuestionStage, HostRevealStage } from './HostRoundStages';
+import { HostLeaderboard } from './LeaderboardStages';
 import { useCompetitionPoll } from './useCompetitionPoll';
 import styles from './Competition.module.css';
+
+/** Sport-neutral wording for the backend's deterministic hints. */
+const HINTS: Record<string, string> = {
+  first_standings: 'Good time to show the first standings.',
+  midpoint_standings: 'A good moment for standings, if you want one.',
+  keep_the_finish_a_surprise: 'Consider skipping standings to keep the finish a surprise.',
+};
 
 export function HostLobbyPage() {
   const { code = '' } = useParams<{ code: string }>();
@@ -190,9 +198,12 @@ export function HostLobbyPage() {
   // --- A round is running: the stage takes the whole screen ---------------
   if (round && status && status !== 'LOBBY') {
     const revealing = status === 'QUESTION_REVEAL';
+    const showingBoard = status === 'LEADERBOARD';
     return (
       <CompetitionShell live>
-        {revealing ? (
+        {showingBoard ? (
+          <HostLeaderboard standings={view?.standings ?? []} />
+        ) : revealing ? (
           <HostRevealStage round={round} />
         ) : (
           <HostQuestionStage round={round} poll={state} />
@@ -207,6 +218,28 @@ export function HostLobbyPage() {
               disabled={busy}
             >
               Show answer
+            </button>
+          )}
+          {actions.includes('SHOW_LEADERBOARD') && (
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => advance('SHOW_LEADERBOARD')}
+              disabled={busy}
+            >
+              Show standings
+            </button>
+          )}
+          {actions.includes('FINISH') && !actions.includes('NEXT_QUESTION') && (
+            /* The last question has been revealed. M2.5 owns the podium; this
+               is the minimum functional control needed to finish a run. */
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => advance('FINISH')}
+              disabled={busy}
+            >
+              Finish competition
             </button>
           )}
           {actions.includes('NEXT_QUESTION') && (
@@ -230,6 +263,14 @@ export function HostLobbyPage() {
             End competition
           </button>
         </div>
+
+        {/* The backend owns WHEN to suggest; this only renders the wording.
+            Informational: it never transitions, hides or disables a control. */}
+        {view?.leaderboard_hint && (
+          <p className={styles.hint} role="note">
+            {HINTS[view.leaderboard_hint] ?? ''}
+          </p>
+        )}
 
         {degraded && (
           <div className={styles.notice} role="status" style={{ marginTop: '1rem' }}>

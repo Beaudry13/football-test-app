@@ -135,6 +135,8 @@ export interface PlayerRound {
   answering_open: boolean;
   answered: boolean;
   selected_option_id: number | null;
+  /** This player's own row. Present only during LEADERBOARD. */
+  standing?: Standing | null;
   result: {
     answered: boolean;
     /** null when they never answered - not the same as being wrong. */
@@ -144,6 +146,27 @@ export interface PlayerRound {
     current_streak: number;
     best_streak: number;
   } | null;
+}
+
+/**
+ * One row of the standings, ranked BY THE SERVER.
+ *
+ * `movement` is `previous_rank - rank`, so positive means climbed, and null
+ * means the room has never been shown standings - rendered as NEW rather than
+ * as "unchanged". `tied` counts how many share this rank, which is what lets a
+ * phone say T-2ND honestly.
+ */
+export interface Standing {
+  participant_id: number;
+  display_name: string;
+  rank: number;
+  previous_rank: number | null;
+  movement: number | null;
+  total_points: number;
+  correct_count: number;
+  scored_rounds: number;
+  current_streak: number;
+  tied?: number;
 }
 
 export interface CompetitionParticipant {
@@ -170,6 +193,10 @@ export interface CompetitionLobby {
 
 export interface CompetitionHostView {
   round?: HostRound | null;
+  /** Present only while the room is in LEADERBOARD. Top 5, ties kept whole. */
+  standings?: Standing[] | null;
+  scored_rounds?: number;
+  last_leaderboard_round?: number | null;
   available_actions?: string[];
   leaderboard_hint?: string | null;
   answered_count?: number;

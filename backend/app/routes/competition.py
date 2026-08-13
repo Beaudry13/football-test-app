@@ -32,7 +32,7 @@ from flask_jwt_extended import jwt_required
 from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import Group, Player
-from app.models.competition import LOBBY
+from app.models.competition import LEADERBOARD, LOBBY
 from app.schemas.competition import (
     CreateCompetitionSchema,
     JoinCompetitionSchema,
@@ -42,6 +42,7 @@ from app.schemas.competition import (
 from app.services import competition as svc
 from app.services import competition_answers as answers
 from app.services import competition_round_view as round_view
+from app.services import competition_standings as standings_svc
 from app.services import competition_rounds as rounds
 from app.utils.auth import current_coach, get_visible_quiz
 from app.utils.validation import load_json_body, load_optional_json_body
@@ -240,6 +241,14 @@ def _host_view(session) -> dict:
     # the explanation and the distribution. Gated in one place; see
     # competition_round_view.
     data["round"] = round_view.host_round(session)
+    # The projector's table. Only while the room is being shown standings -
+    # computing it during a question would be work nobody can see, and
+    # exposing it would leak the suspense the reveal exists to build.
+    data["standings"] = (
+        standings_svc.top(session) if session.status == LEADERBOARD else None
+    )
+    data["scored_rounds"] = standings_svc.scored_round_count(session)
+    data["last_leaderboard_round"] = session.last_leaderboard_round
     return data
 
 
@@ -380,7 +389,16 @@ def player_round(join_code: str):
     participant = svc.participant_by_token(session, _player_token())
     participant.last_seen_at = _now()
     db.session.commit()
-    return jsonify(round_view.player_round(session, participant, _now()))
+    payload = round_view.player_round(session, participant, _now())
+    # A player's OWN standing, resolved from the token - never from an id in
+    # the request, and never anybody else's row. Present only once the room is
+    # being shown standings, so a phone cannot read the ranking early.
+    payload["standing"] = (
+        standings_svc.standing_for(session, participant)
+        if session.status == LEADERBOARD
+        else None
+    )
+    return jsonify(payload)
 
 
 @competition_bp.get("/<join_code>/me")

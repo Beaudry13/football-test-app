@@ -303,6 +303,22 @@ comes back in `access-control-allow-origin`.
 
 ---
 
+## Queued next — read before picking up new work
+
+`docs/KNOWN-ISSUES.md` holds two problems reported from real use. Both are
+approved and waiting only on the Competition milestone finishing:
+
+1. **Duplicating a quiz loses its images.** Appears objectively broken - the
+   duplicate's images did not render on the sent test. Trace the whole path
+   (rows, storage objects, URLs, player payload) and reproduce it through the
+   real player flow before diagnosing.
+2. **A coach cannot correct a question on an active quiz.** The lock is
+   defensible; the trap is not. Trace how answers and grading reference
+   questions BEFORE designing an override, and stop for approval before
+   implementing one.
+
+Do not interrupt Competition work to start either.
+
 ## Work in flight
 
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.

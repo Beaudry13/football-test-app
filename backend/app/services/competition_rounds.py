@@ -141,6 +141,30 @@ def playable_round_from(session: CompetitionSession, start_index: int) -> int | 
     return None
 
 
+def _retire_leaderboard(session: CompetitionSession) -> None:
+    """Record the board the room has just FINISHED looking at.
+
+    WHY THIS IS NOT DONE AT SHOW_LEADERBOARD
+    -----------------------------------------
+    It was, and it was wrong. Setting the baseline as the board went up meant
+    the standings rendered for that board were compared against themselves:
+    the first leaderboard showed every row as "unchanged" instead of NEW, and
+    every later one showed zero movement for everybody.
+
+    A unit test missed it because it read the table while still in
+    QUESTION_REVEAL, never actually showing the second board. An eight-player
+    walkthrough found it immediately - the arrows were all dashes.
+
+    So the baseline advances when the room LEAVES the leaderboard. While a
+    board is on screen, `last_leaderboard_round` still points at the previous
+    one, which is exactly the comparison the arrows are meant to describe.
+    Skipping a leaderboard never passes through here, so a board nobody saw
+    still never becomes a baseline.
+    """
+    if session.status == LEADERBOARD:
+        session.last_leaderboard_round = session.current_round
+
+
 def _open_question(session: CompetitionSession, round_index: int) -> None:
     """Point the session at a round and start its clock.
 
@@ -169,6 +193,9 @@ def _apply(session: CompetitionSession, action: str) -> None:
         _open_question(session, 0)
 
     elif action == NEXT_QUESTION:
+        # BEFORE the round advances, and only when leaving a board that was
+        # actually on screen.
+        _retire_leaderboard(session)
         _open_question(session, session.current_round + 1)
 
     elif action == SHOW_ANSWER:
@@ -184,6 +211,7 @@ def _apply(session: CompetitionSession, action: str) -> None:
         score_round(session)
 
     elif action == FINISH:
+        _retire_leaderboard(session)
         session.podium_step = 0
 
     elif action == ADVANCE_PODIUM:
@@ -272,11 +300,25 @@ def available_actions(session: CompetitionSession) -> list[str]:
 def leaderboard_hint(session: CompetitionSession) -> str | None:
     """A SUGGESTION for the coach, never a rule.
 
-    The coach can always show standings or move on; this only offers a nudge
-    at the two moments where the room's experience measurably differs:
-    establishing stakes after the first question, and protecting the ending.
-    Returns None when there is nothing worth saying, because a hint on every
-    screen is noise the coach learns to ignore.
+    THE EXACT RULES, in order - the first that matches wins:
+
+      1. `first_standings`          - after round 0, and more rounds remain.
+                                      Establishes the stakes once.
+      2. `keep_the_finish_a_surprise` - 1 or 2 playable rounds left. Showing
+                                      standings here makes the podium a
+                                      foregone conclusion.
+      3. `midpoint_standings`       - competitions of 8+ rounds, every 4th
+                                      round, while more than 2 remain.
+      4. otherwise None.
+
+    Deliberately silent most of the time: a hint on every screen is one a
+    coach learns to ignore, and this needs to still mean something on the
+    round where it says "keep the ending a surprise".
+
+    A hint NEVER transitions, never hides a control and never delays anything.
+    Both SHOW_LEADERBOARD and NEXT_QUESTION remain in available_actions
+    regardless of what this returns. Wording is sport-neutral - Competition
+    should read the same in a classroom as in a film room.
     """
     if session.status not in (QUESTION_REVEAL, LEADERBOARD):
         return None

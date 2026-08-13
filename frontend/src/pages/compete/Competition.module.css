@@ -987,3 +987,109 @@
   .optionBar,
   .timerFill { transition: none; }
 }
+
+/* --- Standings (M2.4) ---------------------------------------------------- */
+
+.board { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+
+.boardRow {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr auto auto auto;
+  align-items: center;
+  gap: clamp(0.6rem, 2vw, 1.5rem);
+  padding: clamp(0.7rem, 2vw, 1.15rem) clamp(0.8rem, 2vw, 1.4rem);
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-border);
+  background: var(--comp-surface-raised);
+  /* transform/opacity only - cheap on a low-end HDMI stick driving a
+     projector, which is what this usually renders on. */
+  animation: settle 320ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes settle {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+.boardRank {
+  font-size: clamp(1.6rem, 4vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--comp-accent);
+  text-align: center;
+}
+
+.boardName {
+  font-size: clamp(1.1rem, 2.8vw, 2rem);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boardCorrect {
+  font-size: clamp(1rem, 2.2vw, 1.6rem);
+  font-weight: 700;
+}
+
+.boardCorrectOf { color: var(--comp-text-dim); font-size: 0.7em; }
+
+.boardPoints {
+  font-size: clamp(1.1rem, 2.6vw, 1.9rem);
+  font-weight: 800;
+  min-width: 4ch;
+  text-align: right;
+}
+
+.movement {
+  font-size: clamp(0.8rem, 1.8vw, 1.05rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  min-width: 3.5ch;
+  text-align: center;
+}
+
+/* Direction carries a glyph AND a label; colour is the third signal. */
+.movement_up { color: var(--comp-live); }
+.movement_down { color: var(--comp-danger); }
+.movement_same { color: var(--comp-text-dim); }
+.movement_new { color: var(--comp-accent); font-size: 0.75em; }
+
+.movementWord { font-weight: 600; text-transform: none; letter-spacing: 0; }
+.movementNewNote { color: var(--comp-accent); font-weight: 700; }
+
+.standingCard {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: center;
+  text-align: center;
+  padding: clamp(1.25rem, 5vw, 2rem);
+  border-radius: var(--comp-radius);
+  border: 1px solid var(--comp-accent-line);
+  background: linear-gradient(180deg, var(--comp-accent-soft), var(--comp-surface));
+}
+
+.standingLabel {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--comp-text-dim);
+}
+
+.standingRank {
+  font-size: clamp(2.8rem, 14vw, 5rem);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.hint {
+  margin-top: 0.85rem;
+  color: var(--comp-text-dim);
+  font-size: 0.92rem;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boardRow { animation: none; }
+}

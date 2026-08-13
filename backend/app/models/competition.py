@@ -121,6 +121,14 @@ class CompetitionSession(db.Model):
         db.SmallInteger, nullable=False, default=1, server_default="1"
     )
 
+    #: The last round whose standings the ROOM WAS ACTUALLY SHOWN.
+    #:
+    #: NULL until a leaderboard is displayed. This is the baseline movement
+    #: arrows are measured against - not the previous round, because a coach
+    #: who skips two leaderboards must still see arrows comparing against the
+    #: last table the room saw. See services/competition_standings.
+    last_leaderboard_round = db.Column(db.SmallInteger, nullable=True)
+
     #: How far through the podium reveal the coach has advanced.
     podium_step = db.Column(
         db.SmallInteger, nullable=False, default=0, server_default="0"
