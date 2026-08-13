@@ -254,3 +254,49 @@ measured glyph budget, and `Competition.layout.test.ts` for the guard.
 **7. Removing ordinary Peira navigation from the Competition host experience
 was correct.** Keep that architecture. Recorded so a future polish pass does
 not "restore consistency" by putting the nav back.
+
+---
+
+## Competition session cleanup / deletion / retention
+
+**Not a blocker for M2, and deliberately not implemented.** Raised by the
+owner on 13 August 2026 during the M2.6 production verification, once it
+became clear what the smoke-test sessions would leave behind.
+
+**The situation today.** A Competition session persists permanently once it
+reaches COMPLETE or ABANDONED, along with its `competition_participants` and
+`competition_answers` rows. There is no coach-side way to remove one. The only
+DELETE route on the Competition surface is
+`/sessions/<id>/participants/<id>`, and `remove_participant()` refuses unless
+the session is still in LOBBY. Nothing else deletes anything — `end_session()`
+only sets a status. So every competition a coach ever runs accumulates
+forever, and the coach has no view of them and no control over them.
+
+**Why it has not bitten yet.** `GET /competition/active` is deliberately
+live-sessions-only, so finished sessions are invisible rather than cluttering
+anything, and Competition rows touch no ordinary Peira surface (see the
+analytics isolation section of COMPETITION-API.md). The cost today is storage
+and an absence of control, not a wrong number anywhere — which is exactly why
+this is a retention decision rather than a bug.
+
+**The decision to make later**, as one deliberate design pass rather than
+piecemeal. Some combination of:
+
+- coach-side deletion of completed/abandoned sessions;
+- an archive / history view (note this overlaps with the Competition History
+  work already parked for M3, and with the question-content snapshot problem
+  recorded above — a history screen and a retention policy want deciding
+  together, because a policy that deletes what history wants to show is a
+  policy nobody can use);
+- automatic retention or scheduled cleanup.
+
+**Careful with the third one.** `expire_stale_sessions()` already exists,
+is dead code, and is deliberately unwired: it filters on *status not terminal*
+rather than *status is LOBBY*, so calling it today would mark a LIVE
+mid-round competition ABANDONED. Any retention work must fix that predicate
+before wiring anything to a schedule. See COMPETITION-API.md §13.
+
+Also note organizations do not cascade — the production cleanup audit
+(CLAUDE.md) had to delete across 22 tables in order. Any deletion tool here
+must handle `competition_answers` before `competition_participants` before
+`competition_sessions`.
