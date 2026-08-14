@@ -14,6 +14,7 @@ from flask_jwt_extended import jwt_required
 from sqlalchemy import case, func
 from sqlalchemy.orm import contains_eager, selectinload
 
+from app.errors import ApiError
 from app.extensions import db
 from app.services.attempt_scope import official_filter
 from app.models import (
@@ -31,7 +32,7 @@ from app.models import (
 )
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
-from app.services.file_storage import get_file_storage
+from app.services.file_storage import StorageError, get_file_storage
 from app.utils.auth import (
     current_coach,
     get_editable_quiz,
@@ -325,6 +326,12 @@ def duplicate_quiz(quiz_id: int):
     original = get_visible_quiz(quiz_id)
     coach = current_coach()
 
+    storage = get_file_storage()
+    # Every object this operation creates, so a failure can undo them. The DB
+    # side is already all-or-nothing through the session; storage is not, and a
+    # rollback that left copied assets behind would leak a file per attempt.
+    copied_keys: list[str] = []
+
     copy_quiz = Quiz(
         organization_id=coach.organization_id,
         coach_id=coach.id,
@@ -337,6 +344,46 @@ def duplicate_quiz(quiz_id: int):
     db.session.add(copy_quiz)
     db.session.flush()  # assign copy_quiz.id without committing
 
+    try:
+        _copy_questions_into(original, copy_quiz, storage, copied_keys)
+        db.session.commit()
+    except StorageError as exc:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        # A readable refusal rather than a 500. The coach can retry, and
+        # crucially they are NOT handed a duplicate that is missing pictures.
+        raise ApiError(
+            "Could not copy this quiz's images, so the duplicate was not created. "
+            "Please try again.",
+            status_code=502,
+            reason="image_copy_failed",
+        ) from exc
+    except Exception:
+        # Order matters. Roll the DB back FIRST so nothing can observe rows
+        # pointing at assets that are about to disappear, then remove the
+        # objects this call created. delete_image is idempotent, and a failure
+        # to clean up must not mask the original error.
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise
+
+    return jsonify(copy_quiz.to_dict(include_questions=True, include_correct_answers=True)), 201
+
+
+def _copy_questions_into(original, copy_quiz, storage, copied_keys: list[str]) -> None:
+    """Copy every authored question onto `copy_quiz`. Does not commit.
+
+    Split out of the route so the whole copy sits inside one try/except that
+    can undo both halves - the DB session and the storage objects.
+    """
     for question in original.questions:
         copy_question = Question(
             quiz_id=copy_quiz.id,
@@ -348,6 +395,10 @@ def duplicate_quiz(quiz_id: int):
             # wrong - and the coach would have no way to see why.
             expected_answers=question.expected_answers,
             answer_matching=question.answer_matching,
+            # The teaching material. It was silently dropped until a real coach
+            # duplicated a quiz to work around not being able to edit a live
+            # one, and every explanation vanished with no error anywhere.
+            answer_explanation=question.answer_explanation,
         )
         db.session.add(copy_question)
         db.session.flush()
@@ -382,13 +433,27 @@ def duplicate_quiz(quiz_id: int):
             )
 
         if question.image is not None:
+            # ITS OWN STORAGE OBJECT, not a second reference to the original's.
+            # Sharing one asset between two quizzes looks harmless until any
+            # delete path runs: delete_quiz, and both the replace and delete
+            # image routes, unlink the file outright because they assume a
+            # single owner. The first destructive edit on either side then
+            # blanked the other's images - proven in both directions.
+            #
+            # A copy failure raises, which aborts the whole duplicate. That is
+            # deliberate: a duplicate that quietly drops a picture is the exact
+            # failure being fixed, so it must not be the fallback.
+            copied_url = storage.copy_image(question.image.image_url)
+            copied_keys.append(copied_url)
             db.session.add(
                 QuestionImage(
                     question_id=copy_question.id,
-                    image_url=question.image.image_url,
+                    image_url=copied_url,
                     annotations=copy.deepcopy(question.image.annotations),
+                    # The coordinate space those annotations were authored in.
+                    # NULL means "assume the legacy 900px canvas", so dropping
+                    # it silently MOVED every saved shape on the duplicate.
+                    # Annotations and canvas_width only mean anything together.
+                    canvas_width=question.image.canvas_width,
                 )
             )
-
-    db.session.commit()
-    return jsonify(copy_quiz.to_dict(include_questions=True, include_correct_answers=True)), 201

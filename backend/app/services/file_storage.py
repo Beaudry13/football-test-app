@@ -89,10 +89,46 @@ def _compress_image(uploaded_file: UploadedFile, max_dimension: int, quality: in
     return output.getvalue()
 
 
+class StorageError(RuntimeError):
+    """A storage operation that the caller must NOT treat as recoverable.
+
+    Deliberately distinct from `load_image_bytes` returning None. That is the
+    read path used by PDF export, where one unreadable image must degrade
+    quietly rather than fail a whole report. A COPY is the opposite: if it
+    fails, the caller is about to create a question row pointing at an asset
+    that does not exist, and a duplicate quiz with silently missing images is
+    exactly the bug this whole change exists to remove.
+    """
+
+
 class FileStorage(ABC):
     @abstractmethod
     def save_image(self, uploaded_file: UploadedFile) -> str:
         """Persist an uploaded image and return a URL/path clients can fetch."""
+
+    @abstractmethod
+    def copy_image(self, image_url: str) -> str:
+        """Copy a stored image to a NEW key and return the new URL.
+
+        WHY THIS EXISTS, AND WHY IT LIVES HERE
+        ---------------------------------------
+        Duplicating a quiz used to copy `image_url` verbatim, so two questions
+        referenced ONE stored object while every deletion path in the product
+        assumes single ownership - `delete_quiz`, and both the replace and
+        delete image routes, unlink the file outright. The first destructive
+        edit on either quiz therefore broke the other's images, which is how a
+        coach ended up sending a duplicated quiz whose pictures had vanished.
+
+        Giving the duplicate its own object restores independence without
+        touching any of those deletion paths.
+
+        BYTES ARE COPIED, NOT RE-ENCODED. `save_image` compresses on the way
+        in, so re-running that here would re-encode an already-lossy JPEG and
+        degrade the image a little more on every duplicate. A copy has to be a
+        copy.
+
+        RAISES `StorageError` rather than returning None - see above.
+        """
 
     @abstractmethod
     def delete_image(self, image_url: str) -> None:
@@ -122,6 +158,26 @@ class LocalFileStorage(FileStorage):
         self.upload_folder.mkdir(parents=True, exist_ok=True)
         (self.upload_folder / stored_name).write_bytes(compressed)
 
+        return f"/uploads/{stored_name}"
+
+    def copy_image(self, image_url: str) -> str:
+        source_name = image_url.rsplit("/", 1)[-1]
+        source = self.upload_folder / source_name
+        try:
+            data = source.read_bytes()
+        except OSError as exc:
+            raise StorageError(f"Could not read {source_name} to copy it.") from exc
+
+        # Keep the source's extension: stored objects are already normalised by
+        # save_image, and inventing a different one here would make the copy
+        # describe itself as something it is not.
+        suffix = source_name.rsplit(".", 1)[-1] if "." in source_name else COMPRESSED_EXTENSION
+        stored_name = f"{uuid.uuid4().hex}.{suffix}"
+        try:
+            self.upload_folder.mkdir(parents=True, exist_ok=True)
+            (self.upload_folder / stored_name).write_bytes(data)
+        except OSError as exc:
+            raise StorageError(f"Could not write the copy of {source_name}.") from exc
         return f"/uploads/{stored_name}"
 
     def delete_image(self, image_url: str) -> None:
@@ -183,6 +239,25 @@ class S3FileStorage(FileStorage):
             ContentType=COMPRESSED_CONTENT_TYPE,
         )
 
+        return f"{self.public_url_base}/{stored_name}"
+
+    def copy_image(self, image_url: str) -> str:
+        source_name = image_url.rsplit("/", 1)[-1]
+        suffix = source_name.rsplit(".", 1)[-1] if "." in source_name else COMPRESSED_EXTENSION
+        stored_name = f"{uuid.uuid4().hex}.{suffix}"
+        try:
+            # Server-side copy: the bytes never travel through this process.
+            self.client.copy_object(
+                Bucket=self.bucket_name,
+                Key=stored_name,
+                CopySource={"Bucket": self.bucket_name, "Key": source_name},
+            )
+        except Exception as exc:
+            # Narrower than load_image_bytes' catch-all on purpose: this one
+            # re-raises. botocore's error hierarchy makes "missing key" and
+            # "bad credentials" the same class of thing to us, and neither is
+            # something a duplicate should quietly continue past.
+            raise StorageError(f"Could not copy {source_name} in the bucket.") from exc
         return f"{self.public_url_base}/{stored_name}"
 
     def delete_image(self, image_url: str) -> None:
