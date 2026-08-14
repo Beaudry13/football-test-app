@@ -76,6 +76,7 @@ const playerResults: PlayerResultsResponse = {
       your_answer: 'True',
       correct_answer: 'True',
       is_correct: true,
+      is_excluded: false,
       coach_feedback: null,
       graded_at: null,
     },

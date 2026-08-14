@@ -468,6 +468,11 @@ export interface PlayerResultAnswer {
   your_answer: string | null;
   correct_answer: string | null;
   is_correct: boolean | null;
+  /** The coach stopped counting this question. `is_correct` is null for an
+   *  excluded question exactly as it is for an ungraded one, so this flag is
+   *  the only thing that tells the two states apart - never infer "excluded"
+   *  from a null verdict. The coach's private reason is deliberately absent. */
+  is_excluded: boolean;
   coach_feedback: string | null;
   graded_at: string | null;
 }
@@ -479,14 +484,50 @@ export interface PlayerResultsResponse {
   answers: PlayerResultAnswer[];
 }
 
+/** One coach's decision to stop counting a question, as the coach sees it.
+ *  `scope` is 'assignment' for a single access code, 'quiz' for every use of
+ *  the quiz. `reason` is the coach's own optional note and is never sent to a
+ *  player. */
+export interface QuestionExclusion {
+  id: number;
+  question_id: number;
+  access_code_id: number | null;
+  scope: 'assignment' | 'quiz';
+  excluded_at: string;
+  restored_at: string | null;
+  is_active: boolean;
+  excluded_by_username: string | null;
+  reason?: string | null;
+}
+
+/** An assignment a coach can scope an exclusion to. Labelled from metadata
+ *  that already exists - no schema was added to name assignments. */
+export interface QuizAssignment {
+  access_code_id: number;
+  code: string;
+  activated_at: string;
+  is_active: boolean;
+  is_valid: boolean;
+  mode: string;
+  groups: { id: number; name: string }[];
+  submitted_count: number;
+}
+
 export interface QuestionBreakdown {
   question_id: number;
   question_text: string;
   question_type: QuestionType;
+  /** RAW EVIDENCE, never filtered by exclusion - usually the very thing that
+   *  made the coach exclude the question. */
   answered_count: number;
   correct_count: number;
   incorrect_count: number;
   ungraded_count: number;
+  is_excluded: boolean;
+  /** Every ACTIVE exclusion covering this question. More than one when a
+   *  quiz-wide and an assignment-scoped exclusion overlap - restoring one
+   *  leaves the other in force, so the UI must show both. */
+  exclusions: QuestionExclusion[];
 }
 
 export interface QuizDashboard {

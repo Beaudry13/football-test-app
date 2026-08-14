@@ -7,6 +7,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.auth import auth_bp
     from app.routes.quizzes import quizzes_bp
     from app.routes.questions import questions_bp
+    from app.routes.question_exclusions import question_exclusions_bp
     from app.routes.rosters import rosters_bp
     from app.routes.access_codes import access_codes_bp
     from app.routes.play import play_bp
@@ -25,6 +26,9 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
     app.register_blueprint(questions_bp, url_prefix="/api/quizzes")
+    # Same prefix as questions_bp: "don't count this question" is nested
+    # under the quiz and the question so every route can re-verify both.
+    app.register_blueprint(question_exclusions_bp, url_prefix="/api/quizzes")
     app.register_blueprint(rosters_bp, url_prefix="/api/quizzes")
     app.register_blueprint(access_codes_bp, url_prefix="/api/quizzes")
     app.register_blueprint(play_bp, url_prefix="/api/play")

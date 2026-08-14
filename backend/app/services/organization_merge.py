@@ -120,6 +120,15 @@ COUNT_QUERIES = {
         " JOIN player_attempts pa ON pa.id=a.attempt_id"
         " JOIN quizzes q ON q.id=pa.quiz_id WHERE q.organization_id=:o"
     ),
+    # Reached through questions -> quizzes, so re-pointing quizzes.
+    # organization_id carries these with no UPDATE of their own - the merge
+    # needs no new logic. Counted here so the before/after census does not
+    # silently under-report an org that had exclusions.
+    "question_exclusions": (
+        "SELECT count(*) FROM question_exclusions qe"
+        " JOIN questions qu ON qu.id=qe.question_id"
+        " JOIN quizzes q ON q.id=qu.quiz_id WHERE q.organization_id=:o"
+    ),
     "document_pages": (
         "SELECT count(*) FROM document_pages dp"
         " JOIN source_documents sd ON sd.id=dp.source_document_id"

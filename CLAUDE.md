@@ -383,16 +383,28 @@ players are already in has no safe move. Consider designing them together.
 backend scoring rule — see Things That Will Bite You #4.
 
 - **Phase 2 centralized HOW A SCORE IS CALCULATED, not WHICH QUESTIONS EACH
-  SURFACE COUNTS.** Only `export.py` counts delivered questions
-  (`count_delivered`); `players.py`, `grading.py` and `quizzes.py` still count
-  answer rows or SQL, and an answer-row count cannot express an excluded
-  question that nobody answered.
-- **Do not assume teaching `score_percent` about exclusions implements "don't
-  count this question".** It does not. Read "THE PHASE 3 BOUNDARY" in
-  `docs/DESIGN-delivered-question-snapshots.md` first — `quizzes.py`'s pooled
-  SQL aggregate is a special case needing an explicit decision.
-- **Do not start Phase 3 ("don't count this question") or Phase 4 (safe
-  correction) without being asked.**
+  SURFACE COUNTS.** `score_percent` and `ScoreCounts.scored_total` are the
+  arithmetic; exclusion filters the INPUT and never touches them.
+
+**Phase 3 ("don't count this question") is implemented.** `question_exclusions`
++ `services/question_exclusions.py`.
+
+- **Score exclusion filters ANSWER ROWS and needs no snapshot.** An unanswered
+  question is already outside the graded denominator, so excluding it cannot
+  move a score — measured, not assumed. Snapshots/delivered-question info are
+  for REPORTING (an excluded question must stop being shown as an active
+  *unanswered* one). This is why legacy attempts still score correctly.
+- **The predicate is spelled TWICE on purpose** — Python `ExclusionSet.excludes`
+  and SQL `sql_not_excluded`, because the quiz-card aggregate must not load
+  every answer to divide two numbers (33ms vs 88ms at 75k answers). The
+  equivalence class in `tests/test_question_exclusions.py` is what keeps them
+  honest. Change one, change the other.
+- **Two partial unique indexes, not one.** `UNIQUE (question_id,
+  access_code_id) WHERE restored_at IS NULL` does NOT constrain quiz-wide rows
+  — Postgres treats NULLs as distinct, so any number satisfy it.
+- Exclusion never edits, hides or deletes an answer. Restore sets
+  `restored_at`; rows are never deleted.
+- **Do not start Phase 4 (safe correction) without being asked.**
 
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 

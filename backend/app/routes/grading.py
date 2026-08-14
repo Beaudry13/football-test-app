@@ -22,6 +22,11 @@ from sqlalchemy.orm import contains_eager, selectinload
 from app.errors import ApiError
 from app.extensions import db
 from app.services.attempt_scope import official_filter, official_only
+from app.services.question_exclusions import (
+    active_exclusions_for_quiz,
+    load_for_attempts,
+    load_for_quizzes,
+)
 from app.services.scoring import count_answers, pending_grading_count
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
@@ -180,6 +185,14 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
     responded_names = {r.player_name for r in responses}
     missing_players = [name for name in roster_names if name not in responded_names]
 
+    # Every ACTIVE exclusion on this quiz, as rows rather than a boolean: a
+    # question can be covered by BOTH a quiz-wide and an assignment exclusion,
+    # and the coach has to see both or Restore will look broken.
+    exclusion_rows = active_exclusions_for_quiz(quiz.id)
+    exclusions_by_question: dict[int, list] = {}
+    for row in exclusion_rows:
+        exclusions_by_question.setdefault(row.question_id, []).append(row)
+
     question_breakdown = []
     for question in sorted(quiz.questions, key=lambda q: q.position):
         answers = [a for r in responses for a in r.answers if a.question_id == question.id]
@@ -188,7 +201,13 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         # question nobody answered has no rows and every count is zero;
         # `answered_count` is how this surface expresses that, not an
         # unanswered figure (which counting answer rows cannot produce).
+        #
+        # DELIBERATELY NOT FILTERED BY EXCLUSION. These counts are the
+        # EVIDENCE - usually the very thing that made the coach exclude the
+        # question - so they stay exactly as recorded and the row is MARKED
+        # instead. Zeroing them would hide why the question was a problem.
         counts = count_answers(answers)
+        rows = exclusions_by_question.get(question.id, [])
 
         question_breakdown.append(
             {
@@ -199,6 +218,11 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
                 "correct_count": counts.correct,
                 "incorrect_count": counts.incorrect,
                 "ungraded_count": counts.not_graded,
+                "is_excluded": bool(rows),
+                # Coach-facing surface, so the reason IS included here - it is
+                # the coach's own note. It is never included in any /play
+                # payload.
+                "exclusions": [row.to_dict(include_reason=True) for row in rows],
             }
         )
 
@@ -246,7 +270,7 @@ def quiz_dashboard(quiz_id: int):
 def export_results_csv(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = _load_responses_for_export(quiz)
-    csv_text = build_results_csv(quiz, responses)
+    csv_text = build_results_csv(quiz, responses, load_for_quizzes([quiz.id]))
     slug = export_filename_slug(quiz.title)
     return Response(
         csv_text,
@@ -261,7 +285,9 @@ def export_results_pdf(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     responses = _load_responses_for_export(quiz)
     dashboard_data = _build_dashboard_data(quiz, responses)
-    pdf_bytes = build_results_pdf(quiz, dashboard_data, responses)
+    pdf_bytes = build_results_pdf(
+        quiz, dashboard_data, responses, exclusions=load_for_quizzes([quiz.id])
+    )
     slug = export_filename_slug(quiz.title)
     return Response(
         pdf_bytes,
@@ -305,6 +331,7 @@ def export_results_detailed_pdf(quiz_id: int):
         responses,
         organization_name=quiz.organization.name,
         load_image_bytes=storage.load_image_bytes,
+        exclusions=load_for_quizzes([quiz.id]),
     )
     slug = export_filename_slug(quiz.title)
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -365,9 +392,10 @@ def _player_history_payload(coach, player_name: str, organization_wide: bool):
         .all()
     )
 
+    exclusions = load_for_attempts(responses)
     history = []
     for response in responses:
-        counts = count_answers(response.answers)
+        counts = count_answers(exclusions.active_answers(response))
         # Same rule ResponseRow.tsx's "N to grade" badge uses - only manually
         # graded questions are ever waiting on a coach (a multiple-choice
         # answer's is_correct is computed immediately at answer time), so this

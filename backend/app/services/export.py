@@ -83,6 +83,7 @@ from reportlab.platypus import (
 )
 
 from app.models.question import TEXT_ANSWER_TYPES, QuestionType
+from app.services.question_exclusions import NO_EXCLUSIONS
 from app.services.scoring import (
     Outcome,
     classify,
@@ -105,10 +106,21 @@ _CSV_OUTCOME_LABELS = {
     Outcome.UNANSWERED: "No answer",
 }
 
+#: Overrides the outcome entirely when a question has been excluded. Not a
+#: fifth Outcome: exclusion is a coach's decision ABOUT the question, not a
+#: property of the answer, and the answer's own outcome is still recorded in
+#: the database exactly as before.
+CSV_EXCLUDED_LABEL = "Excluded"
+
 RESULT_CORRECT = "Correct"
 RESULT_INCORRECT = "Incorrect"
 RESULT_NOT_GRADED = "Not Graded"
 RESULT_UNANSWERED = "Unanswered"
+#: NOT a fifth Outcome. The four outcomes describe an ANSWER; this describes a
+#: coach's decision about the QUESTION, and it overrides the chip regardless of
+#: what the player did. The underlying outcome is still recorded in the
+#: database and still visible on the coach's Results tab.
+RESULT_EXCLUDED = "Excluded"
 
 _MAX_IMAGE_WIDTH = 4.5 * inch
 _MAX_IMAGE_HEIGHT = 3.5 * inch
@@ -180,6 +192,10 @@ PDF_THEME = {
         RESULT_INCORRECT: (colors.HexColor("#FBF0EE"), colors.HexColor("#8C2F26")),
         RESULT_NOT_GRADED: (colors.HexColor("#FBF5E8"), colors.HexColor("#7A5A12")),
         RESULT_UNANSWERED: (colors.HexColor("#F4F3F0"), colors.HexColor("#5E5A50")),
+        # Neutral on purpose. An excluded question is not a verdict about the
+        # player, so it must not borrow the green of Correct or the red of
+        # Incorrect - it reads as "set aside", which is what happened.
+        RESULT_EXCLUDED: (colors.HexColor("#F0F1F4"), colors.HexColor("#4A5060")),
     },
     "heading_font": "Helvetica-Bold",
     "body_font": "Helvetica",
@@ -661,7 +677,7 @@ def _player_sort_key(response):
     return (jersey is None, jersey if jersey is not None else 0, last_name.lower(), first_name.lower())
 
 
-def _player_result_counts(questions: list, response) -> tuple[dict, dict]:
+def _player_result_counts(questions: list, response, exclusions=NO_EXCLUSIONS) -> tuple[dict, dict]:
     """Per-question grading result for this one SUBMITTED attempt, plus the
     aggregate counts derived from it - the single pass every summary number
     (page 1's table row, and this Player's own detail-page header) reads
@@ -672,9 +688,17 @@ def _player_result_counts(questions: list, response) -> tuple[dict, dict]:
     surface that can report Unanswered at all. Returned keyed by this
     module's label strings because that is what the table builders below
     index by; the counting itself is no longer done here.
+
+    EXCLUDED QUESTIONS ARE DROPPED FROM THE DELIVERED LIST, not from the
+    answers. That matters: an excluded question the player never answered must
+    stop being reported as an active Unanswered one, and only filtering the
+    delivered set can achieve that. The answers themselves are untouched, so
+    the per-question detail pages can still show what the player wrote.
     """
     answers_by_question = {a.question_id: a for a in response.answers}
-    counted = count_delivered(questions, answers_by_question)
+    counted = count_delivered(
+        exclusions.active_questions(questions, response.access_code_id), answers_by_question
+    )
     counts = {
         RESULT_CORRECT: counted.correct,
         RESULT_INCORRECT: counted.incorrect,
@@ -706,7 +730,7 @@ def _load_image_flowable(load_image_bytes, image_url: str):
         return None
 
 
-def build_results_csv(quiz, responses: list) -> str:
+def build_results_csv(quiz, responses: list, exclusions=NO_EXCLUSIONS) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(CSV_HEADER)
@@ -716,6 +740,12 @@ def build_results_csv(quiz, responses: list) -> str:
         answers_by_question = {a.question_id: a for a in response.answers}
         for i, question in enumerate(questions, start=1):
             answer = answers_by_question.get(question.id)
+            # AN EXCLUDED QUESTION KEEPS ITS ROW. This export is the per-answer
+            # evidence trail; dropping the row would destroy exactly what a
+            # coach opens it for. Only the verdict changes - the player's
+            # answer text and the coach's feedback are still there.
+            excluded = exclusions.excludes(question.id, response.access_code_id)
+            verdict = CSV_EXCLUDED_LABEL if excluded else _CSV_OUTCOME_LABELS[classify(answer)]
             writer.writerow(
                 [
                     response.display_name,
@@ -724,7 +754,7 @@ def build_results_csv(quiz, responses: list) -> str:
                     question.question_text,
                     question.question_type.value,
                     _answer_text(question, answer),
-                    _CSV_OUTCOME_LABELS[classify(answer)],
+                    verdict,
                     (answer.coach_feedback or "") if answer else "",
                 ]
             )
@@ -795,7 +825,13 @@ def _make_footer(theme: dict, quiz_title: str):
     return _draw
 
 
-def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict | None = None) -> bytes:
+def build_results_pdf(
+    quiz,
+    dashboard_data: dict,
+    responses: list,
+    theme: dict | None = None,
+    exclusions=NO_EXCLUSIONS,
+) -> bytes:
     theme = theme or PDF_THEME
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, title=f"{quiz.title} - Results")
@@ -841,7 +877,7 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict |
             # percentage elsewhere is built from, so they come from the same
             # counter. "Ungraded" here means an answered-but-unmarked row;
             # unanswered questions have no row and never appear on this table.
-            counted = count_answers(response.answers)
+            counted = count_answers(exclusions.active_answers(response))
             score_rows.append(
                 [
                     response.display_name,
@@ -1092,6 +1128,7 @@ def build_detailed_results_pdf(
     organization_name: str,
     load_image_bytes=None,
     theme: dict | None = None,
+    exclusions=NO_EXCLUSIONS,
 ) -> bytes:
     """A full, per-Player, per-question results report for every SUBMITTED
     attempt: a page-1 quiz summary, then one page-broken section per
@@ -1132,7 +1169,9 @@ def build_detailed_results_pdf(
     # One pass to compute every Player's counts/answers-by-question up
     # front - page 1's summary table and each Player's own detail section
     # both read from this, so the two can never disagree.
-    per_response = {r.id: _player_result_counts(questions, r) for r in ordered_responses}
+    per_response = {
+        r.id: _player_result_counts(questions, r, exclusions) for r in ordered_responses
+    }
 
     # --- Page 1: report header + summary metrics + roster table ---
     elements: list = [
@@ -1248,12 +1287,23 @@ def build_detailed_results_pdf(
         # moved from a trailing "Result:" line up into the header chip.
         for i, question in enumerate(questions, start=1):
             answer = answers_by_question.get(question.id)
-            result = _grading_result(answer)
+            # THE EXCLUDED QUESTION IS STILL PRINTED. Removing its card would
+            # silently drop a page a coach may be looking for, and would hide
+            # the player's answer - which is preserved, not deleted. Only the
+            # status chip changes, so the report says plainly that this
+            # question did not count.
+            excluded = exclusions.excludes(question.id, response.access_code_id)
+            result = RESULT_EXCLUDED if excluded else _grading_result(answer)
 
             prompt_group: list = [
                 _question_card_header(theme, styles, i, result),
                 Paragraph(_xml_escape(question.question_text), wrap_style),
             ]
+            if excluded:
+                prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
+                prompt_group.append(
+                    Paragraph("Excluded from scoring by the coach.", label_style)
+                )
 
             image_flowable = None
             if question.image is not None:

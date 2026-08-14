@@ -18,6 +18,7 @@ const playerResults: PlayerResultsResponse = {
       your_answer: 'False',
       correct_answer: 'True',
       is_correct: false,
+      is_excluded: false,
       coach_feedback: null,
       graded_at: null,
     },

@@ -57,6 +57,7 @@ from app.services.attempts import (
     upsert_drawing,
 )
 from app.services.drawing_documents import validate_document
+from app.services.question_exclusions import load_for_quizzes
 from app.services.question_snapshots import capture_attempt_snapshots
 from app.utils.validation import load_json_body
 
@@ -631,11 +632,19 @@ def player_results():
 
     quiz = access_code.quiz
     answers_by_question = {a.question_id: a for a in attempt.answers}
+    exclusions = load_for_quizzes([quiz.id])
 
     answer_details = []
     for question in sorted(quiz.questions, key=lambda q: q.position):
         answer = answers_by_question.get(question.id)
         correct_option = next((o for o in question.options if o.is_correct_answer), None)
+        # A question the coach has stopped counting. The player still sees the
+        # question and their own answer - nothing is hidden or deleted - but it
+        # is no longer presented as right or wrong, because it no longer is
+        # either. The coach's optional private reason is deliberately NOT in
+        # this payload; it is a note to themselves, not an explanation owed to
+        # the player.
+        excluded = exclusions.excludes(question.id, attempt.access_code_id)
 
         answer_details.append(
             {
@@ -643,8 +652,18 @@ def player_results():
                 "question_text": question.question_text,
                 "question_type": question.question_type.value,
                 "your_answer": _resolve_answer_text(question, answer),
-                "correct_answer": correct_option.option_text if correct_option else None,
-                "is_correct": answer.is_correct if answer else None,
+                # Withheld for an excluded question: showing "the correct
+                # answer was B" next to a neutral chip invites the player to
+                # score it themselves, which is the confusion exclusion exists
+                # to remove.
+                "correct_answer": (
+                    None if excluded else (correct_option.option_text if correct_option else None)
+                ),
+                # None, exactly as an ungraded answer reports - `is_excluded`
+                # is what tells the two apart, so no client can mistake an
+                # excluded question for one still awaiting a coach.
+                "is_correct": None if excluded else (answer.is_correct if answer else None),
+                "is_excluded": excluded,
                 "coach_feedback": answer.coach_feedback if answer else None,
                 "graded_at": answer.graded_at.isoformat() if answer and answer.graded_at else None,
             }

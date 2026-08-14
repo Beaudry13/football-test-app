@@ -121,6 +121,15 @@ ORG_ROSTERS = f"SELECT id FROM rosters WHERE quiz_id IN ({ORG_QUIZZES})"
 ORG_DOCS = "SELECT id FROM source_documents WHERE organization_id = ANY(:ids)"
 
 DELETION_PLAN = [
+    # Scoped through QUESTIONS, not through attempts: a quiz-wide exclusion has
+    # access_code_id NULL, so an attempt- or code-scoped delete would miss it
+    # and the later `questions` delete would fail on the FK. Listed explicitly
+    # for the same reason as everything else here - the per-table counts are
+    # how an operator checks what actually went.
+    (
+        "question_exclusions",
+        f"DELETE FROM question_exclusions WHERE question_id IN ({ORG_QUESTIONS})",
+    ),
     # Listed explicitly even though attempt_id is ON DELETE CASCADE, for the
     # same reason `answers` is: every statement here proves its own scope, and
     # the per-table counts this tool reports back are how an operator checks

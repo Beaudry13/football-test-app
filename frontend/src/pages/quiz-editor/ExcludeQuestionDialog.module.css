@@ -1,0 +1,72 @@
+/* Coach-side dialog, so it uses the --peira-* coach tokens throughout.
+   See the NAMING NOTE at the top of styles/tokens.css: these names are
+   prefixed precisely because the player theme declares its own :root. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 55%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.dialog {
+  width: min(30rem, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.questionText {
+  font-weight: 600;
+  color: var(--peira-text);
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--peira-bg);
+  border: 1px solid var(--peira-border);
+  border-radius: var(--peira-radius-sm);
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--peira-text);
+  margin-bottom: -0.3rem;
+}
+
+.muted {
+  font-size: 0.8rem;
+  color: var(--peira-text-muted);
+  margin: 0;
+}
+
+.reassurance {
+  font-size: 0.85rem;
+  color: var(--peira-text);
+  margin: 0.2rem 0 0;
+}
+
+.warning {
+  display: block;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+/* Destructive-ish, but not a delete - it is reversible, so this reads as a
+   deliberate action rather than a red danger button. */
+.confirm {
+  border-color: var(--peira-danger);
+  color: var(--peira-danger);
+}

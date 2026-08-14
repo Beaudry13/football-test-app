@@ -33,6 +33,7 @@ from app.models import (
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
 from app.services.file_storage import StorageError, get_file_storage
+from app.services.question_exclusions import sql_not_excluded
 from app.services.scoring import score_percent
 from app.utils.auth import (
     current_coach,
@@ -124,6 +125,17 @@ def list_quizzes():
                 PlayerAttempt.status == AttemptStatus.SUBMITTED,
                 # Response counts and average score are official numbers.
                 official_filter(),
+                # "Don't count this question", in SQL. This is the ONE place
+                # the exclusion predicate is spelled twice - the Python
+                # equivalent is ExclusionSet.excludes, and the two are locked
+                # together by the equivalence tests in
+                # tests/test_question_exclusions.py.
+                #
+                # It stays in SQL because this aggregate must not load every
+                # answer of every attempt to divide two numbers: measured at
+                # 75k answers, the anti-join costs ~33ms against ~88ms for the
+                # Python counter, before ORM and network overhead.
+                sql_not_excluded(PlayerAttempt, Answer),
             )
             .group_by(PlayerAttempt.quiz_id)
             .all()

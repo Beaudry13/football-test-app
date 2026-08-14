@@ -156,6 +156,8 @@ describe('ActiveQuizStatusSection', () => {
           correct_count: 1,
           incorrect_count: 0,
           ungraded_count: 0,
+          is_excluded: false,
+          exclusions: [],
         },
       ],
     });

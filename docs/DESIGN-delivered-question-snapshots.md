@@ -1,13 +1,15 @@
 # Delivered-question snapshots — approved design
 
 **Status: APPROVED. PHASE 1 SHIPPED (write + preserve, production verified).
-PHASE 2 SHIPPED (unified score helper, zero behaviour change).**
-13-14 August 2026. Baseline `a002fdf`; Phase 1 is `25a383c`.
+PHASE 2 SHIPPED (unified score helper, zero behaviour change).
+PHASE 3 IMPLEMENTED ("don't count this question"), awaiting review.**
+13-14 August 2026. Baseline `a002fdf`; Phase 1 is `25a383c`; Phase 2 is `e81397b`.
 
-Phases 3-4 remain designed and NOT authorised. Nothing reads a snapshot for
-product behaviour yet. **Before designing Phase 3, read "THE PHASE 3 BOUNDARY"
-near the bottom** - centralizing the score formula did NOT centralize which
-questions each surface counts, and that difference is the whole of Phase 3.
+Phase 4 remains designed and NOT authorised. Nothing reads a snapshot for
+product behaviour for SCORING. **Read "THE PHASE 3 BOUNDARY" near the bottom
+before touching exclusions** - it records the correction that score exclusion
+filters answer rows and needs no snapshot, while delivered/unanswered REPORTING
+does use them.
 
 ## The problem
 
@@ -125,8 +127,15 @@ that belongs to Phase 4.
    Default scope is THIS ASSIGNMENT, not quiz-wide - a bad Monday delivery must
    not rewrite Tuesday's results. Reversible via `restored_at`, never deletion.
    The row is its own audit record; do NOT force it into the answer-scoped
-   `GradeAuditLog`. Players are told: "Question 7 was excluded from scoring by
-   your coach. Your score is now out of 9."
+   `GradeAuditLog`.
+
+   **The player wording in the original design - "Your score is now out of 9" -
+   was WRONG and was not built.** Today's denominator is GRADED ANSWERS, not
+   the delivered question count, so "out of 9" is simply untrue for a player
+   who left two questions blank. The player results page also shows no
+   aggregate score at all, so there was no number to update. What shipped
+   instead: the excluded question carries a neutral "Excluded from scoring"
+   badge with the player's own answer still shown, and one plain sentence.
 4. **Safe question correction.** Text / explanation / image / option text
    become correctable under snapshot protection. **Correct-answer changes stay
    BLOCKED** (two cohorts graded under different rules needs explicit product
@@ -196,67 +205,62 @@ fraction, the CSV labels). Deliberately NOT migrated: completion rate and
 response rate (different measurements that merely share the arithmetic shape),
 per-surface display wording, and Competition.
 
-### THE PHASE 3 BOUNDARY - read this before designing exclusions
+### THE PHASE 3 BOUNDARY - corrected, and what actually shipped
 
-**Phase 2 centralized HOW A SCORE IS CALCULATED. It did NOT centralize HOW EACH
-SURFACE DETERMINES THE SET OF QUESTIONS BEING SCORED.** That distinction is the
-whole of Phase 3, because exclusion changes WHAT IS COUNTED, not the formula.
+An earlier draft of this section said Phase 3 "must FIRST give the answer-row
+surfaces delivered-question information". **That was wrong**, and it was
+corrected by measurement before any exclusion code was written. The corrected
+rule is:
 
-**Do NOT assume that teaching `score_percent` about exclusions implements
-"don't count this question" everywhere. It does not, and it cannot.**
+> **SCORE EXCLUSION -> filters ANSWER ROWS.**
+> **DELIVERED / UNANSWERED REPORTING -> uses delivered-question information.**
 
-Where each surface gets its set today:
+Why the original claim was wrong: today's scoring denominator contains only
+GRADED ANSWER ROWS (`correct + incorrect`). A delivered question nobody
+answered has no row and is therefore already outside the denominator - so
+excluding it cannot move the score. Proven on a 75,000-answer fixture with the
+excluded question deliberately left unanswered by 25 attempts:
 
-| Surface | Counts from | Can express "excluded"? |
-|---|---|---|
-| `export.py` detailed PDF | `count_delivered` - the quiz's questions | **Yes** - filter the `questions` argument |
-| `players.py` profile + cumulative | `count_answers` - answer rows | **No** |
-| `grading.py` legacy history | `count_answers` - answer rows | **No** |
-| `grading.py` per-question breakdown | `count_answers` - answer rows | **No** |
-| `quizzes.py` quiz-card average | pooled SQL `SUM(CASE ...)` | **No** - see below |
-
-An answer-row count CANNOT express an excluded question, because **an excluded
-question that nobody answered has no row to filter out** - and those are
-exactly the questions exclusion has to be able to talk about. This is the same
-fact that made Phase 1 a sibling table rather than a column on `answers`.
-
-`count_delivered` takes the delivered questions as an ARGUMENT rather than
-deriving them, and `ScoreCounts` carries `unanswered`, precisely so that
-excluding a question is a change to what is passed in and never a change to the
-arithmetic. That is the seam. It is currently used by one surface.
-
-**Phase 3 must therefore FIRST give the answer-row surfaces delivered-question
-information** - which is what `attempt_question_snapshots` records, unanswered
-questions included - and only then apply exclusions to it. Treat that as an
-explicit first step, not something to discover halfway through.
-
-### `quizzes.py` is the special case, and needs a deliberate decision
-
-The quiz-card average is the one figure computed by **pooled SQL aggregation**
-across every submitted official attempt of a quiz:
-
-```sql
-SUM(CASE WHEN answers.is_correct IS TRUE     THEN 1 ELSE 0 END)  -- correct
-SUM(CASE WHEN answers.is_correct IS NOT NULL THEN 1 ELSE 0 END)  -- denominator
+```
+exclude by filtering ANSWER ROWS      -> 1060/1260 = 84.1%
+exclude from the DELIVERED set        -> 1060/1260 = 84.1%   (identical)
 ```
 
-It shares the FORMULA (`score_percent`) but not the counter, on purpose: it is
-the one aggregate that must not load every answer of every attempt just to
-divide two numbers. An exclusion rule expressed as Python objects will not
-reach it.
+The delivered set is still required for REPORTING - the same query reports 40
+questions that are delivered, unanswered and still counting, which answer rows
+cannot produce. So snapshots matter for what a report SHOWS, not for the
+percentage. **That is why a legacy attempt with no snapshots still gets a fully
+correct exclusion-aware score.**
 
-Phase 3 must choose ONE of, explicitly:
+Phase 2's arithmetic was not touched: `score_percent` and
+`ScoreCounts.scored_total` are unchanged, and exclusion filters the INPUT.
 
-1. an exclusion-aware SQL design (an anti-join or NOT EXISTS against
-   `question_exclusions`, scoped per `access_code_id`), keeping the aggregate;
-2. moving this surface onto the shared counter and accepting the load; or
-3. a different aggregation strategy (a maintained per-quiz rollup).
+### `quizzes.py` - Option A was chosen, and why
 
-Option 1 preserves today's performance but means the exclusion rule is written
-twice - once in Python, once in SQL - which is exactly the duplication Phase 2
-existed to remove. If it is chosen, the two spellings need a test that proves
-them equivalent on the same data, the way Phase 2's characterization suite
-proves the four old sites agreed.
+The quiz-card average is the one figure computed by **pooled SQL aggregation**
+across every submitted official attempt of a quiz. Measured at 50 quizzes x 100
+attempts x 15 questions (75,000 answers), median of 5 runs, raw tuples:
+
+| | Median |
+|---|---|
+| pooled SQL aggregate, as it was | 19.2 ms |
+| **same aggregate + `NOT EXISTS` anti-join (chosen)** | **33.4 ms** |
+| load every row and count in Python | 87.8 ms |
+
+Option B was rejected on that measurement - 4.5x slower before ORM and network
+overhead, and it would materialise 75,000 rows into the web process on every
+dashboard render. Option C (a rollup) was unnecessary.
+
+**The consequence is one deliberate duplication:** the exclusion predicate is
+spelled in Python (`ExclusionSet.excludes`) and in SQL (`sql_not_excluded`,
+which lives next to the Python so the two are read together). That duplication
+is held in place by the equivalence class in
+`tests/test_question_exclusions.py`, which asserts the SQL quiz-card percentage
+equals the Python-counted percentage over the same data for: nothing excluded,
+an answered exclusion, an unanswered exclusion, quiz-wide, restore, an
+overlapping pair, and an exclusion that empties the denominator. **If you change
+the rule in one spelling, those tests are what will tell you that you forgot the
+other.**
 
 **Note that exclusion is scoped per assignment** (`access_code_id` nullable),
 so the SQL cannot simply exclude a question id globally - a bad Monday delivery
@@ -295,3 +299,45 @@ CLAUDE.md both cited it as the rule's second home. It has never been on master;
 it lives only on `origin/feature/player-progress-analytics`. Both references
 were corrected in Phase 2 to point at `services/scoring.py`. Documentation
 only - no behaviour was involved.
+
+## What Phase 3 actually shipped
+
+| | |
+|---|---|
+| Table | `question_exclusions`, migration `c4e1b8f70a25` |
+| Model | `models/question_exclusion.py` |
+| Predicate | `services/question_exclusions.ExclusionSet.excludes` (Python) and `sql_not_excluded` (SQL) |
+| Routes | `routes/question_exclusions.py` - create, restore, list, plus the assignment picker |
+| Tests | `tests/test_question_exclusions.py` |
+
+**Scope.** `access_code_id` NULL = quiz-wide; a value = that assignment only.
+Both may be active at once and a question covered by either is excluded once.
+Two partial unique indexes enforce "at most one active of each kind" - one
+index cannot, because Postgres treats NULLs as distinct and every quiz-wide row
+has a NULL there.
+
+**The UI never guesses the scope.** The coach Results tab pools every
+assignment of a quiz, so "this assignment" is ambiguous there. The confirmation
+dialog therefore makes the coach choose, labelled from metadata that already
+exists (date, group names, submitted count, code) - no schema was added to name
+assignments. It pre-selects ONLY when the quiz has exactly one assignment.
+Quiz-wide is offered as an explicit broader option with a stronger warning and
+is never the default.
+
+**Evidence is never destroyed.** No answer row is read differently, edited or
+deleted - exclusion filters at scoring time. The per-question breakdown keeps
+its raw correct/incorrect/ungraded counts and is MARKED instead, because those
+counts are usually the reason the coach excluded the question. The CSV keeps
+the row and labels it `Excluded`. The detailed PDF keeps the question's card
+with a neutral chip.
+
+**Restore is honest about overlap.** The restore endpoint returns
+`still_excluded_by`, so a coach restoring one of two overlapping exclusions is
+told the question is still excluded by the other rather than being shown a
+success that did not happen.
+
+**FK behaviour**, decided deliberately: `question_id` CASCADE (an answered
+question cannot be hard-deleted today, and if one does go its answers cascade
+with it, leaving an exclusion pointing at no evidence); `access_code_id`
+CASCADE (deleting an assignment deletes its attempts); `coach_id` SET NULL
+(a coach leaving the org loses the attribution, not the record).

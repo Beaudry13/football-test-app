@@ -25,6 +25,7 @@ from app.schemas.player import (
 from app.services.attempt_scope import official_only
 from app.services.export import build_cumulative_performance_pdf
 from app.services.file_storage import get_file_storage
+from app.services.question_exclusions import load_for_attempts
 from app.services.roster_import import apply_import, build_preview
 from app.services.scoring import NO_COUNTS, count_answers, pending_grading_count
 from app.utils.auth import current_coach, get_org_player
@@ -175,10 +176,20 @@ def build_player_history(
     # Counted from ANSWER ROWS, which is what this history has always done:
     # a question the player never opened has no row and so has never been in
     # this denominator. services/scoring owns that rule now.
+    #
+    # Loaded ONCE for every attempt in scope rather than per attempt - this
+    # walks a player's whole history, so a per-attempt lookup would be an N+1.
+    exclusions = load_for_attempts(submitted)
     cumulative = NO_COUNTS
     for attempt in submitted:
-        counts = count_answers(attempt.answers)
+        # Excluded answers are filtered out BEFORE counting. The rows
+        # themselves are untouched, which is what makes a restore give the
+        # original number back exactly.
+        counts = count_answers(exclusions.active_answers(attempt))
         cumulative = cumulative + counts
+        # Deliberately NOT filtered: a coach still owes a grade on an excluded
+        # written answer if they ever restore the question, and hiding it from
+        # the queue would make that work invisible.
         pending_grading = pending_grading_count(attempt.answers)
         total_pending += pending_grading
         recent_results.append(

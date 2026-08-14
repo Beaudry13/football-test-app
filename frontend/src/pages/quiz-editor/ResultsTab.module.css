@@ -137,3 +137,36 @@
   font-size: 0.85em;
   color: var(--nb-text-faint);
 }
+
+/* --- "Don't count this question" ------------------------------------- */
+
+/* Dimmed, NOT hidden. The raw counts in this row are the evidence that
+   usually explains why the coach excluded the question, so the row stays
+   fully readable - it just stops looking like a live scoring line. */
+.excludedRow td {
+  opacity: 0.72;
+}
+
+.breakdownAction {
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* One per ACTIVE exclusion. A quiz-wide and an assignment-scoped exclusion
+   can both cover the same question, and each needs its own Restore. */
+.exclusionNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--peira-text-muted);
+}
+
+/* Shown after a restore that did NOT put the question back, because another
+   exclusion still applies. Without this the button looks broken. */
+.stillExcluded {
+  color: var(--peira-danger);
+  flex-basis: 100%;
+}

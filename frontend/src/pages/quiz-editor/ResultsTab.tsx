@@ -7,7 +7,17 @@ import {
   listResponses,
 } from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
-import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
+import type {
+  PlayerResponse,
+  QuestionBreakdown,
+  QuestionExclusion,
+  Quiz,
+  QuizAssignment,
+  QuizDashboard,
+} from '../../api/types';
+import { listQuizAssignments, restoreQuestionExclusion } from '../../api/questionExclusions';
+import { describeExclusionScope } from './assignmentLabel';
+import { ExcludeQuestionDialog } from './ExcludeQuestionDialog';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
@@ -22,11 +32,76 @@ function slugify(title: string): string {
 
 type ExportFormat = 'detailed-pdf' | 'summary-pdf' | 'csv';
 
+/** One active exclusion, with its scope and its own Restore.
+ *
+ * Rendered per exclusion rather than once per question so an overlapping
+ * quiz-wide + assignment pair reads as the two separate decisions it is.
+ * Restoring one reports what is STILL excluding the question, so the coach is
+ * never told it counts again while the other is in force. */
+function ExclusionNote({
+  quizId,
+  questionId,
+  exclusion,
+  assignments,
+  onChanged,
+}: {
+  quizId: number;
+  questionId: number;
+  exclusion: QuestionExclusion;
+  assignments: Map<number, QuizAssignment>;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [stillExcluded, setStillExcluded] = useState<QuestionExclusion[] | null>(null);
+
+  async function handleRestore() {
+    setBusy(true);
+    try {
+      const result = await restoreQuestionExclusion(quizId, questionId, exclusion.id);
+      setStillExcluded(result.still_excluded_by);
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // NAMES THE ASSIGNMENT. "one assignment" left a coach on this pooled page
+  // unable to tell WHICH delivery had stopped counting - the walkthrough's one
+  // real finding. Falls back to the old generic wording if the assignment
+  // cannot be resolved, rather than breaking the row.
+  const scopeLabel = describeExclusionScope(
+    exclusion.scope,
+    exclusion.access_code_id,
+    assignments,
+  );
+
+  return (
+    <div className={styles.exclusionNote}>
+      <span>
+        Not counted for {scopeLabel}
+        {exclusion.excluded_by_username ? ` · ${exclusion.excluded_by_username}` : ''}
+        {exclusion.reason ? ` · “${exclusion.reason}”` : ''}
+      </span>
+      <button type="button" className={nb.btnSm} onClick={handleRestore} disabled={busy}>
+        {busy ? 'Restoring…' : 'Restore'}
+      </button>
+      {stillExcluded !== null && stillExcluded.length > 0 && (
+        <span className={styles.stillExcluded}>
+          Still excluded by another rule covering{' '}
+          {stillExcluded.some((e) => e.scope === 'quiz') ? 'all assignments' : 'another assignment'}.
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ResultsTab({ quiz }: { quiz: Quiz }) {
   const [dashboard, setDashboard] = useState<QuizDashboard | null>(null);
   const [responses, setResponses] = useState<PlayerResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [excluding, setExcluding] = useState<QuestionBreakdown | null>(null);
+  const [assignmentsById, setAssignmentsById] = useState<Map<number, QuizAssignment>>(new Map());
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +113,16 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
       setResponses(responseData);
     } catch (err) {
       setError(getErrorMessage(err));
+    }
+
+    // Loaded SEPARATELY and never fatal. These only name the exclusion chips;
+    // failing to fetch them must leave Results working with the generic
+    // wording, not blank the page over a label.
+    try {
+      const assignments = await listQuizAssignments(quiz.id);
+      setAssignmentsById(new Map(assignments.map((a) => [a.access_code_id, a])));
+    } catch {
+      setAssignmentsById(new Map());
     }
   }, [quiz.id]);
 
@@ -147,15 +232,46 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                     <th>Correct</th>
                     <th>Incorrect</th>
                     <th>Ungraded</th>
+                    <th aria-label="Scoring" />
                   </tr>
                 </thead>
                 <tbody>
                   {dashboard.question_breakdown.map((q) => (
-                    <tr key={q.question_id}>
-                      <td>{q.question_text}</td>
+                    <tr key={q.question_id} className={q.is_excluded ? styles.excludedRow : undefined}>
+                      <td>
+                        {q.question_text}
+                        {/* Every active exclusion, not a single boolean: a
+                            quiz-wide and an assignment-scoped one can overlap,
+                            and restoring one leaves the other in force. */}
+                        {q.exclusions.map((ex) => (
+                          <ExclusionNote
+                            key={ex.id}
+                            quizId={quiz.id}
+                            questionId={q.question_id}
+                            exclusion={ex}
+                            assignments={assignmentsById}
+                            onChanged={load}
+                          />
+                        ))}
+                      </td>
+                      {/* RAW COUNTS, never filtered by exclusion - usually the
+                          very reason the coach excluded the question. */}
                       <td>{q.correct_count}</td>
                       <td>{q.incorrect_count}</td>
                       <td>{q.ungraded_count}</td>
+                      <td className={styles.breakdownAction}>
+                        {q.is_excluded ? (
+                          <span className={`${nb.badge} ${nb.badgeWarning}`}>Excluded</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className={nb.btnSm}
+                            onClick={() => setExcluding(q)}
+                          >
+                            Don&rsquo;t count this
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -176,6 +292,18 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             <ResponseRow key={response.id} quiz={quiz} response={response} onChanged={load} />
           ))}
         </div>
+      )}
+
+      {excluding && (
+        <ExcludeQuestionDialog
+          quizId={quiz.id}
+          question={excluding}
+          onCancel={() => setExcluding(null)}
+          onExcluded={() => {
+            setExcluding(null);
+            load();
+          }}
+        />
       )}
     </div>
   );
