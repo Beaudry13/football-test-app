@@ -15,6 +15,7 @@ from app.models.answer_drawing import AnswerDrawing
 from app.models.source_document import SourceDocument
 from app.models.document_page import DocumentPage
 from app.models.response import Answer, AttemptStatus, PlayerAttempt
+from app.models.attempt_question_snapshot import AttemptQuestionSnapshot
 from app.models.grade_audit_log import GradeAuditLog
 from app.models.organization_merge import OrganizationMerge
 from app.models.competition import (
@@ -46,6 +47,7 @@ __all__ = [
     "AttemptStatus",
     "Answer",
     "AnswerDrawing",
+    "AttemptQuestionSnapshot",
     "GradeAuditLog",
     "OrganizationMerge",
     "CompetitionSession",

@@ -36,7 +36,8 @@ from app.schemas.question import (
 from app.services.answer_matching import DEFAULT_MODE, clean_expected_answers
 from app.services.document_geometry import NormalisedRectError, validate_normalised_rect
 from app.services.page_masking import invalidate_masked_render
-from app.services.file_storage import get_file_storage
+from app.services.file_storage import StorageError, get_file_storage
+from app.services.question_snapshots import historical_image_preserved
 from app.utils.auth import current_coach, get_editable_quiz
 from app.utils.validation import load_json_body
 
@@ -61,6 +62,28 @@ def _replace_options(question: Question, options: list[dict]) -> None:
                 position=index,
             )
         )
+
+
+IMAGE_PRESERVATION_FAILED = (
+    "Could not preserve the copy of this image that already-delivered attempts "
+    "depend on, so nothing was changed. Please try again."
+)
+
+
+def _refuse_rather_than_destroy_history(exc: StorageError) -> None:
+    """Turn a failed preservation copy into a readable refusal.
+
+    Same philosophy as the duplicate-quiz fix: when history cannot be preserved,
+    the COACH'S DESTRUCTIVE OPERATION FAILS. Continuing would trade a retryable
+    inconvenience for permanently destroyed evidence of what a player was shown.
+    A 502 rather than a 500 because the failure is downstream storage, and the
+    coach's correct response is to retry.
+    """
+    raise ApiError(
+        IMAGE_PRESERVATION_FAILED,
+        status_code=502,
+        reason="image_preservation_failed",
+    ) from exc
 
 
 def _reject_if_already_answered(question: Question, action: str) -> None:
@@ -340,11 +363,19 @@ def delete_question(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
     _reject_if_already_answered(question, "delete this question")
 
-    if question.image is not None:
-        get_file_storage().delete_image(question.image.image_url)
+    # ANSWERED is not the same as DELIVERED. This guard only fires once a
+    # player has an Answer row, but a question delivered and skipped has a
+    # snapshot and no answer - so deleting it here would still destroy the
+    # image that snapshot points at. The question row going away is fine
+    # (question_id is ON DELETE SET NULL and the snapshot's content survives);
+    # the bytes going away is not.
+    storage = get_file_storage()
+    try:
+        with historical_image_preserved(question, storage):
+            db.session.delete(question)
+    except StorageError as exc:
+        _refuse_rather_than_destroy_history(exc)
 
-    db.session.delete(question)
-    db.session.commit()
     return "", 204
 
 
@@ -393,15 +424,27 @@ def upload_question_image(quiz_id: int, question_id: int):
         raise ApiError("No image file provided under the 'image' field", status_code=400)
 
     storage = get_file_storage()
-    if question.image is not None:
-        storage.delete_image(question.image.image_url)
-        db.session.delete(question.image)
-        db.session.flush()
+    # REPLACING a delivered image used to physically destroy the object every
+    # snapshot of that delivery points at - the old code unlinked it here,
+    # before anything was committed. `historical_image_preserved` copies it
+    # first, repoints the affected snapshots at the copy, and defers the
+    # unlink until after this transaction has actually landed.
+    try:
+        with historical_image_preserved(question, storage) as preserved:
+            if question.image is not None:
+                db.session.delete(question.image)
+                db.session.flush()
 
-    image_url = storage.save_image(request.files["image"])
-    image = QuestionImage(question_id=question.id, image_url=image_url, annotations=[])
-    db.session.add(image)
-    db.session.commit()
+            image_url = storage.save_image(request.files["image"])
+            # Registered so a failed commit removes the replacement too. Saved
+            # to storage before the commit, exactly as create_question does, so
+            # the bytes need the same undo.
+            preserved.track(image_url)
+            image = QuestionImage(question_id=question.id, image_url=image_url, annotations=[])
+            db.session.add(image)
+    except StorageError as exc:
+        _refuse_rather_than_destroy_history(exc)
+
     return jsonify(image.to_dict()), 201
 
 
@@ -430,7 +473,10 @@ def delete_question_image(quiz_id: int, question_id: int):
     if question.image is None:
         raise ApiError("Question has no image", status_code=404)
 
-    get_file_storage().delete_image(question.image.image_url)
-    db.session.delete(question.image)
-    db.session.commit()
+    try:
+        with historical_image_preserved(question, get_file_storage()):
+            db.session.delete(question.image)
+    except StorageError as exc:
+        _refuse_rather_than_destroy_history(exc)
+
     return "", 204

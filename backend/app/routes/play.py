@@ -57,6 +57,7 @@ from app.services.attempts import (
     upsert_drawing,
 )
 from app.services.drawing_documents import validate_document
+from app.services.question_snapshots import capture_attempt_snapshots
 from app.utils.validation import load_json_body
 
 play_bp = Blueprint("play", __name__)
@@ -286,6 +287,11 @@ def start_attempt():
     )
     db.session.add(attempt)
     try:
+        # Flushed, not committed, so the snapshot rows below join the SAME
+        # transaction as the attempt they describe. Starting an attempt and
+        # recording what it was delivered are one operation or neither.
+        db.session.flush()
+        capture_attempt_snapshots(attempt)
         db.session.commit()
     except IntegrityError:
         # Two concurrent "start" calls for the same name is a benign race
@@ -298,6 +304,18 @@ def start_attempt():
         if existing.status == AttemptStatus.SUBMITTED:
             raise ApiError(ALREADY_SUBMITTED, status_code=409) from None
         return jsonify(_attempt_state(existing))
+    except Exception as exc:
+        # A NEW attempt must never become "legacy" because a write failed.
+        # There is no backfill for a missing snapshot - a partially recorded
+        # attempt would be indistinguishable, forever, from one that predates
+        # the table - so an incomplete record fails the start outright rather
+        # than handing the player a quiz whose delivery nobody wrote down.
+        db.session.rollback()
+        raise ApiError(
+            "Could not start this Peira. Please try again.",
+            status_code=500,
+            reason="attempt_not_recorded",
+        ) from exc
 
     return jsonify(_attempt_state(attempt)), 201
 

@@ -344,6 +344,26 @@ players are already in has no safe move. Consider designing them together.
 
 ## Work in flight
 
+**Delivered-question snapshots** — Phase 1 (WRITE + PRESERVE) is implemented.
+
+- `docs/DESIGN-delivered-question-snapshots.md` is the approved design; its
+  bottom section records what Phase 1 actually shipped.
+- `attempt_question_snapshots` records what every attempt was DELIVERED, one
+  row per question in the frozen order, written at `POST /play/start`.
+  Unanswered questions included — that is the point, since exclusion changes
+  the denominator and the denominator counts them.
+- **Nothing reads a snapshot for product behaviour.** Scores, grading, Results,
+  exports, analytics and the edit locks are all unchanged, on purpose.
+- **NO BACKFILL, ever.** Pre-existing attempts have zero rows and read honestly
+  as "delivered content not recorded". Manufacturing rows from today's
+  questions would invent history.
+- Replacing or deleting a delivered image copies the old object FIRST, repoints
+  the affected snapshots, commits, and only then unlinks the original. If the
+  copy fails, the coach's destructive operation fails (502) rather than
+  destroying evidence. Same philosophy as the duplicate-quiz fix.
+- **Do not start Phase 2 (unify the score helper), 3 ("don't count this
+  question") or 4 (safe correction) without being asked.**
+
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 
 - Read `docs/DESIGN-draw-on-image.md` first — product decisions are locked in

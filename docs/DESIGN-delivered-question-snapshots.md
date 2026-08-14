@@ -1,7 +1,10 @@
 # Delivered-question snapshots — approved design
 
-**Status: APPROVED, Phase 1 authorised, NOT YET IMPLEMENTED.** 13 August 2026.
-Baseline `a002fdf`.
+**Status: APPROVED. PHASE 1 IMPLEMENTED (write + preserve), awaiting review.**
+13 August 2026. Baseline `a002fdf`.
+
+Phases 2-4 remain designed and NOT authorised. Nothing reads a snapshot for
+product behaviour yet - see "What Phase 1 actually shipped" at the bottom.
 
 ## The problem
 
@@ -134,4 +137,35 @@ that belongs to Phase 4.
 **Untouched. M2 stays frozen.** Forward-compatible only: the same table could
 later snapshot at `_freeze_question_order`, which would fix a deleted question
 breaking `question_order` and make finished competitions explainable. Do not
-build that now.
+build that now. A test asserts no competition module references this table.
+
+## What Phase 1 actually shipped
+
+Backend only; the frontend is byte-for-byte unchanged.
+
+| | |
+|---|---|
+| Table | `attempt_question_snapshots`, migration `f9a3c07b21de` |
+| Model | `models/attempt_question_snapshot.py`; `PlayerAttempt.question_snapshots` |
+| Capture | `services/question_snapshots.capture_attempt_snapshots`, called from `POST /play/start` inside the attempt's own transaction |
+| Preservation | `services/question_snapshots.historical_image_preserved`, used by the two image routes AND by `delete_question` |
+| Tests | `tests/test_delivered_question_snapshots.py` |
+
+Two things the design implied rather than stated, decided during implementation:
+
+1. **`delete_question` preserves too.** The design named `POST .../image` and
+   `DELETE .../image`. But `_reject_if_already_answered` fires on ANSWERED, not
+   on DELIVERED - so a question delivered and skipped can still be deleted, and
+   deleting it destroyed its image the same way. Same trap, third door. No UX
+   changed: the delete still succeeds.
+2. **`delete_quiz` deliberately does NOT preserve.** Deleting a quiz deletes its
+   attempts, and an attempt takes its snapshots with it, so there is no history
+   left to point at those images. Noted in a comment there so it reads as a
+   decision rather than an omission.
+
+The ordering that makes preservation safe is: **copy → repoint → COMMIT →
+unlink**. The code it replaces unlinked first. One copy serves every affected
+snapshot, so no failure can leave some attempts on the old asset and some on a
+copy. A crash between the commit and the unlink leaks one unreferenced object -
+the deliberately chosen direction, since a leaked object costs pennies and a
+destroyed one costs the evidence.

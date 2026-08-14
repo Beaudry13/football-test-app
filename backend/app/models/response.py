@@ -92,6 +92,21 @@ class PlayerAttempt(db.Model):
     quiz = db.relationship("Quiz", back_populates="attempts")
     access_code = db.relationship("AccessCode", back_populates="attempts")
     answers = db.relationship("Answer", back_populates="attempt", cascade="all, delete-orphan")
+    #: What this attempt was actually delivered, written once at /play/start.
+    #: passive_deletes=True: attempt_id has ON DELETE CASCADE at the DB level,
+    #: so resetting an attempt lets Postgres remove these rather than having
+    #: SQLAlchemy null out a NOT NULL column first.
+    #:
+    #: EMPTY IS MEANINGFUL AND IS NOT AN ERROR. Attempts that predate the table
+    #: have no rows and never will - there is no backfill, by design. See
+    #: models/attempt_question_snapshot.py.
+    question_snapshots = db.relationship(
+        "AttemptQuestionSnapshot",
+        back_populates="attempt",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AttemptQuestionSnapshot.position",
+    )
     player = db.relationship("Player")
 
     __table_args__ = (

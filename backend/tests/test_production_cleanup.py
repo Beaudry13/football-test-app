@@ -363,6 +363,8 @@ class TestTheApprovedPlan:
     def test_children_precede_their_parents_in_the_plan(self, tool):
         order = [label for label, _ in tool.DELETION_PLAN]
         pairs = [
+            ("attempt_question_snapshots", "player_attempts"),
+            ("attempt_question_snapshots", "questions"),
             ("answers", "player_attempts"),
             ("player_attempts", "quizzes"),
             ("questions", "quizzes"),

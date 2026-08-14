@@ -121,6 +121,15 @@ ORG_ROSTERS = f"SELECT id FROM rosters WHERE quiz_id IN ({ORG_QUIZZES})"
 ORG_DOCS = "SELECT id FROM source_documents WHERE organization_id = ANY(:ids)"
 
 DELETION_PLAN = [
+    # Listed explicitly even though attempt_id is ON DELETE CASCADE, for the
+    # same reason `answers` is: every statement here proves its own scope, and
+    # the per-table counts this tool reports back are how an operator checks
+    # what actually went. A table removed only by cascade is a table the report
+    # silently says nothing about.
+    (
+        "attempt_question_snapshots",
+        f"DELETE FROM attempt_question_snapshots WHERE attempt_id IN ({ORG_ATTEMPTS})",
+    ),
     ("grade_audit_logs", f"DELETE FROM grade_audit_logs WHERE answer_id IN ({ORG_ANSWERS})"),
     ("answer_drawings", f"DELETE FROM answer_drawings WHERE answer_id IN ({ORG_ANSWERS})"),
     ("answers", f"DELETE FROM answers WHERE attempt_id IN ({ORG_ATTEMPTS})"),

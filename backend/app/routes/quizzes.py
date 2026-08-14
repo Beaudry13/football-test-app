@@ -308,6 +308,12 @@ def delete_quiz(quiz_id: int):
     quiz = get_editable_quiz(quiz_id)
     # DB-level cascade removes the question_images rows, but not the actual
     # files - those have to be cleaned up explicitly before the row goes away.
+    #
+    # NO SNAPSHOT PRESERVATION HERE, and that is not an oversight. Deleting a
+    # quiz deletes its attempts, and an attempt takes its delivered-question
+    # snapshots with it (ON DELETE CASCADE) - so there is no history left to
+    # point at these images. The image routes are different: they destroy the
+    # picture while the attempts that were shown it live on.
     storage = get_file_storage()
     for question in quiz.questions:
         if question.image:
