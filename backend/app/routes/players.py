@@ -14,7 +14,6 @@ from flask_jwt_extended import jwt_required
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models.question import MANUALLY_GRADED_TYPES
 from app.models import Player
 from app.schemas.player import (
     ImportConfirmSchema,
@@ -27,6 +26,7 @@ from app.services.attempt_scope import official_only
 from app.services.export import build_cumulative_performance_pdf
 from app.services.file_storage import get_file_storage
 from app.services.roster_import import apply_import, build_preview
+from app.services.scoring import NO_COUNTS, count_answers, pending_grading_count
 from app.utils.auth import current_coach, get_org_player
 from app.utils.validation import load_json_body
 
@@ -171,35 +171,32 @@ def build_player_history(
     completion_percent = round(100 * completed_count / assigned_count, 1) if assigned_count else None
 
     recent_results = []
-    total_correct = 0
-    total_graded = 0
     total_pending = 0
+    # Counted from ANSWER ROWS, which is what this history has always done:
+    # a question the player never opened has no row and so has never been in
+    # this denominator. services/scoring owns that rule now.
+    cumulative = NO_COUNTS
     for attempt in submitted:
-        auto_graded = [a for a in attempt.answers if a.is_correct is not None]
-        correct = sum(1 for a in auto_graded if a.is_correct)
-        total_correct += correct
-        total_graded += len(auto_graded)
-        pending_grading = sum(
-            1
-            for a in attempt.answers
-            if a.is_correct is None and a.question.question_type in MANUALLY_GRADED_TYPES
-        )
+        counts = count_answers(attempt.answers)
+        cumulative = cumulative + counts
+        pending_grading = pending_grading_count(attempt.answers)
         total_pending += pending_grading
-        score_percent = round(100 * correct / len(auto_graded), 1) if auto_graded else None
         recent_results.append(
             {
                 "quiz_id": attempt.quiz_id,
                 "quiz_title": attempt.quiz.title,
                 "attempt_id": attempt.id,
                 "submitted_at": attempt.submitted_at.isoformat() if attempt.submitted_at else None,
-                "score_percent": score_percent,
-                "graded_answer_count": len(auto_graded),
-                "correct_answer_count": correct,
+                "score_percent": counts.percent,
+                "graded_answer_count": counts.scored_total,
+                "correct_answer_count": counts.correct,
                 "pending_grading_count": pending_grading,
             }
         )
 
-    average_score_percent = round(100 * total_correct / total_graded, 1) if total_graded else None
+    # POOLED across attempts, not an average of per-attempt percentages - a
+    # ten-question quiz and a two-question quiz do not carry equal weight.
+    average_score_percent = cumulative.percent
 
     group_ids = [
         row.group_id
@@ -219,11 +216,14 @@ def build_player_history(
             # Exposed so the performance PDF reads them rather than deriving
             # its own - two places computing "how many did they get right"
             # is how a report starts disagreeing with the player's profile.
-            # Incorrect is graded minus correct by definition: an ungraded or
-            # unanswered question is neither, and must never become a wrong.
-            "total_correct_count": total_correct,
-            "total_incorrect_count": total_graded - total_correct,
-            "total_graded_count": total_graded,
+            # Incorrect is a counted outcome, not "graded minus correct" -
+            # same number, but now it comes from the shared counter rather
+            # than from arithmetic that only happens to agree with it. An
+            # ungraded or unanswered question is neither, and must never
+            # become a wrong.
+            "total_correct_count": cumulative.correct,
+            "total_incorrect_count": cumulative.incorrect,
+            "total_graded_count": cumulative.scored_total,
             "total_pending_grading_count": total_pending,
             "recent_results": recent_results if result_limit is None else recent_results[:result_limit],
         }

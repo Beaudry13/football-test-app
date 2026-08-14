@@ -33,6 +33,7 @@ from app.models import (
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
 from app.services.file_storage import StorageError, get_file_storage
+from app.services.scoring import score_percent
 from app.utils.auth import (
     current_coach,
     get_editable_quiz,
@@ -132,8 +133,16 @@ def list_quizzes():
         correct, graded = score_totals.get(quiz.id, (0, 0))
         # None (not 0%) when nothing's been graded yet - a brand-new quiz
         # shouldn't show a misleading "0% avg. score" before anyone's
-        # answered anything gradeable.
-        average_score_percent = round(100 * correct / graded, 1) if graded else None
+        # answered anything gradeable. Quiz.to_dict then OMITS the key
+        # entirely on None, which is what QuizCard.tsx's `!== undefined`
+        # guard reads; do not "improve" that into an explicit null.
+        #
+        # Counted in SQL rather than in Python - this is the one aggregate
+        # that must not load every answer of every attempt just to divide two
+        # numbers - so it shares the FORMULA rather than the counter. The two
+        # SUM(CASE ...) expressions above are the SQL spelling of
+        # ScoreCounts.correct and ScoreCounts.scored_total.
+        average_score_percent = score_percent(correct, graded)
         # Group-aware: if the quiz's active code is restricted to group(s),
         # that's who's actually eligible to submit, not the quiz's own
         # Roster - see effective_roster_names_for_quiz.

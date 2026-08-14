@@ -22,7 +22,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 from app.errors import ApiError
 from app.extensions import db
 from app.services.attempt_scope import official_filter, official_only
-from app.models.question import MANUALLY_GRADED_TYPES
+from app.services.scoring import count_answers, pending_grading_count
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.access_codes import effective_roster_names_for_quiz
@@ -183,9 +183,12 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
     question_breakdown = []
     for question in sorted(quiz.questions, key=lambda q: q.position):
         answers = [a for r in responses for a in r.answers if a.question_id == question.id]
-        correct = sum(1 for a in answers if a.is_correct is True)
-        incorrect = sum(1 for a in answers if a.is_correct is False)
-        ungraded = sum(1 for a in answers if a.is_correct is None)
+        # Grouped by QUESTION rather than by attempt, but the same three
+        # counts and the same rule - so it comes from the same counter. A
+        # question nobody answered has no rows and every count is zero;
+        # `answered_count` is how this surface expresses that, not an
+        # unanswered figure (which counting answer rows cannot produce).
+        counts = count_answers(answers)
 
         question_breakdown.append(
             {
@@ -193,9 +196,9 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
                 "question_text": question.question_text,
                 "question_type": question.question_type.value,
                 "answered_count": len(answers),
-                "correct_count": correct,
-                "incorrect_count": incorrect,
-                "ungraded_count": ungraded,
+                "correct_count": counts.correct,
+                "incorrect_count": counts.incorrect,
+                "ungraded_count": counts.not_graded,
             }
         )
 
@@ -364,27 +367,25 @@ def _player_history_payload(coach, player_name: str, organization_wide: bool):
 
     history = []
     for response in responses:
-        auto_graded = [a for a in response.answers if a.is_correct is not None]
-        correct = sum(1 for a in auto_graded if a.is_correct)
-        # Same rule ResponseRow.tsx's "N to grade" badge uses - only written
-        # questions are ever manually graded (a multiple-choice answer's
-        # is_correct is computed immediately at answer time, never left
-        # null), so this and that badge always agree on the same response.
-        pending_grading = sum(
-            1
-            for a in response.answers
-            if a.is_correct is None and a.question.question_type in MANUALLY_GRADED_TYPES
-        )
-
+        counts = count_answers(response.answers)
+        # Same rule ResponseRow.tsx's "N to grade" badge uses - only manually
+        # graded questions are ever waiting on a coach (a multiple-choice
+        # answer's is_correct is computed immediately at answer time), so this
+        # and that badge always agree on the same response.
         history.append(
             {
                 "quiz_id": response.quiz_id,
                 "quiz_title": response.quiz.title,
                 "response_id": response.id,
                 "submitted_at": response.submitted_at.isoformat(),
-                "graded_answer_count": len(auto_graded),
-                "correct_answer_count": correct,
-                "pending_grading_count": pending_grading,
+                # COUNTS ONLY, no percentage - deliberately unchanged. The
+                # percentage a coach sees on this page is computed in the
+                # browser at a different precision to the profile page's; see
+                # Finding A in the Phase 2 report. Moving it server-side would
+                # change a displayed number, which this refactor must not do.
+                "graded_answer_count": counts.scored_total,
+                "correct_answer_count": counts.correct,
+                "pending_grading_count": pending_grading_count(response.answers),
             }
         )
 

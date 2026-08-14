@@ -153,7 +153,7 @@ them as regressions:
 backend/app/
   models/          SQLAlchemy models
   routes/          Flask blueprints (auth, quizzes, questions, play, grading, …)
-  services/        business logic — export.py, attempts.py, player_analytics.py,
+  services/        business logic — scoring.py, export.py, attempts.py,
                    file_storage.py, player_names.py
   assets/          shipped non-code assets (the Peira mark used in PDFs)
 backend/migrations/versions/   Alembic revisions
@@ -193,13 +193,30 @@ in. Changing the default width would move every previously-saved shape on
 every existing question. `canvasSizing.ts` explains the rule; respect the
 distinction it draws between *coordinate space* and *render scale*.
 
-**4. The grading vocabulary is shared and must not diverge.**
+**4. The grading vocabulary lives in ONE place — `services/scoring.py`.**
 CORRECT / INCORRECT / NOT_GRADED / UNANSWERED, and
 `score = correct / (correct + incorrect)` — never counting ungraded or
-unanswered, never fabricating 0% when nothing is graded. Defined identically
-in `services/export.py` and `services/player_analytics.py`. If you change one
-you must change both, or the PDF, the CSV, the Results tab and the analytics
-page start disagreeing with each other.
+unanswered, never fabricating 0% when nothing is graded (`None`, not `0.0`).
+
+`scoring.classify` decides the outcome; `scoring.score_percent` and
+`scoring.ScoreCounts` compute the score. Every backend surface reads them, so
+the PDF, the CSV, the Results tab, the quiz card and the player profile can no
+longer drift apart. Display *wording* is still per-surface on purpose — the CSV
+says "Ungraded" where the PDF says "Not Graded" — but neither re-decides what
+an ungraded answer is.
+
+*This entry used to say the rule was "defined identically in `services/
+export.py` and `services/player_analytics.py`". `player_analytics.py` has
+never existed on master — it lives only on the abandoned branch
+`origin/feature/player-progress-analytics` — so until Phase 2 the rule had no
+shared home at all and was written out in four places.*
+
+**Two frontend surfaces still compute their own percentages** and are
+deliberately NOT unified (see `docs/DESIGN-delivered-question-snapshots.md`,
+Findings A and B): `PlayerHistoryPage.tsx` rounds to whole percent where the
+backend uses one decimal, and `practiceSummary.ts` uses a different
+denominator than its own docstring claims. Do not "fix" either without
+deciding the product question first — both change a number a coach sees.
 
 **5. PDF styling is a theme dict, not literals.** Every builder in
 `services/export.py` takes `theme: dict | None = None`. There is a test that
@@ -361,8 +378,21 @@ players are already in has no safe move. Consider designing them together.
   the affected snapshots, commits, and only then unlinks the original. If the
   copy fails, the coach's destructive operation fails (502) rather than
   destroying evidence. Same philosophy as the duplicate-quiz fix.
-- **Do not start Phase 2 (unify the score helper), 3 ("don't count this
-  question") or 4 (safe correction) without being asked.**
+
+**Phase 2 (unify the score helper) is DONE.** `services/scoring.py` is the one
+backend scoring rule — see Things That Will Bite You #4.
+
+- **Phase 2 centralized HOW A SCORE IS CALCULATED, not WHICH QUESTIONS EACH
+  SURFACE COUNTS.** Only `export.py` counts delivered questions
+  (`count_delivered`); `players.py`, `grading.py` and `quizzes.py` still count
+  answer rows or SQL, and an answer-row count cannot express an excluded
+  question that nobody answered.
+- **Do not assume teaching `score_percent` about exclusions implements "don't
+  count this question".** It does not. Read "THE PHASE 3 BOUNDARY" in
+  `docs/DESIGN-delivered-question-snapshots.md` first — `quizzes.py`'s pooled
+  SQL aggregate is a special case needing an explicit decision.
+- **Do not start Phase 3 ("don't count this question") or Phase 4 (safe
+  correction) without being asked.**
 
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 

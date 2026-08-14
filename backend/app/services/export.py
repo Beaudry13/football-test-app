@@ -16,10 +16,14 @@ since-deleted Player). An export is a point-in-time report, not an
 archival record, so it should read the same as the live Results tab it
 was generated from.
 
-Grading-result vocabulary (the detailed PDF's per-question labels) matches
-services/player_analytics.py exactly, so this export can never disagree
-with the Results tab, quiz-card analytics, the grading dashboard, or
-Player Progress Analytics about what "correct," "graded," or "score" mean:
+Grading-result vocabulary (the detailed PDF's per-question labels) is this
+module's WORDING for the outcomes decided in services/scoring, which every
+other scoring surface also reads - so this export cannot disagree with the
+Results tab, quiz-card analytics, the grading dashboard, or the player
+profile about what "correct," "graded," or "score" mean. (This note used to
+cite services/player_analytics.py; that file has never existed on master -
+it lives only on an abandoned branch - so the rule had no shared home until
+services/scoring.):
 - CORRECT / INCORRECT only apply to a graded Answer row (is_correct is not
   None) - a pending (ungraded) written answer is never counted as either.
 - NOT_GRADED: an Answer row exists but is_correct is still None (pending
@@ -79,10 +83,27 @@ from reportlab.platypus import (
 )
 
 from app.models.question import TEXT_ANSWER_TYPES, QuestionType
+from app.services.scoring import (
+    Outcome,
+    classify,
+    count_answers,
+    count_delivered,
+    score_percent,
+)
 
 CSV_HEADER = ["Player", "Submitted At", "Question #", "Question", "Type", "Answer", "Correct", "Coach Feedback"]
 
-_CORRECT_LABELS = {True: "Yes", False: "No", None: "Ungraded"}
+#: The CSV's OWN vocabulary for the same four outcomes the PDF labels
+#: differently. A spreadsheet column headed "Correct" reads better as Yes/No
+#: than as Correct/Incorrect, so the words differ deliberately - but the
+#: decision behind them is services/scoring.classify, shared with the PDF, so
+#: the two exports cannot disagree about what an ungraded answer is.
+_CSV_OUTCOME_LABELS = {
+    Outcome.CORRECT: "Yes",
+    Outcome.INCORRECT: "No",
+    Outcome.NOT_GRADED: "Ungraded",
+    Outcome.UNANSWERED: "No answer",
+}
 
 RESULT_CORRECT = "Correct"
 RESULT_INCORRECT = "Incorrect"
@@ -589,22 +610,30 @@ def _answer_text(question, answer) -> str:
     return answer.selected_option.option_text if answer.selected_option else ""
 
 
+#: This exporter's WORDS for each outcome. The decision itself belongs to
+#: services/scoring.classify; only the vocabulary is local, which is what lets
+#: the CSV say "Ungraded" where the PDF says "Not Graded" without either of
+#: them re-deciding what an ungraded answer is.
+_OUTCOME_LABELS = {
+    Outcome.CORRECT: RESULT_CORRECT,
+    Outcome.INCORRECT: RESULT_INCORRECT,
+    Outcome.NOT_GRADED: RESULT_NOT_GRADED,
+    Outcome.UNANSWERED: RESULT_UNANSWERED,
+}
+
+
 def _grading_result(answer) -> str:
-    """See the module docstring's CORRECT/INCORRECT/NOT_GRADED/UNANSWERED
-    definitions - this is the one place that decision is made, reused by
-    both the per-player counts and the per-question detail rows below."""
-    if answer is None:
-        return RESULT_UNANSWERED
-    if answer.is_correct is None:
-        return RESULT_NOT_GRADED
-    return RESULT_CORRECT if answer.is_correct else RESULT_INCORRECT
+    """This module's label for one answer's outcome. See the module
+    docstring's CORRECT/INCORRECT/NOT_GRADED/UNANSWERED definitions; the rule
+    behind them now lives in services/scoring."""
+    return _OUTCOME_LABELS[classify(answer)]
 
 
 def _score_percent(correct: int, graded: int) -> float | None:
-    """correct / (correct + incorrect) - never fabricates a score (0% or
-    otherwise) when nothing is graded yet; matches
-    services/player_analytics.py's identical rule exactly."""
-    return round(100 * correct / graded, 1) if graded else None
+    """correct / (correct + incorrect), to one decimal, or None when nothing
+    is graded. Kept as a local alias because this module's builders read
+    better with it; the rule itself is services/scoring.score_percent."""
+    return score_percent(correct, graded)
 
 
 def _player_sort_key(response):
@@ -636,11 +665,22 @@ def _player_result_counts(questions: list, response) -> tuple[dict, dict]:
     """Per-question grading result for this one SUBMITTED attempt, plus the
     aggregate counts derived from it - the single pass every summary number
     (page 1's table row, and this Player's own detail-page header) reads
-    from, so they can never disagree with each other."""
+    from, so they can never disagree with each other.
+
+    Counted by services/scoring.count_delivered, which walks the DELIVERED
+    questions rather than the answer rows - that is why this is the one
+    surface that can report Unanswered at all. Returned keyed by this
+    module's label strings because that is what the table builders below
+    index by; the counting itself is no longer done here.
+    """
     answers_by_question = {a.question_id: a for a in response.answers}
-    counts = {RESULT_CORRECT: 0, RESULT_INCORRECT: 0, RESULT_NOT_GRADED: 0, RESULT_UNANSWERED: 0}
-    for question in questions:
-        counts[_grading_result(answers_by_question.get(question.id))] += 1
+    counted = count_delivered(questions, answers_by_question)
+    counts = {
+        RESULT_CORRECT: counted.correct,
+        RESULT_INCORRECT: counted.incorrect,
+        RESULT_NOT_GRADED: counted.not_graded,
+        RESULT_UNANSWERED: counted.unanswered,
+    }
     return counts, answers_by_question
 
 
@@ -684,7 +724,7 @@ def build_results_csv(quiz, responses: list) -> str:
                     question.question_text,
                     question.question_type.value,
                     _answer_text(question, answer),
-                    _CORRECT_LABELS[answer.is_correct] if answer else "No answer",
+                    _CSV_OUTCOME_LABELS[classify(answer)],
                     (answer.coach_feedback or "") if answer else "",
                 ]
             )
@@ -796,15 +836,18 @@ def build_results_pdf(quiz, dashboard_data: dict, responses: list, theme: dict |
     if responses:
         score_rows = [["Player", "Submitted", "Score", "Ungraded"]]
         for response in sorted(responses, key=lambda r: r.display_name.lower()):
-            graded = [a for a in response.answers if a.is_correct is not None]
-            correct = sum(1 for a in graded if a.is_correct)
-            ungraded = len(response.answers) - len(graded)
+            # A FRACTION, not a percentage - this simpler PDF shows the raw
+            # numerator and denominator. They are the same two numbers the
+            # percentage elsewhere is built from, so they come from the same
+            # counter. "Ungraded" here means an answered-but-unmarked row;
+            # unanswered questions have no row and never appear on this table.
+            counted = count_answers(response.answers)
             score_rows.append(
                 [
                     response.display_name,
                     _format_short_timestamp(response.submitted_at),
-                    f"{correct}/{len(graded)}",
-                    str(ungraded),
+                    f"{counted.correct}/{counted.scored_total}",
+                    str(counted.not_graded),
                 ]
             )
         elements.append(_styled_table(theme, score_rows, first_col_width=180))

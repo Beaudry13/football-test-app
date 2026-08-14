@@ -1,10 +1,13 @@
 # Delivered-question snapshots — approved design
 
-**Status: APPROVED. PHASE 1 IMPLEMENTED (write + preserve), awaiting review.**
-13 August 2026. Baseline `a002fdf`.
+**Status: APPROVED. PHASE 1 SHIPPED (write + preserve, production verified).
+PHASE 2 SHIPPED (unified score helper, zero behaviour change).**
+13-14 August 2026. Baseline `a002fdf`; Phase 1 is `25a383c`.
 
-Phases 2-4 remain designed and NOT authorised. Nothing reads a snapshot for
-product behaviour yet - see "What Phase 1 actually shipped" at the bottom.
+Phases 3-4 remain designed and NOT authorised. Nothing reads a snapshot for
+product behaviour yet. **Before designing Phase 3, read "THE PHASE 3 BOUNDARY"
+near the bottom** - centralizing the score formula did NOT centralize which
+questions each surface counts, and that difference is the whole of Phase 3.
 
 ## The problem
 
@@ -114,10 +117,9 @@ that belongs to Phase 4.
 
 ## Later phases (approved sequence, not authorised)
 
-2. **Unify the score helper.** The rule lives in at least FOUR places -
-   `export.py:603`, `players.py:188`, `players.py:202`, `quizzes.py:136`
-   (CLAUDE.md says two; it understates the risk). Extract with proven
-   value-for-value equivalence BEFORE exclusion exists.
+2. ~~**Unify the score helper.**~~ **DONE** - see "What Phase 2 actually
+   shipped" below. The rule lived in four places; it now lives in
+   `services/scoring.py`.
 3. **"Don't count this question."** `question_exclusions` (question,
    `access_code_id` nullable, coach, reason, `excluded_at`, `restored_at`).
    Default scope is THIS ASSIGNMENT, not quiz-wide - a bad Monday delivery must
@@ -169,3 +171,127 @@ snapshot, so no failure can leave some attempts on the old asset and some on a
 copy. A crash between the commit and the unlink leaks one unreferenced object -
 the deliberately chosen direction, since a leaked object costs pennies and a
 destroyed one costs the evidence.
+
+## What Phase 2 actually shipped
+
+Backend only; the frontend is byte-for-byte unchanged. Zero behaviour change,
+proven by 16 characterization tests written BEFORE the refactor and passing
+unedited after it (`tests/test_scoring_characterization.py`).
+
+**`services/scoring.py` is now the canonical backend scoring semantics.**
+
+| | |
+|---|---|
+| `classify(answer)` | the four-way outcome: CORRECT / INCORRECT / NOT_GRADED / UNANSWERED |
+| `score_percent(correct, scored_total)` | THE formula - one decimal, `None` (never `0.0`) on an empty denominator |
+| `ScoreCounts` | `correct`, `incorrect`, `not_graded`, `unanswered`; `.scored_total` is THE DENOMINATOR; `.percent`; `__add__` pools across attempts |
+| `count_answers(answers)` | counts from ANSWER ROWS. `unanswered` is `None` = **not measured** |
+| `count_delivered(questions, answers_by_qid)` | counts over DELIVERED QUESTIONS, so `unanswered` is a real integer |
+| `pending_grading_count(answers)` | deliberately separate - a grading-queue badge, in no denominator |
+
+Migrated: `quizzes.py` (formula only), `players.py` (per-attempt, cumulative,
+totals), `grading.py` (per-question breakdown, legacy history), `export.py`
+(`_grading_result`, `_score_percent`, `_player_result_counts`, the simple PDF
+fraction, the CSV labels). Deliberately NOT migrated: completion rate and
+response rate (different measurements that merely share the arithmetic shape),
+per-surface display wording, and Competition.
+
+### THE PHASE 3 BOUNDARY - read this before designing exclusions
+
+**Phase 2 centralized HOW A SCORE IS CALCULATED. It did NOT centralize HOW EACH
+SURFACE DETERMINES THE SET OF QUESTIONS BEING SCORED.** That distinction is the
+whole of Phase 3, because exclusion changes WHAT IS COUNTED, not the formula.
+
+**Do NOT assume that teaching `score_percent` about exclusions implements
+"don't count this question" everywhere. It does not, and it cannot.**
+
+Where each surface gets its set today:
+
+| Surface | Counts from | Can express "excluded"? |
+|---|---|---|
+| `export.py` detailed PDF | `count_delivered` - the quiz's questions | **Yes** - filter the `questions` argument |
+| `players.py` profile + cumulative | `count_answers` - answer rows | **No** |
+| `grading.py` legacy history | `count_answers` - answer rows | **No** |
+| `grading.py` per-question breakdown | `count_answers` - answer rows | **No** |
+| `quizzes.py` quiz-card average | pooled SQL `SUM(CASE ...)` | **No** - see below |
+
+An answer-row count CANNOT express an excluded question, because **an excluded
+question that nobody answered has no row to filter out** - and those are
+exactly the questions exclusion has to be able to talk about. This is the same
+fact that made Phase 1 a sibling table rather than a column on `answers`.
+
+`count_delivered` takes the delivered questions as an ARGUMENT rather than
+deriving them, and `ScoreCounts` carries `unanswered`, precisely so that
+excluding a question is a change to what is passed in and never a change to the
+arithmetic. That is the seam. It is currently used by one surface.
+
+**Phase 3 must therefore FIRST give the answer-row surfaces delivered-question
+information** - which is what `attempt_question_snapshots` records, unanswered
+questions included - and only then apply exclusions to it. Treat that as an
+explicit first step, not something to discover halfway through.
+
+### `quizzes.py` is the special case, and needs a deliberate decision
+
+The quiz-card average is the one figure computed by **pooled SQL aggregation**
+across every submitted official attempt of a quiz:
+
+```sql
+SUM(CASE WHEN answers.is_correct IS TRUE     THEN 1 ELSE 0 END)  -- correct
+SUM(CASE WHEN answers.is_correct IS NOT NULL THEN 1 ELSE 0 END)  -- denominator
+```
+
+It shares the FORMULA (`score_percent`) but not the counter, on purpose: it is
+the one aggregate that must not load every answer of every attempt just to
+divide two numbers. An exclusion rule expressed as Python objects will not
+reach it.
+
+Phase 3 must choose ONE of, explicitly:
+
+1. an exclusion-aware SQL design (an anti-join or NOT EXISTS against
+   `question_exclusions`, scoped per `access_code_id`), keeping the aggregate;
+2. moving this surface onto the shared counter and accepting the load; or
+3. a different aggregation strategy (a maintained per-quiz rollup).
+
+Option 1 preserves today's performance but means the exclusion rule is written
+twice - once in Python, once in SQL - which is exactly the duplication Phase 2
+existed to remove. If it is chosen, the two spellings need a test that proves
+them equivalent on the same data, the way Phase 2's characterization suite
+proves the four old sites agreed.
+
+**Note that exclusion is scoped per assignment** (`access_code_id` nullable),
+so the SQL cannot simply exclude a question id globally - a bad Monday delivery
+must not rewrite Tuesday's results.
+
+## Known scoring inconsistencies - recorded, deliberately NOT fixed
+
+Found during the Phase 2 audit. All three predate Phase 2 and none was changed
+by it, because fixing any of them would alter a number somebody already sees.
+
+**Finding A - two pages, one attempt, two different percentages.**
+`PlayerHistoryPage.tsx` computes `Math.round(correct / graded * 100)` from the
+counts `GET /players/history?name=` returns, giving a WHOLE percent (67%).
+`PlayerProfilePage` renders the backend's `average_score_percent`, one decimal
+(66.7%). The same canonical attempt appears in both (it has `player_id` set AND
+`player_name` populated), so the same data is displayed two ways. The RULE
+agrees; only the precision differs, because the legacy endpoint ships counts
+and lets the browser divide. `grading.py`'s history payload carries a comment
+saying it returns counts only on purpose - do not "tidy" that into a
+server-side percentage without deciding this first. Fixing it changes a
+displayed historical number.
+
+**Finding B - the practice summary uses a denominator it does not document.**
+`frontend/src/pages/play/practiceSummary.ts` claims to follow
+`correct / (correct + incorrect)`. It does not: its denominator is every
+auto-gradable question the player CHECKED, which includes ones with
+`is_correct === null`. A player who skips a multiple-choice question and presses
+"Check Answer" gets `{auto_gradable: true, is_correct: null}` (characterized in
+`test_scoring_characterization.py`), which lands in the denominator but not the
+numerator - i.e. scored as wrong, where the canonical rule excludes it. Not a
+cross-surface conflict: practice attempts are excluded from every official
+surface by `official_only`, so nothing else ever scores the same attempt.
+
+**Finding C - `services/player_analytics.py` does not exist.** `export.py` and
+CLAUDE.md both cited it as the rule's second home. It has never been on master;
+it lives only on `origin/feature/player-progress-analytics`. Both references
+were corrected in Phase 2 to point at `services/scoring.py`. Documentation
+only - no behaviour was involved.
