@@ -345,3 +345,93 @@ Also note organizations do not cascade — the production cleanup audit
 (CLAUDE.md) had to delete across 22 tables in order. Any deletion tool here
 must handle `competition_answers` before `competition_participants` before
 `competition_sessions`.
+
+---
+
+## Competition: confirm identity before claiming the seat
+
+**Requested 13 August 2026. Higher priority than podium photos. NOT approved
+for implementation.**
+
+**The problem.** Tapping a name on the roster picker claims that seat
+immediately - `CompetitionJoinPage` line 198's `onClick` runs `choose(...)`,
+which calls `joinCompetition` at line 81. One mistaken tap creates the
+participant, issues the reconnect token, and marks that identity taken. The
+real player then gets `409 identity_taken` and the coach has to remove the
+wrong participant to free the name. In a room of thirty that is a genuine
+disruption, not a cosmetic annoyance.
+
+**Wanted flow:** scan/code -> roster picker -> tap a name -> **IS THIS YOU?**
+(photo + name) -> explicit *Yes, that's me* claims the seat; *Go back* returns
+to the roster having claimed nothing.
+
+**The good news, from tracing it: this is almost certainly frontend-only.**
+Selection is already just a click handler; nothing is sent until
+`joinCompetition` runs. Deferring that call behind a confirmation button
+changes no route, no schema and no contract. `POST /<code>/join` stays the one
+irreversible step.
+
+**Do NOT add reservations or seat locks.** The server is already authoritative
+and correct for the race: if two devices sit on the confirmation screen for the
+same player, the first to confirm wins and the second gets `409
+identity_taken`, which the picker already knows how to explain (see the
+`keepError` handling that exists precisely because a roster refresh used to
+wipe that message). The losing player just picks again. A reservation would
+introduce expiry, cleanup and a whole new class of stuck seat, to solve a race
+the database's unique constraint already handles.
+
+**Because nothing is claimed until confirm, the confirmation state is
+disposable** - refresh, Back, or closing the tab need no cleanup at all. That
+is the main argument for this shape over any server-side alternative.
+
+Worth deciding: what the confirmation screen does if the room leaves LOBBY
+while it is open (the 1 Hz poll already knows), and whether *Go back* should
+re-fetch the roster so a name taken in the meantime shows as unavailable.
+
+---
+
+## Competition: player photos on the podium
+
+**Requested 13 August 2026. NOT approved for implementation.** Wanted for the
+payoff moment - 3rd/2nd/1st with the player's face, so the podium reads like a
+team event rather than a list.
+
+**Peira already has player photos. Reuse them; do not build anything new.**
+`Player.photo_url` (`models/player.py:29`), uploaded via
+`POST /api/players/<id>/photo`, stored through the same `FileStorage`
+abstraction as question images, and already exposed by `Player.to_dict()`.
+There is no case for a Competition-specific photo column, upload path or
+storage lifecycle.
+
+**What would actually need to change.** `eligible_players()` in
+`services/competition.py` returns exactly `{player_id, display_name}` - the
+photo is not in any Competition payload today. The podium builds from
+`competition_participants`, which snapshots `display_name` at join and holds
+`player_id`, so the join back to `Player.photo_url` exists. Adding it is a
+payload change plus rendering; no schema change.
+
+**One safe display representation should serve both features.** The
+confirmation screen and the podium want the same thing - display name plus a
+safe photo - so define it once rather than fetching photos two ways. That is
+the main reason to design these two together even though they ship separately.
+
+**Ties are the design constraint, not an edge case.** Competition allows
+genuine large ties, and a place belongs to whoever holds rank N with nobody
+promoted into an unearned place. A six-way tie for first is not hypothetical -
+it happened during M2.6 verification. So the component cannot assume one place
+means one face: it needs a deliberate answer for 2, 3, and many, and "shrink
+until it fits" is not one. If very large ties need a different presentation
+(names only above a threshold, say), that is a decision to take rather than
+guess. Adding photos must change no ranking, scoring or tie semantics.
+
+**No-photo fallback is required, not optional** - many players will have none,
+and the projector must still look intentional. Use whatever the roster already
+does for a photo-less player rather than inventing a second treatment. No
+broken-image icons, no empty frames.
+
+**Privacy.** Photos are additional roster information, so this needs checking
+rather than assuming: `photo_url` is a public storage URL carrying no token,
+which is consistent with how question images already reach unauthenticated
+players. The projector is meant to be seen by the room. What must NOT happen is
+a player's own phone receiving other players' photos beyond what the podium
+legitimately shows - the player-private standing rule stays as it is.

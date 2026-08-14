@@ -15,116 +15,47 @@ conclusion; they are the questions to answer *before* proposing a fix.
 
 ---
 
-## PRIORITY 1 — Duplicating a quiz loses its images
+## PRIORITY 1 — A coach cannot correct a question on an active quiz
 
-**Status: reported, unreproduced, uninvestigated. Appears to be objectively
-broken behaviour rather than a design limitation.**
-
-### What happened
-
-A coach could not edit a question on an active quiz (see Priority 2), so they
-used the obvious recovery path:
-
-1. Duplicate the quiz
-2. Correct the bad question in the duplicate
-3. Activate the duplicate
-4. Send the new test
-
-**The images did not appear on the duplicated test.** That defeats the purpose
-of Duplicate Quiz: a duplicate that is not a complete copy is a trap, because
-the coach only discovers what is missing after the room already has the code.
-
-Note where it failed: **on the test that was sent**, not necessarily inside the
-editor. The player delivery path has to be part of the investigation, not just
-the duplication function.
-
-### Trace the whole path before changing anything
-
-    ORIGINAL QUIZ
-      -> DUPLICATE QUIZ
-      -> QUESTIONS COPIED
-      -> QUESTION IMAGE ROWS
-      -> STORAGE OBJECTS / FILE REFERENCES
-      -> IMAGE URLS
-      -> PLAYER PAYLOAD
-      -> PLAYER RENDERING
-
-Candidate causes, none yet confirmed:
-
-- `question_images` rows not copied at all
-- copied questions pointing at the original's image row
-- storage objects not copied while rows are
-- image URLs generated wrongly for the copy
-- organization / quiz / question ownership mismatch on the copy
-- image metadata (`canvas_width`) or annotations not copied
-- a signed-media or private-URL issue on the player path
-- serialisation or player-payload issue rather than a data issue
-
-### The architectural question to answer first
-
-**Do not assume the storage object must be physically duplicated.**
-
-Determine how question images are actually stored and referenced today, then
-decide which of these is true:
-
-- If the underlying asset is immutable and shared safely, the duplicate can
-  reference the same object, and the fix is about rows and URLs, not bytes.
-- If replacing or deleting an image on one quiz could affect the other, the
-  duplicate needs independent ownership and a real copy.
-
-That decision drives the fix. Making it backwards - copying bytes because it
-feels safer - would double storage for every duplicate forever.
-
-Relevant background: storage keys are opaque (`secrets.token_hex(32)`) with no
-organization or quiz prefix, so a key alone does not tell you who owns it.
-
-### Audit what else Duplicate Quiz copies
-
-While in there, establish whether duplication faithfully reproduces:
-
-quiz settings · question order · question types · question text · answer
-choices · correct answers · explanations · question images · Draw Response
-configuration · image annotations and regions · `allow_drawing` ·
-`require_all_answers` · any other question-level configuration.
-
-It must **not** copy: access codes, attempts, responses, results, player
-answers, or any other historical or session data.
-
-This is an audit of fidelity, not an invitation to extend the feature.
-
-### Reproduce the failure before believing any diagnosis
-
-Reading the duplication function and concluding it "looks correct" is not an
-investigation. Build a quiz locally containing at minimum:
-
-- a question with no image
-- a question with a PNG
-- a question with a JPEG/WebP, if supported
-- a question with an explanation
-- a question with drawing enabled
-- any annotation or region case that should legally be duplicated
-
-Then duplicate it, open the duplicate as a coach, **activate the duplicate,
-join through the real player flow**, and confirm every expected image renders
-there. The player flow is where it failed.
-
-### Regression coverage once the cause is proven
-
-- original image question -> duplicate -> activate -> player payload -> image
-  renders
-- deleting the duplicate does not damage the original
-- editing or replacing the duplicate's image does not alter the original
-- deleting or replacing the original does not break the duplicate
-- organization isolation holds across duplication
-- duplication copies no attempts, responses or access codes
-- Draw Response and image settings survive where appropriate
-
-The exact shape of these follows the storage architecture, which is why the
-architecture question comes first.
-
----
-
-## PRIORITY 2 — A coach cannot correct a question on an active quiz
+> **READ THIS FIRST — PRIORITY 1 AND PRIORITY 2 ARE ONE PROBLEM.**
+>
+> Investigated 13 August 2026, code-first. The finding that decides both:
+>
+> **`answers.is_correct` is a STORED column** (`models/response.py:172`), set
+> when the answer is recorded, and every score reads it rather than
+> re-evaluating the question. So changing a correct answer does **not**
+> retroactively rewrite existing grades - the danger everyone assumes is here
+> is not.
+>
+> What IS true is subtler and worse in a different way:
+>
+> - **The delivered question is never snapshotted.** `answers` holds
+>   `question_id` and `selected_option_id`, both pointing at LIVE rows. Edit the
+>   text and the Results screen shows an old answer against a question the
+>   player never saw. The evidence of what was actually asked is gone.
+> - **Two cohorts, two rules.** Fix a correct answer mid-flight and players who
+>   answered before are graded by the old rule, players after by the new one,
+>   with nothing recording that the rule changed.
+> - **Deletion destroys evidence.** `answers.question_id` is
+>   `ON DELETE CASCADE`, so deleting a question deletes the answers to it.
+>   `selected_option_id` is `ON DELETE SET NULL`, so replacing options detaches
+>   what the player chose while keeping their grade - a grade with no visible
+>   basis.
+>
+> **Both features want the same missing concept: an immutable record of what
+> was delivered, separate from the authoring state.** PRIORITY 1 needs it so a
+> correction does not rewrite history; PRIORITY 2 needs somewhere to mark
+> "excluded" that is not the live question. The Competition
+> immutable-question-snapshot entry in IMPROVEMENT-BANK.md is the third face of
+> it, and `question_order` already solves the ORDERING half of that problem
+> while leaving the CONTENT half open.
+>
+> This is an argument for designing them together, **not** for building a
+> versioning system first. The minimal shapes worth pricing are (a) snapshot
+> the delivered question onto the answer/attempt, or (b) copy-on-write a new
+> question version when an answered question is edited, leaving old answers
+> pointing at the old version. Both are schema changes and neither should be
+> chosen without the owner.
 
 **Status: reported, uninvestigated. This is a product gap, NOT simply a bug -
 the restriction exists for a good reason and must not just be removed.**
@@ -203,12 +134,11 @@ together rather than twice.
 Report the full investigation - root cause, what could be corrupted, safe
 versus dangerous edits, the recommended override model, how existing,
 in-progress and completed attempts behave, and any migration - and **stop for
-approval before implementing the override.** The duplicate-image fix may
-proceed as an ordinary bug fix once its root cause is proven.
+approval before implementing the override.**
 
 ---
 
-## PRIORITY 3 — "Don't count this question"
+## PRIORITY 2 — "Don't count this question"
 
 **Status: requested by the owner, approved as work, not designed, not
 investigated.** Recorded 13 August 2026 during the Competition M2 freeze,
@@ -315,3 +245,186 @@ not against production**, because that check needs coach authentication.
 Locally a fully completed 30-player competition produced 285 competition
 answers and zero attempts, answers or access codes, and the winner still reads
 `completed_count = 0` in ordinary Peira.
+
+## RESOLVED — Duplicating a quiz lost its images
+
+**STATUS: FIXED AND PRODUCTION VERIFIED** (13 August 2026).
+**FIX COMMIT: `0f146bdb177ecc5dc06b900bfa394c8e05d8a225`**
+
+### Root cause
+
+Duplicate Quiz created separate database ROWS but both quizzes referenced the
+SAME underlying image storage object - `image_url` was copied verbatim.
+
+Every deletion path in the product assumes single ownership and unlinks the
+file outright: `delete_quiz`, and both the replace and delete image routes. So
+deleting or replacing an image, or deleting either quiz, physically removed the
+shared asset and broke the other quiz. Rows were decoupled; bytes were not.
+
+Crucially the duplicate was NOT broken at the moment of duplication - both
+images returned 200 immediately after. The failure only appeared on the first
+destructive operation on either side, which is why it looked like duplication
+"worked" and then mysteriously did not.
+
+### The fix
+
+Every duplicated quiz now receives its OWN independent image object, via a new
+`FileStorage.copy_image` (local copies bytes; S3/R2 uses `copy_object`
+server-side). Bytes are copied, never re-encoded, so quality does not degrade
+on each duplicate.
+
+Duplication now also preserves three things it was silently dropping:
+
+- `answer_explanation` - the teaching material, lost from every duplicate ever
+  made, with no error
+- `canvas_width` - the coordinate space annotations were authored against.
+  NULL means "assume the legacy 900px canvas", so shapes were copied faithfully
+  and then drawn in the WRONG PLACES
+- `annotations` alongside it (these two only mean anything together)
+
+Failure behaviour is explicit: a storage failure rolls back, deletes anything
+already copied, and returns `502 image_copy_failed` rather than handing over a
+duplicate missing pictures. A DB failure after copying rolls back FIRST, then
+removes the copied objects, so no attempt leaks a file.
+
+### Production proof (real R2)
+
+Original key `a900d32c04164011833a4f5a179f3532.jpg`, duplicate key
+`217dc7b94a81448a9a2b103b35f38846.jpg` - **different objects**. Both returned
+HTTP 200 at 84,019 bytes with **identical SHA-256**
+(`7abe0666ede15a72...`), proving a byte-for-byte copy rather than a re-encode.
+
+The duplicate quiz was then deleted through the normal coach UI. Afterwards:
+
+- duplicate asset -> **HTTP 404** (it owned its own object, correctly removed)
+- original asset -> **HTTP 200, 84,019 bytes, unchanged**
+
+Under the old code that same delete is what destroyed the original. No R2
+permission problem, no copy problem, no cleanup problem, no orphaned asset.
+
+### Test coverage
+
+Backend 1299 passed / 3 skipped, including 18 new tests in
+`tests/test_quiz_duplication.py`. **13 of those 18 fail when the defects are
+deliberately reintroduced.** Coverage includes all six independence cases
+(replace/delete an image on either side, delete either quiz), both failure
+paths (storage-copy failure, DB failure cleanup), and a fidelity guard that
+iterates `Question.__table__.columns` so the NEXT authored field cannot be
+silently forgotten the way `answer_explanation` was.
+
+### Why this is conclusively closed
+
+There is no remaining verification gap. The bounded one that existed - real R2
+`copy_object` - was closed by the production check above.
+
+---
+
+<details>
+<summary>Original report, kept for context</summary>
+
+
+### What happened
+
+A coach could not edit a question on an active quiz (see Priority 2), so they
+used the obvious recovery path:
+
+1. Duplicate the quiz
+2. Correct the bad question in the duplicate
+3. Activate the duplicate
+4. Send the new test
+
+**The images did not appear on the duplicated test.** That defeats the purpose
+of Duplicate Quiz: a duplicate that is not a complete copy is a trap, because
+the coach only discovers what is missing after the room already has the code.
+
+Note where it failed: **on the test that was sent**, not necessarily inside the
+editor. The player delivery path has to be part of the investigation, not just
+the duplication function.
+
+### Trace the whole path before changing anything
+
+    ORIGINAL QUIZ
+      -> DUPLICATE QUIZ
+      -> QUESTIONS COPIED
+      -> QUESTION IMAGE ROWS
+      -> STORAGE OBJECTS / FILE REFERENCES
+      -> IMAGE URLS
+      -> PLAYER PAYLOAD
+      -> PLAYER RENDERING
+
+Candidate causes, none yet confirmed:
+
+- `question_images` rows not copied at all
+- copied questions pointing at the original's image row
+- storage objects not copied while rows are
+- image URLs generated wrongly for the copy
+- organization / quiz / question ownership mismatch on the copy
+- image metadata (`canvas_width`) or annotations not copied
+- a signed-media or private-URL issue on the player path
+- serialisation or player-payload issue rather than a data issue
+
+### The architectural question to answer first
+
+**Do not assume the storage object must be physically duplicated.**
+
+Determine how question images are actually stored and referenced today, then
+decide which of these is true:
+
+- If the underlying asset is immutable and shared safely, the duplicate can
+  reference the same object, and the fix is about rows and URLs, not bytes.
+- If replacing or deleting an image on one quiz could affect the other, the
+  duplicate needs independent ownership and a real copy.
+
+That decision drives the fix. Making it backwards - copying bytes because it
+feels safer - would double storage for every duplicate forever.
+
+Relevant background: storage keys are opaque (`secrets.token_hex(32)`) with no
+organization or quiz prefix, so a key alone does not tell you who owns it.
+
+### Audit what else Duplicate Quiz copies
+
+While in there, establish whether duplication faithfully reproduces:
+
+quiz settings · question order · question types · question text · answer
+choices · correct answers · explanations · question images · Draw Response
+configuration · image annotations and regions · `allow_drawing` ·
+`require_all_answers` · any other question-level configuration.
+
+It must **not** copy: access codes, attempts, responses, results, player
+answers, or any other historical or session data.
+
+This is an audit of fidelity, not an invitation to extend the feature.
+
+### Reproduce the failure before believing any diagnosis
+
+Reading the duplication function and concluding it "looks correct" is not an
+investigation. Build a quiz locally containing at minimum:
+
+- a question with no image
+- a question with a PNG
+- a question with a JPEG/WebP, if supported
+- a question with an explanation
+- a question with drawing enabled
+- any annotation or region case that should legally be duplicated
+
+Then duplicate it, open the duplicate as a coach, **activate the duplicate,
+join through the real player flow**, and confirm every expected image renders
+there. The player flow is where it failed.
+
+### Regression coverage once the cause is proven
+
+- original image question -> duplicate -> activate -> player payload -> image
+  renders
+- deleting the duplicate does not damage the original
+- editing or replacing the duplicate's image does not alter the original
+- deleting or replacing the original does not break the duplicate
+- organization isolation holds across duplication
+- duplication copies no attempts, responses or access codes
+- Draw Response and image settings survive where appropriate
+
+The exact shape of these follows the storage architecture, which is why the
+architecture question comes first.
+
+---
+
+</details>

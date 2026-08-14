@@ -317,23 +317,27 @@ asked.** Polish items found in production are recorded in
 
 ## Queued next — read before picking up new work
 
-`docs/KNOWN-ISSUES.md` holds three problems reported from real use. All are
-approved; **none is blocked any more** now Competition M2 is frozen. The owner
-decides the order - do not pick one up unprompted:
+`docs/KNOWN-ISSUES.md` holds the approved queue. The owner decides the order -
+do not pick one up unprompted:
 
-1. **Duplicating a quiz loses its images.** Appears objectively broken - the
-   duplicate's images did not render on the sent test. Trace the whole path
-   (rows, storage objects, URLs, player payload) and reproduce it through the
-   real player flow before diagnosing.
-2. **A coach cannot correct a question on an active quiz.** The lock is
-   defensible; the trap is not. Trace how answers and grading reference
-   questions BEFORE designing an override, and stop for approval before
-   implementing one.
-3. **"Don't count this question".** Exclude a question from results AFTER
+1. **A coach cannot correct a question on an active quiz.** The lock is
+   `_reject_if_already_answered` in `routes/questions.py`, and it fires only
+   once somebody has ANSWERED, not on activation. It guards option changes,
+   region changes and deletion; question text and explanation are already
+   editable. Trace how answers and grading reference questions BEFORE designing
+   an override, and stop for approval before implementing one.
+2. **"Don't count this question".** Exclude a question from results AFTER
    players have taken it, preserving the responses for audit. This lands on the
    shared `score = correct / (correct + incorrect)` rule implemented twice on
    purpose (see Things That Will Bite You #4) - it changes the DENOMINATOR, so
    any design touching only one of those two places has already failed.
+
+**(1) and (2) are the same architectural gap seen from two sides**, and
+`answers.is_correct` being a STORED column is why. See the analysis at the top
+of PRIORITY 1 before designing either.
+
+**Duplicating a quiz losing its images is FIXED and production verified**
+(`0f146bd`) - recorded under RESOLVED in KNOWN-ISSUES.md. Do not reopen it.
 
 (2) and (3) are two halves of the same gap: a coach who finds a mistake after
 players are already in has no safe move. Consider designing them together.
