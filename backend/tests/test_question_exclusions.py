@@ -773,3 +773,107 @@ class TestNoExclusionRegression:
             json={"code": quiz3["monday"]["code"], "player_name": PLAYER},
         ).get_json()
         assert all(a["is_excluded"] is False for a in body["answers"])
+
+
+# ---------------------------------------------------------------------------
+# Question numbering in the coach Results view
+# ---------------------------------------------------------------------------
+
+
+class TestQuestionNumbering:
+    """The number a coach reads next to a question.
+
+    Computed server-side over the position-sorted questions - the same rule the
+    CSV's "Question #" column and the PDF's "QUESTION n" heading already use,
+    so the screen cannot disagree with the exports downloaded from that page.
+    """
+
+    def test_the_breakdown_numbers_questions_in_quiz_order(self, client, coach_headers, quiz3):
+        body = client.get(
+            f"/api/quizzes/{quiz3['quiz_id']}/dashboard", headers=coach_headers
+        ).get_json()
+
+        numbered = [(q["question_number"], q["question_text"]) for q in body["question_breakdown"]]
+        assert numbered == [(1, "Q1"), (2, "Q2"), (3, "Q3")]
+
+    def test_an_excluded_question_keeps_its_number(self, client, coach_headers, quiz3):
+        """Renumbering from a row index would slide Q3 up to Q2 the moment Q2
+        stopped counting, silently renaming a question the coach refers to by
+        number."""
+        exclude(client, coach_headers, quiz3["quiz_id"], quiz3["q2"]["id"], None)
+
+        body = client.get(
+            f"/api/quizzes/{quiz3['quiz_id']}/dashboard", headers=coach_headers
+        ).get_json()
+        by_text = {q["question_text"]: q for q in body["question_breakdown"]}
+
+        assert by_text["Q2"]["question_number"] == 2
+        assert by_text["Q2"]["is_excluded"] is True
+        # The one after it did NOT move up.
+        assert by_text["Q3"]["question_number"] == 3
+
+    def test_restoring_does_not_change_numbering(self, client, coach_headers, quiz3):
+        created = exclude(
+            client, coach_headers, quiz3["quiz_id"], quiz3["q2"]["id"], None
+        ).get_json()
+        client.post(
+            f"/api/quizzes/{quiz3['quiz_id']}/questions/{quiz3['q2']['id']}"
+            f"/exclusions/{created['id']}/restore",
+            headers=coach_headers,
+        )
+
+        body = client.get(
+            f"/api/quizzes/{quiz3['quiz_id']}/dashboard", headers=coach_headers
+        ).get_json()
+        assert [q["question_number"] for q in body["question_breakdown"]] == [1, 2, 3]
+
+    def test_the_number_is_not_the_database_id(self, client, coach_headers, quiz3):
+        """Ids climb across the whole install; numbers are per quiz and start
+        at 1. Any quiz created after the first would fail this if ids leaked
+        into the numbering."""
+        body = client.get(
+            f"/api/quizzes/{quiz3['quiz_id']}/dashboard", headers=coach_headers
+        ).get_json()
+
+        for question in body["question_breakdown"]:
+            assert question["question_number"] != question["question_id"]
+        assert min(q["question_number"] for q in body["question_breakdown"]) == 1
+
+    def test_numbering_has_no_gaps_after_a_question_is_deleted(
+        self, app, client, coach_headers, quiz3
+    ):
+        """`questions.position` DOES gap when a question is deleted (creation
+        appends len(questions), deletion never renumbers), so `position + 1`
+        would skip a number. Enumerating the sorted list does not - and that is
+        what the CSV and PDF have always done.
+
+        Deletes an UNANSWERED question, because the edit lock quite rightly
+        refuses to delete one somebody has already answered.
+        """
+        from app.models import Question
+
+        fourth = _mc(client, coach_headers, quiz3["quiz_id"], "Q4")
+        _mc(client, coach_headers, quiz3["quiz_id"], "Q5")
+        assert (
+            client.delete(
+                f"/api/quizzes/{quiz3['quiz_id']}/questions/{fourth['id']}",
+                headers=coach_headers,
+            ).status_code
+            == 204
+        )
+
+        with app.app_context():
+            positions = sorted(
+                q.position for q in Question.query.filter_by(quiz_id=quiz3["quiz_id"]).all()
+            )
+            # 0, 1, 2, 4 - a real gap where Q4 used to be.
+            assert positions == [0, 1, 2, 4], positions
+
+        body = client.get(
+            f"/api/quizzes/{quiz3['quiz_id']}/dashboard", headers=coach_headers
+        ).get_json()
+        numbers = [q["question_number"] for q in body["question_breakdown"]]
+
+        # `position + 1` would have produced [1, 2, 3, 5] and skipped Q4.
+        assert numbers == [1, 2, 3, 4], numbers
+        assert body["question_breakdown"][-1]["question_text"] == "Q5"

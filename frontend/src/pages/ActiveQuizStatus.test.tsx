@@ -150,6 +150,7 @@ describe('ActiveQuizStatusSection', () => {
       question_breakdown: [
         {
           question_id: 1,
+          question_number: 1,
           question_text: 'What gap does the 3-tech attack?',
           question_type: 'multiple_choice',
           answered_count: 1,

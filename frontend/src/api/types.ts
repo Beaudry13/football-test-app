@@ -515,6 +515,10 @@ export interface QuizAssignment {
 
 export interface QuestionBreakdown {
   question_id: number;
+  /** The quiz's own 1-based numbering, computed server-side over the
+   *  position-sorted questions - the same rule the CSV and detailed PDF use.
+   *  An excluded question KEEPS its number; never renumber from a row index. */
+  question_number: number;
   question_text: string;
   question_type: QuestionType;
   /** RAW EVIDENCE, never filtered by exclusion - usually the very thing that

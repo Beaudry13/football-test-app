@@ -107,9 +107,24 @@ function dashboardWith(exclusions: QuestionExclusion[]): QuizDashboard {
     response_count: 5,
     response_rate: 1,
     missing_players: [],
+    // Q11 / Q12 / Q13 so the numbering can be checked for gaps: Q12 is the one
+    // that gets excluded, and Q13 must NOT slide up to take its place.
     question_breakdown: [
       {
+        question_id: 6,
+        question_number: 11,
+        question_text: 'Before the broken one',
+        question_type: 'multiple_choice',
+        answered_count: 5,
+        correct_count: 5,
+        incorrect_count: 0,
+        ungraded_count: 0,
+        is_excluded: false,
+        exclusions: [],
+      },
+      {
         question_id: 7,
+        question_number: 12,
         question_text: 'Which gap does the 3-tech attack?',
         question_type: 'multiple_choice',
         answered_count: 5,
@@ -118,6 +133,18 @@ function dashboardWith(exclusions: QuestionExclusion[]): QuizDashboard {
         ungraded_count: 0,
         is_excluded: exclusions.length > 0,
         exclusions,
+      },
+      {
+        question_id: 8,
+        question_number: 13,
+        question_text: 'After the broken one',
+        question_type: 'multiple_choice',
+        answered_count: 5,
+        correct_count: 4,
+        incorrect_count: 1,
+        ungraded_count: 0,
+        is_excluded: false,
+        exclusions: [],
       },
     ],
   };
@@ -139,13 +166,50 @@ describe('ResultsTab - question exclusions', () => {
     vi.spyOn(exclusionsApi, 'listQuizAssignments').mockResolvedValue(ASSIGNMENTS);
   });
 
+  it('numbers questions in quiz order', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(dashboardWith([]));
+    renderTab();
+
+    expect(await screen.findByText('Q11')).toBeInTheDocument();
+    expect(screen.getByText('Q12')).toBeInTheDocument();
+    expect(screen.getByText('Q13')).toBeInTheDocument();
+  });
+
+  it('an EXCLUDED question keeps its number, and the next one is not renumbered', async () => {
+    // The trap: renumbering from a row index would slide Q13 up to Q12 the
+    // moment Q12 stopped counting, silently renaming a question the coach
+    // refers to by number.
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(
+      dashboardWith([assignmentExclusion]),
+    );
+    renderTab();
+
+    const excludedRow = (await screen.findByText(/3-tech attack/)).closest('tr')!;
+    expect(within(excludedRow).getByText('Q12')).toBeInTheDocument();
+
+    const afterRow = screen.getByText('After the broken one').closest('tr')!;
+    expect(within(afterRow).getByText('Q13')).toBeInTheDocument();
+    expect(screen.queryAllByText('Q12')).toHaveLength(1);
+  });
+
+  it('takes the number from the API, never from the row index', async () => {
+    // Numbers that do not start at 1 prove the component is reading
+    // question_number rather than counting rows.
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(dashboardWith([]));
+    renderTab();
+
+    await screen.findByText('Q11');
+    expect(screen.queryByText('Q1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Q2')).not.toBeInTheDocument();
+    expect(screen.queryByText('Q3')).not.toBeInTheDocument();
+  });
+
   it('offers the control on a question that is still counting', async () => {
     vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(dashboardWith([]));
     renderTab();
 
-    expect(
-      await screen.findByRole('button', { name: /Don’t count this/ }),
-    ).toBeInTheDocument();
+    const row = (await screen.findByText(/3-tech attack/)).closest('tr')!;
+    expect(within(row).getByRole('button', { name: /Don’t count this/ })).toBeInTheDocument();
     expect(screen.queryByText('Excluded')).not.toBeInTheDocument();
   });
 
@@ -271,9 +335,8 @@ describe('ResultsTab - question exclusions', () => {
     const excludeSpy = vi.spyOn(exclusionsApi, 'excludeQuestion');
     renderTab();
 
-    await userEvent
-      .setup()
-      .click(await screen.findByRole('button', { name: /Don’t count this/ }));
+    const row = (await screen.findByText(/3-tech attack/)).closest('tr')!;
+    await userEvent.setup().click(within(row).getByRole('button', { name: /Don’t count this/ }));
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     // Nothing happens until the coach confirms a scope.

@@ -3,7 +3,13 @@ import { Link } from 'react-router-dom';
 import { gradeAnswer, resetAttempt } from '../../api/grading';
 import { getErrorMessage } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import type { Answer, PlayerResponse, Quiz } from '../../api/types';
+import type {
+  Answer,
+  PlayerResponse,
+  QuestionExclusion,
+  Quiz,
+  QuizAssignment,
+} from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/ui/Icon';
@@ -11,15 +17,29 @@ import { DrawingViewer } from '../../components/drawing/DrawingViewer';
 import { resolveMediaUrl } from '../../api/client';
 import type { DrawingDocument } from '../../components/drawing/types';
 import nb from '../../styles/notebook.module.css';
+import { describeExclusionScope } from './assignmentLabel';
 import styles from './ResultsTab.module.css';
+
+/** Shared empty default, so an unsupplied lookup does not allocate a new Map
+ *  on every render and retrigger memoised children. */
+const EMPTY_ASSIGNMENTS = new Map<number, QuizAssignment>();
 
 function AnswerRow({
   answer,
   quiz,
+  questionNumber,
+  exclusions,
+  assignments,
   onChanged,
 }: {
   answer: Answer;
   quiz: Quiz;
+  /** The quiz's own numbering, passed down from the dashboard so this view and
+   *  the per-question breakdown cannot disagree. */
+  questionNumber?: number;
+  /** Active exclusions covering this question, if any. */
+  exclusions?: QuestionExclusion[];
+  assignments: Map<number, QuizAssignment>;
   onChanged: () => void;
 }) {
   const question = quiz.questions?.find((q) => q.id === answer.question_id);
@@ -53,9 +73,21 @@ function AnswerRow({
     }
   }
 
+  // This question no longer counts. The coach's other surfaces - the
+  // per-question breakdown, the PDF, the CSV, and the player's own results
+  // page - all say so; before this, the expanded response was the one place
+  // that stayed silent and showed a bare Correct/Incorrect.
+  const activeExclusions = exclusions ?? [];
+  const isExcluded = activeExclusions.length > 0;
+
   return (
-    <div className={styles.answerRow}>
-      <div className={styles.answerQuestion}>{question.question_text}</div>
+    <div className={`${styles.answerRow} ${isExcluded ? styles.answerExcluded : ''}`}>
+      <div className={styles.answerQuestion}>
+        {questionNumber !== undefined && (
+          <span className={styles.questionNumber}>Q{questionNumber}</span>
+        )}
+        {question.question_text}
+      </div>
       {isDrawResponse ? (
         answer.drawing && question.image ? (
           <DrawingViewer
@@ -107,6 +139,23 @@ function AnswerRow({
           {answer.is_correct ? 'Correct' : 'Incorrect'}
         </span>
       )}
+
+      {/* Placed AFTER the verdict rather than replacing it. The stored grade is
+          evidence and the coach keeps seeing it - and for a manually graded
+          question they must still be able to grade it, because restoring the
+          exclusion would otherwise leave the answer unmarked. This says the
+          grade no longer counts, not that it no longer exists. */}
+      {isExcluded && (
+        <div className={styles.answerExcludedNote}>
+          <span className={`${nb.badge} ${nb.badgeWarning}`}>Excluded from scoring</span>
+          {activeExclusions.map((ex) => (
+            <span key={ex.id}>
+              Not counted for{' '}
+              {describeExclusionScope(ex.scope, ex.access_code_id, assignments)}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -114,10 +163,20 @@ function AnswerRow({
 export function ResponseRow({
   quiz,
   response,
+  questionNumbers,
+  exclusionsByQuestion,
+  assignments,
   onChanged,
 }: {
   quiz: Quiz;
   response: PlayerResponse;
+  /** question_id -> the quiz's own number. Supplied by ResultsTab from the
+   *  dashboard so this view and the per-question breakdown share ONE source;
+   *  optional so existing callers and tests keep working unnumbered. */
+  questionNumbers?: Map<number, number>;
+  /** question_id -> active exclusions covering it. */
+  exclusionsByQuestion?: Map<number, QuestionExclusion[]>;
+  assignments?: Map<number, QuizAssignment>;
   onChanged: () => void;
 }) {
   const { coach } = useAuth();
@@ -126,7 +185,30 @@ export function ResponseRow({
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const answers = response.answers ?? [];
-  const gradedCorrect = answers.filter((a) => a.is_correct === true).length;
+  const isExcluded = (questionId: number) =>
+    (exclusionsByQuestion?.get(questionId)?.length ?? 0) > 0;
+
+  // THE SUMMARY BADGE IS A SCORE, NOT A TALLY OF STORED VERDICTS.
+  //
+  // It sits in the player's summary row in success colours and reads as "how
+  // did they do", so it has to mean CORRECT ANSWERS THAT CURRENTLY COUNT.
+  // Leaving it raw produced a three-way contradiction about one player: the
+  // badge said 12, the expanded rows showed 11 counted plus one marked
+  // "Excluded from scoring", and the PDF said 11.
+  //
+  // The evidence is NOT lost - the expanded row below still shows the stored
+  // Correct/Incorrect verdict alongside the excluded marker. That is the right
+  // place to show both truths; this is the place to show the current result.
+  // Nothing is regraded: answers.is_correct is untouched.
+  const gradedCorrect = answers.filter(
+    (a) => a.is_correct === true && !isExcluded(a.question_id),
+  ).length;
+
+  // DELIBERATELY NOT exclusion-filtered, and not the same bug. This is a WORK
+  // QUEUE ("N to grade"), not a scored result: a coach still owes a grade on an
+  // excluded written answer, because restoring the question would otherwise
+  // leave it unmarked. Mirrors services/scoring.pending_grading_count, which
+  // makes the same choice for the same reason.
   const pendingGrading = answers.filter(
     (a) => a.is_correct === null && quiz.questions?.find((q) => q.id === a.question_id)?.question_type === 'written',
   ).length;
@@ -208,7 +290,15 @@ export function ResponseRow({
       </div>
       <ErrorBanner message={error} />
       {isOpen && answers.map((answer) => (
-        <AnswerRow key={answer.id} answer={answer} quiz={quiz} onChanged={onChanged} />
+        <AnswerRow
+          key={answer.id}
+          answer={answer}
+          quiz={quiz}
+          questionNumber={questionNumbers?.get(answer.question_id)}
+          exclusions={exclusionsByQuestion?.get(answer.question_id)}
+          assignments={assignments ?? EMPTY_ASSIGNMENTS}
+          onChanged={onChanged}
+        />
       ))}
     </div>
   );

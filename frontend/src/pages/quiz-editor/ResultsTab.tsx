@@ -130,6 +130,17 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
     load();
   }, [load]);
 
+  // Built from the dashboard so the expanded player view and the per-question
+  // breakdown cannot disagree about either the numbering or what is excluded.
+  const questionNumbers = new Map(
+    (dashboard?.question_breakdown ?? []).map((q) => [q.question_id, q.question_number]),
+  );
+  const exclusionsByQuestion = new Map(
+    (dashboard?.question_breakdown ?? [])
+      .filter((q) => q.exclusions.length > 0)
+      .map((q) => [q.question_id, q.exclusions]),
+  );
+
   const handleExport = useCallback(
     async (format: ExportFormat) => {
       setExporting(format);
@@ -239,6 +250,10 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                   {dashboard.question_breakdown.map((q) => (
                     <tr key={q.question_id} className={q.is_excluded ? styles.excludedRow : undefined}>
                       <td>
+                        {/* Compact, inline, and visually quieter than the
+                            question itself - it exists to let a coach scan to
+                            "Q12", not to compete with the text. */}
+                        <span className={styles.questionNumber}>Q{q.question_number}</span>
                         {q.question_text}
                         {/* Every active exclusion, not a single boolean: a
                             quiz-wide and an assignment-scoped one can overlap,
@@ -289,7 +304,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
       ) : (
         <div className={styles.responseList}>
           {responses.map((response) => (
-            <ResponseRow key={response.id} quiz={quiz} response={response} onChanged={load} />
+            <ResponseRow
+              key={response.id}
+              quiz={quiz}
+              response={response}
+              questionNumbers={questionNumbers}
+              exclusionsByQuestion={exclusionsByQuestion}
+              assignments={assignmentsById}
+              onChanged={load}
+            />
           ))}
         </div>
       )}

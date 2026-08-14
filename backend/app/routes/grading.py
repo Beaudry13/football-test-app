@@ -194,7 +194,17 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         exclusions_by_question.setdefault(row.question_id, []).append(row)
 
     question_breakdown = []
-    for question in sorted(quiz.questions, key=lambda q: q.position):
+    # NUMBERED HERE, not in the browser. `enumerate` over the position-sorted
+    # list is the same rule the CSV's "Question #" column and the detailed
+    # PDF's "QUESTION n" heading already use, so the screen cannot disagree
+    # with the exports a coach downloads from the same page.
+    #
+    # Deliberately NOT `position + 1`: deleting a question leaves gaps in
+    # `questions.position` (creation appends len(questions), deletion never
+    # renumbers), so that would skip a number. And deliberately not computed
+    # from the row index client-side, where a later sort or filter could
+    # silently renumber the quiz.
+    for number, question in enumerate(sorted(quiz.questions, key=lambda q: q.position), start=1):
         answers = [a for r in responses for a in r.answers if a.question_id == question.id]
         # Grouped by QUESTION rather than by attempt, but the same three
         # counts and the same rule - so it comes from the same counter. A
@@ -212,6 +222,10 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         question_breakdown.append(
             {
                 "question_id": question.id,
+                # The quiz's own numbering. An excluded question KEEPS its
+                # number - it is still the twelfth question of the quiz, it
+                # just no longer counts - so nothing here is renumbered.
+                "question_number": number,
                 "question_text": question.question_text,
                 "question_type": question.question_type.value,
                 "answered_count": len(answers),

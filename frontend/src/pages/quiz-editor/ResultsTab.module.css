@@ -170,3 +170,36 @@
   color: var(--peira-danger);
   flex-basis: 100%;
 }
+
+/* --- Question numbers ------------------------------------------------- */
+
+/* Inline and quieter than the question text: it exists so a coach can scan to
+   "Q12", not to compete with the question itself. Tabular figures keep the
+   numbers aligned down the column without needing a separate <td>. */
+.questionNumber {
+  display: inline-block;
+  margin-right: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--peira-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Excluded answer, inside an expanded player response -------------- */
+
+.answerExcluded {
+  border-left: 2px solid var(--peira-border);
+  padding-left: 0.6rem;
+}
+
+/* Sits AFTER the stored verdict rather than replacing it - the grade is
+   evidence and stays visible; this says it no longer counts. */
+.answerExcludedNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--peira-text-muted);
+}

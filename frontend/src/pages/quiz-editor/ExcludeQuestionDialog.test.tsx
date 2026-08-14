@@ -14,6 +14,7 @@ import type { QuestionBreakdown, QuizAssignment } from '../../api/types';
 
 const question: QuestionBreakdown = {
   question_id: 7,
+  question_number: 7,
   question_text: 'Which gap does the 3-tech attack?',
   question_type: 'multiple_choice',
   answered_count: 5,
