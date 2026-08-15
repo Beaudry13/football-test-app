@@ -116,6 +116,32 @@ const response = {
       drawing: null,
     },
   ],
+  // WHAT THIS ATTEMPT RECEIVED. The delivered text is deliberately DIFFERENT
+  // from the live quiz above, so a passing test proves the record is read
+  // rather than the live question.
+  delivered_questions: [
+    {
+      question_id: 7,
+      question_number: 12,
+      question_text: 'DELIVERED: which gap does the 3-tech attack?',
+      question_type: 'multiple_choice',
+      options: [
+        { id: 70, option_text: 'B gap', is_correct_answer: true },
+        { id: 71, option_text: 'A gap', is_correct_answer: false },
+      ],
+      image: null,
+      from_snapshot: true,
+    },
+    {
+      question_id: 8,
+      question_number: 13,
+      question_text: 'DELIVERED: after the broken one',
+      question_type: 'multiple_choice',
+      options: [{ id: 80, option_text: 'Yes', is_correct_answer: true }],
+      image: null,
+      from_snapshot: true,
+    },
+  ],
 } as unknown as PlayerResponse;
 
 const ASSIGNMENTS = new Map<number, QuizAssignment>([
@@ -160,7 +186,6 @@ async function renderExpanded(exclusions?: Map<number, QuestionExclusion[]>) {
       <ResponseRow
         quiz={quiz}
         response={response}
-        questionNumbers={new Map([[7, 12], [8, 13]])}
         exclusionsByQuestion={exclusions}
         assignments={ASSIGNMENTS}
         onChanged={vi.fn()}
@@ -201,7 +226,7 @@ describe('ResponseRow - excluded questions', () => {
   it('leaves questions that still count completely untouched', async () => {
     await renderExpanded(new Map([[7, [assignmentExclusion]]]));
 
-    expect(screen.getByText('After the broken one')).toBeInTheDocument();
+    expect(screen.getByText('DELIVERED: after the broken one')).toBeInTheDocument();
     expect(screen.getByText('Incorrect')).toBeInTheDocument();
     // Exactly one excluded marker, on the one excluded question.
     expect(screen.getAllByText('Excluded from scoring')).toHaveLength(1);
@@ -237,6 +262,17 @@ describe('ResponseRow - excluded questions', () => {
     expect(screen.queryByText(/PICTURE ERROR/)).not.toBeInTheDocument();
   });
 
+  it('renders the DELIVERED question text, not the live one', async () => {
+    // The live quiz says "Which gap does the 3-tech attack?"; this attempt was
+    // delivered different wording. The record wins.
+    await renderExpanded(new Map());
+
+    expect(
+      screen.getByText('DELIVERED: which gap does the 3-tech attack?'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Which gap does the 3-tech attack?')).not.toBeInTheDocument();
+  });
+
   it('numbers each answer with the quiz question number', async () => {
     await renderExpanded(new Map());
 
@@ -244,17 +280,23 @@ describe('ResponseRow - excluded questions', () => {
     expect(screen.getByText('Q13')).toBeInTheDocument();
   });
 
-  it('renders unnumbered when no numbering is supplied', async () => {
-    // Optional on purpose, so existing callers and tests keep working.
+  it('LEGACY: an attempt with no delivered record falls back to the live question', async () => {
+    // Pre-Phase-1 attempts have no snapshots, so no history is invented for
+    // them - they render today's question, unnumbered, exactly as this view
+    // behaved before Phase 4a.
+    const legacy = { ...response, delivered_questions: undefined } as unknown as PlayerResponse;
     render(
       <MemoryRouter>
-        <ResponseRow quiz={quiz} response={response} onChanged={vi.fn()} />
+        <ResponseRow quiz={quiz} response={legacy} onChanged={vi.fn()} />
       </MemoryRouter>,
     );
     await userEvent.click(screen.getByLabelText(/Expand answers/));
 
-    expect(screen.queryByText(/^Q\d+$/)).not.toBeInTheDocument();
     expect(screen.getByText('Which gap does the 3-tech attack?')).toBeInTheDocument();
+    expect(
+      screen.queryByText('DELIVERED: which gap does the 3-tech attack?'),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Q\d+$/)).not.toBeInTheDocument();
   });
 });
 
@@ -271,7 +313,6 @@ describe('ResponseRow - the summary "N correct" badge', () => {
         <ResponseRow
           quiz={quiz}
           response={response}
-          questionNumbers={new Map([[7, 12], [8, 13]])}
           exclusionsByQuestion={exclusions}
           assignments={ASSIGNMENTS}
           onChanged={vi.fn()}

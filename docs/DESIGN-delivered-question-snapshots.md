@@ -2,14 +2,16 @@
 
 **Status: APPROVED. PHASE 1 SHIPPED (write + preserve, production verified).
 PHASE 2 SHIPPED (unified score helper, zero behaviour change).
-PHASE 3 IMPLEMENTED ("don't count this question"), awaiting review.**
+PHASE 3 SHIPPED ("don't count this question", production verified).
+PHASE 4a + 4a-bis IMPLEMENTED (snapshots become readable; attempt version
+invariant), awaiting review.**
 13-14 August 2026. Baseline `a002fdf`; Phase 1 is `25a383c`; Phase 2 is `e81397b`.
 
-Phase 4 remains designed and NOT authorised. Nothing reads a snapshot for
-product behaviour for SCORING. **Read "THE PHASE 3 BOUNDARY" near the bottom
-before touching exclusions** - it records the correction that score exclusion
-filters answer rows and needs no snapshot, while delivered/unanswered REPORTING
-does use them.
+Phase 4b (remove from future attempts) and 4c (broader editing unlocks) remain
+designed and NOT authorised. **Read "THE ATTEMPT VERSION INVARIANT" and "THE
+REGION EXCEPTION" at the bottom before touching question editing or region
+corrections.** Scoring still reads answer rows, not snapshots - see "THE PHASE
+3 BOUNDARY".
 
 ## The problem
 
@@ -341,3 +343,126 @@ question cannot be hard-deleted today, and if one does go its answers cascade
 with it, leaving an exclusion pointing at no evidence); `access_code_id`
 CASCADE (deleting an assignment deletes its attempts); `coach_id` SET NULL
 (a coach leaving the org loses the attribution, not the record).
+
+
+## What Phase 4a + 4a-bis shipped
+
+Phase 1 recorded what every attempt was delivered and deliberately let nothing
+read it. **Phase 4a is that read**, and **4a-bis makes the record true after a
+refresh.**
+
+### THE ATTEMPT VERSION INVARIANT
+
+> **ONCE AN ATTEMPT STARTS, IT STAYS ON THE VERSION IT WAS DELIVERED.**
+> **Coach corrections apply to NEW attempts only.**
+
+| | |
+|---|---|
+| **NEW attempt** | current live quiz → snapshot captured at `/play/start` |
+| **EXISTING attempt** | its delivered snapshot version, on every resume |
+| **LEGACY attempt** | live compatibility fallback, because delivered content was never recorded |
+
+Why it was needed: question CONTENT and attempt IDENTITY arrive from two
+different calls. `/validate-code` is identity-free by construction - it returns
+the roster the player then picks from - so it serves the LIVE quiz. A refresh
+mid-quiz therefore re-fetched live content and rendered version B inside a
+version-A attempt. `/play/start` is the first moment the server knows which
+attempt belongs to the caller, so the delivered questions ride on that
+response, and the client prefers them over the join payload.
+
+There is no live-update mechanism. A correction becomes visible to that player
+only on a NEW attempt - no polling, no websockets, no forced refresh.
+
+### The player payload is a security boundary
+
+`to_player_payload` is a SEPARATE serializer from the coach-facing one and
+**builds** a safe shape rather than filtering an unsafe one, so a field added to
+the coach serializer cannot leak by default. It never emits
+`is_correct_answer`, `expected_answers`, `answer_matching` or
+`answer_explanation`. Tests inspect the RAW response body, not the parsed
+object.
+
+### Historical displays read the snapshot
+
+`services/delivered_questions.py` is the single reader. The player's results
+page, the CSV, the detailed PDF and the coach's expanded per-player view all go
+through it, so they cannot disagree about what a player received - text, type,
+options, selected answer, image, annotations, and the delivered question
+number.
+
+`answers.is_correct` remains the historical verdict and is **never recomputed**
+from the snapshot's answer key. Scoring still counts answer rows; Phase 2's
+arithmetic and Phase 3's exclusions are untouched.
+
+### Historical Q# vs live Q#
+
+- **Historical attempt displays** use the delivered snapshot order. A later
+  reorder must not retitle a report already shared.
+- **The live per-question breakdown** describes the quiz as it stands today,
+  because it aggregates every attempt - and different attempts can have had
+  different orders (randomized practice already does), so no single historical
+  number exists for it.
+
+### `require_all_answers` uses the delivered set
+
+Submission validates against the questions THAT ATTEMPT received, not today's
+quiz. A question added after an attempt started cannot strand a player on one
+they were never shown; a new attempt receives it and is held to it.
+
+### THE REGION EXCEPTION - read before unlocking region editing
+
+A region-backed question's picture is a signed masked render minted per access
+code, and the snapshot **deliberately does not record region geometry**. So the
+masked URL on a resumed attempt comes from the LIVE region.
+
+**That is truthful ONLY because region editing stays blocked after delivery.**
+Unlocking region corrections without first building masked-render preservation
+would silently show past attempts a page they never saw. Do not unlock it
+without solving that.
+
+### Images
+
+| | |
+|---|---|
+| Old attempt | preserved copy, from the snapshot (Phase 1's copy-on-write, now finally rendered) |
+| Live quiz / new attempt | the corrected image |
+
+Draw Response keeps live image id/version for stroke-source keying, because the
+snapshot does not record them and Draw Response persistence is not built.
+
+### Legacy attempts
+
+No snapshot means no delivered record. Those attempts fall back to the LIVE
+question - a **compatibility fallback, not history**. Nothing is invented,
+nothing is backfilled, and `from_snapshot: false` is carried through the API so
+an explicit "delivered content not recorded" indicator can be added later with
+no architectural change.
+
+### Reading a snapshot is an N+1 waiting to happen
+
+Every surface that now calls `delivered_questions()` walks a relationship
+(`attempt.question_snapshots`) that is lazy by default. Phase 4a introduced
+**three** N+1s this way, and each was caught by a query count rather than by
+review:
+
+| Where | What lazy-loaded | Fix |
+|---|---|---|
+| `_load_responses_for_export` | `question_snapshots` per attempt | `selectinload` |
+| `_delivered_payload` (`/play/start`) | `question.regions` per question | one `QuestionRegion` lookup for the whole quiz |
+| `player_results` | `question_snapshots`, `answers.selected_option` | `selectinload` |
+
+If you add another reader, add the eager load in the same commit.
+
+**Query guards here are scale-invariant on purpose.** A flat bound
+(`assert len(queries) < 20`) passes an N+1 that simply has not grown yet - it
+is satisfied by a 3-question fixture no matter how the cost scales. The guards
+in `tests/test_attempt_version_invariant.py` compare a 3-question quiz against
+a 15-question one and require the difference to stay flat, which is what
+actually pins the eager loads. Removing the `player_results` eager load moves
+it from 9 queries to 21; that is the number the test exists to catch.
+
+They also assert the request returned 200 and that the count is non-zero.
+The first version of the `player_results` guard sent `access_code_id` where
+the route takes `code`, so the request failed validation before touching the
+database and the assertion passed on **zero queries** while proving nothing.
+A query-count test that cannot fail is worse than no test.

@@ -13,6 +13,7 @@ const playerResults: PlayerResultsResponse = {
   answers: [
     {
       question_id: 10,
+      question_number: 1,
       question_text: 'Is this cover 2?',
       question_type: 'true_false',
       your_answer: 'False',

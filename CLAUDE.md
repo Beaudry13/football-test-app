@@ -404,7 +404,37 @@ backend scoring rule — see Things That Will Bite You #4.
   — Postgres treats NULLs as distinct, so any number satisfy it.
 - Exclusion never edits, hides or deletes an answer. Restore sets
   `restored_at`; rows are never deleted.
-- **Do not start Phase 4 (safe correction) without being asked.**
+**Phase 4a + 4a-bis are implemented** — snapshots are finally READ, and an
+attempt keeps the version it was delivered.
+
+- **THE ATTEMPT VERSION INVARIANT.** Once an attempt starts it stays on the
+  version it received; corrections apply to NEW attempts only. `/play/start`
+  returns that attempt's delivered questions and the client prefers them over
+  `/validate-code`'s live copy — because validate-code is identity-free and
+  cannot know which version to serve. No polling, no websockets: a correction
+  reaches a player only on a new attempt.
+- **`services/delivered_questions.py` is the single reader.** Player results,
+  CSV, detailed PDF and the coach's expanded per-player view all go through it,
+  so they cannot disagree about what a player received. `answers.is_correct` is
+  never recomputed from the snapshot.
+- **`to_player_payload` is a SECURITY BOUNDARY** — a separate serializer that
+  BUILDS a safe shape rather than filtering an unsafe one. It must never emit
+  `is_correct_answer` or `expected_answers`; that payload goes to a player
+  mid-quiz. Tests grep the raw body.
+- **Historical Q# comes from the delivered order**; the live per-question
+  breakdown follows today's quiz, because it aggregates attempts that may have
+  had different orders.
+- **`require_all_answers` validates the DELIVERED set**, so a question added
+  mid-attempt cannot strand a player.
+- **THE REGION EXCEPTION:** a region question's masked URL comes from the LIVE
+  region because the snapshot does not record region geometry. That is only
+  truthful while region editing stays blocked after delivery — **do not unlock
+  region corrections without building masked-render preservation first.**
+- **Legacy attempts (no snapshot) fall back to the live question.** That is a
+  COMPATIBILITY FALLBACK, not history. No backfill, ever. `from_snapshot` is
+  carried through the API so an indicator can be added later.
+- **Do not start Phase 4b (remove from future attempts) or 4c without being
+  asked.**
 
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 

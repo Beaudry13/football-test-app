@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, saveDrawing, submitQuiz } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
-import type { AssessmentMode, PracticeFeedback, Question, Quiz, ResumedAnswer } from '../../api/types';
+import type {
+  AssessmentMode,
+  DeliveredPlayerQuestion,
+  PracticeFeedback,
+  Question,
+  Quiz,
+  ResumedAnswer,
+} from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { hasDrawnAnswer } from '../../components/drawing/drawingDocument';
 import { PracticeFeedbackCard } from './PracticeFeedbackCard';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import { QuizProgress } from './QuizProgress';
 import styles from './PlayPage.module.css';
+import { applyDeliveredContent } from './deliveredQuestions';
 import { orderQuestions } from './questionOrder';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
@@ -30,6 +38,7 @@ function seedAnswers(initialAnswers: ResumedAnswer[]): Record<number, PlayerAnsw
 export function QuizStep({
   quiz,
   questionOrder,
+  deliveredQuestions,
   accessCodeId,
   playerName,
   playerId,
@@ -52,12 +61,17 @@ export function QuizStep({
    * in progress. Defaults to GRADED so any caller that has not been taught
    * about practice gets the behaviour that existed before it. */
   /** The order this ATTEMPT was given, as question ids, from
-   *  /play/start. Undefined or empty means the quiz's authored order.
-   *
-   *  The questions themselves still arrive from /play/validate-code - this
-   *  only arranges what is already loaded, which is why randomization needed
-   *  no change to the join flow. */
+   *  /play/start. Undefined or empty means the quiz's authored order. */
   questionOrder?: number[];
+  /** THE ATTEMPT VERSION INVARIANT. What this attempt was DELIVERED, from
+   *  /play/start. Preferred over `quiz.questions`, which /validate-code
+   *  fetched live before the player identified themselves - so once a coach
+   *  corrects the quiz mid-session those two differ, and only this one
+   *  describes the attempt in progress.
+   *
+   *  Absent only for an attempt with no snapshot (pre-Phase-1), where the
+   *  live questions are the compatibility fallback. */
+  deliveredQuestions?: DeliveredPlayerQuestion[];
   mode?: AssessmentMode;
   /** Feedback already earned before a reload, so a refresh mid-practice does
    * not wipe the explanations the player was reading. */
@@ -68,7 +82,11 @@ export function QuizStep({
   onPracticeComplete?: (feedback: PracticeFeedback[]) => void;
 }) {
   const isPractice = mode === 'PRACTICE';
-  const questions = orderQuestions(quiz.questions ?? [], questionOrder);
+  // The delivered version wins. A refresh mid-quiz re-runs validate-code and
+  // gets whatever the quiz says NOW; rendering that would hot-swap corrected
+  // content underneath a player who is halfway through answering the old one.
+  const sourceQuestions = applyDeliveredContent(quiz.questions ?? [], deliveredQuestions);
+  const questions = orderQuestions(sourceQuestions, questionOrder);
   const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => seedAnswers(initialAnswers));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);

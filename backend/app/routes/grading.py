@@ -22,6 +22,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 from app.errors import ApiError
 from app.extensions import db
 from app.services.attempt_scope import official_filter, official_only
+from app.services.delivered_questions import delivered_questions, to_payload
 from app.services.question_exclusions import (
     active_exclusions_for_quiz,
     load_for_attempts,
@@ -42,6 +43,25 @@ from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_json_body
 
 grading_bp = Blueprint("grading", __name__)
+
+
+def _with_delivered(attempt: PlayerAttempt, quiz: Quiz) -> dict:
+    """An attempt, plus WHAT IT WAS DELIVERED.
+
+    The coach's expanded per-player view used to resolve every answer against
+    the LIVE question in the browser, which meant a corrected question retitled
+    and renumbered results a player received weeks earlier. Sending the
+    delivered content alongside the answers is what lets that view agree with
+    the player's own results page, the CSV and the PDF.
+
+    Additive: `to_dict` is unchanged, so every existing consumer of this
+    payload keeps working.
+    """
+    payload = attempt.to_dict(include_answers=True)
+    payload["delivered_questions"] = [
+        to_payload(delivered) for delivered in delivered_questions(attempt, quiz)
+    ]
+    return payload
 
 
 def _get_gradable_answer(answer_id: int) -> Answer:
@@ -75,11 +95,17 @@ def list_responses(quiz_id: int):
         # player eager-loaded alongside answers - display_name resolves it
         # for every row below, and this is the one place that would
         # otherwise turn into an N+1 (one lazy load per canonical attempt).
-        .options(selectinload(PlayerAttempt.answers), selectinload(PlayerAttempt.player))
+        .options(
+            selectinload(PlayerAttempt.answers),
+            selectinload(PlayerAttempt.player),
+            # Loaded up front for _with_delivered below - without it, resolving
+            # what each attempt received would be one query per response.
+            selectinload(PlayerAttempt.question_snapshots),
+        )
         .order_by(PlayerAttempt.submitted_at.desc())
         .all()
     )
-    return jsonify([r.to_dict(include_answers=True) for r in responses])
+    return jsonify([_with_delivered(r, quiz) for r in responses])
 
 
 @grading_bp.get("/quizzes/<int:quiz_id>/responses/<int:response_id>")
@@ -91,12 +117,16 @@ def get_response(quiz_id: int, response_id: int):
         .filter_by(
             id=response_id, quiz_id=quiz.id, status=AttemptStatus.SUBMITTED
         )
-        .options(selectinload(PlayerAttempt.answers), selectinload(PlayerAttempt.player))
+        .options(
+            selectinload(PlayerAttempt.answers),
+            selectinload(PlayerAttempt.player),
+            selectinload(PlayerAttempt.question_snapshots),
+        )
         .first()
     )
     if response is None:
         raise ApiError("Response not found", status_code=404)
-    return jsonify(response.to_dict(include_answers=True))
+    return jsonify(_with_delivered(response, quiz))
 
 
 @grading_bp.delete("/quizzes/<int:quiz_id>/attempts/<int:attempt_id>")
@@ -261,6 +291,12 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
         .options(
             selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
             selectinload(PlayerAttempt.player),
+            # Phase 4a: every builder now resolves what each attempt was
+            # DELIVERED. Without this the lazy load fires once per attempt and
+            # the export goes straight back to the N+1 that
+            # test_export_detailed_performance's query budget exists to catch -
+            # it caught exactly this.
+            selectinload(PlayerAttempt.question_snapshots),
         )
         .all()
     )

@@ -5,6 +5,7 @@ import { getErrorMessage } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type {
   Answer,
+  DeliveredQuestion,
   PlayerResponse,
   QuestionExclusion,
   Quiz,
@@ -27,28 +28,36 @@ const EMPTY_ASSIGNMENTS = new Map<number, QuizAssignment>();
 function AnswerRow({
   answer,
   quiz,
-  questionNumber,
+  delivered,
   exclusions,
   assignments,
   onChanged,
 }: {
   answer: Answer;
   quiz: Quiz;
-  /** The quiz's own numbering, passed down from the dashboard so this view and
-   *  the per-question breakdown cannot disagree. */
-  questionNumber?: number;
+  /** WHAT THIS ATTEMPT RECEIVED. Snapshot-backed, so a corrected live question
+   *  cannot retitle or renumber a result the player already has. Absent only
+   *  for a payload that predates Phase 4a, where the live question is used. */
+  delivered?: DeliveredQuestion;
   /** Active exclusions covering this question, if any. */
   exclusions?: QuestionExclusion[];
   assignments: Map<number, QuizAssignment>;
   onChanged: () => void;
 }) {
-  const question = quiz.questions?.find((q) => q.id === answer.question_id);
+  const live = quiz.questions?.find((q) => q.id === answer.question_id);
+  // Delivered content wins wherever it exists; the live question is only a
+  // fallback, never a correction of the record.
+  const question = delivered ?? live;
+  const questionNumber = delivered?.question_number;
   const [feedback, setFeedback] = useState(answer.coach_feedback ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!question) return null;
 
+  const questionText = delivered ? delivered.question_text : live!.question_text;
+  const questionType = question.question_type;
+  const questionImage = delivered ? delivered.image : live!.image;
   const selectedOption = question.options.find((o) => o.id === answer.selected_option_id);
   // Both types are judged by a person rather than scored from an option. The
   // grading UI itself is Phase 4; this only decides what the coach is shown.
@@ -56,9 +65,8 @@ function AnswerRow({
   // fill_blank is deliberately NOT here: it is scored the moment the player
   // types, so offering a coach a Correct/Incorrect button for one would invite
   // them to overrule a decision the server already made and recorded.
-  const needsManualGrading =
-    question.question_type === 'written' || question.question_type === 'draw_response';
-  const isDrawResponse = question.question_type === 'draw_response';
+  const needsManualGrading = questionType === 'written' || questionType === 'draw_response';
+  const isDrawResponse = questionType === 'draw_response';
 
   async function handleGrade(isCorrect: boolean) {
     setError(null);
@@ -86,18 +94,18 @@ function AnswerRow({
         {questionNumber !== undefined && (
           <span className={styles.questionNumber}>Q{questionNumber}</span>
         )}
-        {question.question_text}
+        {questionText}
       </div>
       {isDrawResponse ? (
-        answer.drawing && question.image ? (
+        answer.drawing && questionImage ? (
           <DrawingViewer
-            imageUrl={resolveMediaUrl(question.image.image_url)}
+            imageUrl={resolveMediaUrl(questionImage.image_url)}
             document={answer.drawing.document as DrawingDocument}
-            alt={`Drawing submitted for: ${question.question_text}`}
+            alt={`Drawing submitted for: ${questionText}`}
           />
         ) : (
           <div className={styles.answerValue}>
-            <em>{question.image ? 'Nothing drawn' : 'This question is missing its image'}</em>
+            <em>{questionImage ? 'Nothing drawn' : 'This question is missing its image'}</em>
           </div>
         )
       ) : (
@@ -163,17 +171,12 @@ function AnswerRow({
 export function ResponseRow({
   quiz,
   response,
-  questionNumbers,
   exclusionsByQuestion,
   assignments,
   onChanged,
 }: {
   quiz: Quiz;
   response: PlayerResponse;
-  /** question_id -> the quiz's own number. Supplied by ResultsTab from the
-   *  dashboard so this view and the per-question breakdown share ONE source;
-   *  optional so existing callers and tests keep working unnumbered. */
-  questionNumbers?: Map<number, number>;
   /** question_id -> active exclusions covering it. */
   exclusionsByQuestion?: Map<number, QuestionExclusion[]>;
   assignments?: Map<number, QuizAssignment>;
@@ -185,6 +188,14 @@ export function ResponseRow({
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const answers = response.answers ?? [];
+  // WHAT THIS ATTEMPT RECEIVED, keyed for lookup. Comes with the response
+  // payload, so the numbering and content here are the player's own rather
+  // than the live quiz's.
+  const deliveredById = new Map(
+    (response.delivered_questions ?? [])
+      .filter((d) => d.question_id !== null)
+      .map((d) => [d.question_id as number, d]),
+  );
   const isExcluded = (questionId: number) =>
     (exclusionsByQuestion?.get(questionId)?.length ?? 0) > 0;
 
@@ -209,9 +220,18 @@ export function ResponseRow({
   // excluded written answer, because restoring the question would otherwise
   // leave it unmarked. Mirrors services/scoring.pending_grading_count, which
   // makes the same choice for the same reason.
-  const pendingGrading = answers.filter(
-    (a) => a.is_correct === null && quiz.questions?.find((q) => q.id === a.question_id)?.question_type === 'written',
-  ).length;
+  //
+  // The TYPE comes from the delivered record, not the live question. A
+  // historical component must not mix snapshot semantics for display with
+  // live-type interpretation for grading state - one source, consistently.
+  // (Type edits are blocked once answered, so this changes no count today; it
+  // stops the two from being able to diverge at all.)
+  const pendingGrading = answers.filter((a) => {
+    const type =
+      deliveredById.get(a.question_id)?.question_type ??
+      quiz.questions?.find((q) => q.id === a.question_id)?.question_type;
+    return a.is_correct === null && type === 'written';
+  }).length;
   // Mirrors the backend's get_editable_quiz rule so the UI doesn't offer an
   // action the API will refuse - the server is still the enforcement point.
   const canReset = coach != null && (coach.id === quiz.coach_id || coach.role === 'admin');
@@ -294,7 +314,7 @@ export function ResponseRow({
           key={answer.id}
           answer={answer}
           quiz={quiz}
-          questionNumber={questionNumbers?.get(answer.question_id)}
+          delivered={deliveredById.get(answer.question_id)}
           exclusions={exclusionsByQuestion?.get(answer.question_id)}
           assignments={assignments ?? EMPTY_ASSIGNMENTS}
           onChanged={onChanged}

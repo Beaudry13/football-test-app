@@ -340,6 +340,22 @@ def update_question(quiz_id: int, question_id: int):
         validate_options_for_type(question_type, data["options"])
         _reject_if_already_answered(question, "change this question's answer options")
 
+    # THE HOLE THIS CLOSES. The guard above only fires when `options` is in the
+    # payload, so a question_type change ON ITS OWN walked straight past it -
+    # and past validate_options_for_type with it. Measured damage: converting
+    # an answered multiple-choice question to `written` made every player's
+    # correct answer display as "No answer", because the display consulted the
+    # live type and then read the empty text column.
+    #
+    # Phase 4a makes historical surfaces read the DELIVERED type, so that
+    # particular symptom is fixed at the display end too. This stays blocked
+    # anyway: the type decides how an answer is stored and graded, so changing
+    # it under recorded answers leaves rows whose shape no longer matches the
+    # question that produced them. Unlike text, there is no version of that
+    # which is merely cosmetic.
+    if "question_type" in data and data["question_type"] != question.question_type.value:
+        _reject_if_already_answered(question, "change this question's type")
+
     if "question_text" in data:
         question.question_text = data["question_text"]
 

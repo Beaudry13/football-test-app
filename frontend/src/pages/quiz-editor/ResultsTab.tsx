@@ -130,11 +130,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
     load();
   }, [load]);
 
-  // Built from the dashboard so the expanded player view and the per-question
-  // breakdown cannot disagree about either the numbering or what is excluded.
-  const questionNumbers = new Map(
-    (dashboard?.question_breakdown ?? []).map((q) => [q.question_id, q.question_number]),
-  );
+  // Exclusions come from the dashboard (a live, quiz-level fact). Question
+  // NUMBERING for an expanded player does NOT: that has to be the number the
+  // player was given, which travels with the response payload itself.
   const exclusionsByQuestion = new Map(
     (dashboard?.question_breakdown ?? [])
       .filter((q) => q.exclusions.length > 0)
@@ -308,7 +306,6 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               key={response.id}
               quiz={quiz}
               response={response}
-              questionNumbers={questionNumbers}
               exclusionsByQuestion={exclusionsByQuestion}
               assignments={assignmentsById}
               onChanged={load}

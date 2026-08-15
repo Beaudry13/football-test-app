@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question, QuestionType
+from app.models.question_region import QuestionRegion
 from app.models.answer_drawing import document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
 from app.services.signed_media import (
@@ -57,6 +58,7 @@ from app.services.attempts import (
     upsert_drawing,
 )
 from app.services.drawing_documents import validate_document
+from app.services.delivered_questions import delivered_questions, to_player_payload
 from app.services.question_exclusions import load_for_quizzes
 from app.services.question_snapshots import capture_attempt_snapshots
 from app.utils.validation import load_json_body
@@ -76,7 +78,13 @@ def _invalid_code_error(reason: str) -> ApiError:
     return ApiError(message, status_code=404, reason=reason)
 
 
-def _resolve_answer_text(question: Question, answer: Answer | None) -> str | None:
+def _resolve_answer_text(question, answer: Answer | None) -> str | None:
+    """What to print as the player's answer.
+
+    `question` is a DeliveredQuestion, not the live row: asking the DELIVERED
+    type which column to read is what stops a later question-type change from
+    displaying a correctly-answered multiple-choice question as "No answer".
+    """
     if answer is None:
         return None
     if question.question_type is QuestionType.DRAW_RESPONSE:
@@ -88,10 +96,13 @@ def _resolve_answer_text(question: Question, answer: Answer | None) -> str | Non
         if answer.drawing is not None and document_has_strokes(answer.drawing.document):
             return "Drawing submitted"
         return None
-    if question.question_type in TEXT_ANSWER_TYPES:
+    if question.is_text_answered:
         return answer.answer_text
-    option = next((o for o in question.options if o.id == answer.selected_option_id), None)
-    return option.option_text if option else None
+    # Looked up in the DELIVERED options, so an option whose text was edited
+    # afterwards still reads as the player saw it - falling back to the live
+    # option only when the snapshot never saw that id at all.
+    live = answer.selected_option.option_text if answer.selected_option else None
+    return question.option_text(answer.selected_option_id, fallback=live)
 
 
 def _attach_masked_media(quiz_payload: dict, access_code_id: int) -> None:
@@ -113,6 +124,58 @@ def _attach_masked_media(quiz_payload: dict, access_code_id: int) -> None:
             audience=audience_for_access_code(access_code_id),
         )
         question["masked_image_url"] = f"/api/media/{token}"
+
+
+def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
+    """THE ATTEMPT VERSION INVARIANT, enforced here.
+
+    Once an attempt starts, it stays on the version it was delivered. A coach
+    correcting the quiz afterwards changes what NEW attempts receive and
+    nothing else - so a resumed attempt must be handed its own snapshot rather
+    than today's live questions.
+
+    This is the first moment the server knows WHICH attempt belongs to the
+    caller: /validate-code is identity-free by construction (it returns the
+    roster the player then picks from), so it cannot serve versioned content.
+    That is why the delivered questions ride on /start rather than there.
+
+    Region-backed questions are the one documented seam: their picture is a
+    signed masked render minted per access code, and the snapshot does not
+    record region geometry. The live masked URL is attached here, which is
+    truthful only because region editing stays blocked after delivery.
+    """
+    live_by_id = {question.id: question for question in attempt.quiz.questions}
+    # Which questions are region-backed, in ONE query. Touching
+    # `question.regions` per question instead would be an N+1 on the hottest
+    # player route - /play/start runs once per join for a whole team.
+    region_question_ids = {
+        question_id
+        for (question_id,) in db.session.query(QuestionRegion.question_id)
+        .join(Question, Question.id == QuestionRegion.question_id)
+        .filter(Question.quiz_id == attempt.quiz_id)
+        .all()
+    }
+
+    payload = []
+    for delivered in delivered_questions(attempt, attempt.quiz):
+        # A question hard-deleted after this attempt started leaves a snapshot
+        # with question_id NULL. It cannot be answered (upsert_answer rejects
+        # an id that is not on the quiz), so it is dropped from what the player
+        # is asked rather than rendered as an unanswerable card. The historical
+        # record of it survives untouched in the snapshot.
+        if delivered.question_id is None:
+            continue
+        live = live_by_id.get(delivered.question_id)
+        masked = None
+        if live is not None and live.id in region_question_ids:
+            token = sign_media_token(
+                KIND_QUESTION_MASK,
+                live.id,
+                audience=audience_for_access_code(attempt.access_code_id),
+            )
+            masked = f"/api/media/{token}"
+        payload.append(to_player_payload(delivered, masked_image_url=masked))
+    return payload
 
 
 def _attempt_state(attempt: PlayerAttempt) -> dict:
@@ -141,6 +204,12 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
         # to arrange the already-loaded questions by, so the join flow is
         # untouched.
         "question_order": presented_question_ids(attempt, attempt.quiz),
+        # WHAT THIS ATTEMPT RECEIVED, player-safe. Returned on both a fresh
+        # start and a resume, so a refresh mid-quiz re-renders the delivered
+        # version rather than picking up a correction made since. The client
+        # prefers this over the live questions /validate-code handed it before
+        # the player had identified themselves.
+        "questions": _delivered_payload(attempt),
         "answers": [
             {
                 "question_id": a.question_id,
@@ -492,7 +561,12 @@ def submit_quiz():
         # the frontend's guard cannot drift.
         submitted_by_question = {a["question_id"]: a for a in data["answers"]}
         missing = []
-        for question in access_code.quiz.questions:
+        # THE DELIVERED SET, not today's quiz. An attempt that started with
+        # three questions must be able to finish after answering three, even
+        # if the coach has since added a fourth - it was never given one, and
+        # blocking the submit would strand a player on a question they cannot
+        # see. A NEW attempt receives the fourth and is held to all four.
+        for question in delivered_questions(attempt, access_code.quiz):
             submitted = submitted_by_question.get(question.id)
             if submitted is None:
                 missing.append(question.id)
@@ -626,7 +700,14 @@ def player_results():
         query = query.filter(
             db.func.lower(PlayerAttempt.player_name) == data["player_name"].strip().lower()
         )
-    attempt = query.options(selectinload(PlayerAttempt.answers)).first()
+    attempt = query.options(
+        # `question_snapshots` is what delivered_questions() reads, and
+        # `answers.selected_option` is the compatibility fallback in
+        # _resolve_answer_text - both would otherwise lazy-load per question
+        # and turn one results page into an N+1.
+        selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
+        selectinload(PlayerAttempt.question_snapshots),
+    ).first()
     if attempt is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
@@ -634,31 +715,33 @@ def player_results():
     answers_by_question = {a.question_id: a for a in attempt.answers}
     exclusions = load_for_quizzes([quiz.id])
 
+    # WHAT THIS PLAYER RECEIVED, not what the quiz says today. A coach fixing
+    # the quiz for future players must not rewrite the page this player is
+    # looking at.
     answer_details = []
-    for question in sorted(quiz.questions, key=lambda q: q.position):
-        answer = answers_by_question.get(question.id)
-        correct_option = next((o for o in question.options if o.is_correct_answer), None)
+    for question in delivered_questions(attempt, quiz):
+        answer = answers_by_question.get(question.question_id)
+        correct_option_text = question.correct_option_text
         # A question the coach has stopped counting. The player still sees the
         # question and their own answer - nothing is hidden or deleted - but it
         # is no longer presented as right or wrong, because it no longer is
         # either. The coach's optional private reason is deliberately NOT in
         # this payload; it is a note to themselves, not an explanation owed to
         # the player.
-        excluded = exclusions.excludes(question.id, attempt.access_code_id)
+        excluded = exclusions.excludes(question.question_id, attempt.access_code_id)
 
         answer_details.append(
             {
-                "question_id": question.id,
-                "question_text": question.question_text,
+                "question_id": question.question_id,
+                "question_number": question.number,
+                "question_text": question.text,
                 "question_type": question.question_type.value,
                 "your_answer": _resolve_answer_text(question, answer),
                 # Withheld for an excluded question: showing "the correct
                 # answer was B" next to a neutral chip invites the player to
                 # score it themselves, which is the confusion exclusion exists
                 # to remove.
-                "correct_answer": (
-                    None if excluded else (correct_option.option_text if correct_option else None)
-                ),
+                "correct_answer": (None if excluded else correct_option_text),
                 # None, exactly as an ungraded answer reports - `is_excluded`
                 # is what tells the two apart, so no client can mistake an
                 # excluded question for one still awaiting a coach.

@@ -17,6 +17,8 @@ Phase 1 ships with zero user-visible change, so the last class here asserts
 what must NOT have moved.
 """
 
+import json
+
 import pytest
 
 from app.extensions import db
@@ -1077,12 +1079,36 @@ class TestLifetime:
 
 class TestNothingUserVisibleChanged:
     def test_the_start_payload_says_nothing_about_snapshots(self, client, coach_headers):
+        """SUPERSEDED IN PART BY 4a-bis, AND THE CHANGE IS RECORDED HERE.
+
+        Phase 1 asserted `/play/start` returned exactly its original six keys,
+        because Phase 1's whole promise was zero user-visible change. 4a-bis
+        deliberately breaks that by adding `questions`: serving the attempt its
+        own delivered version is the ATTEMPT VERSION INVARIANT, and it cannot
+        be done without putting delivered content in this response.
+
+        What Phase 1 was actually protecting still holds and is what this test
+        now pins - the SNAPSHOT MECHANISM stays invisible. No snapshot row id,
+        no position, no `from_snapshot`, and above all no answer key.
+        """
         quiz, _ = build_quiz(client, coach_headers, count=2)
         code = activate(client, coach_headers, quiz["id"])
 
         body = start(client, code["id"]).get_json()
 
-        assert set(body) == {"attempt_id", "status", "mode", "question_order", "answers", "feedback"}
+        assert set(body) == {
+            "attempt_id",
+            "status",
+            "mode",
+            "question_order",
+            "answers",
+            "feedback",
+            "questions",  # added by 4a-bis, above
+        }
+        # The mechanism itself leaks nothing, at any depth.
+        blob = json.dumps(body)
+        for internal in ("from_snapshot", "snapshot_id", "is_correct_answer", "expected_answers"):
+            assert internal not in blob
 
     def test_scoring_and_results_are_untouched(self, client, coach_headers):
         quiz, questions = build_quiz(client, coach_headers, count=2)

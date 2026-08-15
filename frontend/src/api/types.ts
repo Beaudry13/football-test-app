@@ -459,10 +459,16 @@ export interface PlayerResponse {
   display_name: string;
   submitted_at: string;
   answers?: Answer[];
+  /** What THIS attempt received, snapshot-backed. Present on the coach's
+   *  Results payloads; absent from older cached responses, in which case the
+   *  UI falls back to the live question exactly as it did before. */
+  delivered_questions?: DeliveredQuestion[];
 }
 
 export interface PlayerResultAnswer {
-  question_id: number;
+  question_id: number | null;
+  /** The number this player was given, not the live position. */
+  question_number: number;
   question_text: string;
   question_type: QuestionType;
   your_answer: string | null;
@@ -511,6 +517,22 @@ export interface QuizAssignment {
   mode: string;
   groups: { id: number; name: string }[];
   submitted_count: number;
+}
+
+/** One question AS ONE ATTEMPT RECEIVED IT.
+ *
+ * Read from Phase 1's delivered-question snapshot, so a coach correcting the
+ * live quiz cannot retitle, renumber or re-picture a result a player already
+ * has. `from_snapshot: false` means the attempt predates Phase 1 and this is
+ * the live question - no history was invented for it. */
+export interface DeliveredQuestion {
+  question_id: number | null;
+  question_number: number;
+  question_text: string;
+  question_type: QuestionType;
+  options: { id: number | null; option_text: string; is_correct_answer: boolean }[];
+  image: { image_url: string; canvas_width: number | null; annotations: unknown[] } | null;
+  from_snapshot: boolean;
 }
 
 export interface QuestionBreakdown {
@@ -629,6 +651,20 @@ export interface PracticeFeedback {
   answer_explanation: string | null;
 }
 
+/** A delivered question as a PLAYER may see it. Built by a dedicated
+ *  server-side serializer that never emits answer-key fields. */
+export interface DeliveredPlayerQuestion {
+  id: number;
+  question_text: string;
+  question_type: QuestionType;
+  options: { id: number; option_text: string }[];
+  image: { image_url: string; canvas_width: number | null; annotations: unknown[] } | null;
+  /** Region-backed questions only: a signed masked render. Comes from the LIVE
+   *  region because the snapshot does not record region geometry - truthful
+   *  only while region editing stays blocked after delivery. */
+  masked_image_url?: string;
+}
+
 export interface AttemptState {
   attempt_id: number;
   status: 'in_progress' | 'submitted';
@@ -642,6 +678,14 @@ export interface AttemptState {
   /** Feedback already earned this attempt, so a refresh does not wipe the
    *  explanations the player was reading. Empty on a graded attempt. */
   feedback: PracticeFeedback[];
+  /** THE ATTEMPT VERSION INVARIANT. What THIS attempt was delivered, from its
+   *  snapshot - so refreshing mid-quiz re-renders the version the player
+   *  started on rather than a correction the coach has made since. Prefer
+   *  this over the questions /validate-code returned, which are live and were
+   *  fetched before the player had identified themselves.
+   *
+   *  Player-safe: no `is_correct_answer`, no `expected_answers`. */
+  questions?: DeliveredPlayerQuestion[];
 }
 
 export interface ApiErrorBody {

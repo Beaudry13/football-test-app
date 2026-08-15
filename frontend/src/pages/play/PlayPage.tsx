@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { getQuizTitleByCode, startAttempt } from '../../api/play';
 import type {
   AssessmentMode,
+  DeliveredPlayerQuestion,
   PracticeFeedback,
   ResumedAnswer,
   ValidateCodeResponse,
@@ -30,6 +31,12 @@ type Step =
       /** The attempt's frozen question order. Re-read from the server on every
        *  start/resume rather than remembered, so a refresh cannot drift. */
       questionOrder?: number[];
+      /** THE ATTEMPT VERSION INVARIANT. What this attempt was delivered,
+       *  re-read from the server on every start/resume. Preferred over
+       *  `joined.quiz.questions`, which /validate-code fetched LIVE before the
+       *  player picked a name - so after a coach correction those two differ,
+       *  and only this one describes the attempt in progress. */
+      deliveredQuestions?: DeliveredPlayerQuestion[];
       initialFeedback: PracticeFeedback[];
       /** Bumped on Try Again. Remounts QuizStep so its answers, feedback and
        * lock state all reset - the alternative, resetting each piece from
@@ -98,8 +105,11 @@ export function PlayPage() {
       initialAnswers: attempt.answers,
       mode: attempt.mode,
       // Try Again created a NEW attempt, so this is a new order - which is
-      // exactly the point of randomized practice.
+      // exactly the point of randomized practice - and a NEW delivered
+      // version: a retake receives the quiz as it stands today, corrections
+      // included, and captures its own snapshot of that.
       questionOrder: attempt.question_order,
+      deliveredQuestions: attempt.questions,
       initialFeedback: attempt.feedback,
       run: step.run + 1,
     });
@@ -135,6 +145,7 @@ export function PlayPage() {
               // rather than re-deriving or remembering it here.
               mode: attempt.mode,
               questionOrder: attempt.question_order,
+              deliveredQuestions: attempt.questions,
               initialFeedback: attempt.feedback,
               run: 0,
             })
@@ -148,6 +159,7 @@ export function PlayPage() {
         <QuizStep
           key={step.run}
           quiz={step.joined.quiz}
+          deliveredQuestions={step.deliveredQuestions}
           accessCodeId={step.joined.access_code_id}
           playerName={step.playerName}
           playerId={step.playerId}

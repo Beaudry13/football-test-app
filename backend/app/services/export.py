@@ -83,6 +83,7 @@ from reportlab.platypus import (
 )
 
 from app.models.question import TEXT_ANSWER_TYPES, QuestionType
+from app.services.delivered_questions import delivered_questions
 from app.services.question_exclusions import NO_EXCLUSIONS
 from app.services.scoring import (
     Outcome,
@@ -616,14 +617,21 @@ def export_filename_slug(title: str) -> str:
 
 
 def _answer_text(question, answer) -> str:
+    """`question` is a DeliveredQuestion - what this attempt was SHOWN.
+
+    Both typed types. This used to ask for "written" specifically, which
+    would have sent every Fill in the Blank answer down the option branch
+    below and printed a blank cell for a player who answered correctly.
+
+    Reading the DELIVERED type and the DELIVERED options is what keeps a later
+    edit from blanking or renaming an answer in an export of a past attempt.
+    """
     if answer is None:
         return ""
-    # Both typed types. This used to ask for "written" specifically, which
-    # would have sent every Fill in the Blank answer down the option branch
-    # below and printed a blank cell for a player who answered correctly.
-    if question.question_type in TEXT_ANSWER_TYPES:
+    if question.is_text_answered:
         return answer.answer_text or ""
-    return answer.selected_option.option_text if answer.selected_option else ""
+    live = answer.selected_option.option_text if answer.selected_option else None
+    return question.option_text(answer.selected_option_id, fallback=live) or ""
 
 
 #: This exporter's WORDS for each outcome. The decision itself belongs to
@@ -677,7 +685,7 @@ def _player_sort_key(response):
     return (jersey is None, jersey if jersey is not None else 0, last_name.lower(), first_name.lower())
 
 
-def _player_result_counts(questions: list, response, exclusions=NO_EXCLUSIONS) -> tuple[dict, dict]:
+def _player_result_counts(questions, response, exclusions=NO_EXCLUSIONS) -> tuple[dict, dict]:
     """Per-question grading result for this one SUBMITTED attempt, plus the
     aggregate counts derived from it - the single pass every summary number
     (page 1's table row, and this Player's own detail-page header) reads
@@ -696,6 +704,10 @@ def _player_result_counts(questions: list, response, exclusions=NO_EXCLUSIONS) -
     the per-question detail pages can still show what the player wrote.
     """
     answers_by_question = {a.question_id: a for a in response.answers}
+    # `questions` is this response's DELIVERED list, so "Unanswered" means a
+    # question THIS player was actually given and skipped - not one the coach
+    # added to the quiz afterwards. Scores are unaffected either way, since
+    # unanswered was never in the denominator.
     counted = count_delivered(
         exclusions.active_questions(questions, response.access_code_id), answers_by_question
     )
@@ -735,23 +747,27 @@ def build_results_csv(quiz, responses: list, exclusions=NO_EXCLUSIONS) -> str:
     writer = csv.writer(buffer)
     writer.writerow(CSV_HEADER)
 
-    questions = sorted(quiz.questions, key=lambda q: q.position)
     for response in sorted(responses, key=lambda r: r.display_name.lower()):
         answers_by_question = {a.question_id: a for a in response.answers}
-        for i, question in enumerate(questions, start=1):
-            answer = answers_by_question.get(question.id)
+        # PER RESPONSE, because two attempts at the same quiz can have received
+        # different content and different ORDER - a randomized practice run
+        # already does, and a coach reordering the quiz makes it true for
+        # graded attempts too. The numbering below is the one this player was
+        # given, not today's.
+        for question in delivered_questions(response, quiz):
+            answer = answers_by_question.get(question.question_id)
             # AN EXCLUDED QUESTION KEEPS ITS ROW. This export is the per-answer
             # evidence trail; dropping the row would destroy exactly what a
             # coach opens it for. Only the verdict changes - the player's
             # answer text and the coach's feedback are still there.
-            excluded = exclusions.excludes(question.id, response.access_code_id)
+            excluded = exclusions.excludes(question.question_id, response.access_code_id)
             verdict = CSV_EXCLUDED_LABEL if excluded else _CSV_OUTCOME_LABELS[classify(answer)]
             writer.writerow(
                 [
                     response.display_name,
                     response.submitted_at.isoformat(),
-                    i,
-                    question.question_text,
+                    question.number,
+                    question.text,
                     question.question_type.value,
                     _answer_text(question, answer),
                     verdict,
@@ -1163,14 +1179,19 @@ def build_detailed_results_pdf(
     wrap_style = styles["wrap"]
     label_style = styles["label"]
 
-    questions = sorted(quiz.questions, key=lambda q: q.position)
     ordered_responses = sorted(responses, key=_player_sort_key)
+
+    # WHAT EACH PLAYER RECEIVED, resolved once. Two attempts at one quiz can
+    # differ in content and order, so this is per response rather than one
+    # shared list read from the live quiz.
+    delivered_per_response = {r.id: delivered_questions(r, quiz) for r in ordered_responses}
 
     # One pass to compute every Player's counts/answers-by-question up
     # front - page 1's summary table and each Player's own detail section
     # both read from this, so the two can never disagree.
     per_response = {
-        r.id: _player_result_counts(questions, r, exclusions) for r in ordered_responses
+        r.id: _player_result_counts(delivered_per_response[r.id], r, exclusions)
+        for r in ordered_responses
     }
 
     # --- Page 1: report header + summary metrics + roster table ---
@@ -1285,19 +1306,21 @@ def build_detailed_results_pdf(
         # chip, then the prompt, then any image, then the answer fields.
         # Every field the old layout printed is still here - the status just
         # moved from a trailing "Result:" line up into the header chip.
-        for i, question in enumerate(questions, start=1):
-            answer = answers_by_question.get(question.id)
+        for question in delivered_per_response[response.id]:
+            answer = answers_by_question.get(question.question_id)
             # THE EXCLUDED QUESTION IS STILL PRINTED. Removing its card would
             # silently drop a page a coach may be looking for, and would hide
             # the player's answer - which is preserved, not deleted. Only the
             # status chip changes, so the report says plainly that this
             # question did not count.
-            excluded = exclusions.excludes(question.id, response.access_code_id)
+            excluded = exclusions.excludes(question.question_id, response.access_code_id)
             result = RESULT_EXCLUDED if excluded else _grading_result(answer)
 
             prompt_group: list = [
-                _question_card_header(theme, styles, i, result),
-                Paragraph(_xml_escape(question.question_text), wrap_style),
+                # The number THIS player was given, so a later reorder cannot
+                # retitle a report that has already been shared.
+                _question_card_header(theme, styles, question.number, result),
+                Paragraph(_xml_escape(question.text), wrap_style),
             ]
             if excluded:
                 prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
@@ -1307,6 +1330,10 @@ def build_detailed_results_pdf(
 
             image_flowable = None
             if question.image is not None:
+                # THE DELIVERED image. After a coach replaces the live one,
+                # Phase 1 has already repointed this at a preserved copy of the
+                # original - reading it here is what finally makes that
+                # preservation visible instead of merely stored.
                 image_flowable = _load_image_flowable(load_image_bytes, question.image.image_url)
             if question.image is not None and image_flowable is None:
                 prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
@@ -1327,11 +1354,15 @@ def build_detailed_results_pdf(
                 if accepted:
                     answer_group.append(Paragraph("ACCEPTED ANSWERS", styles["fieldLabel"]))
                     answer_group.append(Paragraph(_xml_escape(", ".join(accepted)), wrap_style))
-            elif question.question_type not in TEXT_ANSWER_TYPES:
-                correct_option = next((o for o in question.options if o.is_correct_answer), None)
-                if correct_option is not None:
+            elif not question.is_text_answered:
+                # The key AS DELIVERED. Correct-answer changes are still
+                # blocked once answered, so this cannot currently drift - but
+                # reading the snapshot means it stays right if that ever
+                # changes.
+                correct_text = question.correct_option_text
+                if correct_text is not None:
                     answer_group.append(Paragraph("CORRECT ANSWER", styles["fieldLabel"]))
-                    answer_group.append(Paragraph(_xml_escape(correct_option.option_text), wrap_style))
+                    answer_group.append(Paragraph(_xml_escape(correct_text), wrap_style))
 
             rows = [prompt_group, answer_group]
 
