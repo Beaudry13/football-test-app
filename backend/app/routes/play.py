@@ -47,6 +47,7 @@ from app.services.access_codes import (
 )
 from app.services.attempts import (
     DrawingConflict,
+    deliverable_questions,
     find_attempt,
     frozen_question_order,
     presented_question_ids,
@@ -336,6 +337,27 @@ def start_attempt():
                 raise ApiError(ALREADY_SUBMITTED, status_code=409)
         else:
             return jsonify(_attempt_state(existing))
+
+    # NO ZERO-QUESTION ATTEMPTS. Placed deliberately AFTER the resume branch
+    # above: an attempt already underway is never affected by retirement, so it
+    # must be handed back before this can refuse anything.
+    #
+    # Activation checks the same thing, but activation is not enough on its own
+    # - a code activated BEFORE the last question was stopped is still live, and
+    # nothing revokes it.
+    #
+    # THIS IS NOT MERELY TIDY. `delivered_questions()` treats "zero snapshot
+    # rows" as "pre-Phase-1 attempt" and falls back to the LIVE quiz. An
+    # attempt legitimately delivered nothing would therefore render the live
+    # quiz - retired questions included - which is the exact opposite of what
+    # retirement means. Refusing here is what keeps "zero rows = legacy" true.
+    # See docs/DESIGN-question-retirement.md §12.
+    if not deliverable_questions(access_code.quiz):
+        raise ApiError(
+            "This Peira has no questions to send right now. Ask your coach.",
+            status_code=422,
+            reason="no_deliverable_questions",
+        )
 
     attempt = PlayerAttempt(
         quiz_id=access_code.quiz_id,

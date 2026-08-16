@@ -433,8 +433,48 @@ attempt keeps the version it was delivered.
 - **Legacy attempts (no snapshot) fall back to the live question.** That is a
   COMPATIBILITY FALLBACK, not history. No backfill, ever. `from_snapshot` is
   carried through the API so an indicator can be added later.
-- **Do not start Phase 4b (remove from future attempts) or 4c without being
-  asked.**
+- **Do not start Phase 4c without being asked.**
+
+**Phase 4b is implemented, in two steps.**
+
+- **Step 1 - the delivered order.** An attempt's ORDER now comes from its
+  snapshot positions, the same record its CONTENT comes from, so the two
+  cannot disagree. This shipped ALONE, ahead of the feature, because
+  `presented_question_ids` used to rebuild the order from `quiz.questions` on
+  every read - and **graded attempts store `question_order = NULL`**, so any
+  filter on the live list would have reached backwards into attempts already
+  underway. `delivery_question_ids` (live, capture-side) and
+  `presented_question_ids` (snapshot, read-side) are now two functions on
+  purpose. Legacy attempts keep the live reconciliation.
+- **Step 2 - "stop sending this question".** `questions.retired_at` +
+  `retired_by_coach_id`. NULL = deliverable, so no backfill.
+- **ONE PLACE FILTERS: `attempts.deliverable_questions`,** on the NEW-attempt
+  path only. **Never filter `Quiz.questions` at the model layer.** A legacy
+  attempt falls back to the live quiz, so filtering there would delete a
+  retired question out of a PAST attempt that received it; and the editor
+  would lose the row a coach needs in order to restore it.
+- **A zero-question attempt is refused at `/play/start`, not just at
+  activation.** `delivered_questions()` reads "zero snapshot rows" as
+  "pre-Phase-1 attempt" and falls back to the LIVE quiz - so an attempt
+  legitimately delivered nothing would render the live quiz WITH the retired
+  questions in it. Refusing to create one is what keeps "zero rows = legacy"
+  true. A code activated before the last question was stopped is still live,
+  which is why activation alone is not enough.
+- **Activation validates and NUMBERS over deliverable questions only.**
+  "Question 3 needs an image" must mean the third question a future player
+  actually receives.
+- **Retirement is deliberately NOT blocked by `_reject_if_already_answered`.**
+  Every other guard there exists because the operation would corrupt a past
+  attempt; this one cannot. Being usable once players have answered is the
+  entire point - that is when a coach finds out the question was broken.
+- **Duplication carries `retired_at`** (owner decision, Aug 2026): silently
+  reactivating a question a coach stopped would put that exact question back
+  in front of players.
+- **Retirement and Phase 3 exclusion are separate and neither implies the
+  other.** Stopping a question does not excuse the players who already
+  answered it; that is a second, deliberate decision.
+- Coach wording is "Stop sending it" / "Start sending it again". "Retire"
+  stays in the code and out of the UI.
 
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 

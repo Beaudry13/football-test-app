@@ -6,6 +6,7 @@ organization's data - or a teammate's quiz they didn't create.
 """
 
 import json
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
@@ -393,6 +394,60 @@ def delete_question(quiz_id: int, question_id: int):
         _refuse_rather_than_destroy_history(exc)
 
     return "", 204
+
+
+@questions_bp.post("/<int:quiz_id>/questions/<int:question_id>/retire")
+@jwt_required()
+def retire_question(quiz_id: int, question_id: int):
+    """STOP SENDING THIS QUESTION TO NEW ATTEMPTS.
+
+    Deliberately NOT guarded by `_reject_if_already_answered`. Every other
+    guard on this route exists because the operation would corrupt an attempt
+    that already happened; this one cannot. Retirement changes only which
+    questions a FUTURE attempt is built from - it does not touch a delivered
+    snapshot, an answer, a grade or a score. Being usable precisely when
+    players have already taken the quiz is the entire point: that is when a
+    coach discovers the question was broken.
+
+    It is also the one action here that is not destructive, which is why it can
+    be offered where editing options cannot.
+
+    Distinct from Phase 3 exclusion, and neither implies the other. Stopping a
+    question does NOT stop it counting for players who already answered it; a
+    coach who wants both does both, and the UI keeps them apart.
+    """
+    question = _get_editable_question(quiz_id, question_id)
+
+    # Idempotent: re-stopping an already-stopped question keeps the ORIGINAL
+    # timestamp and coach. Overwriting them would rewrite the record of when
+    # the decision was actually made, for no gain.
+    if question.retired_at is None:
+        question.retired_at = datetime.now(timezone.utc)
+        # From the session, never the payload - a client cannot attribute this
+        # decision to another coach.
+        question.retired_by_coach_id = current_coach().id
+        db.session.commit()
+
+    return jsonify(question.to_dict(include_correct_answers=True))
+
+
+@questions_bp.delete("/<int:quiz_id>/questions/<int:question_id>/retire")
+@jwt_required()
+def restore_question(quiz_id: int, question_id: int):
+    """START SENDING THIS QUESTION AGAIN.
+
+    Safe by definition and needs no guard: retirement only ever affected future
+    delivery, so undoing it cannot alter a past attempt, an answer or a score.
+    Nothing is un-deleted here because nothing was deleted.
+    """
+    question = _get_editable_question(quiz_id, question_id)
+
+    if question.retired_at is not None:
+        question.retired_at = None
+        question.retired_by_coach_id = None
+        db.session.commit()
+
+    return jsonify(question.to_dict(include_correct_answers=True))
 
 
 @questions_bp.post("/<int:quiz_id>/questions/reorder")

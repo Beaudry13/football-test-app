@@ -108,3 +108,22 @@ export function updateRegionQuestion(
 ): Promise<Question> {
   return api.patch<Question>(`/quizzes/${quizId}/questions/${questionId}/region`, input);
 }
+
+/** Stop sending this question to NEW attempts.
+ *
+ * Deliberately usable after players have answered - that is precisely when a
+ * coach discovers a question is broken, and it is the one action safe to allow
+ * then, because it changes nothing about an attempt that already received it.
+ *
+ * Separate from a Phase 3 exclusion (`questionExclusions.ts`), which decides
+ * whether the question COUNTS for players who already have it. Neither implies
+ * the other, and the UI keeps them apart. */
+export function retireQuestion(quizId: number, questionId: number): Promise<Question> {
+  return api.post<Question>(`/quizzes/${quizId}/questions/${questionId}/retire`, {});
+}
+
+/** Start sending it again. Safe by definition: retirement only ever affected
+ *  future delivery, so undoing it cannot alter a past attempt or a score. */
+export function restoreQuestion(quizId: number, questionId: number): Promise<Question> {
+  return api.delete<Question>(`/quizzes/${quizId}/questions/${questionId}/retire`);
+}

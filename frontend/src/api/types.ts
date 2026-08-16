@@ -271,6 +271,17 @@ export interface Question {
   needs_image?: boolean;
   /** Present when the question was built from a playbook page. */
   region?: QuestionRegion | null;
+  /** STOPPED FROM FUTURE DELIVERY. New attempts do not receive this question;
+   *  attempts that already received it keep it, keep their answers and keep
+   *  scoring it exactly as before.
+   *
+   *  NOT a soft delete and NOT a reason to hide the row - the editor shows a
+   *  stopped question de-emphasised with a restore action, because one a coach
+   *  cannot see is one they cannot bring back. Distinct from a Phase 3
+   *  exclusion, which decides whether it COUNTS for players who already have
+   *  it; neither implies the other. */
+  is_retired?: boolean;
+  retired_at?: string | null;
   /** The accepted answers for a `fill_blank` question. COACH-ONLY - the API
    *  omits it from every player-facing payload, so it is always undefined in
    *  the player app. */

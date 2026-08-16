@@ -94,6 +94,31 @@ class Question(db.Model):
     answer_explanation = db.Column(db.Text, nullable=True)
     answer_matching = db.Column(db.String(32), nullable=True)
 
+    #: STOP SENDING THIS QUESTION TO NEW ATTEMPTS. NULL = deliverable, which is
+    #: why no backfill was needed: every pre-existing row is correct the moment
+    #: the column appears.
+    #:
+    #: THIS IS NOT A SOFT DELETE, AND IT MUST NEVER BE FILTERED AT THE MODEL
+    #: LAYER. `Quiz.questions` deliberately still contains retired questions.
+    #: Filtering here would rewrite history twice over: a legacy attempt (no
+    #: snapshot) falls back to the live quiz, so a retired question would
+    #: vanish from a past attempt that received it; and the coach's editor
+    #: would lose the row it needs in order to restore it.
+    #:
+    #: Exactly one place filters: `attempts.deliverable_question_ids`, on the
+    #: NEW-attempt path only. See docs/DESIGN-question-retirement.md §4.
+    #:
+    #: Distinct from Phase 3 exclusions on purpose. Retirement changes WHO GETS
+    #: the question in future; exclusion changes WHETHER IT COUNTS for players
+    #: who already got it. Neither implies the other.
+    retired_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: Taken from the authenticated session, never from the payload. SET NULL
+    #: on coach deletion, mirroring how the codebase treats a departed author
+    #: elsewhere - the retirement decision outlives the person who made it.
+    retired_by_coach_id = db.Column(
+        db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True
+    )
+
     quiz = db.relationship("Quiz", back_populates="questions")
     options = db.relationship(
         "QuestionOption",
@@ -124,6 +149,15 @@ class Question(db.Model):
     # failing, since the column is NOT NULL) to null them out first.
     answers = db.relationship("Answer", back_populates="question", passive_deletes=True)
 
+    @property
+    def is_retired(self) -> bool:
+        """Whether this question has been stopped from FUTURE delivery.
+
+        Says nothing about attempts that already received it - they keep it,
+        keep their answers, and keep scoring it exactly as before.
+        """
+        return self.retired_at is not None
+
     def to_dict(self, include_correct_answers: bool = False) -> dict:
         data = {
             "id": self.id,
@@ -151,6 +185,12 @@ class Question(db.Model):
             # V1 permits exactly one region per question, so this is singular
             # in the payload even though the schema stores a list.
             "region": self.regions[0].to_dict() if self.regions else None,
+            # Coach-facing state, NOT a reason to hide the row. The editor
+            # renders a retired question de-emphasised with a restore action -
+            # a retired question a coach cannot see is one they cannot bring
+            # back.
+            "is_retired": self.is_retired,
+            "retired_at": self.retired_at.isoformat() if self.retired_at else None,
         }
         # THE ANSWER. Gated by exactly the same flag that hides which option is
         # correct, because it is exactly the same secret: shipping this to a

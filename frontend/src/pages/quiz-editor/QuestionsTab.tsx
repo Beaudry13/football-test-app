@@ -4,6 +4,8 @@ import {
   createQuestion,
   deleteQuestion,
   reorderQuestions,
+  restoreQuestion,
+  retireQuestion,
   updateQuestion,
   type QuestionInput,
 } from '../../api/questions';
@@ -66,6 +68,43 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
     }
   }
 
+  async function handleRetire(questionId: number, number: number) {
+    setError(null);
+    try {
+      await confirm({
+        title: 'Stop sending this question?',
+        // Says what stays true as plainly as what changes. A coach reaching
+        // for this has just found a broken question and needs to know they are
+        // not about to disturb results that already exist - and that this is
+        // NOT the same button as "don't count it", which lives on Results.
+        body:
+          `Question ${number} won't be included in any new Peira from now on. ` +
+          'Players who already received it keep the question, their answer and ' +
+          "their score - this doesn't change anything they've already done. " +
+          'You can start sending it again at any time.',
+        confirmLabel: 'Stop sending it',
+        action: async () => {
+          await retireQuestion(quiz.id, questionId);
+          await reload();
+        },
+      });
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  async function handleRestore(questionId: number) {
+    // No confirmation: restoring only ever adds a question back to FUTURE
+    // Peiras, so there is nothing to warn about and nothing to undo.
+    setError(null);
+    try {
+      await restoreQuestion(quiz.id, questionId);
+      await reload();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
   async function handleMove(index: number, direction: -1 | 1) {
     const targetIndex = index + direction;
     if (targetIndex < 0 || targetIndex >= questions.length) return;
@@ -106,7 +145,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               onCancel={() => setEditingId(null)}
             />
           ) : (
-            <div key={question.id} className={`${nb.card} ${styles.questionCard}`}>
+            <div
+              key={question.id}
+              className={`${nb.card} ${styles.questionCard} ${
+                question.is_retired ? styles.retiredCard : ''
+              }`}
+            >
               {question.image && (
                 <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
               )}
@@ -116,6 +160,15 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                       add, delete, or reorder without any extra bookkeeping. */}
                   <span className={styles.questionNumber}>Question {index + 1}</span>
                   <span className={`${nb.badge} ${nb.badgeNeutral}`}>{TYPE_LABELS[question.question_type]}</span>
+                  {/* State, not a warning. Stopping a question is a normal
+                      authoring decision, so this reads as a label rather than
+                      an error - and it is always visible, because a stopped
+                      question a coach cannot see is one they cannot restore. */}
+                  {question.is_retired && (
+                    <span className={`${nb.badge} ${styles.retiredBadge}`}>
+                      Not sent to new Peiras
+                    </span>
+                  )}
                 </div>
                 <div className={styles.questionText}>{question.question_text}</div>
                 {question.options.length > 0 && (
@@ -166,6 +219,27 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   >
                     {question.image ? 'Edit image' : 'Add image'}
                   </Link>
+                  )}
+                  {/* THREE NEIGHBOURING ACTIONS, KEPT APART ON PURPOSE.
+                      Edit changes what future players are asked. Stop sending
+                      changes whether they are asked it at all. "Don't count
+                      this question" - which changes scoring for players who
+                      ALREADY answered - deliberately does not live here; it is
+                      on Results, next to the players it affects. */}
+                  {question.is_retired ? (
+                    <button
+                      className={nb.btnSm}
+                      onClick={() => handleRestore(question.id)}
+                    >
+                      Start sending it again
+                    </button>
+                  ) : (
+                    <button
+                      className={nb.btnSm}
+                      onClick={() => handleRetire(question.id, index + 1)}
+                    >
+                      Stop sending it
+                    </button>
                   )}
                   <button
                     className={`${nb.btnSm} ${nb.btnDanger}`}

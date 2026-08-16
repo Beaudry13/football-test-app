@@ -301,8 +301,40 @@ def practice_feedback(attempt, answer) -> dict:
 
 def authored_question_ids(quiz) -> list[int]:
     """The quiz's own order. `Quiz.questions` is ordered by Question.position,
-    so this is simply what the coach authored."""
+    so this is simply what the coach authored.
+
+    INCLUDES RETIRED QUESTIONS, deliberately. This is "what the coach wrote",
+    not "what a new player gets" - see `deliverable_question_ids`.
+    """
     return [question.id for question in quiz.questions]
+
+
+def deliverable_questions(quiz) -> list:
+    """The questions a NEW attempt may receive, in authored order.
+
+    THE ONE PLACE RETIREMENT IS APPLIED. Everything that decides what a new
+    attempt gets - capture, the randomized shuffle, activation validation -
+    comes through here, so retirement cannot be half-implemented by a caller
+    that forgot to filter.
+
+    Equally important is where this is NOT used. It must never filter:
+
+      * `Quiz.questions` at the model layer - a legacy attempt with no
+        snapshot falls back to the live quiz, so filtering there would delete
+        a retired question out of a PAST attempt that received it
+      * the coach's editor - a retired question a coach cannot see is one they
+        cannot restore
+      * any historical surface - Results, CSV, PDF and grading all read the
+        delivered snapshot, which records what was actually sent
+
+    See docs/DESIGN-question-retirement.md §4.
+    """
+    return [question for question in quiz.questions if question.retired_at is None]
+
+
+def deliverable_question_ids(quiz) -> list[int]:
+    """Ids of `deliverable_questions`, in authored order."""
+    return [question.id for question in deliverable_questions(quiz)]
 
 
 def frozen_question_order(quiz, *, randomize: bool, rng=None) -> list[int] | None:
@@ -322,7 +354,10 @@ def frozen_question_order(quiz, *, randomize: bool, rng=None) -> list[int] | Non
     """
     if not randomize:
         return None
-    ids = authored_question_ids(quiz)
+    # DELIVERABLE only. Shuffling retired questions in would put them back in
+    # front of a player through the practice path, which is the one place a
+    # frozen order is stored rather than derived.
+    ids = deliverable_question_ids(quiz)
     # Nothing to shuffle: an empty list would be indistinguishable from "no
     # questions yet" downstream, and a single question has exactly one order.
     if len(ids) < 2:
@@ -349,8 +384,13 @@ def delivery_question_ids(attempt, quiz) -> list[int]:
     The reconciliation still matters here because a randomized practice order
     is frozen microseconds before capture, and the quiz could in principle
     have changed in between.
+
+    RETIREMENT APPLIES HERE, and only on this side. A question stopped from
+    future delivery is absent from what a new attempt is given, and therefore
+    absent from the snapshot that records it - which is what makes every
+    downstream surface agree without any of them knowing retirement exists.
     """
-    live = authored_question_ids(quiz)
+    live = deliverable_question_ids(quiz)
     stored = attempt.question_order
     if not stored:
         return live

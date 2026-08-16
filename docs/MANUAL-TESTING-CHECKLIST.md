@@ -100,6 +100,49 @@ decorative.
 
 ---
 
+## PHASE 4B STEP 2 / STOP SENDING THIS QUESTION
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Committed, NOT yet pushed at time of writing. Carries a migration
+(`eda136c89785`) — additive nullable columns plus a partial index.
+
+A coach can stop a question from going out in new Peiras without deleting it
+or touching anything a player has already done.
+
+- [ ] Stop a question; confirm it disappears from a NEW Peira
+- [ ] Confirm an attempt already in progress still shows it and can be submitted
+- [ ] Confirm the coach editor still SHOWS it, marked "Not sent to new Peiras"
+- [ ] Confirm "Start sending it again" restores it to new Peiras
+- [ ] Confirm existing results, scores and Q# are completely unchanged
+- [ ] Confirm it is still listed on Results with the players' answers intact
+- [ ] Duplicate the quiz; confirm the copy keeps the stopped state and can be
+      restored independently of the original
+- [ ] Stop EVERY question, then try to activate — expect a clean refusal that
+      does not claim the quiz is empty
+- [ ] With a code already active, stop every question, then try to join as a
+      player — expect a clean refusal and NO attempt created
+
+**The one thing worth checking with your own eyes:** that "Stop sending it"
+and "Don't count this question" still read as obviously different actions.
+That is a judgement about wording, which no test can make.
+
+**Failure signals — stop and report:** a stopped question vanishes from an
+attempt already underway; a past result loses a question; a score moves when
+a question is stopped; a player gets a zero-question Peira.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_question_retirement.py` (40 tests) covers all of the above including the
+legacy-attempt fallback, the zero-question refusal, activation renumbering,
+practice Try Again, cross-org authorization, and that stopping a question
+changes no existing grade. `QuestionsTabRetirement.test.tsx` (13 tests) covers
+the coach UI, including that a stopped question stays visible and that the
+editor never offers the Phase 3 exclusion action.
+
+Migration rehearsed upgrade → downgrade → upgrade against a real Postgres.
+
+---
+
 ## Known bounded gap - the Vitest collection flake
 
 `QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped
@@ -107,9 +150,12 @@ decorative.
 the same file each time. It passes standalone (39 tests) and neither commit
 touches it or anything it imports, but it was not part of either green run.
 
+**The third run, shipping Phase 4B step 2, was CLEAN** - all 89 files ran,
+1093 tests, exit 0. So it did not become a reproducible failure, and the
+"worker starvation" hypothesis survives. Two drops then a clean run is
+consistent with load-dependent flakiness and not with a broken file.
+
 This is the documented collection flake (see CLAUDE.md), and the guard is
-doing its job by refusing to call the run green. It is recorded here rather
-than chased, by instruction. Worth noting that it is no longer looking
-random: if a third run drops the same file, the "worker starvation under
-load" hypothesis needs revisiting, because `8063e31`'s run was not competing
-with a backend suite.
+doing its job by refusing to call a short run green. Recorded rather than
+chased, by instruction. Nothing here is outstanding - it is kept as the
+history that makes the next occurrence readable.

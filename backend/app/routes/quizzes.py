@@ -426,6 +426,18 @@ def _copy_questions_into(original, copy_quiz, storage, copied_keys: list[str]) -
             # duplicated a quiz to work around not being able to edit a live
             # one, and every explanation vanished with no error anywhere.
             answer_explanation=question.answer_explanation,
+            # THE COPY STARTS IN THE SAME STATE THE ORIGINAL IS IN. A coach
+            # stops sending a question because it is wrong or unusable;
+            # silently reactivating it in the duplicate would put that exact
+            # question back in front of players, which is the failure this
+            # feature exists to prevent. The copy stays fully visible and
+            # editable with a one-click restore, so nothing is trapped.
+            #
+            # The original decision is copied verbatim, coach included: it
+            # records who stopped sending this content, which is still true of
+            # the copy.
+            retired_at=question.retired_at,
+            retired_by_coach_id=question.retired_by_coach_id,
         )
         db.session.add(copy_question)
         db.session.flush()

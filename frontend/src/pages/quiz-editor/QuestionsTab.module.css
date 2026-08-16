@@ -129,3 +129,23 @@
   font-size: 13px;
   font-weight: 600;
 }
+
+/* A stopped question is DE-EMPHASISED, never hidden. The coach still needs to
+   read it, edit it and restore it - hiding it would make the state
+   unrecoverable from the only screen that can undo it.
+   Opacity alone would carry the meaning by appearance only, so the badge in
+   the header states it in words too. */
+.retiredCard {
+  opacity: 0.62;
+}
+
+.retiredCard:hover,
+.retiredCard:focus-within {
+  opacity: 1;
+}
+
+.retiredBadge {
+  background: var(--peira-surface-3, #333);
+  color: var(--peira-text-muted, #bbb);
+  border: 1px dashed var(--peira-border, #555);
+}

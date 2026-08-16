@@ -385,3 +385,66 @@ reintroduce the bug.
 
 **Explicitly out of scope:** unlocking correct-answer editing, unlocking region
 editing, anything in Phase 4C, Competition, Draw Response.
+
+---
+
+# WHAT SHIPPED
+
+Both steps are implemented. This section records what the implementation
+actually did, including where it differed from the audit above.
+
+## Step 1 — the delivered order (shipped `8063e31`)
+
+Exactly as recommended. `presented_question_ids` reads snapshot positions;
+`delivery_question_ids` is the live-quiz capture side. Splitting them also
+removed a circularity the audit did not anticipate: capture cannot ask a
+record it is in the middle of writing, so a single snapshot-aware function
+would have had to special-case its own caller.
+
+Two pre-existing tests asserted the old contract and were updated rather than
+weakened — see the commit message.
+
+## Step 2 — retirement (shipped in this commit)
+
+Schema, chokepoint, activation, `/play/start` refusal, duplication, reversal
+and UX all landed as designed. Notes on what the audit got right and what it
+did not say:
+
+**§12 was the most valuable finding and it held up.** The zero-question attempt
+really would have fallen through to the legacy path and rendered retired
+questions. `test_it_does_NOT_fall_through_to_the_legacy_path` pins it.
+
+**Retirement is not guarded by `_reject_if_already_answered`.** The audit
+implied this but did not state it. It deserves saying plainly: every other
+guard on that route exists because the operation would corrupt an attempt that
+already happened, and retirement cannot. The one moment it must work is the
+moment every other edit is blocked.
+
+**Duplication: OPTION A**, confirmed by the owner. The copy keeps the stopped
+state, stays fully visible, and restores in one click.
+
+## Things the audit did not anticipate
+
+**Activation ordering.** The image/region checks run BEFORE the roster check,
+so a quiz with no roster still reports its unanswerable questions first. This
+is pre-existing behaviour and unchanged, but it is worth knowing when reading
+an activation failure: the first error you see is not necessarily the only one.
+
+**Query cost needed a different test than expected.** A scale-invariant
+assertion over `/play/start` fails for a legitimate reason — a FRESH start
+writes one snapshot row per question by design, so its query count is properly
+O(n). The filter is measured directly instead: `deliverable_questions` issues
+zero queries against an already-loaded relationship. A `/play/start` guard
+would have been measuring the snapshot writes and calling it an N+1.
+
+## Still not built, deliberately
+
+- Phase 4C (broader editing unlocks) — not started.
+- Correct-answer editing after delivery — still blocked.
+- Region editing after delivery — still blocked. The region exception in
+  `DESIGN-delivered-question-snapshots.md` is unchanged and still load-bearing.
+- No bulk "stop sending" action. One question at a time is the only shape the
+  product currently needs, and a bulk version would need its own confirmation
+  design.
+- Nothing surfaces retirement to players, by design — a stopped question is
+  simply absent from new attempts, with no gap or placeholder.

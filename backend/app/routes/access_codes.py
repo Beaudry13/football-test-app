@@ -15,6 +15,7 @@ from app.models import AccessCode, Group
 from app.models.question import QuestionType
 from app.schemas.access_code import ActivateQuizSchema
 from app.services.access_codes import generate_unique_code
+from app.services.attempts import deliverable_questions
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_optional_json_body
 
@@ -45,8 +46,27 @@ def activate_quiz(quiz_id: int):
         if len(groups) != len(set(data["group_ids"])):
             raise ApiError("One or more selected groups were not found", status_code=404)
 
+    # DELIVERABLE questions, everywhere in this block. Validating over
+    # `quiz.questions` would let a question the coach has stopped sending block
+    # activation over a fault no future player can encounter - and, worse, the
+    # numbering in the error messages below would count questions the players
+    # about to receive this quiz will never see. "Question 3 needs an image" has
+    # to mean the third question they actually get.
+    deliverable = deliverable_questions(quiz)
+
     if not quiz.questions:
         raise ApiError("Cannot activate a quiz with no questions", status_code=422)
+
+    if not deliverable:
+        # Distinct from the message above on purpose: the quiz HAS questions,
+        # they are simply all stopped. Telling the coach "no questions" would
+        # send them looking for content that is right there in the editor.
+        raise ApiError(
+            "Every question in this Peira is stopped, so there is nothing to send. "
+            "Restore a question, or add a new one.",
+            status_code=422,
+            reason="no_deliverable_questions",
+        )
 
     # A Draw Response question with no image is answerable by nobody. The type
     # cannot demand an image at creation - the upload targets an existing
@@ -60,7 +80,7 @@ def activate_quiz(quiz_id: int):
     # coach touching the question at all.
     missing_images = [
         index + 1
-        for index, question in enumerate(quiz.questions)
+        for index, question in enumerate(deliverable)
         if question.question_type is QuestionType.DRAW_RESPONSE and question.image is None
     ]
     if missing_images:
@@ -92,7 +112,7 @@ def activate_quiz(quiz_id: int):
     # trusted from creation time.
     unanswerable = [
         index + 1
-        for index, question in enumerate(quiz.questions)
+        for index, question in enumerate(deliverable)
         if question.question_type is QuestionType.FILL_BLANK
         and (not question.regions or not question.expected_answers)
     ]
