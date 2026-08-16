@@ -65,9 +65,51 @@ breaks; the player cannot submit; `/play/start` 500s.
 - Historical Results / CSV / PDF read delivered content
 - Query counts stay flat as quiz length grows
 
-### Known bounded gap
+---
 
-`QuestionEditor.test.tsx` did not run in the last `npm run test:ci` (the
-documented collection flake - see CLAUDE.md). It passes standalone and
-nothing in `94b63c2` touches it or its imports, but that file was not part
-of the green run that shipped this commit.
+## PHASE 4B STEP 1 / DELIVERED ORDER
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped in `8063e31` (16 Aug 2026). Deployed and health verified.
+
+An attempt's question ORDER now comes from its delivered snapshot rather than
+from the live quiz. Backend only - no frontend change, no schema change.
+
+**The one deliberate behaviour change a coach can notice:** a question added
+to a quiz while an attempt is in progress no longer appears in that attempt.
+It previously appeared at the end. New attempts receive it as before.
+
+Best folded into the Phase 4A walkthrough above - same attempt, a few extra
+steps:
+
+- [ ] With an attempt in progress, reorder the live quiz; confirm the open
+      attempt keeps its original order and Q# on refresh
+- [ ] Confirm a NEW attempt shows the new order
+- [ ] With an attempt in progress, add a question; confirm the open attempt
+      does NOT gain it and can still be submitted
+- [ ] Confirm a NEW attempt does receive it
+- [ ] Randomized practice: confirm a resumed attempt keeps its shuffle
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_delivered_order.py` (17 tests) covers every case above, including the
+graded `question_order = NULL` path that made this necessary, snapshot
+immutability, and the legacy fallback. Three of those tests were confirmed to
+FAIL against the previous behaviour, so they are load-bearing rather than
+decorative.
+
+---
+
+## Known bounded gap - the Vitest collection flake
+
+`QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped
+`94b63c2`, **nor in the one that shipped `8063e31`** - two consecutive runs,
+the same file each time. It passes standalone (39 tests) and neither commit
+touches it or anything it imports, but it was not part of either green run.
+
+This is the documented collection flake (see CLAUDE.md), and the guard is
+doing its job by refusing to call the run green. It is recorded here rather
+than chased, by instruction. Worth noting that it is no longer looking
+random: if a third run drops the same file, the "worker starvation under
+load" hypothesis needs revisiting, because `8063e31`'s run was not competing
+with a backend suite.
