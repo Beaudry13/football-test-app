@@ -49,6 +49,16 @@ export function applyDeliveredContent(
             image_url: d.image.image_url,
             canvas_width: d.image.canvas_width,
             annotations: d.image.annotations,
+            // THE DELIVERED IMAGE'S IDENTITY WINS (Phase A). A Draw Response
+            // document records this as `source.image_id`, so taking it from
+            // the live question would bind a drawing to whatever the coach
+            // last uploaded rather than to the picture under the player's
+            // strokes. The server refuses a mismatch, so this is the client
+            // half of one rule rather than a second opinion.
+            //
+            // Falls back to the live id only when the snapshot predates
+            // Phase A and genuinely does not record one.
+            id: d.image.id ?? base?.image?.id,
           }
         : null,
       // Region-backed questions only. Their picture is a signed masked render

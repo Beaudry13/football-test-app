@@ -94,6 +94,18 @@ def build_snapshot(question: Question) -> dict:
         # `canvas_width` names, against that specific image.
         "image": (
             {
+                # THE DELIVERED IMAGE'S IDENTITY, recorded as a historical
+                # fact rather than a live foreign key. After a coach replaces
+                # the picture this id names a QuestionImage row that no longer
+                # exists - which is exactly right: it is what the player's
+                # client called the image it was given, and it is what a
+                # Draw Response document's `source.image_id` was bound to.
+                #
+                # Recorded here rather than in a second versioning system,
+                # because the snapshot ALREADY answers "what did this attempt
+                # receive"; the drawing binding is one more field of that same
+                # answer. See docs/DESIGN-draw-response-phase-4.md.
+                "image_id": image.id,
                 "image_url": image.image_url,
                 "canvas_width": image.canvas_width,
                 "annotations": image.annotations or [],

@@ -393,10 +393,17 @@ class TestSnapshotContents:
         with app.app_context():
             snapshot = snapshots_for(attempt_id)[0].snapshot
             assert snapshot["image"] == {
+                # Added by Draw Response Phase A: the image's identity, so a
+                # drawing can be bound permanently to the picture it was made
+                # on. It travels with the other three for the same reason they
+                # travel together - a drawing, its image and its coordinate
+                # space are one fact.
+                "image_id": snapshot["image"]["image_id"],
                 "image_url": image_url,
                 "canvas_width": 900,
                 "annotations": annotations,
             }
+            assert isinstance(snapshot["image"]["image_id"], int)
 
     def test_a_question_with_no_image_records_none(self, app, client, coach_headers):
         quiz, _ = build_quiz(client, coach_headers, count=1)

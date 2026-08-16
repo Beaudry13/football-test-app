@@ -59,7 +59,11 @@ from app.services.attempts import (
     upsert_drawing,
 )
 from app.services.drawing_documents import validate_document
-from app.services.delivered_questions import delivered_questions, to_player_payload
+from app.services.delivered_questions import (
+    delivered_by_question_id,
+    delivered_questions,
+    to_player_payload,
+)
 from app.services.question_exclusions import load_for_quizzes
 from app.services.question_snapshots import capture_attempt_snapshots
 from app.utils.validation import load_json_body
@@ -493,6 +497,44 @@ def check_answer():
     return jsonify(practice_feedback(attempt, answer)), 200
 
 
+def _reject_drawing_bound_to_another_image(attempt, question_id, document) -> None:
+    """A drawing must belong to the picture THIS attempt was delivered.
+
+    PHASE A. `source.image_id` is authored on the client, and before this the
+    client read it from the LIVE question - so a coach replacing the image
+    mid-attempt could produce a drawing whose strokes were made on one picture
+    while claiming another. Nothing downstream would ever notice: the coach's
+    viewer renders the delivered image and the stored strokes side by side and
+    trusts that they belong together.
+
+    The delivered snapshot already records which image was sent. This makes
+    that record ENFORCED rather than merely available, which is what turns
+    "drawing + delivered image + delivered coordinate space" from a convention
+    into an invariant.
+
+    Silent on legacy data BY DESIGN. A snapshot written before Phase A has no
+    `image_id`, and a pre-Phase-1 attempt has no snapshot at all. `None` means
+    "not recorded", never "matches anything" - so those attempts keep working
+    exactly as they did, and no history is invented for them.
+    """
+    delivered = delivered_by_question_id(attempt, attempt.quiz).get(question_id)
+    if delivered is None or delivered.image is None:
+        return
+    if delivered.image.image_id is None:
+        return
+
+    claimed = (document.get("source") or {}).get("image_id")
+    # Compared as strings: the document carries it as a string (it is a client
+    # -authored JSON field), the snapshot as an int.
+    if str(claimed) != str(delivered.image.image_id):
+        raise ApiError(
+            "This drawing was made on a different version of the image. "
+            "Reload the page and try again.",
+            status_code=409,
+            reason="drawing_image_mismatch",
+        )
+
+
 @play_bp.put("/drawing")
 # Same per-IP budget as the text autosave: a whole team drawing at once must
 # not trip it, and a drawing save is debounced far more heavily than a
@@ -530,6 +572,7 @@ def save_drawing():
         )
 
     document = validate_document(data["document"])
+    _reject_drawing_bound_to_another_image(attempt, data["question_id"], document)
 
     try:
         drawing = upsert_drawing(attempt, data["question_id"], document, data["base_revision"])

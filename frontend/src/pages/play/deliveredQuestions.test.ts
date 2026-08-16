@@ -45,6 +45,7 @@ const delivered = (over: Partial<DeliveredPlayerQuestion> = {}): DeliveredPlayer
     { id: 12, option_text: 'OLD option B' },
   ],
   image: {
+    id: 400,
     image_url: '/preserved-old.png',
     canvas_width: 800,
     annotations: [{ kind: 'old' }],
@@ -81,12 +82,28 @@ describe('applyDeliveredContent', () => {
     expect(merged.image?.annotations).toEqual([{ kind: 'old' }]);
   });
 
-  it('keeps the LIVE image id and updated_at, which key Draw Response strokes', () => {
-    // Content comes from the snapshot; the identity the drawing layer caches
-    // against does not, because a saved stroke is keyed to the live row.
+  it('binds to the DELIVERED image id, not the live one', () => {
+    // PHASE A. A Draw Response document records this as `source.image_id`.
+    // Taking it from the live question would bind a drawing to whatever the
+    // coach last uploaded rather than to the picture under the strokes - and
+    // the server now refuses that mismatch outright.
     const [merged] = applyDeliveredContent([liveQuestion()], [delivered()]);
 
+    expect((merged.image as unknown as { id: number }).id).toBe(400);
+  });
+
+  it('falls back to the live image id when the snapshot predates Phase A', () => {
+    const old = delivered();
+    (old.image as unknown as { id: number | null }).id = null;
+
+    const [merged] = applyDeliveredContent([liveQuestion()], [old]);
+
     expect((merged.image as unknown as { id: number }).id).toBe(500);
+  });
+
+  it('keeps the live updated_at, which the drawing layer caches against', () => {
+    const [merged] = applyDeliveredContent([liveQuestion()], [delivered()]);
+
     expect((merged.image as unknown as { updated_at: string }).updated_at).toBe(
       '2026-08-15T00:00:00Z',
     );

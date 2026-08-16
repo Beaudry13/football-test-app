@@ -897,7 +897,11 @@ class TestDrawResponseInPractice:
         from tests.test_drawings import _document, build_drawing_quiz
 
         quiz, question, _ = build_drawing_quiz(client, coach_headers)
-        document = _document()
+        # Bound to the image this attempt is delivered. Since Draw Response
+        # Phase A the server refuses a drawing whose source names a different
+        # image, and this test calls /play/drawing directly rather than through
+        # test_drawings.save_drawing, which does the same binding.
+        document = _document(image_id=question["image"]["id"])
         code = activate(client, coach_headers, quiz["id"], mode=PRACTICE)
         start(client, code)
         first = client.put(

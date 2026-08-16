@@ -674,7 +674,14 @@ export interface DeliveredPlayerQuestion {
   question_text: string;
   question_type: QuestionType;
   options: { id: number; option_text: string }[];
-  image: { image_url: string; canvas_width: number | null; annotations: unknown[] } | null;
+  image: {
+    /** The DELIVERED image's identity - what a Draw Response document binds to
+     *  as `source.image_id`. Null on a snapshot written before Phase A. */
+    id: number | null;
+    image_url: string;
+    canvas_width: number | null;
+    annotations: unknown[];
+  } | null;
   /** Region-backed questions only: a signed masked render. Comes from the LIVE
    *  region because the snapshot does not record region geometry - truthful
    *  only while region editing stays blocked after delivery. */

@@ -59,6 +59,14 @@ class DeliveredImage:
     image_url: str
     canvas_width: int | None
     annotations: list
+    #: WHAT THE PLAYER'S CLIENT CALLED THIS IMAGE. A Draw Response document
+    #: records it as `source.image_id`, so this is the field that binds a
+    #: drawing permanently to the picture it was drawn on.
+    #:
+    #: None for a snapshot written before Phase A, and for the legacy
+    #: live-question fallback where no delivery was ever recorded. None means
+    #: "not recorded" and must never be treated as "matches anything".
+    image_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -167,6 +175,7 @@ def _from_snapshot(row: AttemptQuestionSnapshot, number: int) -> DeliveredQuesti
                 image_url=image.get("image_url"),
                 canvas_width=image.get("canvas_width"),
                 annotations=list(image.get("annotations") or []),
+                image_id=image.get("image_id"),
             )
             if isinstance(image, dict) and image.get("image_url")
             else None
@@ -207,6 +216,7 @@ def _from_live(question, number: int) -> DeliveredQuestion:
                 image_url=question.image.image_url,
                 canvas_width=question.image.canvas_width,
                 annotations=list(question.image.annotations or []),
+                image_id=question.image.id,
             )
             if question.image is not None
             else None
@@ -279,6 +289,10 @@ def to_player_payload(delivered: DeliveredQuestion, masked_image_url: str | None
         ],
         "image": (
             {
+                # The DELIVERED identity, so the client binds a new drawing to
+                # the picture this attempt actually received rather than to
+                # whatever the live question points at today.
+                "id": delivered.image.image_id,
                 "image_url": delivered.image.image_url,
                 "canvas_width": delivered.image.canvas_width,
                 "annotations": delivered.image.annotations,
@@ -310,6 +324,7 @@ def to_payload(delivered: DeliveredQuestion) -> dict:
         ],
         "image": (
             {
+                "id": delivered.image.image_id,
                 "image_url": delivered.image.image_url,
                 "canvas_width": delivered.image.canvas_width,
                 "annotations": delivered.image.annotations,

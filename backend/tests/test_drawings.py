@@ -10,14 +10,21 @@ routes that matter rather than calling it directly.
 from tests.conftest import make_image_file
 
 
-def _document(strokes=1, coordinate_width=1400, coordinate_height=788):
+def _document(strokes=1, coordinate_width=1400, coordinate_height=788, image_id="1"):
     """A minimal but structurally valid DrawingDocument, matching the client's
-    envelope in frontend/src/components/drawing/types.ts."""
+    envelope in frontend/src/components/drawing/types.ts.
+
+    `image_id` defaults to "1" for the tests that never reach the binding check
+    (malformed envelopes, wrong question type). Every test that actually SAVES
+    passes the delivered image's real id, because since Phase A the server
+    refuses a drawing bound to an image the attempt was not given - and a
+    hardcoded literal is exactly the mismatch that check exists to catch.
+    """
     return {
         "format": "peira.drawing",
         "version": 1,
         "source": {
-            "image_id": "1",
+            "image_id": str(image_id),
             "image_version": "2026-08-07T00:00:00Z",
             "natural_width": 2400,
             "natural_height": 1350,
@@ -59,6 +66,12 @@ def build_drawing_quiz(client, headers, require_all=False):
         headers=headers,
         content_type="multipart/form-data",
     )
+    # Re-read so the returned question carries its image - `save_drawing`
+    # binds documents to it, the way a real client binds to the image it was
+    # delivered.
+    question = client.get(f"/api/quizzes/{quiz['id']}", headers=headers).get_json()[
+        "questions"
+    ][0]
 
     client.put(
         f"/api/quizzes/{quiz['id']}/roster", json={"players": ["Jordan Smith"]}, headers=headers
@@ -75,6 +88,15 @@ def build_drawing_quiz(client, headers, require_all=False):
 
 
 def save_drawing(client, access_code, question, document, base_revision=None):
+    # STANDS IN FOR THE CLIENT'S BINDING. Since Phase A the server refuses a
+    # drawing whose `source.image_id` is not the image this attempt was
+    # delivered, and a real client always binds to the delivered image. The
+    # placeholder id in `_document` is rewritten here so these tests exercise
+    # what they are actually about - revisions, conflicts, question types -
+    # rather than all failing on the binding check.
+    image = (question or {}).get("image")
+    if image and document.get("source", {}).get("image_id") == "1":
+        document = {**document, "source": {**document["source"], "image_id": str(image["id"])}}
     return client.put(
         "/api/play/drawing",
         json={
