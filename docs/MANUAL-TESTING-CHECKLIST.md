@@ -103,8 +103,12 @@ decorative.
 ## PHASE 4B STEP 2 / STOP SENDING THIS QUESTION
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
-Committed, NOT yet pushed at time of writing. Carries a migration
-(`eda136c89785`) — additive nullable columns plus a partial index.
+Shipped in `0bef0e1` (16 Aug 2026). Deployed and health verified.
+
+Carries migration `eda136c89785` — additive nullable columns plus a partial
+index. Render's pre-deploy `flask db upgrade` succeeded, so the migration
+applied; the Alembic head is **inferred from that**, not read directly (no
+shell access from here).
 
 A coach can stop a question from going out in new Peiras without deleting it
 or touching anything a player has already done.
@@ -122,9 +126,17 @@ or touching anything a player has already done.
 - [ ] With a code already active, stop every question, then try to join as a
       player — expect a clean refusal and NO attempt created
 
-**The one thing worth checking with your own eyes:** that "Stop sending it"
-and "Don't count this question" still read as obviously different actions.
-That is a judgement about wording, which no test can make.
+**THE ONE ITEM THAT GENUINELY NEEDS A HUMAN.** Verify that:
+
+- **"Stop sending it"** (this feature — future delivery), and
+- **"Don't count this question"** (Phase 3 — scoring for players who already
+  answered)
+
+feel clearly different in the real coach UI. They live on different screens
+and use different words, but whether a coach actually reads them as two
+distinct decisions is a product wording judgement, not an automated gate. No
+test can make it, and getting it wrong means someone changes a score when they
+meant to change a syllabus.
 
 **Failure signals — stop and report:** a stopped question vanishes from an
 attempt already underway; a past result loses a question; a score moves when
