@@ -345,8 +345,14 @@ class TestAllowedAfterAnswers:
 
         assert retire(client, coach_headers, quiz3["id"], quiz3["q2"]["id"]).status_code == 200
 
-    def test_editing_the_options_is_STILL_blocked(self, client, coach_headers, quiz3):
-        """Retirement does not unlock anything. The edit locks are untouched."""
+    def test_changing_the_ANSWER_KEY_is_still_blocked(self, client, coach_headers, quiz3):
+        """Retirement does not unlock grading, and neither does Phase 4C.
+
+        This used to assert that ANY option edit was blocked. Phase 4C allows
+        rewording an option after delivery (the row is mutated in place, so no
+        answer is detached), so what belongs here now is the half that stays
+        shut: moving which answer is correct.
+        """
         start(client, quiz3["code"])
         client.post(
             "/api/play/answers",
@@ -363,13 +369,14 @@ class TestAllowedAfterAnswers:
             f"/api/quizzes/{quiz3['id']}/questions/{quiz3['q2']['id']}",
             json={
                 "options": [
-                    {"option_text": "New", "is_correct_answer": True},
-                    {"option_text": "Other", "is_correct_answer": False},
+                    {"option_text": "Right", "is_correct_answer": False},
+                    {"option_text": "Wrong", "is_correct_answer": True},
                 ]
             },
             headers=coach_headers,
         )
         assert blocked.status_code == 422
+        assert blocked.get_json()["reason"] == "correct_answer_change_blocked"
 
 
 # ---------------------------------------------------------------------------

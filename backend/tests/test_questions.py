@@ -3,6 +3,7 @@
 import io
 import json
 
+from app.models import Answer
 from tests.conftest import make_image_file
 from tests.test_play_and_grading import build_ready_quiz, start_and_submit
 
@@ -238,28 +239,56 @@ def test_wrong_file_extension_is_rejected(client, coach_headers):
 
 
 def test_cannot_change_options_on_a_question_players_have_already_answered(client, coach_headers):
-    """Answer.question_id/selected_option_id cascade (DELETE/SET NULL) so an
-    edit never crashes - but that same cascade would silently detach an
-    already-graded answer from its option with no audit trail. Once a real
-    answer exists, this must be a loud 422, not a quiet data loss."""
+    """REWRITTEN FOR PHASE 4C. The property is unchanged; the mechanism is not.
+
+    This used to assert a blanket 422 on any option edit after an answer
+    existed, because the only edit path cleared the option list and rebuilt it
+    - which silently detached an already-graded answer from its option, with no
+    audit trail.
+
+    Phase 4C edits a delivered question's options IN PLACE instead, so
+    rewording no longer detaches anything and is allowed. What must still be
+    refused is the part that was actually dangerous: removing an option a
+    player may have chosen, and changing which answer is correct.
+    """
     quiz, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
+    chosen_option_id = tf_question["options"][0]["id"]
     start_and_submit(
-        client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"], "selected_option_id": tf_question["options"][0]["id"]}]
+        client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"], "selected_option_id": chosen_option_id}]
     )
 
-    response = client.patch(
+    # Rewording: allowed, and the row the answer points at survives.
+    reworded = client.patch(
         f"/api/quizzes/{quiz['id']}/questions/{tf_question['id']}",
         json={
             "options": [
-                {"option_text": "True", "is_correct_answer": True},
-                {"option_text": "False", "is_correct_answer": False},
+                {"option_text": "Yes", "is_correct_answer": True},
+                {"option_text": "No", "is_correct_answer": False},
             ]
         },
         headers=coach_headers,
     )
+    assert reworded.status_code == 200, reworded.get_json()
+    assert [o["id"] for o in reworded.get_json()["options"]][0] == chosen_option_id
 
-    assert response.status_code == 422
-    assert "already answered" in response.get_json()["error"].lower()
+    with client.application.app_context():
+        answer = Answer.query.filter_by(question_id=tf_question["id"]).one()
+        assert answer.selected_option_id == chosen_option_id, "never detached"
+        assert answer.is_correct is True, "and never regraded"
+
+    # Changing which answer is correct: still refused.
+    rekeyed = client.patch(
+        f"/api/quizzes/{quiz['id']}/questions/{tf_question['id']}",
+        json={
+            "options": [
+                {"option_text": "Yes", "is_correct_answer": False},
+                {"option_text": "No", "is_correct_answer": True},
+            ]
+        },
+        headers=coach_headers,
+    )
+    assert rekeyed.status_code == 422
+    assert rekeyed.get_json()["reason"] == "correct_answer_change_blocked"
 
 
 def test_can_still_edit_question_text_after_players_have_answered(client, coach_headers):

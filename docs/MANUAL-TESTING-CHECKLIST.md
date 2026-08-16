@@ -155,6 +155,46 @@ Migration rehearsed upgrade → downgrade → upgrade against a real Postgres.
 
 ---
 
+## PHASE 4C / SAFE CORRECTIONS
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Implemented, NOT committed at time of writing. No migration.
+
+A coach can now reword an option, add an option, replace or delete the image
+and redraw annotations on a question players have already received.
+
+**API-level dev verification was performed** against a running local backend:
+reword 200, add option 200, move-the-correct-answer 422, remove-option 422,
+and the resumed attempt still served its delivered options. What was NOT done
+is a visual browser pass - see below.
+
+- [ ] Reword an option on a delivered question; confirm the notice appears
+- [ ] Confirm the notice reads as an explanation, not a warning - it should
+      not make a coach hesitate to fix a genuine mistake
+- [ ] Confirm a brand-new question shows NO notice
+- [ ] Confirm an in-progress attempt still shows the old wording on refresh
+- [ ] Confirm a new attempt shows the corrected wording
+- [ ] Add an option; confirm an in-progress attempt does not gain it
+- [ ] Replace an image; confirm past results still show the old picture
+- [ ] Confirm the refusal messages for correct-answer and option-removal read
+      clearly and point at the right alternative
+
+**THE VISUAL CHECK IS THE GAP.** The notice's wording is asserted by tests;
+its *tone* is not, and cannot be. Whether it reassures or alarms is the thing
+worth your eyes. I did not drive the coach UI in a browser because doing so
+needs a login, and entering credentials is outside what I do.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_safe_corrections.py` (32 tests) covers every unlock and every remaining
+block, including that the option ROW survives a reword so no answer is
+detached, that a refused edit changes nothing at all, that snapshots are never
+mutated, and that no answer row is touched by any correction.
+`QuestionEditorDelivered.test.tsx` (7 tests) covers the notice, including that
+it carries no alert role and none of the vocabulary of a hazard.
+
+---
+
 ## Known bounded gap - the Vitest collection flake
 
 `QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped

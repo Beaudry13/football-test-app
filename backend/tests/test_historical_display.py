@@ -198,9 +198,15 @@ class TestCorrectingTheQuizDoesNotRewriteHistory:
         self, client, coach_headers
     ):
         """The one reachable gap, handled explicitly: start (snapshot taken),
-        options edited while unanswered, THEN answered with a new option id.
+        an option ADDED while unanswered, THEN answered with that new option id.
         Blanking the cell would erase a real answer to protect a record that
-        does not describe it."""
+        does not describe it.
+
+        Reached via an APPENDED option since Phase 4C. Rewording a delivered
+        question's options now mutates the rows in place, so it can no longer
+        produce an id the snapshot never saw - adding one still can, and that
+        is exactly the case this fallback exists for.
+        """
         quiz = client.post(
             "/api/quizzes", json={"title": "Late answer"}, headers=coach_headers
         ).get_json()
@@ -217,13 +223,14 @@ class TestCorrectingTheQuizDoesNotRewriteHistory:
             f"/api/quizzes/{quiz['id']}/questions/{question['id']}",
             json={
                 "options": [
-                    {"option_text": "NEW RIGHT", "is_correct_answer": True},
-                    {"option_text": "NEW WRONG", "is_correct_answer": False},
+                    {"option_text": "OLD RIGHT", "is_correct_answer": True},
+                    {"option_text": "OLD WRONG", "is_correct_answer": False},
+                    {"option_text": "NEW RIGHT", "is_correct_answer": False},
                 ]
             },
             headers=coach_headers,
         ).get_json()
-        new_right = next(o["id"] for o in updated["options"] if o["is_correct_answer"])
+        new_right = next(o["id"] for o in updated["options"] if o["option_text"] == "NEW RIGHT")
 
         client.post(
             "/api/play/submit",

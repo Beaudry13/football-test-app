@@ -159,9 +159,15 @@ class TestOptionCorrection:
             },
             headers=coach_headers,
         )
-        assert updated.status_code == 200, "allowed - nobody has answered yet"
+        assert updated.status_code == 200
         new_ids = {o["id"] for o in updated.get_json()["options"]}
-        assert not (original & new_ids), "the edit really did replace the rows"
+        # PHASE 4C CHANGED THE MECHANISM HERE. This used to assert the edit
+        # replaced the option ROWS, because the only edit path cleared the list
+        # and rebuilt it. A delivered question is now edited IN PLACE, so the
+        # ids survive - which is strictly safer, since nothing referencing them
+        # can be orphaned. The delivered TEXT below is what proves the resumed
+        # attempt is reading its snapshot rather than the live rows.
+        assert new_ids == original, "4C edits in place, so ids are preserved"
 
         resumed = start(client, started["code"]).get_json()
         resumed_ids = {o["id"] for o in resumed["questions"][0]["options"]}

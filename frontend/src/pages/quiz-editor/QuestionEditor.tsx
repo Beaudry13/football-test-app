@@ -19,6 +19,13 @@ interface QuestionEditorProps {
   submitLabel: string;
   onSave: (input: QuestionInput, image?: File | null) => Promise<void>;
   onCancel: () => void;
+  /** Whether players have ALREADY RECEIVED this question, from the delivered
+   *  snapshot rather than from answer rows - a question can be delivered and
+   *  skipped, and correcting that one matters just as much.
+   *
+   *  Drives the explanatory notice only. It is not a lock: the API is the
+   *  enforcement point and refuses the genuinely unsafe edits on its own. */
+  hasBeenDelivered?: boolean;
   /** Offers an image picker whose file is held here until save.
    *
    *  Only the create flow passes this. Editing keeps its existing route to the
@@ -47,6 +54,7 @@ export function QuestionEditor({
   submitLabel,
   onSave,
   onCancel,
+  hasBeenDelivered = false,
   allowImage = false,
 }: QuestionEditorProps) {
   const [questionText, setQuestionText] = useState(initialText);
@@ -245,6 +253,23 @@ export function QuestionEditor({
         <div ref={errorRef} tabIndex={-1} className={styles.errorAnchor}>
           <ErrorBanner message={error} />
         </div>
+      )}
+
+      {/* EXPLAINS THE BOUNDARY, DOES NOT DISCOURAGE THE FIX.
+          Deliberately a plain note rather than a warning banner: correcting a
+          mistake is the behaviour we want, and dressing it as a hazard would
+          push a coach toward leaving a bad question in place. It says what
+          stays true first, because that is the thing a coach is actually
+          unsure about.
+          Shown only once players have RECEIVED the question - a never-
+          delivered question has no boundary to explain. */}
+      {hasBeenDelivered && (
+        <p className={styles.deliveredNote}>
+          <strong>This changes the question for future attempts only.</strong>{' '}
+          Players who already received it keep the version they got, along with
+          their answers and scores. The image players already saw is kept with
+          their results.
+        </p>
       )}
 
       <div className={nb.field}>

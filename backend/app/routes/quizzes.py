@@ -34,6 +34,7 @@ from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
 from app.services.file_storage import StorageError, get_file_storage
 from app.services.question_exclusions import sql_not_excluded
+from app.services.question_snapshots import delivered_question_ids_for_quiz
 from app.services.scoring import score_percent
 from app.utils.auth import (
     current_coach,
@@ -296,11 +297,32 @@ def create_quiz():
     return jsonify(quiz.to_dict()), 201
 
 
+def _flag_delivered(payload: dict, quiz_id: int) -> dict:
+    """Mark which questions players have already RECEIVED.
+
+    Phase 4C's warning trigger. Attached here rather than in `Question.to_dict`
+    because the model cannot answer it without a query per question, and this
+    payload is the coach's editor - the one screen where an N+1 would be felt.
+
+    Snapshot-based, deliberately: a question can be delivered and SKIPPED, and
+    a coach correcting that question needs the warning just as much as one
+    correcting a question people answered. See has_been_delivered.
+    """
+    delivered = delivered_question_ids_for_quiz(quiz_id)
+    for question in payload.get("questions", []):
+        question["has_been_delivered"] = question["id"] in delivered
+    return payload
+
+
 @quizzes_bp.get("/<int:quiz_id>")
 @jwt_required()
 def get_quiz(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
-    return jsonify(quiz.to_dict(include_questions=True, include_correct_answers=True))
+    return jsonify(
+        _flag_delivered(
+            quiz.to_dict(include_questions=True, include_correct_answers=True), quiz.id
+        )
+    )
 
 
 @quizzes_bp.patch("/<int:quiz_id>")

@@ -17,7 +17,7 @@ yet; scores, grading, Results, exports and analytics are untouched.
 from copy import deepcopy
 
 from app.extensions import db
-from app.models import AttemptQuestionSnapshot, Question
+from app.models import Answer, AttemptQuestionSnapshot, Question
 from app.models.question import OPTIONLESS_TYPES
 from app.services.attempts import delivery_question_ids
 
@@ -304,3 +304,64 @@ class historical_image_preserved:  # noqa: N801 - used as a context manager
                 self.storage.delete_image(url)
             except Exception:  # noqa: BLE001 - cleanup must never mask the real error
                 pass
+
+
+def has_been_delivered(question) -> bool:
+    """Whether any attempt was RECORDED as receiving this question.
+
+    THE PHASE 4C WARNING TRIGGER, and the reason Phase 1 exists.
+
+    Deliberately NOT "does an answer row exist". A question can be delivered
+    and skipped - the player saw it, scrolled past it and submitted - which
+    leaves a snapshot and no answer. Asking about answers would tell that coach
+    their correction affects nobody, which is false: it is exactly the question
+    somebody looked at and could not do.
+
+    Cheap by construction: an EXISTS against the indexed `question_id`, never a
+    load of the snapshot rows themselves.
+    """
+    return (
+        db.session.query(
+            AttemptQuestionSnapshot.query.filter_by(question_id=question.id).exists()
+        ).scalar()
+        or False
+    )
+
+
+def has_history(question) -> bool:
+    """Whether editing this question could disturb anything already recorded.
+
+    BROADER THAN `has_been_delivered`, ON PURPOSE, and the two are not
+    interchangeable:
+
+      * `has_been_delivered` drives the coach WARNING. Snapshot-based, because
+        that is what truthfully answers "did a player receive this".
+      * `has_history` drives the ENFORCEMENT below it, and additionally counts
+        raw answer rows.
+
+    The gap between them is legacy attempts. A pre-Phase-1 attempt has answers
+    and NO snapshot, so a snapshot-only guard would treat a question answered
+    last year as pristine and let an unsafe edit through. Locks must fail
+    closed; warnings must be honest. That is why there are two.
+    """
+    return has_been_delivered(question) or (
+        db.session.query(Answer.query.filter_by(question_id=question.id).exists()).scalar()
+        or False
+    )
+
+
+def delivered_question_ids_for_quiz(quiz_id: int) -> set[int]:
+    """Which of a quiz's questions have been delivered, in ONE query.
+
+    The set form exists so the coach's quiz payload can flag every question
+    without asking per question - `has_been_delivered` in a loop is an N+1 on
+    the screen a coach opens most.
+    """
+    rows = (
+        db.session.query(AttemptQuestionSnapshot.question_id)
+        .join(Question, Question.id == AttemptQuestionSnapshot.question_id)
+        .filter(Question.quiz_id == quiz_id)
+        .distinct()
+        .all()
+    )
+    return {question_id for (question_id,) in rows}

@@ -151,3 +151,17 @@
 .errorAnchor:focus {
   outline: none;
 }
+
+/* Informational, NOT a warning. Neutral surface and no alert colouring: a
+   coach fixing a mistake is doing the right thing, and a red banner would
+   suggest otherwise. */
+.deliveredNote {
+  margin: 0 0 var(--peira-space-3, 12px);
+  padding: var(--peira-space-3, 12px);
+  border-radius: var(--peira-radius-sm, 6px);
+  background: var(--peira-surface-2, #2a2a2a);
+  border-left: 3px solid var(--peira-border, #555);
+  color: var(--peira-text-muted, #c4c4c4);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}

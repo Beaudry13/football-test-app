@@ -38,7 +38,11 @@ from app.services.answer_matching import DEFAULT_MODE, clean_expected_answers
 from app.services.document_geometry import NormalisedRectError, validate_normalised_rect
 from app.services.page_masking import invalidate_masked_render
 from app.services.file_storage import StorageError, get_file_storage
-from app.services.question_snapshots import historical_image_preserved
+from app.services.question_snapshots import (
+    has_been_delivered,
+    has_history,
+    historical_image_preserved,
+)
 from app.utils.auth import current_coach, get_editable_quiz
 from app.utils.validation import load_json_body
 
@@ -61,6 +65,83 @@ def _replace_options(question: Question, options: list[dict]) -> None:
                 option_text=option["option_text"],
                 is_correct_answer=option["is_correct_answer"],
                 position=index,
+            )
+        )
+
+
+def _apply_option_edits(question: Question, incoming: list[dict]) -> None:
+    """Edit the options of a question that HAS ALREADY BEEN DELIVERED.
+
+    PHASE 4C. `_replace_options` above clears the list and rebuilds it, which
+    mints NEW option rows with NEW ids - fine while nothing references them,
+    fatal once an answer does. So a delivered question takes this path instead,
+    which mutates in place and never deletes.
+
+    Matched BY POSITION, because the update payload carries no option ids: the
+    editor sends the list it rendered, in order. Incoming[i] is therefore the
+    same option as existing[i], and anything past the end is an addition.
+
+    Permitted (Phase 4C v1):
+      * changing an existing option's TEXT - the player's selection still
+        points at the same row, and the snapshot still holds the wording they
+        actually saw
+      * APPENDING a new option - no existing attempt gains it, because no
+        existing attempt's snapshot contains it
+
+    Refused, each for its own reason:
+      * REMOVING an option. Deleting the row would strand
+        `Answer.selected_option_id`, and whether the delivered snapshot alone
+        can still identify what the player picked is an open question - it is
+        the explicit follow-up audit in the Phase 4C brief, deliberately not
+        answered here.
+      * Changing WHICH option is correct, including adding a correct one.
+        `answers.is_correct` is a stored column, so old answers keep their
+        verdict while new ones get the new key - two players give the same
+        answer and carry different results, permanently and invisibly. That
+        needs a product decision about regrading, not a code change. The safe
+        workflow today is Phase 4B ("stop sending it") plus Phase 3 ("don't
+        count it").
+    """
+    existing = list(question.options)
+
+    if len(incoming) < len(existing):
+        raise ApiError(
+            "Cannot remove an answer option from a question players have already "
+            "received - a player may have chosen it. You can reword the options, "
+            "add a new one, or stop sending this question.",
+            status_code=422,
+            reason="option_removal_blocked",
+        )
+
+    for option, update in zip(existing, incoming):
+        if bool(update["is_correct_answer"]) != bool(option.is_correct_answer):
+            raise ApiError(
+                "Cannot change which answer is correct on a question players have "
+                "already received - it would grade them differently from everyone "
+                "who answers next. Stop sending this question, and use "
+                "\"Don't count this question\" for the players who already have it.",
+                status_code=422,
+                reason="correct_answer_change_blocked",
+            )
+        # TEXT ONLY, in place. The row - and therefore every
+        # `Answer.selected_option_id` pointing at it - survives untouched.
+        option.option_text = update["option_text"]
+
+    for position, update in enumerate(incoming[len(existing) :], start=len(existing)):
+        if update["is_correct_answer"]:
+            raise ApiError(
+                "Cannot add a new correct answer to a question players have already "
+                "received - everyone who answered under the old key would keep a "
+                "different result. Add it as an ordinary option, or stop sending "
+                "this question.",
+                status_code=422,
+                reason="correct_answer_change_blocked",
+            )
+        question.options.append(
+            QuestionOption(
+                option_text=update["option_text"],
+                is_correct_answer=False,
+                position=position,
             )
         )
 
@@ -337,9 +418,16 @@ def update_question(quiz_id: int, question_id: int):
     data = load_json_body(QuestionUpdateSchema())
 
     question_type = data.get("question_type", question.question_type.value)
+    # PHASE 4C. Whether this question already has recorded history decides
+    # WHICH edit path it takes, not whether it may be edited at all.
+    #
+    # `has_history`, not `has_been_delivered`: a legacy pre-Phase-1 attempt has
+    # answers and no snapshot, and a snapshot-only check would wave an unsafe
+    # edit through on a question answered last year. Locks fail closed; the
+    # coach WARNING uses the honest snapshot-based check instead.
+    delivered = has_history(question)
     if "options" in data:
         validate_options_for_type(question_type, data["options"])
-        _reject_if_already_answered(question, "change this question's answer options")
 
     # THE HOLE THIS CLOSES. The guard above only fires when `options` is in the
     # payload, so a question_type change ON ITS OWN walked straight past it -
@@ -368,7 +456,13 @@ def update_question(quiz_id: int, question_id: int):
     if "question_type" in data:
         question.question_type = QuestionType(data["question_type"])
     if "options" in data:
-        _replace_options(question, data["options"])
+        if delivered:
+            # In place: reword and append only, never delete, never re-key.
+            _apply_option_edits(question, data["options"])
+        else:
+            # Nothing has seen this question, so the whole list is still the
+            # coach's to rewrite - including which answer is correct.
+            _replace_options(question, data["options"])
 
     db.session.commit()
     return jsonify(question.to_dict(include_correct_answers=True))

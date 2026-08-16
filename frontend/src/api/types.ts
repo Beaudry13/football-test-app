@@ -282,6 +282,11 @@ export interface Question {
    *  it; neither implies the other. */
   is_retired?: boolean;
   retired_at?: string | null;
+  /** Whether any attempt was RECORDED as receiving this question, from the
+   *  delivered snapshot - NOT from answer rows, because a question can be
+   *  delivered and skipped. Drives the correction notice in the editor; the
+   *  API is the enforcement point for what may actually be changed. */
+  has_been_delivered?: boolean;
   /** The accepted answers for a `fill_blank` question. COACH-ONLY - the API
    *  omits it from every player-facing payload, so it is always undefined in
    *  the player app. */
