@@ -158,7 +158,8 @@ Migration rehearsed upgrade → downgrade → upgrade against a real Postgres.
 ## PHASE 4C / SAFE CORRECTIONS
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
-Implemented, NOT committed at time of writing. No migration.
+Shipped in `6e38805` (16 Aug 2026). Deployed and health verified.
+No migration - none was needed.
 
 A coach can now reword an option, add an option, replace or delete the image
 and redraw annotations on a question players have already received.
