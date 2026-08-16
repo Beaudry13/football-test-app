@@ -16,7 +16,7 @@ import random
 import pytest
 
 from app.extensions import db
-from app.models import AccessCode, PlayerAttempt, Question
+from app.models import AccessCode, AttemptQuestionSnapshot, PlayerAttempt, Question
 from app.models.assessment_mode import PRACTICE
 from app.services import attempts as attempts_service
 
@@ -266,7 +266,25 @@ class TestReconciliation:
             # The stored order is NOT rewritten - it stays the historical fact.
             assert doomed in PlayerAttempt.query.one().question_order
 
-    def test_a_newly_added_question_is_appended(self, client, coach_headers):
+    def test_a_newly_added_question_is_NOT_given_to_an_attempt_underway(
+        self, client, coach_headers
+    ):
+        """REVERSED BY PHASE 4B STEP 1, DELIBERATELY.
+
+        This used to assert the opposite - that a question added mid-attempt
+        was APPENDED to the existing attempt's order. That was the behaviour of
+        read-time reconciliation against the live quiz.
+
+        It was already half-wrong after 4a-bis: the `questions` payload stopped
+        including the new question (an attempt keeps the version it was
+        delivered), while `question_order` still listed it. So the order named a
+        question the content did not contain.
+
+        Step 1 sources both from the delivered snapshot, so they agree, and the
+        answer is the one the attempt version invariant requires: an attempt
+        already underway does not gain a question it was never given. A NEW
+        attempt receives it - see the test below.
+        """
         quiz = build_quiz(client, coach_headers)
         code = activate(client, coach_headers, quiz["id"], mode=PRACTICE, randomize=True)
         before = start(client, code).get_json()["question_order"]
@@ -284,15 +302,47 @@ class TestReconciliation:
             headers=coach_headers,
         ).get_json()
 
-        after = start(client, code).get_json()["question_order"]
-        # Appended, not inserted - the frozen prefix is untouched.
-        assert after == before + [added["id"]]
+        resumed = start(client, code).get_json()
 
-    def test_an_attempt_with_no_stored_order_uses_the_live_authored_order(
+        assert resumed["question_order"] == before
+        assert added["id"] not in resumed["question_order"]
+        # Order and content agree, which is the whole point of the change.
+        assert [q["id"] for q in resumed["questions"]] == resumed["question_order"]
+
+    def test_a_NEW_attempt_does_receive_the_added_question(self, client, coach_headers):
+        """The other half. Corrections and additions reach players on a new
+        attempt - that is the only route, by design."""
+        quiz = build_quiz(client, coach_headers)
+        code = activate(client, coach_headers, quiz["id"], mode=PRACTICE, randomize=True)
+        start(client, code)
+
+        added = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={
+                "question_text": "Added mid-attempt",
+                "question_type": "true_false",
+                "options": [
+                    {"option_text": "True", "is_correct_answer": True},
+                    {"option_text": "False", "is_correct_answer": False},
+                ],
+            },
+            headers=coach_headers,
+        ).get_json()
+
+        fresh = start(client, code, player="Alex Lee").get_json()
+
+        assert added["id"] in fresh["question_order"]
+
+    def test_a_LEGACY_attempt_with_no_stored_order_uses_the_live_authored_order(
         self, app, client, coach_headers
     ):
-        """Every pre-existing attempt has NULL here, which is why no backfill
-        was needed."""
+        """The COMPATIBILITY FALLBACK, and now the only route to it.
+
+        Every pre-existing attempt has NULL here, which is why no backfill was
+        needed. Since Step 1 that fallback is reached only when the attempt has
+        no delivered snapshot EITHER - so the snapshots are removed here too,
+        which is what a genuine pre-Phase-1 attempt looks like.
+        """
         quiz = build_quiz(client, coach_headers)
         code = activate(client, coach_headers, quiz["id"], mode=PRACTICE, randomize=True)
         start(client, code)
@@ -300,11 +350,35 @@ class TestReconciliation:
         with app.app_context():
             attempt = PlayerAttempt.query.one()
             attempt.question_order = None
+            AttemptQuestionSnapshot.query.filter_by(attempt_id=attempt.id).delete()
             db.session.commit()
 
         assert start(client, code).get_json()["question_order"] == authored_ids(
             client, coach_headers, quiz["id"]
         )
+
+    def test_a_SNAPSHOTTED_attempt_ignores_a_null_stored_order(
+        self, app, client, coach_headers
+    ):
+        """THE CASE THAT MADE STEP 1 NECESSARY.
+
+        A graded attempt stores NULL here by design, so before Step 1 its order
+        was rebuilt from the live quiz on every read. With a delivered record
+        present, that record wins and the column is not consulted at all -
+        which is what stops a future filter on `quiz.questions` (question
+        retirement) from reaching backwards into an attempt already underway.
+        """
+        quiz = build_quiz(client, coach_headers)
+        code = activate(client, coach_headers, quiz["id"], mode=PRACTICE, randomize=True)
+        delivered = start(client, code).get_json()["question_order"]
+
+        with app.app_context():
+            attempt = PlayerAttempt.query.one()
+            attempt.question_order = None
+            db.session.commit()
+
+        # Unchanged: the snapshot still says what this attempt was given.
+        assert start(client, code).get_json()["question_order"] == delivered
 
 
 # ---------------------------------------------------------------------------

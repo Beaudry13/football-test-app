@@ -332,21 +332,23 @@ def frozen_question_order(quiz, *, randomize: bool, rng=None) -> list[int] | Non
     return shuffled
 
 
-def presented_question_ids(attempt, quiz) -> list[int]:
-    """The order to SHOW, reconciled against the quiz as it exists now.
+def delivery_question_ids(attempt, quiz) -> list[int]:
+    """What an attempt BEING CREATED is given, reconciled against the live quiz.
 
-    The stored order is a historical fact and is never rewritten - a coach
-    editing the quiz mid-attempt must not retroactively change what the player
-    was given. So reconciliation happens here, at read time:
+    THE NEW-ATTEMPT SIDE. This reads the live quiz on purpose: a new attempt
+    should receive the quiz as it stands right now, corrections included.
 
       1. stored ids that still exist, in the order they were frozen
       2. then any question added since, in current authored order
       3. deleted questions simply fall out
 
-    That covers both directions of drift without corrupting the attempt: a
-    deleted question disappears rather than 404-ing mid-quiz, and an added one
-    appears at the end rather than vanishing from a quiz that claims to have
-    it.
+    Used by `capture_attempt_snapshots` to decide what to record, and that is
+    its ONLY caller by design. Once the snapshot exists it is the record, and
+    `presented_question_ids` below stops consulting the live quiz entirely.
+
+    The reconciliation still matters here because a randomized practice order
+    is frozen microseconds before capture, and the quiz could in principle
+    have changed in between.
     """
     live = authored_question_ids(quiz)
     stored = attempt.question_order
@@ -358,4 +360,59 @@ def presented_question_ids(attempt, quiz) -> list[int]:
     seen = set(kept)
     appended = [qid for qid in live if qid not in seen]
     return kept + appended
+
+
+def delivered_question_ids(attempt) -> list[int] | None:
+    """The ids this attempt was RECORDED as receiving, or None if unrecorded.
+
+    None means no snapshot rows - a pre-Phase-1 attempt. It is deliberately
+    distinct from `[]`, which would mean "recorded as receiving nothing".
+    """
+    rows = sorted(attempt.question_snapshots, key=lambda row: row.position)
+    if not rows:
+        return None
+    # A question hard-deleted after delivery leaves question_id NULL. It is
+    # dropped here for the same reason `_delivered_payload` drops it: it cannot
+    # be answered, so listing it in the order would name a card that does not
+    # exist. The snapshot itself survives as history either way.
+    return [row.question_id for row in rows if row.question_id is not None]
+
+
+def presented_question_ids(attempt, quiz) -> list[int]:
+    """The order to SHOW an EXISTING attempt.
+
+    THE DELIVERED RECORD WINS. Once an attempt has snapshots, its order comes
+    from their positions and the live quiz is not consulted at all.
+
+    WHY THIS IS STRUCTURAL, NOT COSMETIC
+    ------------------------------------
+    This used to re-derive the order from the live quiz on every read. That was
+    survivable only because nothing filtered the live question list. It was
+    also already subtly wrong: `question_order` could name a question that the
+    delivered `questions` payload did not contain (one the coach added
+    mid-attempt), so ORDER and CONTENT came from two different sources and
+    could disagree.
+
+    The trap it set is worse than the inconsistency. **Graded attempts store
+    `question_order = NULL`** - `frozen_question_order` returns None for
+    anything non-randomized - so a graded attempt has no frozen list, and its
+    order was rebuilt from `quiz.questions` every time. Any future filter on
+    that list (question retirement is the one coming) would therefore have
+    reached backwards into attempts already underway: a snapshot-backed player
+    would see a question jump to the end mid-quiz, and a legacy player would
+    see it vanish.
+
+    Sourcing the order from the same record the content comes from makes THE
+    ATTEMPT VERSION INVARIANT true by construction rather than by remembering
+    not to filter in the wrong place.
+
+    LEGACY ATTEMPTS keep the live reconciliation below - the documented
+    COMPATIBILITY FALLBACK. Those attempts have no delivered record, so the
+    live quiz is the only thing there is to answer with. Nothing is invented
+    and nothing is backfilled.
+    """
+    delivered = delivered_question_ids(attempt)
+    if delivered is not None:
+        return delivered
+    return delivery_question_ids(attempt, quiz)
 

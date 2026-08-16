@@ -66,9 +66,16 @@ class PlayerAttempt(db.Model):
     #: attempt and every pre-existing row uses, so no backfill was needed.
     #:
     #: Frozen at creation and never rewritten, even when the quiz changes
-    #: underneath it. Reconciliation against the live quiz happens at read
-    #: time (services/attempts.presented_question_ids) so this column stays a
-    #: historical record of what the player was actually given.
+    #: underneath it, so this column stays a historical record.
+    #:
+    #: It is NOT the order an existing attempt is shown. Since Phase 4B step 1
+    #: that comes from the delivered snapshot's positions
+    #: (services/attempts.presented_question_ids), which is the same record the
+    #: content comes from - so order and content cannot disagree. This column
+    #: feeds the CAPTURE side (`delivery_question_ids`) and remains the
+    #: historical note of the shuffle a randomized practice attempt was given.
+    #: Legacy attempts with no snapshot still reconcile it against the live
+    #: quiz, which is the documented compatibility fallback.
     question_order = db.Column(db.JSON, nullable=True)
     mode = db.Column(
         db.String(16), nullable=False, server_default=DEFAULT_MODE, default=DEFAULT_MODE

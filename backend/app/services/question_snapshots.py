@@ -19,7 +19,7 @@ from copy import deepcopy
 from app.extensions import db
 from app.models import AttemptQuestionSnapshot, Question
 from app.models.question import OPTIONLESS_TYPES
-from app.services.attempts import presented_question_ids
+from app.services.attempts import delivery_question_ids
 
 #: Bumped only if the SHAPE of `snapshot` changes incompatibly. Stored on every
 #: row so a future reader can tell an old shape from a new one WITHOUT guessing
@@ -137,9 +137,13 @@ def capture_attempt_snapshots(attempt) -> None:
     if quiz is None:
         raise SnapshotError(f"Attempt {attempt.id} has no quiz to snapshot")
 
-    # The same reconciliation the client is handed in `_attempt_state`, so the
-    # order recorded here and the order the player is shown cannot disagree.
-    delivered_ids = presented_question_ids(attempt, quiz)
+    # THE LIVE QUIZ, deliberately: a new attempt receives the quiz as it stands
+    # now. `presented_question_ids` is NOT used here - it now reads the
+    # snapshot, which does not exist yet at capture time, and asking it would
+    # be circular. The split is what keeps "what a new attempt is given" and
+    # "what an existing attempt is shown" from ever being the same question
+    # again.
+    delivered_ids = delivery_question_ids(attempt, quiz)
     questions_by_id = {question.id: question for question in quiz.questions}
 
     for position, question_id in enumerate(delivered_ids):
