@@ -22,6 +22,8 @@ import io
 import pytest
 from sqlalchemy import text
 
+from flask_migrate import upgrade
+
 from app import create_app
 from app.extensions import db as _db
 
@@ -34,10 +36,54 @@ def app():
 
 @pytest.fixture(scope="session", autouse=True)
 def _database_schema(app):
+    """Bring the test database to the ALEMBIC HEAD before anything runs.
+
+    THIS USED TO CALL `create_all()`, AND THAT WAS THE BUG. `create_all()`
+    issues CREATE TABLE IF NOT EXISTS - it creates missing tables and NEVER
+    alters an existing one. The test database is deliberately persistent (see
+    the module docstring on why it is not dropped), so every column added by a
+    migration stayed invisible to it forever, and the schema silently drifted
+    away from the migration chain.
+
+    That cost real time twice: a Phase 4B migration and a Multi-Select one both
+    had to be hand-applied with ALTER TABLE before their suites would run, and
+    a developer who did not know that saw a wall of unrelated failures.
+
+    Migrations are now the single source of schema truth for tests, exactly as
+    they are for production. The full chain takes ~12s from empty and is a
+    no-op afterwards, against a suite that runs for minutes.
+    """
     with app.app_context():
         _terminate_other_connections()
-        _db.create_all()
+        if _has_alembic_version():
+            # Already migration-managed: apply anything new and carry on. This
+            # is the steady state, and it is fast.
+            upgrade()
+        else:
+            # A database built by the old `create_all()` path, or an empty one.
+            # Its schema cannot be trusted to match any revision, and stamping
+            # it would enshrine the drift this fixture exists to remove - so it
+            # is rebuilt from the chain instead.
+            #
+            # DROP SCHEMA rather than `drop_all()`: one statement instead of a
+            # dependency-ordered cascade of them, which is what used to hang on
+            # a lock left by an interrupted run.
+            _db.session.execute(text("DROP SCHEMA public CASCADE"))
+            _db.session.execute(text("CREATE SCHEMA public"))
+            _db.session.commit()
+            upgrade()
         yield
+
+
+def _has_alembic_version() -> bool:
+    return bool(
+        _db.session.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = 'public' AND table_name = 'alembic_version'"
+            )
+        ).first()
+    )
 
 
 def _terminate_other_connections() -> None:
