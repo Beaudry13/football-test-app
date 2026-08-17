@@ -248,6 +248,39 @@ returning 200 is the deployment evidence, not a contract probe.
 
 ---
 
+## DRAW RESPONSE PHASE C / PLAYER DRAWING RESULTS
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped in `c1d3b6d` (17 Aug 2026). Deployed and health verified. No migration.
+
+A player's results page now shows the drawing they made, over the image they
+were given, instead of the words "Drawing submitted".
+
+- [ ] Submit a Draw Response, then open the player results page - the drawing
+      renders over the right picture, at the right scale
+- [ ] Compare it side by side with the coach's expanded view of the same
+      answer - the two must look identical
+- [ ] Replace the question's image as coach, reload the player results - the
+      player still sees the ORIGINAL picture with their strokes on it
+- [ ] Exclude that question from scoring - the drawing stays visible, with the
+      neutral "Excluded from scoring" badge
+- [ ] A Draw Response the player skipped reads "No answer" with no broken
+      viewer
+
+**Worth a human eye:** whether the drawing is legible at phone width. The
+viewer is shared with the coach's desktop view, and scaling is the one thing a
+test cannot judge.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_player_results_drawing.py` (14) covers the delivered-image binding, the
+coach/player payloads being identical, exclusion keeping the drawing, the
+coach's private reason never leaking, empty and missing drawings degrading to
+text, answer-key leakage, and drawings loading in one query.
+`ResultsView.test.tsx` (5 new) covers the rendering choices.
+
+---
+
 ## Known bounded gap - the Vitest collection flake
 
 `QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped
