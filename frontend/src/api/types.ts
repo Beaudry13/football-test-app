@@ -458,6 +458,11 @@ export interface Answer {
   question_id: number;
   answer_text: string | null;
   selected_option_id: number | null;
+  /** THE COMPLETE SELECTION SET. `selected_option_id` is null on every
+   *  "Select all that apply" answer, so this is the only field that can show
+   *  what such a player chose. Single-choice answers carry their one selection
+   *  here too. Sorted by id - DISPLAY order is the delivered option order. */
+  selected_option_ids?: number[];
   is_correct: boolean | null;
   coach_feedback: string | null;
   graded_at: string | null;
@@ -553,6 +558,10 @@ export interface DeliveredQuestion {
   question_number: number;
   question_text: string;
   question_type: QuestionType;
+  /** Whether this attempt was given "Select all that apply". Read from the
+   *  snapshot, so a coach flipping the setting later cannot change how an
+   *  already-delivered answer is read. */
+  allows_multiple_answers?: boolean;
   options: { id: number | null; option_text: string; is_correct_answer: boolean }[];
   image: { image_url: string; canvas_width: number | null; annotations: unknown[] } | null;
   from_snapshot: boolean;

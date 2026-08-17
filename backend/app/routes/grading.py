@@ -97,6 +97,18 @@ def list_responses(quiz_id: int):
         # otherwise turn into an N+1 (one lazy load per canonical attempt).
         .options(
             selectinload(PlayerAttempt.answers),
+            # Every answer's SELECTION SET, which Answer.to_dict now emits.
+            # Without it that serialiser lazy-loads once per answer, turning the
+            # Results tab of a 20-question quiz with 25 players into 500 queries.
+            selectinload(PlayerAttempt.answers).joinedload(Answer.selected_options),
+            # PRE-EXISTING N+1, found by M4's scale-invariance guard rather than
+            # introduced by it: `Answer.to_dict` reports whether a drawing
+            # exists, and walked `answer.drawing` once per answer. Measured at
+            # 120 queries for 120 answers; 6 afterwards. One line here rather
+            # than a note in a backlog, because the guard M4 was asked for
+            # covers this route and would otherwise have to be written blind to
+            # a real N+1 sitting inside it.
+            selectinload(PlayerAttempt.answers).selectinload(Answer.drawing),
             selectinload(PlayerAttempt.player),
             # Loaded up front for _with_delivered below - without it, resolving
             # what each attempt received would be one query per response.
@@ -119,6 +131,9 @@ def get_response(quiz_id: int, response_id: int):
         )
         .options(
             selectinload(PlayerAttempt.answers),
+            selectinload(PlayerAttempt.answers).joinedload(Answer.selected_options),
+            # Same pre-existing per-answer drawing load as list_responses above.
+            selectinload(PlayerAttempt.answers).selectinload(Answer.drawing),
             selectinload(PlayerAttempt.player),
             selectinload(PlayerAttempt.question_snapshots),
         )
@@ -290,6 +305,20 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
         .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
         .options(
             selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
+            # The SET a "Select all that apply" answer stores, which both the
+            # CSV and the detailed PDF now print. Lazy-loading it would be one
+            # query per answer across the whole roster - the exact N+1 the
+            # export's query budget exists to catch.
+            #
+            # JOINED, NOT SELECTIN, AND THAT IS THE POINT. `selectinload`
+            # chunks parent keys 500 at a time, so it cost FOUR queries at 100
+            # players x 20 questions and would cost more as a program grows -
+            # measured, and it broke this export's scale-invariance guard.
+            # Joining it onto the answers query instead costs ZERO extra
+            # queries at any size. Safe here because a selection row is two
+            # integers: multiplying answer rows by a handful of them is cheap,
+            # which is NOT true of the drawing blob below.
+            selectinload(PlayerAttempt.answers).joinedload(Answer.selected_options),
             selectinload(PlayerAttempt.player),
             # Phase 4a: every builder now resolves what each attempt was
             # DELIVERED. Without this the lazy load fires once per attempt and

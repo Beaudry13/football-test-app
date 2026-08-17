@@ -354,8 +354,9 @@ live one. Four of the six fail against the unfixed code.
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
 Shipped as M1 `5d2f266`, M2 `ed37eac`, M3 `949fc6d`, plus the wording change.
+M4 (results and exports) is separate and NOT YET DEPLOYED.
 Carries migration `a7fd4276c072` - one boolean column and one join table,
-additive, with a backfill of every existing selection.
+additive, with a backfill of every existing selection. M4 adds NO migration.
 
 A multiple-choice question can now accept more than one correct answer.
 
@@ -385,6 +386,15 @@ A multiple-choice question can now accept more than one correct answer.
 - [ ] Starting a competition on a quiz containing one is clearly blocked, and
       the message says which question
 
+**RESULTS AND EXPORTS (M4)**
+- [ ] The player's own results page reads naturally: "Mike; Nickel; Boundary
+      Safety" on one line, not a wall of text
+- [ ] Three or four selections still fit on a phone without wrapping badly
+- [ ] The coach's expanded response shows the same words in the same order
+- [ ] The CSV cell is readable in Excel/Sheets and does not split the row
+- [ ] The detailed PDF's stacked list looks right beside a long question, and
+      the CORRECT ANSWER block reads as a comparable list rather than a wall
+
 **The one thing worth your eyes most:** whether the editor still feels simple.
 The feature is one contextual checkbox by design, and whether that reads as
 "one more thing to understand" or as an obvious option is a judgement no test
@@ -399,6 +409,20 @@ can make.
 directions, order independence, empty-set-is-unanswered, resume of the complete
 set, write-time validation of option ids, historical wording after a coach
 edit, the Competition fence, and that practice reveals no per-option verdicts.
+
+M4 adds `test_multi_select_results.py` (40),
+`test_multi_select_results_performance.py` (4) and
+`ResponseRowMultiSelect.test.tsx` (8): the full set on both results surfaces,
+delivered wording surviving a later rename, delivered order surviving any tap
+order, exclusion keeping the evidence, the CSV cell surviving a real CSV
+parser, the PDF printing selections that appear nowhere in the answer key, no
+answer-key leakage, snapshots unmodified by reading, and query counts that stay
+flat from 6 answers to 120.
+
+**The PDF tests were rewritten after they were caught passing against the
+unfixed code** - the card prints the answer key too, so asserting that a
+CORRECTLY selected option appears proves nothing. They now select only WRONG
+options, which can reach the page no other way.
 
 Migration rehearsed upgrade -> downgrade -> upgrade on real data: 20 answers
 with a selection, 20 backfilled rows, zero mismatches.

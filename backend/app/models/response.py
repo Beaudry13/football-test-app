@@ -244,6 +244,15 @@ class Answer(db.Model):
             "question_id": self.question_id,
             "answer_text": self.answer_text,
             "selected_option_id": self.selected_option_id,
+            # THE COMPLETE SET. NULL on `selected_option_id` is what a
+            # multi-select answer looks like, so a consumer reading only the
+            # column above sees "No answer" over every ticked box. Sorted for a
+            # stable payload; DISPLAY order is the delivered option order and is
+            # decided by services/delivered_questions, not here.
+            #
+            # Emitted for single-choice answers too - they carry the same row -
+            # so the client has one shape to read rather than a special case.
+            "selected_option_ids": sorted(s.option_id for s in self.selected_options),
             "is_correct": self.is_correct,
             "coach_feedback": self.coach_feedback,
             "graded_at": self.graded_at.isoformat() if self.graded_at else None,

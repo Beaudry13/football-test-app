@@ -185,4 +185,27 @@ describe('a Draw Response answer', () => {
     expect(screen.queryByTestId('drawing-viewer')).not.toBeInTheDocument();
     expect(screen.getByText(/B gap/)).toBeInTheDocument();
   });
+
+  /** MULTI-SELECT M4. A set answer arrives as one already-joined line, so this
+   *  page needed no branch, no list rendering and no new control - which is
+   *  the point, and is what this pins. The joining, the delivered wording and
+   *  the delivered order are the server's job and are tested there. */
+  it('shows a whole selection set as one line, with nothing added around it', () => {
+    render(
+      <ResultsView
+        results={results({
+          question_type: 'multiple_choice',
+          your_answer: 'Mike; Nickel; Boundary Safety',
+          correct_answer: 'Mike; Nickel; Boundary Safety',
+          is_correct: true,
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/Mike; Nickel; Boundary Safety/)).toBeInTheDocument();
+    // No per-selection breakdown, no extra affordance: a set answer reads
+    // exactly like an ordinary multiple-choice one.
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
 });

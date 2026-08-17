@@ -85,7 +85,11 @@ from reportlab.platypus import (
 
 from app.models.answer_drawing import document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES, QuestionType
-from app.services.delivered_questions import delivered_questions
+from app.services.delivered_questions import (
+    delivered_questions,
+    selection_text,
+    selection_texts,
+)
 from app.services.question_exclusions import NO_EXCLUSIONS
 from app.services.scoring import (
     Outcome,
@@ -654,8 +658,41 @@ def _answer_text(question, answer) -> str:
         return ""
     if question.is_text_answered:
         return answer.answer_text or ""
-    live = answer.selected_option.option_text if answer.selected_option else None
-    return question.option_text(answer.selected_option_id, fallback=live) or ""
+    # A "Select all that apply" answer is its WHOLE SET, on one line:
+    # "Mike; Nickel; Boundary Safety". Delivered wording, delivered order, one
+    # resolver shared with the player's results page and the coach's expanded
+    # view - so a coach reading the spreadsheet and a player reading their
+    # results see the same words in the same order.
+    #
+    # An empty set falls through to "" exactly as an unanswered single choice
+    # does. No marker is invented: this column has always expressed "nothing
+    # selected" as an empty cell, and the Result column carries the verdict.
+    return selection_text(question, answer) or ""
+
+
+def _answer_markup(question, answer) -> str:
+    """The same answer as `_answer_text`, marked up for one PDF Paragraph.
+
+    A SET GETS ONE LINE PER SELECTION, which is the only difference:
+
+        PLAYER ANSWER
+        Mike
+        Nickel
+        Boundary Safety
+
+    A page has the room a spreadsheet cell does not, and three plays stacked
+    are read at a glance where "Mike; Nickel; Boundary Safety" has to be
+    parsed. NO NEW LAYOUT - this is still the existing PLAYER ANSWER field,
+    still one Paragraph, so a card holding a set is the same card as any
+    other and nothing else in the report has to know this format exists.
+    """
+    if question.allows_multiple_answers and not question.is_text_answered:
+        parts = selection_texts(question, answer)
+        if parts:
+            # Each part escaped INDIVIDUALLY, then joined with the break -
+            # escaping afterwards would turn the <br/> into literal text.
+            return "<br/>".join(_xml_escape(part) for part in parts)
+    return _xml_escape(_answer_text(question, answer))
 
 
 #: This exporter's WORDS for each outcome. The decision itself belongs to
@@ -1558,7 +1595,7 @@ def build_detailed_results_pdf(
 
             answer_group: list = [
                 Paragraph("PLAYER ANSWER", styles["fieldLabel"]),
-                Paragraph(_xml_escape(_answer_text(question, answer)) or "No answer submitted.", wrap_style),
+                Paragraph(_answer_markup(question, answer) or "No answer submitted.", wrap_style),
             ]
 
             if question.question_type is QuestionType.FILL_BLANK:
@@ -1573,10 +1610,24 @@ def build_detailed_results_pdf(
                 # blocked once answered, so this cannot currently drift - but
                 # reading the snapshot means it stays right if that ever
                 # changes.
-                correct_text = question.correct_option_text
-                if correct_text is not None:
+                #
+                # A set question has a SET answer, listed the same way the
+                # player's own selections are just above - so the two read as
+                # comparable lists rather than one list and one sentence.
+                correct_texts = (
+                    question.correct_option_texts
+                    if question.allows_multiple_answers
+                    else [question.correct_option_text]
+                    if question.correct_option_text is not None
+                    else []
+                )
+                if correct_texts:
                     answer_group.append(Paragraph("CORRECT ANSWER", styles["fieldLabel"]))
-                    answer_group.append(Paragraph(_xml_escape(correct_text), wrap_style))
+                    answer_group.append(
+                        Paragraph(
+                            "<br/>".join(_xml_escape(t) for t in correct_texts), wrap_style
+                        )
+                    )
 
             rows = [prompt_group, answer_group]
 

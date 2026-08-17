@@ -43,6 +43,15 @@ from dataclasses import dataclass
 
 from app.models import AttemptQuestionSnapshot, QuestionType
 
+#: How a set of selections reads on ONE LINE: "Mike; Nickel; Boundary Safety".
+#:
+#: Defined once because the player's results page, the coach's expanded view and
+#: the CSV all print it, and three separators that merely happen to match today
+#: is how a coach ends up reading the same answer two different ways in two
+#: places. Semicolon rather than comma because option wording contains commas
+#: far more often than semicolons, and this string lands in a CSV cell.
+SELECTION_SEPARATOR = "; "
+
 
 @dataclass(frozen=True)
 class DeliveredOption:
@@ -106,28 +115,62 @@ class DeliveredQuestion:
         """
         return self.question_id
 
-    def option_text(self, option_id: int | None, fallback: str | None = None) -> str | None:
-        """What the player's selection SAID when they made it.
+    def selected_texts(
+        self, option_ids, fallbacks: dict[int, str] | None = None
+    ) -> list[str]:
+        """The chosen options' DELIVERED wording, IN DELIVERED ORDER.
 
-        Looked up in the delivered options, so an option whose text has since
-        been edited still reads as the player saw it.
+        THE ORDER IS THE QUESTION'S, NOT THE PLAYER'S. `answer_selected_options`
+        has no order column - order is not a property of a set, and exact-set
+        grading must never depend on the sequence a player happened to tap. So
+        display order has to be decided somewhere, and the only choice that
+        means anything to a reader is the order the options appeared in on the
+        player's screen. Insertion order would make the same answer print
+        differently for two players who tapped the same boxes in a different
+        sequence, and would make Results, CSV and PDF agree only by accident.
 
-        `fallback` is a DEFENSIVE COMPATIBILITY PATH for legacy or corrupted
-        data, not part of normal behaviour.
-
-        Since 4a-bis a resumed attempt is served its own delivered options, so
-        a player cannot be shown - or submit - an option id the snapshot never
-        saw. What remains reachable is a legacy attempt, or a hand-made API
-        call. Blanking the cell there would erase a real answer to protect a
-        record that does not describe it, so the live option text is used
-        instead.
+        `fallbacks` is a DEFENSIVE COMPATIBILITY PATH, not part of normal
+        behaviour: an id the delivered record never saw, resolved against the
+        live row rather than blanked. Since 4a-bis a resumed attempt is served
+        its own delivered options, so a player cannot be shown - or submit - an
+        id the snapshot never saw; what remains reachable is a legacy attempt
+        or a hand-made API call. Blanking there would erase a real answer to
+        protect a record that does not describe it. Those come last, since a
+        delivered record has no position to put them in.
         """
-        if option_id is None:
-            return None
-        return next((o.text for o in self.options if o.id == option_id), fallback)
+        chosen = set(option_ids)
+        texts = [o.text for o in self.options if o.id in chosen]
+
+        known = {o.id for o in self.options}
+        for option_id in option_ids:
+            if option_id in known:
+                continue
+            fallback = (fallbacks or {}).get(option_id)
+            if fallback is not None:
+                texts.append(fallback)
+        return texts
+
+    @property
+    def correct_option_texts(self) -> list[str]:
+        """Every correct option, in delivered order."""
+        return [o.text for o in self.options if o.is_correct_answer]
 
     @property
     def correct_option_text(self) -> str | None:
+        """The answer key, as one line.
+
+        A SET QUESTION HAS A SET ANSWER. Returning only the first correct
+        option here told a player who had correctly ticked Mike AND Nickel that
+        the correct answer was "Mike" - which reads as a grading mistake, on the
+        one surface that exists to explain their grade.
+
+        Single choice keeps the old behaviour EXACTLY, first-correct included:
+        that shape is validated to have exactly one correct option, so joining
+        would change nothing except on data authoring already refuses.
+        """
+        if self.allows_multiple_answers:
+            texts = self.correct_option_texts
+            return SELECTION_SEPARATOR.join(texts) if texts else None
         return next((o.text for o in self.options if o.is_correct_answer), None)
 
     @property
@@ -265,6 +308,58 @@ def delivered_by_question_id(attempt, quiz) -> dict[int, DeliveredQuestion]:
     }
 
 
+def selection_texts(delivered: DeliveredQuestion, answer) -> list[str]:
+    """What this answer SELECTED, as delivered wording in delivered order.
+
+    THE SOURCE DEPENDS ON THE DELIVERED FORMAT, and reading the wrong one is
+    exactly the bug this exists to fix. A multi-select answer stores its set in
+    `answer_selected_options` and leaves `selected_option_id` NULL; every
+    surface that resolved the column alone therefore printed "No answer" over a
+    player who had ticked three boxes.
+
+    Branching on the DELIVERED `allows_multiple_answers` - not today's - means a
+    single-choice answer follows the identical path it always did, down to the
+    live-option fallback, so nothing about existing results can move.
+
+    THIS IS THE ONLY WAY TO TURN A RECORDED SELECTION INTO WORDS. The
+    single-option helper this replaced was deliberately deleted rather than
+    left beside it: it looked like the right thing to call, and calling it is
+    precisely how a future surface would print "No answer" over three ticked
+    boxes again.
+    """
+    if answer is None:
+        return []
+
+    if not delivered.allows_multiple_answers:
+        if answer.selected_option_id is None:
+            return []
+        option_ids = [answer.selected_option_id]
+    else:
+        option_ids = [row.option_id for row in answer.selected_options]
+
+    # ONLY the single-choice column has a live row to fall back on. A
+    # multi-select selection has no such column, and needs none: the format
+    # shipped after Phase 1, so every answer that has one also has a delivered
+    # snapshot to resolve it against.
+    fallbacks = (
+        {answer.selected_option_id: answer.selected_option.option_text}
+        if answer.selected_option is not None
+        else {}
+    )
+    return delivered.selected_texts(option_ids, fallbacks=fallbacks)
+
+
+def selection_text(delivered: DeliveredQuestion, answer) -> str | None:
+    """The same selections as one line. None when nothing was selected.
+
+    None rather than "" so callers keep expressing "unanswered" the way they
+    already do - the CSV's existing unanswered semantics are untouched, and no
+    fake value is invented for an empty set.
+    """
+    texts = selection_texts(delivered, answer)
+    return SELECTION_SEPARATOR.join(texts) if texts else None
+
+
 def to_player_payload(delivered: DeliveredQuestion, masked_image_url: str | None = None) -> dict:
     """The question as a PLAYER may see it, for resuming an attempt.
 
@@ -328,6 +423,11 @@ def to_payload(delivered: DeliveredQuestion) -> dict:
         "question_number": delivered.number,
         "question_text": delivered.text,
         "question_type": delivered.question_type.value,
+        # AS DELIVERED, so the expanded view reads the answer the way the player
+        # gave it. Without this the browser cannot tell a set answer from a
+        # single choice, and resolving `selected_option_id` - NULL on every
+        # multi-select answer - showed "No answer" over three ticked boxes.
+        "allows_multiple_answers": delivered.allows_multiple_answers,
         "options": [
             {"id": o.id, "option_text": o.text, "is_correct_answer": o.is_correct_answer}
             for o in delivered.options

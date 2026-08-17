@@ -70,6 +70,7 @@ from app.services.drawing_documents import validate_document
 from app.services.delivered_questions import (
     delivered_by_question_id,
     delivered_questions,
+    selection_text,
     to_player_payload,
 )
 from app.services.question_exclusions import load_for_quizzes
@@ -114,8 +115,12 @@ def _resolve_answer_text(question, answer: Answer | None) -> str | None:
     # Looked up in the DELIVERED options, so an option whose text was edited
     # afterwards still reads as the player saw it - falling back to the live
     # option only when the snapshot never saw that id at all.
-    live = answer.selected_option.option_text if answer.selected_option else None
-    return question.option_text(answer.selected_option_id, fallback=live)
+    #
+    # A "Select all that apply" answer reads as its whole set, joined on one
+    # line: "Mike; Nickel; Boundary Safety". Same resolver as the CSV and the
+    # coach's view, so a player and a coach discussing one answer are reading
+    # the same words in the same order.
+    return selection_text(question, answer)
 
 
 def _attach_masked_media(quiz_payload: dict, access_code_id: int) -> None:
@@ -803,7 +808,15 @@ def submit_quiz():
         db.session.rollback()
         raise
 
-    db.session.refresh(attempt)
+    # Reloaded with the answers' SELECTION SETS attached. Answer.to_dict emits
+    # them, and without the eager load it lazy-loads once per answer - on the
+    # request an entire squad fires within the same minute.
+    attempt = (
+        PlayerAttempt.query.populate_existing()
+        .options(selectinload(PlayerAttempt.answers).joinedload(Answer.selected_options))
+        .filter(PlayerAttempt.id == attempt.id)
+        .one()
+    )
     return jsonify(attempt.to_dict(include_answers=True)), 201
 
 
@@ -860,6 +873,13 @@ def player_results():
         # _resolve_answer_text - both would otherwise lazy-load per question
         # and turn one results page into an N+1.
         selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
+        # The SET a "Select all that apply" answer stores. Without this,
+        # resolving each one walks `answer.selected_options` and fires a query
+        # per question - the same N+1 the two loaders around it exist to avoid.
+        #
+        # Joined rather than selectin so the cost is zero extra queries at any
+        # size; see the note in routes/grading._load_responses_for_export.
+        selectinload(PlayerAttempt.answers).joinedload(Answer.selected_options),
         # The player's own drawings, for the Draw Response cards below. Walking
         # `answer.drawing` per answer would be one query per question on the
         # page a whole squad opens the moment they finish.

@@ -25,6 +25,34 @@ import styles from './ResultsTab.module.css';
  *  on every render and retrigger memoised children. */
 const EMPTY_ASSIGNMENTS = new Map<number, QuizAssignment>();
 
+/** Matches services/delivered_questions.SELECTION_SEPARATOR, so the coach's
+ *  screen, the player's results page and the CSV read a set the same way. */
+const SELECTION_SEPARATOR = '; ';
+
+/** What this answer SELECTED, in the order the player saw the options.
+ *
+ *  ORDER IS THE QUESTION'S, NOT THE PLAYER'S - `selected_option_ids` arrives
+ *  sorted by id, which is meaningless to a reader, so the options list decides.
+ *  Same rule as the backend's resolver, which is why the CSV and PDF a coach
+ *  downloads from this page list the same items in the same order.
+ *
+ *  Single choice deliberately keeps reading `selected_option_id`: it is what
+ *  this view has always read, and a set answer is the only case that needs the
+ *  other field. */
+function selectedText(
+  question: { options: { id: number | null; option_text: string }[] },
+  answer: Answer,
+  allowsMultiple: boolean,
+): string | null {
+  if (!allowsMultiple) {
+    const one = question.options.find((o) => o.id === answer.selected_option_id);
+    return one ? one.option_text : null;
+  }
+  const chosen = new Set(answer.selected_option_ids ?? []);
+  const texts = question.options.filter((o) => o.id !== null && chosen.has(o.id));
+  return texts.length ? texts.map((o) => o.option_text).join(SELECTION_SEPARATOR) : null;
+}
+
 function AnswerRow({
   answer,
   quiz,
@@ -58,7 +86,13 @@ function AnswerRow({
   const questionText = delivered ? delivered.question_text : live!.question_text;
   const questionType = question.question_type;
   const questionImage = delivered ? delivered.image : live!.image;
-  const selectedOption = question.options.find((o) => o.id === answer.selected_option_id);
+  // AS DELIVERED. A live question whose format a coach changed afterwards must
+  // not decide how an answer already given is read; the fallback is only for a
+  // pre-Phase-4a payload that carries no delivered record at all.
+  const allowsMultiple = delivered
+    ? delivered.allows_multiple_answers === true
+    : live?.allows_multiple_answers === true;
+  const selectedAnswer = selectedText(question, answer, allowsMultiple);
   // Both types are judged by a person rather than scored from an option. The
   // grading UI itself is Phase 4; this only decides what the coach is shown.
   //
@@ -110,7 +144,7 @@ function AnswerRow({
         )
       ) : (
         <div className={styles.answerValue}>
-          {selectedOption ? selectedOption.option_text : answer.answer_text || <em>No answer</em>}
+          {selectedAnswer ?? (answer.answer_text || <em>No answer</em>)}
         </div>
       )}
 
