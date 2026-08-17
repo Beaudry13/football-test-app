@@ -15,15 +15,16 @@ Multi-select: at least one correct answer, at least two options.
 apply" where only one does is a real question a coach might mean, and refusing
 it would be the product second-guessing their material.
 
-THE ACTIVATION FENCE IS TEMPORARY
----------------------------------
-M2 gives a coach authoring only; the player side arrives in M3. Until then a
-quiz containing one of these questions cannot be sent, because the alternative
-is a coach activating a Peira their players cannot answer.
+THE M2 ACTIVATION FENCE IS GONE
+-------------------------------
+M2 temporarily blocked activation, because a coach could author one of these
+before players could answer it. M3 built the player side and removed the block,
+and `TestActivationIsNoLongerFenced` below replaces those tests rather than
+letting them vanish - a guard that disappears without a replacement is a guard
+nobody notices losing.
 
-`TestActivationFence` is expected to be REPLACED in M3, not quietly deleted. If
-those tests disappear without something taking their place, the fence went with
-them.
+Competition is still fenced, in
+test_multi_select_practice_and_competition.py.
 """
 
 import pytest
@@ -194,12 +195,20 @@ class TestAuthoring:
         assert copy["questions"][0]["allows_multiple_answers"] is True
 
 
-class TestActivationFence:
-    """TEMPORARY - REMOVE IN M3, when players can answer these."""
+class TestActivationIsNoLongerFenced:
+    """REPLACES the temporary M2 fence, which is gone.
 
-    def test_a_quiz_containing_one_cannot_be_sent_yet(
-        self, client, coach_headers, quiz_id
-    ):
+    M2 blocked activation because players could not answer these questions
+    yet. M3 built the player side, so the block was removed - and these tests
+    take its place rather than the old ones simply disappearing, which is how
+    a removed guard goes unnoticed.
+
+    Competition remains fenced, and that lives in
+    test_multi_select_practice_and_competition.py where the rest of the
+    Competition behaviour is.
+    """
+
+    def test_a_quiz_containing_one_CAN_now_be_sent(self, client, coach_headers, quiz_id):
         make_question(
             client,
             coach_headers,
@@ -209,56 +218,18 @@ class TestActivationFence:
         )
         add_roster(client, coach_headers, quiz_id)
 
-        refused = activate(client, coach_headers, quiz_id)
-
-        assert refused.status_code == 422
-        assert refused.get_json()["reason"] == "multi_select_not_playable"
-
-    def test_the_message_names_the_question_and_the_way_out(
-        self, client, coach_headers, quiz_id
-    ):
-        """A coach needs to know WHICH question and WHAT TO DO - not that the
-        backend is ahead of the player app."""
-        make_question(client, coach_headers, quiz_id, options=[opt("A", True), opt("B")])
-        make_question(
-            client,
-            coach_headers,
-            quiz_id,
-            multi=True,
-            options=[opt("Mike", True), opt("Will", True)],
-        )
-        add_roster(client, coach_headers, quiz_id)
-
-        body = activate(client, coach_headers, quiz_id).get_json()
-
-        assert body["details"]["multi_select_questions"] == [2], "the second question"
-        assert "Question 2" in body["error"]
-        assert "select all that apply" in body["error"].lower()
+        assert activate(client, coach_headers, quiz_id).status_code == 201
 
     def test_an_ordinary_quiz_still_activates(self, client, coach_headers, quiz_id):
-        """The fence must not touch the normal path."""
         make_question(client, coach_headers, quiz_id, options=[opt("Mike", True), opt("Will")])
         add_roster(client, coach_headers, quiz_id)
 
         assert activate(client, coach_headers, quiz_id).status_code == 201
 
-    def test_a_STOPPED_multi_select_question_does_not_block_activation(
+    def test_a_quiz_with_no_questions_is_still_refused(
         self, client, coach_headers, quiz_id
     ):
-        """Phase 4B retirement composes with the fence, which also gives the
-        coach a second way out of it."""
-        make_question(client, coach_headers, quiz_id, options=[opt("A", True), opt("B")])
-        blocked = make_question(
-            client,
-            coach_headers,
-            quiz_id,
-            multi=True,
-            options=[opt("Mike", True), opt("Will", True)],
-        ).get_json()
+        """The activation guards that were always there are untouched."""
         add_roster(client, coach_headers, quiz_id)
-        client.post(
-            f"/api/quizzes/{quiz_id}/questions/{blocked['id']}/retire",
-            headers=coach_headers,
-        )
 
-        assert activate(client, coach_headers, quiz_id).status_code == 201
+        assert activate(client, coach_headers, quiz_id).status_code == 422

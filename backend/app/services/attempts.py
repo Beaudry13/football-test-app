@@ -83,6 +83,7 @@ def upsert_answer(
     question_id: int,
     selected_option_id: int | None,
     answer_text: str | None,
+    selected_option_ids: list[int] | None = None,
 ) -> Answer:
     """Create or update the one Answer row for (attempt, question_id).
 
@@ -107,7 +108,27 @@ def upsert_answer(
         raise ApiError(f"Question {question_id} does not belong to this quiz", status_code=422)
 
     is_correct = None
-    if selected_option_id is not None:
+
+    if question.allows_multiple_answers:
+        # SELECT ALL THAT APPLY. The selection is a SET, and the set is what is
+        # stored - `selected_option_id` stays NULL, because a single column
+        # cannot honestly represent three choices and picking one of them would
+        # be a lie that every downstream reader would believe.
+        chosen = _validated_selection(question, selected_option_ids or [])
+        correct = {o.id for o in question.options if o.is_correct_answer}
+
+        # EXACT SET EQUALITY. Missing one correct answer is wrong; one extra
+        # wrong answer is wrong; order is meaningless because these are sets.
+        # No partial credit - `answers.is_correct` stays the boolean every
+        # scoring surface already reads, so services/scoring is untouched.
+        #
+        # An EMPTY selection is UNANSWERED, not incorrect: a player who never
+        # answered has not answered wrongly, and scoring them 0 for it is the
+        # "fabricating a grade when nothing was given" that CLAUDE.md forbids.
+        is_correct = (chosen == correct) if chosen else None
+        selected_option_id = None
+        selected_ids = chosen
+    elif selected_option_id is not None:
         option = next((o for o in question.options if o.id == selected_option_id), None)
         if option is None:
             raise ApiError(
@@ -115,7 +136,14 @@ def upsert_answer(
                 status_code=422,
             )
         is_correct = option.is_correct_answer
-    elif question.question_type is QuestionType.FILL_BLANK:
+        selected_ids = {selected_option_id}
+    else:
+        selected_ids = set()
+    if (
+        not question.allows_multiple_answers
+        and selected_option_id is None
+        and question.question_type is QuestionType.FILL_BLANK
+    ):
         # Auto-graded here, on every save, exactly as a selected option is -
         # is_correct is a pure function of what the player has typed.
         #
@@ -145,11 +173,34 @@ def upsert_answer(
         },
     ).returning(Answer.id)
     answer_id = db.session.execute(stmt).scalar_one()
-    _sync_selected_options(answer_id, selected_option_id)
+    _sync_selected_options(answer_id, selected_ids)
     return db.session.get(Answer, answer_id)
 
 
-def _sync_selected_options(answer_id: int, selected_option_id: int | None) -> None:
+def _validated_selection(question, option_ids) -> set[int]:
+    """The submitted ids, proven to belong to this question.
+
+    IDS FROM A CLIENT ARE NEVER TRUSTED. `answer_selected_options.option_id`
+    deliberately has no foreign key - history must outlive live option rows -
+    so the database will happily store a number that means nothing. That check
+    does not disappear; it moves here, and this is the only place it happens.
+
+    Returns a SET, so a client sending the same id twice records one selection
+    rather than two, and order is discarded because a set has none.
+    """
+    valid = {option.id for option in question.options}
+    chosen = set()
+    for option_id in option_ids:
+        if option_id not in valid:
+            raise ApiError(
+                f"Option {option_id} does not belong to question {question.id}",
+                status_code=422,
+            )
+        chosen.add(option_id)
+    return chosen
+
+
+def _sync_selected_options(answer_id: int, option_ids) -> None:
     """Keep `answer_selected_options` in step with `selected_option_id`.
 
     MULTI-SELECT M1, AND DELIBERATELY WRITE-ONLY FOR NOW. Nothing reads this
@@ -169,10 +220,10 @@ def _sync_selected_options(answer_id: int, selected_option_id: int | None) -> No
             AnswerSelectedOption.answer_id == answer_id
         )
     )
-    if selected_option_id is not None:
+    for option_id in sorted(option_ids or ()):
         db.session.execute(
             pg_insert(AnswerSelectedOption)
-            .values(answer_id=answer_id, option_id=selected_option_id)
+            .values(answer_id=answer_id, option_id=option_id)
             # A double-tap racing itself resolves to the same row rather than
             # a duplicate-key error, exactly as the answer upsert above does.
             .on_conflict_do_nothing()
@@ -211,6 +262,11 @@ def is_answered(question: Question, answer: Answer | None) -> bool:
     if question.question_type in TEXT_ANSWER_TYPES:
         return bool((answer.answer_text or "").strip())
 
+    if question.allows_multiple_answers:
+        # ANSWERED AND CORRECT ARE DIFFERENT QUESTIONS. Any selection at all
+        # counts as answered - a player must never be forced to find every
+        # correct option just to be allowed to submit.
+        return bool(answer.selected_options)
     return answer.selected_option_id is not None
 
 

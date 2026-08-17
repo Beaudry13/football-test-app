@@ -11,6 +11,10 @@ class AnswerSubmissionSchema(Schema):
     question_id = fields.Int(required=True)
     answer_text = fields.Str(required=False, allow_none=True, load_default=None)
     selected_option_id = fields.Int(required=False, allow_none=True, load_default=None)
+    #: "Select all that apply". A SET, sent whole on every save - the server
+    #: replaces the stored selection with it rather than merging, so
+    #: deselecting is expressible. Ignored on a single-choice question.
+    selected_option_ids = fields.List(fields.Int(), required=False, allow_none=True, load_default=None)
     # The whole DrawingDocument, re-sent at submit as the same safety net the
     # text answers already get: autosave may have failed on a flaky
     # connection, and submit is the player's last chance to be heard.
@@ -45,6 +49,10 @@ class SaveAnswerSchema(Schema):
     question_id = fields.Int(required=True)
     answer_text = fields.Str(required=False, allow_none=True, load_default=None)
     selected_option_id = fields.Int(required=False, allow_none=True, load_default=None)
+    #: "Select all that apply". A SET, sent whole on every save - the server
+    #: replaces the stored selection with it rather than merging, so
+    #: deselecting is expressible. Ignored on a single-choice question.
+    selected_option_ids = fields.List(fields.Int(), required=False, allow_none=True, load_default=None)
 
 
 class CheckAnswerSchema(Schema):

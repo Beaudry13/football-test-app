@@ -248,9 +248,13 @@ class TestBehaviourIsInert:
         for field in ("id", "question_text", "question_type", "options", "position"):
             assert field in payload
 
-    def test_the_player_payload_gains_nothing(self, client, coach_headers):
-        """M1 exposes nothing to players. A selection set they cannot make must
-        not appear in what they receive."""
+    def test_the_player_payload_exposes_no_answer_key(self, client, coach_headers):
+        """M1 exposed nothing at all; M3 added `allows_multiple_answers`, which
+        says HOW MANY answers may be picked and never WHICH are right.
+
+        What must never appear is the key itself, and that is what this now
+        pins - the earlier "gains nothing" assertion could not survive the
+        phase that made the feature usable."""
         import json
 
         quiz, question, code = build_quiz(client, coach_headers)
@@ -260,8 +264,8 @@ class TestBehaviourIsInert:
         ).get_json()
 
         blob = json.dumps(started)
-        assert "allows_multiple_answers" not in blob
-        assert "selected_options" not in blob
+        assert "is_correct_answer" not in blob
+        assert "expected_answers" not in blob
 
     def test_results_still_read_the_single_selected_option(
         self, client, coach_headers

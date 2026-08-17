@@ -140,7 +140,18 @@ describe('PlayPage', () => {
       expect(submitSpy).toHaveBeenCalledWith({
         access_code_id: 42,
         player_name: 'Jordan Smith',
-        answers: [{ question_id: 10, selected_option_id: 100, answer_text: null, drawing: null }],
+        // `selected_option_ids` added by Multi-Select M3: null for a
+        // single-choice answer, and asserted rather than loosened so a new
+        // field has to be acknowledged.
+        answers: [
+          {
+            question_id: 10,
+            selected_option_id: 100,
+            selected_option_ids: null,
+            answer_text: null,
+            drawing: null,
+          },
+        ],
       }),
     );
     await waitFor(() => expect(resultsSpy).toHaveBeenCalledWith('ABC123', 'Jordan Smith', undefined));

@@ -21,7 +21,15 @@ from sqlalchemy.orm import selectinload
 
 from app.errors import ApiError
 from app.extensions import db, limiter
-from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question, QuestionType
+from app.models import (
+    AccessCode,
+    Answer,
+    AnswerSelectedOption,
+    AttemptStatus,
+    PlayerAttempt,
+    Question,
+    QuestionType,
+)
 from app.models.question_region import QuestionRegion
 from app.models.answer_drawing import AnswerDrawing, document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
@@ -200,6 +208,25 @@ def _drawings_by_answer_id(attempt: PlayerAttempt) -> dict:
     }
 
 
+def _selections_by_answer_id(attempt: PlayerAttempt) -> dict:
+    """Every stored selection for this attempt, in ONE query.
+
+    Walking `answer.selected_options` per answer would be an N+1 on the route a
+    whole squad hits when they join - the same trap the drawings loader above
+    exists to avoid.
+    """
+    answer_ids = [a.id for a in attempt.answers]
+    if not answer_ids:
+        return {}
+    rows = AnswerSelectedOption.query.filter(
+        AnswerSelectedOption.answer_id.in_(answer_ids)
+    ).all()
+    grouped: dict[int, list] = {}
+    for row in rows:
+        grouped.setdefault(row.answer_id, []).append(row)
+    return grouped
+
+
 def _attempt_state(attempt: PlayerAttempt) -> dict:
     """Player-safe attempt payload for /start and /answers.
 
@@ -211,6 +238,7 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
     time rather than deferred to submit.
     """
     drawings = _drawings_by_answer_id(attempt)
+    selections = _selections_by_answer_id(attempt)
 
     return {
         "attempt_id": attempt.id,
@@ -238,6 +266,13 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
             {
                 "question_id": a.question_id,
                 "selected_option_id": a.selected_option_id,
+                # THE COMPLETE SET, so a refresh restores every box a player
+                # ticked rather than one of them. Single-choice answers report
+                # their one selection here too, so the client has a single
+                # shape to read.
+                "selected_option_ids": sorted(
+                    s.option_id for s in selections.get(a.id, ())
+                ),
                 "answer_text": a.answer_text,
                 # Practice lock state, so a reload restores a checked
                 # question as checked instead of handing the player a second
@@ -495,7 +530,13 @@ def save_answer():
             reason="practice_answer_locked",
         )
 
-    upsert_answer(attempt, data["question_id"], data["selected_option_id"], data["answer_text"])
+    upsert_answer(
+        attempt,
+        data["question_id"],
+        data["selected_option_id"],
+        data["answer_text"],
+        data.get("selected_option_ids"),
+    )
     db.session.commit()
     # Identical shape in both modes: correctness is revealed by /check, never
     # by an autosave. A practice player who has not pressed Check Answer yet
@@ -687,6 +728,12 @@ def submit_quiz():
             elif question.question_type in TEXT_ANSWER_TYPES:
                 if not (submitted.get("answer_text") or "").strip():
                     missing.append(question.id)
+            elif question.allows_multiple_answers:
+                # ANSWERED, NOT CORRECT. Any selection satisfies this; the
+                # player is never forced to find every right answer merely to
+                # be allowed to submit.
+                if not submitted.get("selected_option_ids"):
+                    missing.append(question.id)
             elif submitted.get("selected_option_id") is None:
                 missing.append(question.id)
 
@@ -714,6 +761,7 @@ def submit_quiz():
                 submitted_answer["question_id"],
                 submitted_answer["selected_option_id"],
                 submitted_answer["answer_text"],
+                submitted_answer.get("selected_option_ids"),
             )
             # Re-sent by the client as the same safety net the text answers
             # get: an autosave may have failed on a flaky connection and this

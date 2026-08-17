@@ -88,6 +88,9 @@ def build_snapshot(question: Question) -> dict:
         ),
         "expected_answers": question.expected_answers or [],
         "answer_matching": question.answer_matching,
+        #: Recorded so a coach flipping "select all that apply" later cannot
+        #: change how an attempt already underway behaves.
+        "allows_multiple_answers": bool(question.allows_multiple_answers),
         # None when the question has no uploaded still. `annotations` and
         # `canvas_width` travel WITH the url because they are meaningless
         # apart from it: annotations are coordinates in the space

@@ -38,6 +38,8 @@ export function saveAnswer(input: {
   player_id?: number;
   question_id: number;
   selected_option_id?: number | null;
+  /** "Select all that apply" - the complete set, replacing whatever is stored. */
+  selected_option_ids?: number[] | null;
   answer_text?: string | null;
 }): Promise<void> {
   return api.post<void>('/play/answers', input, { auth: false });
@@ -89,6 +91,8 @@ export interface AnswerSubmission {
   question_id: number;
   answer_text?: string | null;
   selected_option_id?: number | null;
+  /** "Select all that apply" - the complete set, replacing whatever is stored. */
+  selected_option_ids?: number[] | null;
   /** Re-sent at submit as the same safety net the text answers get, so one
    * failed autosave on a flaky connection does not cost the player their
    * answer. The server treats submit as authoritative and will not 409 it

@@ -608,3 +608,13 @@
 .answerDrawing {
   margin: 8px 0;
 }
+
+/* "Select all that apply". Deliberately plain text above the options rather
+   than a banner or a badge: it is an instruction about the rows beneath it,
+   not an alert, and a player should absorb it without stopping. */
+.selectAllHint {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--peira-text-muted, #5c5c5c);
+}

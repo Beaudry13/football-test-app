@@ -85,6 +85,28 @@ def unsupported_questions(quiz: Quiz) -> list[dict]:
     """
     blocking = []
     for index, question in enumerate(quiz.questions):
+        # "SELECT ALL THAT APPLY" IS NOT SUPPORTED IN COMPETITION YET, and it
+        # is blocked HERE rather than by a new mechanism because this is
+        # already the one list a coach is shown when a quiz cannot be played
+        # live. Competition scores one tap against one option and times it;
+        # a set answer needs a different submission, a different grading path
+        # and an explicit lock-in step, none of which v1 builds.
+        #
+        # Checked before the type check because the type IS supported - it is
+        # multiple choice - and only the selection rule is not.
+        if question.allows_multiple_answers:
+            blocking.append(
+                {
+                    "question_id": question.id,
+                    "position": index + 1,
+                    "question_type": question.question_type.value,
+                    "reason": (
+                        "Select All That Apply questions are not available in "
+                        "Competition Mode yet."
+                    ),
+                }
+            )
+            continue
         if question.question_type in COMPETITION_QUESTION_TYPES:
             continue
         blocking.append(

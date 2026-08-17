@@ -13,9 +13,24 @@ import styles from './PlayPage.module.css';
 
 export interface PlayerAnswer {
   selected_option_id?: number;
+  /** "Select all that apply" - the COMPLETE set, replaced on every change so
+   *  deselecting is expressible. */
+  selected_option_ids?: number[];
   answer_text?: string;
   /** Present only on `draw_response` questions. */
   drawing?: DrawingDocument;
+}
+
+/** Add or remove one option, returning a new set.
+ *
+ * A plain toggle: tapping a chosen row un-chooses it, which is what a checkbox
+ * means everywhere else and needs no explaining. Sorted so the value a player
+ * sees, the value autosaved and the value compared on resume are all the same
+ * regardless of tap order. */
+function toggleSelection(current: number[], optionId: number): number[] {
+  return current.includes(optionId)
+    ? current.filter((id) => id !== optionId)
+    : [...current, optionId].sort((a, b) => a - b);
 }
 
 export function QuestionInput({
@@ -63,6 +78,11 @@ export function QuestionInput({
   // question with no picture, never an unmasked page.
   const maskedImageUrl = question.masked_image_url ?? null;
   const canDraw = isDrawResponse && image !== null;
+  /** "Select all that apply" - read from the DELIVERED question, so a coach
+   *  flipping the setting cannot change how an attempt already underway
+   *  behaves. */
+  const isMultiSelect = Boolean(question.allows_multiple_answers);
+  const selectedIds = answer?.selected_option_ids ?? [];
   const drawing = answer?.drawing;
   const storageKey = drawingScope ? draftKey(drawingScope, question.id) : null;
 
@@ -249,28 +269,46 @@ export function QuestionInput({
         />
       ) : (
         <div className={styles.optionList}>
-          {question.options.map((option) => (
-            <label
-              key={option.id}
-              className={`${styles.optionRow} ${
-                answer?.selected_option_id === option.id ? styles.optionRowActive : ''
-              }`}
-            >
-              {/* Still a real <input type="radio"> - it is styled with
-                  appearance:none rather than replaced by a div, so keyboard
-                  navigation, screen readers and form semantics all keep
-                  working exactly as before. */}
-              <input
-                type="radio"
-                className={styles.optionRadio}
-                name={`question-${question.id}`}
-                checked={answer?.selected_option_id === option.id}
-                onChange={() => onChange({ selected_option_id: option.id })}
-                disabled={locked}
-              />
-              <span className={styles.optionText}>{renderArrows(option.option_text)}</span>
-            </label>
-          ))}
+          {/* THE ONLY THING ADDED FOR THE PLAYER, and only on these questions.
+              Without it a player meets checkboxes and has to infer the rule;
+              with it there is nothing to work out. Sits with the options
+              rather than in a banner, because it describes them. */}
+          {isMultiSelect && <p className={styles.selectAllHint}>Select all that apply</p>}
+          {question.options.map((option) => {
+            const isSelected = isMultiSelect
+              ? selectedIds.includes(option.id)
+              : answer?.selected_option_id === option.id;
+            return (
+              <label
+                key={option.id}
+                className={`${styles.optionRow} ${isSelected ? styles.optionRowActive : ''}`}
+              >
+                {/* Still a real input - styled with appearance:none rather
+                    than replaced by a div, so keyboard navigation, screen
+                    readers and form semantics keep working. The whole row is
+                    the label, so the tap target is the row, not the box.
+
+                    Radio to checkbox is the entire visual difference, and it
+                    is the one convention every phone user already reads as
+                    "you may pick several". */}
+                <input
+                  type={isMultiSelect ? 'checkbox' : 'radio'}
+                  className={styles.optionRadio}
+                  name={isMultiSelect ? undefined : `question-${question.id}`}
+                  checked={isSelected}
+                  onChange={() =>
+                    onChange(
+                      isMultiSelect
+                        ? { selected_option_ids: toggleSelection(selectedIds, option.id) }
+                        : { selected_option_id: option.id },
+                    )
+                  }
+                  disabled={locked}
+                />
+                <span className={styles.optionText}>{renderArrows(option.option_text)}</span>
+              </label>
+            );
+          })}
         </div>
       )}
     </div>

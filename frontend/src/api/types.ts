@@ -655,6 +655,9 @@ export interface ValidateCodeResponse {
 export interface ResumedAnswer {
   question_id: number;
   selected_option_id: number | null;
+  /** The COMPLETE selection set. Single-choice answers report their one
+   *  selection here too, so the client has one shape to read. */
+  selected_option_ids?: number[];
   answer_text: string | null;
   /** Practice only: the player has already seen this question's verdict and
    *  explanation, so it is locked. Always false on a graded attempt. */

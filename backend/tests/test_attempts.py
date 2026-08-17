@@ -54,6 +54,9 @@ def test_start_resumes_an_existing_in_progress_attempt_with_its_saved_answers(cl
             # this test exists to pin the EXACT resume shape, so a new key
             # should have to be acknowledged deliberately.
             "drawing": None,
+            # Added by Multi-Select M3. A single-choice answer reports its one
+            # selection as a set too, so the client has one shape to read.
+            "selected_option_ids": [tf_question["options"][0]["id"]],
         }
     ]
 
@@ -131,6 +134,8 @@ def test_autosave_persists_and_is_retrievable_on_resume(client, coach_headers):
             "checked": False,
             # Phase B, as above: a text answer carries no drawing.
             "drawing": None,
+            # M3: a written answer selects no options.
+            "selected_option_ids": [],
         }
     ]
 

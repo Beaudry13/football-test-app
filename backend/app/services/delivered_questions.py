@@ -84,6 +84,10 @@ class DeliveredQuestion:
     options: list[DeliveredOption]
     expected_answers: list[str]
     answer_matching: str | None
+    #: "Select all that apply" AS DELIVERED. Read from the snapshot so a coach
+    #: flipping the setting later cannot change how an in-progress attempt
+    #: behaves - the same rule the rest of the delivered content follows.
+    allows_multiple_answers: bool
     image: DeliveredImage | None
     #: False means this attempt predates Phase 1 and the content below came
     #: from the live question. Never silently conflate the two.
@@ -170,6 +174,7 @@ def _from_snapshot(row: AttemptQuestionSnapshot, number: int) -> DeliveredQuesti
         ],
         expected_answers=list(data.get("expected_answers") or []),
         answer_matching=data.get("answer_matching"),
+        allows_multiple_answers=bool(data.get("allows_multiple_answers")),
         image=(
             DeliveredImage(
                 image_url=image.get("image_url"),
@@ -211,6 +216,7 @@ def _from_live(question, number: int) -> DeliveredQuestion:
         ),
         expected_answers=list(question.expected_answers or []),
         answer_matching=question.answer_matching,
+        allows_multiple_answers=bool(question.allows_multiple_answers),
         image=(
             DeliveredImage(
                 image_url=question.image.image_url,
@@ -282,6 +288,10 @@ def to_player_payload(delivered: DeliveredQuestion, masked_image_url: str | None
         "id": delivered.question_id,
         "question_text": delivered.text,
         "question_type": delivered.question_type.value,
+        # HOW MANY ANSWERS MAY BE PICKED - not which. Carries no correctness
+        # information, so it is safe mid-quiz; without it the client cannot
+        # know whether to render one choice or several.
+        "allows_multiple_answers": delivered.allows_multiple_answers,
         "options": [
             # id + text ONLY. No correctness flag, in any branch.
             {"id": o.id, "option_text": o.text}

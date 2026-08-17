@@ -36,6 +36,9 @@ function seedAnswers(initialAnswers: ResumedAnswer[]): Record<number, PlayerAnsw
   for (const a of initialAnswers) {
     seeded[a.question_id] = {
       selected_option_id: a.selected_option_id ?? undefined,
+      // THE COMPLETE SET, so a refresh restores every box a player ticked
+      // rather than one of them.
+      selected_option_ids: a.selected_option_ids ?? undefined,
       answer_text: a.answer_text ?? undefined,
       drawing: (a.drawing?.document as PlayerAnswer['drawing']) ?? undefined,
     };
@@ -219,6 +222,11 @@ export function QuizStep({
     if (question.question_type === 'written' || question.question_type === 'fill_blank') {
       return Boolean(answer?.answer_text?.trim());
     }
+    if (question.allows_multiple_answers) {
+      // ANSWERED, NOT CORRECT: any selection counts. A player is never made to
+      // find every right answer just to be allowed to submit.
+      return (answer?.selected_option_ids?.length ?? 0) > 0;
+    }
     return answer?.selected_option_id !== undefined;
   }
 
@@ -237,6 +245,7 @@ export function QuizStep({
       player_id: playerId,
       question_id: questionId,
       selected_option_id: answer.selected_option_id ?? null,
+      selected_option_ids: answer.selected_option_ids ?? null,
       answer_text: answer.answer_text ?? null,
     })
       .then(() => setSaveStatus('saved'))
@@ -315,6 +324,7 @@ export function QuizStep({
             player_id: playerId,
             question_id: questionId,
             selected_option_id: answer.selected_option_id ?? null,
+      selected_option_ids: answer.selected_option_ids ?? null,
             answer_text: answer.answer_text ?? null,
           });
           setSaveStatus('saved');
@@ -391,6 +401,14 @@ export function QuizStep({
       return;
     }
 
+    if (answer.selected_option_ids !== undefined) {
+      // Saved immediately, like an option pick: a set of taps is the final
+      // value until the next tap, and delaying only widens the window where a
+      // closed browser loses it. No "lock in" step - the interaction stays the
+      // same shape as single choice.
+      performSave(questionId, answer);
+      return;
+    }
     if (answer.selected_option_id !== undefined) {
       // A radio/option pick is the final value until changed again -
       // nothing to protect against by delaying it, and delaying only
@@ -448,6 +466,7 @@ export function QuizStep({
         answers: questions.map((q) => ({
           question_id: q.id,
           selected_option_id: answers[q.id]?.selected_option_id ?? null,
+          selected_option_ids: answers[q.id]?.selected_option_ids ?? null,
           answer_text: answers[q.id]?.answer_text ?? null,
           // Re-sent as the same safety net the text answers already get: an
           // autosave may have failed on a flaky connection, and submit is the

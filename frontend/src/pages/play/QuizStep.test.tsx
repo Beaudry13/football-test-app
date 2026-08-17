@@ -94,6 +94,10 @@ describe('QuizStep', () => {
         player_id: 501,
         question_id: 1,
         selected_option_id: 10,
+        // Added by Multi-Select M3. Null for a single-choice answer; the
+        // exact-shape assertion is what makes a new field visible rather than
+        // silently accepted.
+        selected_option_ids: null,
         answer_text: null,
       }),
     );
@@ -139,6 +143,7 @@ describe('QuizStep', () => {
         player_id: 501,
         question_id: 2,
         selected_option_id: null,
+        selected_option_ids: null,
         answer_text: 'I set the edge.',
       });
     });
@@ -182,8 +187,8 @@ describe('QuizStep', () => {
           player_name: 'Jordan Smith',
           player_id: 501,
           answers: [
-            { question_id: 1, selected_option_id: null, answer_text: null, drawing: null },
-            { question_id: 2, selected_option_id: null, answer_text: 'I set the edge.', drawing: null },
+            { question_id: 1, selected_option_id: null, selected_option_ids: null, answer_text: null, drawing: null },
+            { question_id: 2, selected_option_id: null, selected_option_ids: null, answer_text: 'I set the edge.', drawing: null },
           ],
         }),
       );

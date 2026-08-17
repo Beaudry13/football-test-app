@@ -271,6 +271,12 @@ class TestPlayerPayloadLeaksNoAnswerKey:
             "options",
             "image",
             "masked_image_url",
+            # Added by Multi-Select M3. Says HOW MANY answers may be picked,
+            # never WHICH are right - a player already sees the option list, so
+            # knowing they may tick several reveals nothing about the key.
+            # Added to the allowlist rather than loosening it, because the
+            # allowlist is what makes a genuinely leaky field visible.
+            "allows_multiple_answers",
         }, question.keys()
 
     def test_a_fill_blank_delivers_no_accepted_answers(self, app, client, coach_headers):
