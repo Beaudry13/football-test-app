@@ -387,14 +387,51 @@ class TestReconnectSecurity:
         )
 
     def test_join_issues_a_token(self, client, coach_env):
-        code = _open_lobby(client, coach_env)["join_code"]
-        body = self._join(client, code, coach_env["players"][0]["id"]).get_json()
+        """The token must be UNGUESSABLE - not derived from the player id, the
+        participant id, or anything else a third party can see.
 
-        token = body["reconnect_token"]
+        THIS TEST USED TO ASSERT `str(player_id) not in token`, WHICH IS NOT A
+        VALID PROOF OF THAT. A reconnect token is 43 url-safe characters, and a
+        player id is usually a single digit, so the digit appears by pure
+        chance roughly half the time - measured at ~51% failure across repeated
+        runs. It failed randomly, was assumed flaky, and was carried for weeks.
+
+        Non-derivation has a deterministic proof instead: if the token were a
+        function of the id (a hash, an encoding, a seed), then the SAME id
+        would always produce the SAME token. Joining twice with the same player
+        and getting different tokens rules that out - and it cannot fail by
+        chance, because two 256-bit CSPRNG values colliding is not a thing that
+        happens.
+        """
+        first_body = self._join(
+            client, _open_lobby(client, coach_env)["join_code"], coach_env["players"][0]["id"]
+        ).get_json()
+        second_body = self._join(
+            client, _open_lobby(client, coach_env)["join_code"], coach_env["players"][0]["id"]
+        ).get_json()
+
+        token = first_body["reconnect_token"]
         assert len(token) >= 32
-        # Not derived from anything a third party knows.
-        assert str(coach_env["players"][0]["id"]) not in token
-        assert str(body["participant"]["id"]) not in token
+
+        # SAME player id, two sessions, two different tokens: the id cannot be
+        # what the token is made of.
+        assert first_body["participant"]["player_id"] == second_body["participant"]["player_id"]
+        assert token != second_body["reconnect_token"]
+
+    def test_the_token_is_not_a_function_of_anything_guessable(self):
+        """The generator itself, checked directly.
+
+        Asserted here rather than through the route so it cannot be satisfied
+        by a route that happens to shuffle ids - `new_token` takes no arguments
+        at all, so there is nothing guessable it could be derived FROM, and
+        repeated calls must never repeat.
+        """
+        from app.models.competition import CompetitionParticipant
+
+        tokens = {CompetitionParticipant.new_token() for _ in range(200)}
+
+        assert len(tokens) == 200, "every token is distinct"
+        assert all(len(t) >= 32 for t in tokens)
 
     def test_tokens_differ_between_players(self, client, coach_env):
         code = _open_lobby(client, coach_env)["join_code"]
