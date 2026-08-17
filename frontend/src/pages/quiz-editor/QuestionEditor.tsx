@@ -15,6 +15,7 @@ interface QuestionEditorProps {
   initialText?: string;
   initialType?: QuestionType;
   initialOptions?: QuestionOptionInput[];
+  initialAllowsMultiple?: boolean;
   initialExplanation?: string | null;
   submitLabel: string;
   onSave: (input: QuestionInput, image?: File | null) => Promise<void>;
@@ -50,6 +51,7 @@ export function QuestionEditor({
   initialText = '',
   initialType = 'true_false',
   initialOptions,
+  initialAllowsMultiple = false,
   initialExplanation = null,
   submitLabel,
   onSave,
@@ -58,6 +60,8 @@ export function QuestionEditor({
   allowImage = false,
 }: QuestionEditorProps) {
   const [questionText, setQuestionText] = useState(initialText);
+  /** "Select all that apply". Multiple choice only - see the control below. */
+  const [allowsMultiple, setAllowsMultiple] = useState(initialAllowsMultiple);
   const [questionType, setQuestionType] = useState<QuestionType>(initialType);
   const [options, setOptions] = useState<QuestionOptionInput[]>(
     initialOptions ?? (initialType === 'true_false' ? TRUE_FALSE_OPTIONS : []),
@@ -202,7 +206,13 @@ export function QuestionEditor({
   }
 
   function setCorrectOption(index: number) {
-    setOptions((prev) => prev.map((o, i) => ({ ...o, is_correct_answer: i === index })));
+    setOptions((prev) =>
+      allowsMultiple
+        ? // Several answers may be right, so this toggles one independently.
+          prev.map((o, i) => (i === index ? { ...o, is_correct_answer: !o.is_correct_answer } : o))
+        : // Exactly one right answer: picking a new one un-picks the old.
+          prev.map((o, i) => ({ ...o, is_correct_answer: i === index })),
+    );
   }
 
   function addOption() {
@@ -229,6 +239,9 @@ export function QuestionEditor({
           question_text: questionText.trim(),
           question_type: questionType,
           options,
+          // Only meaningful on multiple choice; the server drops it elsewhere,
+          // but sending a truthful value is cheaper than sending a stale one.
+          allows_multiple_answers: questionType === 'multiple_choice' && allowsMultiple,
           answer_explanation: explanation.trim(),
         },
         image,
@@ -343,14 +356,20 @@ export function QuestionEditor({
 
       {questionType === 'multiple_choice' && (
         <div className={nb.field}>
-          <span className={nb.fieldLabel}>Options (mark the correct one)</span>
+          <span className={nb.fieldLabel}>
+            {allowsMultiple ? 'Options (mark every correct one)' : 'Options (mark the correct one)'}
+          </span>
           {options.map((option, index) => (
             <div className={styles.optionRow} key={index}>
+              {/* Radio to checkbox is the whole visual change, and it is the
+                  interaction every coach already knows for "one of these" vs
+                  "any of these". No new terminology, no explanation needed. */}
               <input
-                type="radio"
-                name="correct-option"
+                type={allowsMultiple ? 'checkbox' : 'radio'}
+                name={allowsMultiple ? undefined : 'correct-option'}
                 checked={option.is_correct_answer}
                 onChange={() => setCorrectOption(index)}
+                aria-label={`Option ${index + 1} is correct`}
               />
               <input
                 type="text"
@@ -374,6 +393,25 @@ export function QuestionEditor({
           <button type="button" className={`${nb.btnSm} ${styles.addOption}`} onClick={addOption}>
             + Add option
           </button>
+
+          {/* THE WHOLE FEATURE, from the coach's side: one checkbox, below the
+              options it affects, only on multiple choice.
+              Nothing can infer this - radios physically prevent marking two
+              answers, so the coach has to say so first. The consequence is
+              stated in the same breath rather than in a warning, a modal or a
+              help link, and the sentence says what PLAYERS will see, which is
+              the thing the coach is actually deciding. */}
+          <label className={styles.allowMultiple}>
+            <input
+              type="checkbox"
+              checked={allowsMultiple}
+              onChange={(e) => setAllowsMultiple(e.target.checked)}
+            />
+            <span>
+              Allow more than one answer
+              <small>Players will be asked to select all that apply.</small>
+            </span>
+          </label>
         </div>
       )}
 

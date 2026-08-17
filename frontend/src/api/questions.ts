@@ -10,6 +10,9 @@ export interface QuestionInput {
   question_text: string;
   question_type: QuestionType;
   options: QuestionOptionInput[];
+  /** "Select all that apply". Multiple choice only - the server ignores it on
+   *  any other type. */
+  allows_multiple_answers?: boolean;
   position?: number | null;
   /** Shown to a player in Practice Mode after they check their answer, and
    *  never before. Sent as an empty string to clear it; the server stores

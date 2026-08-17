@@ -280,6 +280,9 @@ export interface Question {
    *  cannot see is one they cannot bring back. Distinct from a Phase 3
    *  exclusion, which decides whether it COUNTS for players who already have
    *  it; neither implies the other. */
+  /** "Select all that apply" - a behaviour of multiple choice, not a separate
+   *  question type. */
+  allows_multiple_answers?: boolean;
   is_retired?: boolean;
   retired_at?: string | null;
   /** Whether any attempt was RECORDED as receiving this question, from the

@@ -34,6 +34,8 @@ class QuestionCreateSchema(Schema):
     question_text = fields.Str(required=True, validate=validate.Length(min=1))
     question_type = fields.Str(required=True, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False, load_default=list)
+    #: "Select all that apply". Multiple choice only - validated below.
+    allows_multiple_answers = fields.Bool(required=False, load_default=False)
     position = fields.Int(required=False, load_default=None)
     answer_explanation = _ANSWER_EXPLANATION
 
@@ -42,6 +44,7 @@ class QuestionUpdateSchema(Schema):
     question_text = fields.Str(required=False, validate=validate.Length(min=1))
     question_type = fields.Str(required=False, validate=validate.OneOf(QUESTION_TYPE_VALUES))
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False)
+    allows_multiple_answers = fields.Bool(required=False)
     # Editable in the same form that created it - no second screen.
     answer_explanation = fields.Str(
         required=False, allow_none=True, validate=validate.Length(max=2000)
@@ -111,7 +114,9 @@ class AnnotationsUpdateSchema(Schema):
     canvas_width = fields.Int(required=False, allow_none=True, load_default=None)
 
 
-def validate_options_for_type(question_type: str, options: list[dict]) -> None:
+def validate_options_for_type(
+    question_type: str, options: list[dict], allows_multiple_answers: bool = False
+) -> None:
     """Raises ApiError(422) - same status as marshmallow validation failures,
     since this is the same class of error (semantically invalid payload),
     just enforced in Python because it's a cross-field business rule."""
@@ -130,5 +135,24 @@ def validate_options_for_type(question_type: str, options: list[dict]) -> None:
             raise ApiError("Multiple choice questions need at least 2 options", status_code=422)
 
     correct_count = sum(1 for option in options if option.get("is_correct_answer"))
+
+    if allows_multiple_answers:
+        # "SELECT ALL THAT APPLY". At least one correct answer, and at least two
+        # options to choose between - anything less is not a question.
+        #
+        # EXACTLY ONE CORRECT ANSWER IS DELIBERATELY ALLOWED. "Select all that
+        # apply" where only one does is a legitimate question, and refusing it
+        # would be the product second-guessing the coach about their own
+        # material.
+        if correct_count < 1:
+            raise ApiError(
+                "Mark at least one option as correct", status_code=422
+            )
+        if len(options) < 2:
+            raise ApiError(
+                "A question needs at least 2 options", status_code=422
+            )
+        return
+
     if correct_count != 1:
         raise ApiError("Exactly one option must be marked as the correct answer", status_code=422)

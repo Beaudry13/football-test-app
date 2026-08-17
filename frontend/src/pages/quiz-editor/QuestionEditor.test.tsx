@@ -106,6 +106,11 @@ describe('QuestionEditor', () => {
         // Sent as an empty string when the coach left it blank; the server
         // stores that as null so "no explanation" has one representation.
         answer_explanation: '',
+        // Added by Multi-Select M2. FALSE here on purpose: this is a
+        // true/false question, which never offers the setting, and the payload
+        // must say so rather than omit it - the exact-shape assertion is what
+        // makes a new field visible instead of silently accepted.
+        allows_multiple_answers: false,
       },
       null,
     );

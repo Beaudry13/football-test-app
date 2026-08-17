@@ -230,7 +230,15 @@ def create_question(quiz_id: int):
     """
     quiz = get_editable_quiz(quiz_id)
     data, uploaded_image = _create_payload()
-    validate_options_for_type(data["question_type"], data["options"])
+    # Only multiple choice can be a "select all that apply". Anything else
+    # silently keeps the default rather than erroring: a client sending it on a
+    # written question is confused, not malicious, and the question it actually
+    # asked for is unambiguous.
+    allows_multiple = bool(
+        data.get("allows_multiple_answers")
+        and data["question_type"] == QuestionType.MULTIPLE_CHOICE.value
+    )
+    validate_options_for_type(data["question_type"], data["options"], allows_multiple)
 
     next_position = data["position"]
     if next_position is None:
@@ -242,6 +250,7 @@ def create_question(quiz_id: int):
         answer_explanation=(data.get("answer_explanation") or None),
         question_type=QuestionType(data["question_type"]),
         position=next_position,
+        allows_multiple_answers=allows_multiple,
     )
     db.session.add(question)
     db.session.flush()
@@ -387,6 +396,8 @@ def update_region_question(quiz_id: int, question_id: int):
     # on, which is the same reasoning behind _reject_if_already_answered.
     _reject_if_already_answered(question, "change this question")
 
+    if "allows_multiple_answers" in data:
+        question.allows_multiple_answers = allows_multiple
     if "question_text" in data:
         question.question_text = data["question_text"]
 
@@ -418,6 +429,10 @@ def update_question(quiz_id: int, question_id: int):
     data = load_json_body(QuestionUpdateSchema())
 
     question_type = data.get("question_type", question.question_type.value)
+    allows_multiple = bool(
+        data.get("allows_multiple_answers", question.allows_multiple_answers)
+        and question_type == QuestionType.MULTIPLE_CHOICE.value
+    )
     # PHASE 4C. Whether this question already has recorded history decides
     # WHICH edit path it takes, not whether it may be edited at all.
     #
@@ -427,7 +442,7 @@ def update_question(quiz_id: int, question_id: int):
     # coach WARNING uses the honest snapshot-based check instead.
     delivered = has_history(question)
     if "options" in data:
-        validate_options_for_type(question_type, data["options"])
+        validate_options_for_type(question_type, data["options"], allows_multiple)
 
     # THE HOLE THIS CLOSES. The guard above only fires when `options` is in the
     # payload, so a question_type change ON ITS OWN walked straight past it -
@@ -445,6 +460,8 @@ def update_question(quiz_id: int, question_id: int):
     if "question_type" in data and data["question_type"] != question.question_type.value:
         _reject_if_already_answered(question, "change this question's type")
 
+    if "allows_multiple_answers" in data:
+        question.allows_multiple_answers = allows_multiple
     if "question_text" in data:
         question.question_text = data["question_text"]
 

@@ -460,6 +460,10 @@ def _copy_questions_into(original, copy_quiz, storage, copied_keys: list[str]) -
             # the copy.
             retired_at=question.retired_at,
             retired_by_coach_id=question.retired_by_coach_id,
+            # A copy of a "select all that apply" question is still one. Losing
+            # the flag would silently turn it into single-choice with several
+            # options marked correct, which validation would then reject.
+            allows_multiple_answers=question.allows_multiple_answers,
         )
         db.session.add(copy_question)
         db.session.flush()

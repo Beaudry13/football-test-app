@@ -165,3 +165,22 @@
   font-size: 0.9rem;
   line-height: 1.45;
 }
+
+/* One setting, sitting under the options it changes. Deliberately quiet: it is
+   an occasional choice, not part of the normal authoring path, so it should
+   not compete with the question text or the options for attention. */
+.allowMultiple {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.allowMultiple small {
+  display: block;
+  color: var(--peira-text-muted, #b9b3a4);
+  font-size: 0.82rem;
+  margin-top: 2px;
+}

@@ -139,6 +139,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                 option_text: o.option_text,
                 is_correct_answer: Boolean(o.is_correct_answer),
               }))}
+              initialAllowsMultiple={question.allows_multiple_answers ?? false}
               initialExplanation={question.answer_explanation ?? null}
               hasBeenDelivered={question.has_been_delivered ?? false}
               submitLabel="Save question"

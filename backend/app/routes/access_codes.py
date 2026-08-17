@@ -68,6 +68,31 @@ def activate_quiz(quiz_id: int):
             reason="no_deliverable_questions",
         )
 
+    # SAFETY FENCE, M2 ONLY. A coach can author "select all that apply" now,
+    # but the player side does not exist until M3 - so a quiz containing one
+    # must not be sendable. Never leave a state where a coach can activate a
+    # Peira that players cannot correctly answer.
+    #
+    # REMOVE THIS BLOCK IN M3, when players can answer these questions. If M2
+    # and M3 ship together it should never reach production at all.
+    multi_select = [
+        index + 1
+        for index, question in enumerate(deliverable)
+        if question.allows_multiple_answers
+    ]
+    if multi_select:
+        listed = ", ".join(str(n) for n in multi_select)
+        noun = "Question" if len(multi_select) == 1 else "Questions"
+        verb = "is" if len(multi_select) == 1 else "are"
+        raise ApiError(
+            f"{noun} {listed} {verb} set to \"select all that apply\", which players "
+            "cannot answer yet. Turn that off, or stop sending the question, to "
+            "send this Peira.",
+            status_code=422,
+            reason="multi_select_not_playable",
+            details={"multi_select_questions": multi_select},
+        )
+
     # A Draw Response question with no image is answerable by nobody. The type
     # cannot demand an image at creation - the upload targets an existing
     # question, so requiring one up front would make the type impossible to
