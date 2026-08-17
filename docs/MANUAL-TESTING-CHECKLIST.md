@@ -281,6 +281,38 @@ text, answer-key leakage, and drawings loading in one query.
 
 ---
 
+## DRAW RESPONSE PHASE D / EXPORTS
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped in `f9d11a9` (17 Aug 2026). Deployed and health verified. No migration.
+Backend only - no frontend change in this commit.
+
+- [ ] Export the CSV for a quiz with a Draw Response - the Answer cell reads
+      `Drawing submitted`
+- [ ] A player who skipped it reads `No drawing`
+- [ ] An excluded drawing keeps `Drawing submitted` in Answer AND `Excluded`
+      in Correct - both facts, not one
+- [ ] Export the DETAILED PDF - the drawing is visibly there, over the right
+      picture, in the right place
+- [ ] **Orientation:** a mark made near the top of the image appears near the
+      top in the PDF, not mirrored to the bottom
+- [ ] Stroke thickness looks natural - not hairline, not slab
+- [ ] Replace the question's image as coach, re-export - the PDF still shows
+      the ORIGINAL picture with the original drawing on it
+
+**Why orientation is on this list.** PDF space measures y upward from the
+bottom-left; a browser canvas measures it downward from the top-left. A flipped
+drawing still looks like a plausible drawing, so it is worth one real glance
+even though a test asserts it.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_export_drawings.py` (25 tests) covers all of the above, plus the failure
+paths: malformed documents, invalid strokes, unloadable images, no mutation of
+the stored document, and the delivered-image proof after a replacement.
+
+---
+
 ## Known bounded gap - the Vitest collection flake
 
 `QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped
