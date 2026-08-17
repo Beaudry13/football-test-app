@@ -573,3 +573,31 @@
   margin: 0;
   max-width: 34ch;
 }
+
+/* The drawing-recovery notice. Informational: the player's work was restored
+   correctly, so this explains rather than alarms. No error colouring, and it
+   never covers the canvas. */
+.drawingRestored {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eef4fb;
+  border: 1px solid #cddcec;
+  color: #274156;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.drawingRestoredDismiss {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: #1d4f7c;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+}

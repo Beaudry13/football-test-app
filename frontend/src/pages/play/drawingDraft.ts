@@ -64,15 +64,37 @@ export async function createDrawingFor(image: QuestionImage, url: string): Promi
   return createDocument({ source: drawingSource(image, width, height), now: new Date().toISOString() });
 }
 
-export function loadDraft(key: string): DrawingDocument | null {
+/** A stored draft, plus the server revision it was continued FROM.
+ *
+ *  `base_revision` is what lets resume decide between a local draft and the
+ *  server's copy without ever comparing clocks. null means "this draft was
+ *  never based on a successful save" - which the precedence rule reads as
+ *  "cannot prove it is newer", not as "is older". */
+export interface StoredDraft {
+  document: DrawingDocument;
+  base_revision: number | null;
+}
+
+export function loadDraft(key: string): StoredDraft | null {
   try {
     const raw = window.localStorage.getItem(key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as DrawingDocument;
+    const parsed = JSON.parse(raw) as StoredDraft | DrawingDocument;
+
+    // BACKWARD COMPATIBILITY. Drafts written before Phase B are a bare
+    // DrawingDocument with no envelope. They are still usable work, so they
+    // are read as base_revision null - which the precedence rule treats as
+    // unprovable rather than discarding it outright.
+    const isEnvelope =
+      typeof parsed === 'object' && parsed !== null && 'document' in parsed;
+    const document = (isEnvelope ? (parsed as StoredDraft).document : parsed) as DrawingDocument;
+    const baseRevision = isEnvelope ? ((parsed as StoredDraft).base_revision ?? null) : null;
+
     // Refuse a draft that cannot be trusted rather than rendering half of it.
     // A player is better off starting again than answering on top of a
     // document whose coordinate space or stroke data is malformed.
-    return validateDocument(parsed).length === 0 ? parsed : null;
+    if (validateDocument(document).length !== 0) return null;
+    return { document, base_revision: baseRevision };
   } catch {
     // Private browsing, a full quota, or hand-edited storage. A missing draft
     // is recoverable; a thrown exception here would take the whole question
@@ -81,9 +103,14 @@ export function loadDraft(key: string): DrawingDocument | null {
   }
 }
 
-export function saveDraft(key: string, document: DrawingDocument): boolean {
+export function saveDraft(
+  key: string,
+  document: DrawingDocument,
+  baseRevision: number | null = null,
+): boolean {
   try {
-    window.localStorage.setItem(key, JSON.stringify(document));
+    const envelope: StoredDraft = { document, base_revision: baseRevision };
+    window.localStorage.setItem(key, JSON.stringify(envelope));
     return true;
   } catch {
     return false;

@@ -49,6 +49,11 @@ def test_start_resumes_an_existing_in_progress_attempt_with_its_saved_answers(cl
             # Practice's per-question lock. Always false on a graded attempt:
             # nothing is revealed there, so nothing locks.
             "checked": False,
+            # Added by Draw Response Phase B. None for every non-drawing
+            # answer, and asserted here rather than loosened to `in` checks -
+            # this test exists to pin the EXACT resume shape, so a new key
+            # should have to be acknowledged deliberately.
+            "drawing": None,
         }
     ]
 
@@ -124,6 +129,8 @@ def test_autosave_persists_and_is_retrievable_on_resume(client, coach_headers):
             "selected_option_id": None,
             "answer_text": "I set the edge.",
             "checked": False,
+            # Phase B, as above: a text answer carries no drawing.
+            "drawing": None,
         }
     ]
 

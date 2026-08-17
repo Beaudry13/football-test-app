@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
 import { AnnotationViewer } from '../../components/annotation/AnnotationViewer';
@@ -8,7 +8,7 @@ import { hasDrawnAnswer } from '../../components/drawing/drawingDocument';
 import type { DrawingDocument } from '../../components/drawing/types';
 import { Icon } from '../../components/ui/Icon';
 import { renderArrows } from '../../utils/typography';
-import { clearDraft, createDrawingFor, draftKey, loadDraft, saveDraft } from './drawingDraft';
+import { clearDraft, createDrawingFor, draftKey, saveDraft } from './drawingDraft';
 import styles from './PlayPage.module.css';
 
 export interface PlayerAnswer {
@@ -66,15 +66,13 @@ export function QuestionInput({
   const drawing = answer?.drawing;
   const storageKey = drawingScope ? draftKey(drawingScope, question.id) : null;
 
-  // Restore a draft once, on mount. Runs only for drawing questions, so an
-  // ordinary image question touches localStorage not at all.
-  useEffect(() => {
-    if (!canDraw || !storageKey || drawing) return;
-    const restored = loadDraft(storageKey);
-    if (restored) onChange({ ...answer, drawing: restored });
-    // Mount-only by design: re-running would fight the player's live edits.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canDraw, storageKey]);
+  // DRAFT RESTORE LIVES IN QuizStep SINCE PHASE B, not here.
+  //
+  // Choosing between the local draft and the server's copy needs the server
+  // REVISION, which only QuizStep holds - and doing it per input on mount
+  // meant a question whose resolution was "show nothing" would immediately
+  // reload the draft anyway, quietly bypassing the rule. One place decides.
+  // See resumeDrawing.ts.
 
   const openBoard = useCallback(async () => {
     if (!image) return;

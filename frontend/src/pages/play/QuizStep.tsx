@@ -17,6 +17,13 @@ import { QuizProgress } from './QuizProgress';
 import styles from './PlayPage.module.css';
 import { applyDeliveredContent } from './deliveredQuestions';
 import { orderQuestions } from './questionOrder';
+import { draftKey, loadDraft } from './drawingDraft';
+import {
+  ACTIVE_EDIT_CONFLICT_MESSAGE,
+  DRAWING_RESTORED_MESSAGE,
+  resolveResumeDrawing,
+} from './resumeDrawing';
+import type { DrawingDocument } from '../../components/drawing/types';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 /** Longer than the text debounce. A drawing payload is orders of magnitude
@@ -30,9 +37,72 @@ function seedAnswers(initialAnswers: ResumedAnswer[]): Record<number, PlayerAnsw
     seeded[a.question_id] = {
       selected_option_id: a.selected_option_id ?? undefined,
       answer_text: a.answer_text ?? undefined,
+      drawing: (a.drawing?.document as PlayerAnswer['drawing']) ?? undefined,
     };
   }
   return seeded;
+}
+
+/** Applies the resume precedence rule to every drawing question at once.
+ *
+ * Runs ONCE, when the step mounts. The server copy is the starting point; a
+ * local draft replaces it only where `resolveResumeDrawing` finds it can prove
+ * it continued from the revision the server currently holds.
+ *
+ * Returns the resolved answers, the base revision each question's next save
+ * must use, and whether any question genuinely lost local work - which is the
+ * only case the player is told about. */
+function resolveDrawings(
+  seeded: Record<number, PlayerAnswer>,
+  initialAnswers: ResumedAnswer[],
+  questions: Question[],
+  scope: string,
+): {
+  answers: Record<number, PlayerAnswer>;
+  revisions: Record<number, number>;
+  replaced: boolean;
+  /** Questions where a LOCAL draft won. These must be pushed back to the
+   *  server - recovering work only to leave it on one device is the bug this
+   *  phase exists to fix. */
+  restoredLocally: number[];
+} {
+  const answers = { ...seeded };
+  const revisions: Record<number, number> = {};
+  const restoredLocally: number[] = [];
+  let replaced = false;
+
+  const serverByQuestion = new Map(initialAnswers.map((a) => [a.question_id, a.drawing ?? null]));
+
+  for (const question of questions) {
+    if (question.question_type !== 'draw_response') continue;
+
+    const stored = serverByQuestion.get(question.id) ?? null;
+    const server = stored
+      ? { document: stored.document as DrawingDocument, revision: stored.revision }
+      : null;
+    const draft = loadDraft(draftKey(scope, question.id));
+    // The delivered image's id - what a draft must still be bound to. Null
+    // when the question has no picture, in which case binding cannot be
+    // checked at all.
+    const image = question.image as unknown as { id?: number } | null;
+    const decision = resolveResumeDrawing(server, draft, image?.id ? String(image.id) : null);
+    if (decision.document) {
+      answers[question.id] = {
+        ...(answers[question.id] ?? {}),
+        drawing: decision.document as PlayerAnswer['drawing'],
+      };
+    }
+    if (decision.baseRevision !== null) revisions[question.id] = decision.baseRevision;
+    if (decision.replacedLocalWork) replaced = true;
+    // Only the two gates where the DRAFT won. When the server won, its copy is
+    // already what is stored - saving it back would be a pointless write and a
+    // pointless revision bump.
+    if (decision.reason === 'local-only' || decision.reason === 'draft-continues-server') {
+      restoredLocally.push(question.id);
+    }
+  }
+
+  return { answers, revisions, replaced, restoredLocally };
 }
 
 export function QuizStep({
@@ -87,7 +157,23 @@ export function QuizStep({
   // content underneath a player who is halfway through answering the old one.
   const sourceQuestions = applyDeliveredContent(quiz.questions ?? [], deliveredQuestions);
   const questions = orderQuestions(sourceQuestions, questionOrder);
-  const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => seedAnswers(initialAnswers));
+  /** Namespaces drawing drafts in localStorage. Keyed by access code and
+   * player, so two team-mates handing one phone back and forth never see each
+   * other's drawings, and the same player on a different code starts clean.
+   * Declared before the resume resolution below, which reads drafts from it. */
+  const drawingScope = `${accessCodeId}:${playerId ?? playerName}`;
+  // Resolved once, at mount: server copy vs local draft, ordered by revision.
+  const [resumed] = useState(() =>
+    resolveDrawings(seedAnswers(initialAnswers), initialAnswers, sourceQuestions, drawingScope),
+  );
+  const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => resumed.answers);
+  /** ONE NOTICE FOR BOTH multi-device situations, holding whichever message
+   *  applies. They share an opening sentence and a presentation; only the
+   *  second half differs, because what happened to THIS device's work
+   *  differs. Dismissible, and neither ever blocks drawing. */
+  const [drawingConflict, setDrawingConflict] = useState<string | null>(() =>
+    resumed.replaced ? DRAWING_RESTORED_MESSAGE : null,
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -112,12 +198,10 @@ export function QuizStep({
    * has landed in between. Reading a captured revision sent `null` on the
    * second save of every session, which the server correctly refused as a
    * conflict, and the player saw "Couldn't save" on their first real stroke. */
-  const drawingRevisions = useRef<Record<number, number>>({});
-
-  /** Namespaces drawing drafts in localStorage. Keyed by access code and
-   * player, so two team-mates handing one phone back and forth never see each
-   * other's drawings, and the same player on a different code starts clean. */
-  const drawingScope = `${accessCodeId}:${playerId ?? playerName}`;
+  // Seeded from the resume decision so the first save after a resume is based
+  // on the revision that actually exists - which is what stops a stale device
+  // from overwriting newer work.
+  const drawingRevisions = useRef<Record<number, number>>(resumed.revisions);
 
   /** The one place the player flow decides whether a question has been
    * answered, mirroring services/attempts.py::is_answered on the server. The
@@ -202,7 +286,11 @@ export function QuizStep({
         // (submit is authoritative), so the player is never stranded; they
         // are just told rather than left with a silent "Saved" that was not.
         if (getErrorMessage(err).toLowerCase().includes('another device')) {
-          setError('This drawing was changed on another device. Yours will be used when you submit.');
+          // SAME OPENING AS THE RESUME NOTICE, different second half, because
+          // the outcome genuinely differs: here the player's local drawing is
+          // still on screen and still wins at submit. Telling them "the latest
+          // version has been restored" would be a lie about their own work.
+          setDrawingConflict(ACTIVE_EDIT_CONFLICT_MESSAGE);
         }
       });
   }
@@ -252,6 +340,27 @@ export function QuizStep({
       setIsChecking(false);
     }
   }
+
+  /** RECOVERED LOCAL WORK IS SAVED, NOT JUST SHOWN.
+   *
+   * Restoring a draft used to happen in QuestionInput and went through
+   * `onChange` - which meant it entered the ordinary autosave path for free.
+   * Moving the decision up here to get the server revision quietly removed
+   * that, so a recovered drawing was displayed and never persisted. This puts
+   * it back deliberately, through the SAME debounced path a player's own
+   * strokes take, rather than a second save mechanism.
+   *
+   * `drawingRevisions` was seeded from the resume decision, so Gate 4 saves
+   * against the server revision it continued from and Gate 2 saves as a new
+   * drawing. Neither invents a revision. */
+  useEffect(() => {
+    for (const questionId of resumed.restoredLocally) {
+      const answer = answers[questionId];
+      if (answer?.drawing) updateAnswer(questionId, answer);
+    }
+    // Mount-only: re-running would fight the player's live edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function updateAnswer(questionId: number, answer: PlayerAnswer) {
     setAnswers((prev) => ({ ...prev, [questionId]: answer }));
@@ -372,6 +481,29 @@ export function QuizStep({
     </div>
   );
 
+  /** Shown when a newer drawing saved elsewhere replaced local work.
+   *
+   * Defined once and rendered by BOTH layouts. This component returns from two
+   * places - one question at a time, and the whole list - and a notice added
+   * to only one of them is invisible to half the product. That is exactly how
+   * this went wrong the first time. `practiceBanner` below exists in the same
+   * shape for the same reason.
+   *
+   * Informational, not an error: the drawing was recovered correctly, and the
+   * only surprise is where it came from. It never blocks drawing. */
+  const drawingRestoredNotice = drawingConflict && (
+    <div className={styles.drawingRestored} role="status">
+      <span>{drawingConflict}</span>
+      <button
+        type="button"
+        className={styles.drawingRestoredDismiss}
+        onClick={() => setDrawingConflict(null)}
+      >
+        Got it
+      </button>
+    </div>
+  );
+
   /** Told up front, not discovered at the end. A player who thinks a quiz
    * counts answers it differently from one who knows it is reps. */
   const practiceBanner = isPractice && (
@@ -402,6 +534,7 @@ export function QuizStep({
           saveIndicator={saveIndicator}
         />
         <ErrorBanner message={error} />
+        {drawingRestoredNotice}
         <QuestionInput
           question={question}
           index={currentIndex}
@@ -457,6 +590,7 @@ export function QuizStep({
       {practiceBanner}
       {saveIndicator}
       <ErrorBanner message={error} />
+      {drawingRestoredNotice}
       {questions.map((question, index) => {
         const checked = feedback[question.id];
         return (

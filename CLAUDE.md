@@ -481,11 +481,15 @@ attempt keeps the version it was delivered.
 - Read `docs/DESIGN-draw-on-image.md` first — product decisions are locked in
   its §10 — then `docs/DRAW_ON_IMAGE_PHASE_0.md` for the engine's design and
   the spike's findings.
-- **Drawing is a per-question boolean (`questions.allow_drawing`), NOT a
-  question type.** The design doc originally locked a `draw_on_image` type;
-  §3.3 and §10 record why that was reversed. The enum route is a one-way door
-  (Postgres cannot remove an enum value) and cannot express "multiple choice
-  *and* a drawing" on one question.
+- **`draw_response` IS the question type, and `allow_drawing` no longer
+  exists.** The design doc locked a type, then reversed it to a boolean, and
+  then migration `d2b5f8a41c32` ("Convert allow_drawing questions to
+  DRAW_RESPONSE and drop the column") reversed it BACK - converting existing
+  rows and dropping the column. `draw_response` is now the sole authoritative
+  signal for whether a drawing is the answer: delivery, require-all-answers,
+  Results, exports and submission semantics all branch on it, and there is no
+  compatibility shim to preserve. *This entry used to say the opposite - the
+  column was already gone when it was written.*
 - `frontend/src/components/drawing/` is the engine and must stay free of quiz
   knowledge (§11.1). Everything quiz-specific lives in
   `frontend/src/pages/play/drawingDraft.ts`.
@@ -495,6 +499,25 @@ attempt keeps the version it was delivered.
   on-screen HUD — FPS, canvas memory and stray-mark counters. Re-attaching
   one needs no engine change: `DrawingBoard` still exposes a `renderOverlay`
   render prop fed with `BoardTelemetry`.
-- **Phase 3 is not built.** Drawings persist to localStorage only; nothing
-  reaches `answer_drawings`, so a coach cannot see a player's drawing and the
-  server's `require_all_answers` check cannot count one.
+- **Persistence IS built, and this entry used to claim otherwise.** An audit
+  in Aug 2026 measured the whole lifecycle: `PUT /play/drawing` stores to
+  `answer_drawings`, submit re-sends the document as a safety net,
+  `require_all_answers` counts a drawing, and the coach's expanded player view
+  already renders it over the delivered image.
+- **localStorage is a DRAFT/RECOVERY layer, not the source of truth.** It
+  protects work before a successful autosave. Once a save succeeds the SERVER
+  is authoritative, and `/play/start` returns `{document, revision}` so a
+  cleared browser or a second device recovers the drawing.
+- **Resume precedence is ordered by `revision`, NEVER by a clock.** A local
+  draft wins only where it can prove it continued from the revision the server
+  currently holds; anything it cannot prove loses. The rule is spelled out
+  once, in `frontend/src/pages/play/resumeDrawing.ts`. Device clocks are not
+  trustworthy enough to decide whose work survives.
+- **A drawing is bound to the image it was drawn on.** The delivered snapshot
+  records `image_id` and the server refuses a document bound to any other
+  image, so replacing a picture can never re-bind an old drawing to the new
+  one. `None` means "not recorded" (pre-Phase-A snapshots), never "matches
+  anything".
+- **Still open:** the player's own results page says "Drawing submitted"
+  rather than showing the drawing, CSV prints an empty answer cell, and the
+  detailed PDF renders no drawing at all.

@@ -538,7 +538,14 @@ describe('QuizStep drawing autosave', () => {
     await screen.findByRole('button', { name: /edit your drawing/i });
     await vi.advanceTimersByTimeAsync(1500);
 
-    expect(await screen.findByText(/changed on another device/i)).toBeInTheDocument();
+    // WORDING UNIFIED IN PHASE B. Both multi-device notices now open with
+    // "Your drawing was updated on another device"; only the second half
+    // differs, because the outcomes differ. Here the player's local drawing is
+    // still on screen and still wins at submit, so the message must say that -
+    // it must NOT claim a server version was restored.
+    expect(await screen.findByText(/updated on another device/i)).toBeInTheDocument();
+    expect(screen.getByText(/current changes are still here/i)).toBeInTheDocument();
+    expect(screen.queryByText(/has been restored/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /edit your drawing/i })).toBeInTheDocument();
   });
 

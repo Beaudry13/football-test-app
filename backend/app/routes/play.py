@@ -23,7 +23,7 @@ from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import AccessCode, Answer, AttemptStatus, PlayerAttempt, Question, QuestionType
 from app.models.question_region import QuestionRegion
-from app.models.answer_drawing import document_has_strokes
+from app.models.answer_drawing import AnswerDrawing, document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
 from app.services.signed_media import (
     KIND_QUESTION_MASK,
@@ -183,6 +183,23 @@ def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
     return payload
 
 
+def _drawings_by_answer_id(attempt: PlayerAttempt) -> dict:
+    """Every stored drawing for this attempt, in ONE query.
+
+    Walking `answer.drawing` in the loop below would lazy-load once per
+    answer - an N+1 on the route a whole squad hits when they join.
+    """
+    answer_ids = [a.id for a in attempt.answers]
+    if not answer_ids:
+        return {}
+    return {
+        drawing.answer_id: drawing
+        for drawing in AnswerDrawing.query.filter(
+            AnswerDrawing.answer_id.in_(answer_ids)
+        ).all()
+    }
+
+
 def _attempt_state(attempt: PlayerAttempt) -> dict:
     """Player-safe attempt payload for /start and /answers.
 
@@ -193,6 +210,8 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
     before they submit, even though is_correct is now computed at autosave
     time rather than deferred to submit.
     """
+    drawings = _drawings_by_answer_id(attempt)
+
     return {
         "attempt_id": attempt.id,
         "status": attempt.status.value,
@@ -224,6 +243,28 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
                 # question as checked instead of handing the player a second
                 # attempt at it. Always false on a graded attempt.
                 "checked": a.checked_at is not None,
+                # THE SERVER-STORED DRAWING, so resuming does not depend on
+                # this device's localStorage. Before this, a drawing was safe
+                # on the server but invisible to a player who cleared their
+                # browser or picked up a different phone.
+                #
+                # BUILT, not `to_dict()`d: that serialiser carries `id`,
+                # `answer_id` and `preview_url`, which are storage details a
+                # player has no use for. Same discipline as to_player_payload -
+                # the safe shape is constructed rather than filtered.
+                #
+                # `revision` is the ordering mechanism for the resume
+                # precedence rule. NO TIMESTAMP is sent, deliberately: device
+                # clocks are unreliable, and the client must not be tempted to
+                # decide "newer" by comparing them.
+                "drawing": (
+                    {
+                        "document": drawings[a.id].document,
+                        "revision": drawings[a.id].revision,
+                    }
+                    if a.id in drawings
+                    else None
+                ),
             }
             for a in attempt.answers
         ],

@@ -652,6 +652,12 @@ export interface ResumedAnswer {
   /** Practice only: the player has already seen this question's verdict and
    *  explanation, so it is locked. Always false on a graded attempt. */
   checked: boolean;
+  /** THE SERVER-STORED DRAWING, so a resumed attempt does not depend on this
+   *  device's localStorage. `revision` is the ordering mechanism for the
+   *  resume precedence rule - deliberately no timestamp, because device
+   *  clocks must never decide which drawing is newer.
+   *  See pages/play/resumeDrawing.ts. */
+  drawing?: { document: unknown; revision: number } | null;
 }
 
 /** What a practice player is told after pressing Check Answer.
