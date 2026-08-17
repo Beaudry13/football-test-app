@@ -812,6 +812,10 @@ def player_results():
         # _resolve_answer_text - both would otherwise lazy-load per question
         # and turn one results page into an N+1.
         selectinload(PlayerAttempt.answers).selectinload(Answer.selected_option),
+        # The player's own drawings, for the Draw Response cards below. Walking
+        # `answer.drawing` per answer would be one query per question on the
+        # page a whole squad opens the moment they finish.
+        selectinload(PlayerAttempt.answers).selectinload(Answer.drawing),
         selectinload(PlayerAttempt.question_snapshots),
     ).first()
     if attempt is None:
@@ -855,6 +859,29 @@ def player_results():
                 "is_excluded": excluded,
                 "coach_feedback": answer.coach_feedback if answer else None,
                 "graded_at": answer.graded_at.isoformat() if answer and answer.graded_at else None,
+                # THE PLAYER'S OWN DRAWING, over the image they were given.
+                #
+                # Both halves come from the same delivered record the coach's
+                # view reads, so the two cannot show different pictures for the
+                # same answer. The image is the DELIVERED one - after a coach
+                # replaces the picture, Phase 1's preserved copy - and the
+                # drawing is bound to it by Phase A.
+                #
+                # Only present for a drawing question that actually has one.
+                # A missing drawing stays None so the client can say so plainly
+                # rather than mounting a viewer over nothing.
+                "drawing": (
+                    {
+                        "document": answer.drawing.document,
+                        "image_url": question.image.image_url,
+                    }
+                    if question.question_type is QuestionType.DRAW_RESPONSE
+                    and answer is not None
+                    and answer.drawing is not None
+                    and document_has_strokes(answer.drawing.document)
+                    and question.image is not None
+                    else None
+                ),
             }
         )
 

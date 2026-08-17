@@ -1,4 +1,7 @@
 import type { PlayerResultAnswer, PlayerResultsResponse } from '../../api/types';
+import { resolveMediaUrl } from '../../api/client';
+import { DrawingViewer } from '../../components/drawing/DrawingViewer';
+import type { DrawingDocument } from '../../components/drawing/types';
 import styles from './PlayPage.module.css';
 
 /** THE HONESTY RULE, same as PracticeFeedbackCard's.
@@ -31,9 +34,33 @@ export function ResultsView({ results }: { results: PlayerResultsResponse }) {
             {/* The player's own answer is shown for an excluded question too.
                 Exclusion sets a question aside; it does not erase what they
                 wrote, and hiding it would read as a penalty. */}
-            <div className={styles.answerMeta}>
-              Your answer: {answer.your_answer ?? <em>No answer</em>}
-            </div>
+            {/* THE SAME COMPONENT THE COACH SEES, over the same delivered
+                image. Rendering the drawing here rather than the words
+                "Drawing submitted" is the point of this phase - and reusing
+                DrawingViewer is what stops the two sides from ever drawing the
+                same answer differently. It takes an image url, a document and
+                alt text, and nothing coach-only, so there is no privacy reason
+                to fork it.
+
+                The image comes from the DELIVERED record, so a coach replacing
+                the picture afterwards cannot change what this player is shown.
+
+                A drawing question with no drawing falls through to the text
+                line below, which reads "No answer" - honest, and no viewer is
+                mounted over a picture that has nothing on it. */}
+            {answer.drawing ? (
+              <div className={styles.answerDrawing}>
+                <DrawingViewer
+                  imageUrl={resolveMediaUrl(answer.drawing.image_url)}
+                  document={answer.drawing.document as DrawingDocument}
+                  alt={`Your drawing for: ${answer.question_text}`}
+                />
+              </div>
+            ) : (
+              <div className={styles.answerMeta}>
+                Your answer: {answer.your_answer ?? <em>No answer</em>}
+              </div>
+            )}
             {!answer.is_excluded && answer.is_correct === false && answer.correct_answer && (
               <div className={styles.answerMeta}>Correct answer: {answer.correct_answer}</div>
             )}

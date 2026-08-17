@@ -483,6 +483,10 @@ export interface PlayerResponse {
 
 export interface PlayerResultAnswer {
   question_id: number | null;
+  /** The player's own drawing, with the DELIVERED image it was made on.
+   *  Null for anything that is not an answered Draw Response, so the caller
+   *  falls back to the text line rather than mounting an empty viewer. */
+  drawing?: { document: unknown; image_url: string } | null;
   /** The number this player was given, not the live position. */
   question_number: number;
   question_text: string;

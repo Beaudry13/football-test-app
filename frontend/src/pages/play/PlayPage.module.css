@@ -601,3 +601,10 @@
   cursor: pointer;
   padding: 4px 6px;
 }
+
+/* The player's own drawing on their results. Sits where the text answer would
+   have gone, so the card reads the same shape whether the answer was typed,
+   chosen or drawn. */
+.answerDrawing {
+  margin: 8px 0;
+}
