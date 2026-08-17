@@ -196,6 +196,58 @@ it carries no alert role and none of the vocabulary of a hazard.
 
 ---
 
+## DRAW RESPONSE PHASE A / HISTORICAL IMAGE BINDING
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped in `f588b7a` (16 Aug 2026). Deployed and health verified. No migration.
+
+A drawing is now permanently bound to the image it was drawn on. The server
+refuses a drawing bound to any other image.
+
+- [ ] Draw on a question, submit, then replace that question's image as coach
+- [ ] Confirm the coach's view still shows the OLD picture with the drawing
+      correctly positioned on it - not the new picture
+
+---
+
+## DRAW RESPONSE PHASE B / SERVER-BACKED RESUME
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped in `d51736e` (16 Aug 2026). Deployed and health verified. No migration.
+
+A drawing now comes back from the server, not just from the browser.
+
+- [ ] Draw, wait for "Saved", clear site data, rejoin - drawing returns
+- [ ] Draw on a phone, then resume the same attempt on a laptop - drawing follows
+- [ ] Draw more strokes, refresh BEFORE the save lands - unsaved strokes survive
+- [ ] Two devices: save on A, then resume on B which has older local work -
+      B shows A's version and says so
+
+**THE WORDING WORTH A HUMAN LOOK.** Two multi-device notices exist and must
+read as one voice while telling the truth about different outcomes:
+
+| When | Says |
+|---|---|
+| Resuming onto a newer server drawing | "...The latest saved version has been restored." |
+| Conflict WHILE drawing | "...Your current changes are still here and will be saved when you submit." |
+
+Both open "Your drawing was updated on another device." Whether that reads as
+reassuring rather than alarming is a judgement no test can make.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_drawing_resume.py` (14), `test_drawing_image_binding.py` (18),
+`resumeDrawing.test.ts` (14) and `QuizStepDrawingRestore.test.tsx` (18) cover
+cross-device resume, cleared storage, all six precedence gates, recovered work
+being re-saved, no redundant save, isolation between players and attempts, and
+answer-key leakage.
+
+**Backend note:** the `/play/start` drawing contract could not be probed
+unauthenticated from here - the Render deploy succeeding and `/api/health`
+returning 200 is the deployment evidence, not a contract probe.
+
+---
+
 ## Known bounded gap - the Vitest collection flake
 
 `QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped
