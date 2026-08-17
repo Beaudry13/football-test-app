@@ -220,6 +220,17 @@ class Answer(db.Model):
     drawing = db.relationship(
         "AnswerDrawing", back_populates="answer", uselist=False, cascade="all, delete-orphan"
     )
+    #: THE SELECTION SET. Populated for every answer that picks options,
+    #: including single-choice ones, so there is one representation to read
+    #: once the transition finishes. `selected_option_id` above is kept in step
+    #: for now and remains what current product behaviour reads - see
+    #: models/answer_selected_option.py.
+    selected_options = db.relationship(
+        "AnswerSelectedOption",
+        back_populates="answer",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         db.UniqueConstraint(

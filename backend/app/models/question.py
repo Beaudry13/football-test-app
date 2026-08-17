@@ -94,6 +94,18 @@ class Question(db.Model):
     answer_explanation = db.Column(db.Text, nullable=True)
     answer_matching = db.Column(db.String(32), nullable=True)
 
+    #: "SELECT ALL THAT APPLY" - a behaviour of multiple choice, NOT a new
+    #: question type. `question_type` is a native Postgres enum and adding a
+    #: member is a one-way, multi-migration operation (CLAUDE.md #8); more to
+    #: the point, the options and their `is_correct_answer` flags already model
+    #: this perfectly. Only the SELECTION RULE differs.
+    #:
+    #: FALSE = pick exactly one, which is every question that exists today, so
+    #: no backfill was needed.
+    allows_multiple_answers = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
+
     #: STOP SENDING THIS QUESTION TO NEW ATTEMPTS. NULL = deliverable, which is
     #: why no backfill was needed: every pre-existing row is correct the moment
     #: the column appears.
@@ -189,6 +201,7 @@ class Question(db.Model):
             # renders a retired question de-emphasised with a restore action -
             # a retired question a coach cannot see is one they cannot bring
             # back.
+            "allows_multiple_answers": self.allows_multiple_answers,
             "is_retired": self.is_retired,
             "retired_at": self.retired_at.isoformat() if self.retired_at else None,
         }

@@ -12,6 +12,7 @@ from app.models.question_image import QuestionImage
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
 from app.models.answer_drawing import AnswerDrawing
+from app.models.answer_selected_option import AnswerSelectedOption
 from app.models.source_document import SourceDocument
 from app.models.document_page import DocumentPage
 from app.models.response import Answer, AttemptStatus, PlayerAttempt
@@ -48,6 +49,7 @@ __all__ = [
     "AttemptStatus",
     "Answer",
     "AnswerDrawing",
+    "AnswerSelectedOption",
     "AttemptQuestionSnapshot",
     "QuestionExclusion",
     "GradeAuditLog",

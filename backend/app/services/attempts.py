@@ -7,11 +7,19 @@ computation, so it lives here once rather than being duplicated per route.
 import random
 from datetime import datetime, timezone
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Answer, AnswerDrawing, PlayerAttempt, Question, QuestionType
+from app.models import (
+    Answer,
+    AnswerDrawing,
+    AnswerSelectedOption,
+    PlayerAttempt,
+    Question,
+    QuestionType,
+)
 from app.models.answer_drawing import document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
 from app.services.answer_matching import matches
@@ -137,7 +145,38 @@ def upsert_answer(
         },
     ).returning(Answer.id)
     answer_id = db.session.execute(stmt).scalar_one()
+    _sync_selected_options(answer_id, selected_option_id)
     return db.session.get(Answer, answer_id)
+
+
+def _sync_selected_options(answer_id: int, selected_option_id: int | None) -> None:
+    """Keep `answer_selected_options` in step with `selected_option_id`.
+
+    MULTI-SELECT M1, AND DELIBERATELY WRITE-ONLY FOR NOW. Nothing reads this
+    table yet - `selected_option_id` remains what every product surface uses -
+    but writing it from the start means that by the time anything does, it
+    describes ALL of history rather than only the answers saved after the
+    switch. The migration backfilled what already existed; this keeps the
+    stream flowing.
+
+    REPLACES rather than merges: an answer's selections are a set, and this
+    function is the only thing that maintains it, so the stored set must always
+    equal exactly what the current save says. A player deselecting an option
+    (`selected_option_id` becoming None) must leave no orphan behind.
+    """
+    db.session.execute(
+        sa_delete(AnswerSelectedOption).where(
+            AnswerSelectedOption.answer_id == answer_id
+        )
+    )
+    if selected_option_id is not None:
+        db.session.execute(
+            pg_insert(AnswerSelectedOption)
+            .values(answer_id=answer_id, option_id=selected_option_id)
+            # A double-tap racing itself resolves to the same row rather than
+            # a duplicate-key error, exactly as the answer upsert above does.
+            .on_conflict_do_nothing()
+        )
 
 
 # --- Answer presence ------------------------------------------------------
