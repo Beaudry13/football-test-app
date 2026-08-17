@@ -396,11 +396,17 @@ export function QuestionEditor({
 
           {/* THE WHOLE FEATURE, from the coach's side: one checkbox, below the
               options it affects, only on multiple choice.
-              Nothing can infer this - radios physically prevent marking two
-              answers, so the coach has to say so first. The consequence is
-              stated in the same breath rather than in a warning, a modal or a
-              help link, and the sentence says what PLAYERS will see, which is
-              the thing the coach is actually deciding. */}
+
+              Named for the QUESTION FORMAT, not the mechanics of the setting.
+              "Select all that apply" is a phrase coaches already write on
+              their own material, so it needs no explaining; an earlier draft
+              said "Allow more than one answer", which described what the
+              checkbox DOES rather than what the question IS. The supporting
+              line then covers the consequence in one sentence - no tooltip, no
+              help link, no modal.
+
+              Nothing can infer this: radios physically prevent marking two
+              answers, so the coach has to say so first. */}
           <label className={styles.allowMultiple}>
             <input
               type="checkbox"
@@ -408,8 +414,8 @@ export function QuestionEditor({
               onChange={(e) => setAllowsMultiple(e.target.checked)}
             />
             <span>
-              Allow more than one answer
-              <small>Players will be asked to select all that apply.</small>
+              Select all that apply
+              <small>Players can choose more than one answer.</small>
             </span>
           </label>
         </div>

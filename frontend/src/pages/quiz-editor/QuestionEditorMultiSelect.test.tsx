@@ -35,27 +35,31 @@ describe('where the setting appears', () => {
   it('is offered on multiple choice', () => {
     renderEditor();
 
-    expect(screen.getByLabelText(/allow more than one answer/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/select all that apply/i)).toBeInTheDocument();
   });
 
   it('is NOT offered on true/false', () => {
     // Two options, one right, by definition. A setting here would be noise.
     renderEditor({ initialType: 'true_false' });
 
-    expect(screen.queryByText(/allow more than one answer/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/select all that apply/i)).not.toBeInTheDocument();
   });
 
   it('is NOT offered on a written question', () => {
     renderEditor({ initialType: 'written', initialOptions: [] });
 
-    expect(screen.queryByText(/allow more than one answer/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/select all that apply/i)).not.toBeInTheDocument();
   });
 
-  it('says what it will do to PLAYERS, where the decision is made', () => {
-    // Not in a modal, not behind a help link, not in a warning banner.
+  it('names the question FORMAT, and explains the consequence in one line', () => {
+    // "Select all that apply" is a phrase coaches already write on their own
+    // material, so the control needs no explaining. The supporting sentence
+    // covers what it means for players - not in a modal, not behind a help
+    // link, not in a warning banner.
     renderEditor();
 
-    expect(screen.getByText(/select all that apply/i)).toBeInTheDocument();
+    expect(screen.getByText('Select all that apply')).toBeInTheDocument();
+    expect(screen.getByText('Players can choose more than one answer.')).toBeInTheDocument();
   });
 });
 
@@ -84,7 +88,7 @@ describe('single choice is untouched', () => {
   it('starts switched off', () => {
     renderEditor();
 
-    expect(screen.getByLabelText(/allow more than one answer/i)).not.toBeChecked();
+    expect(screen.getByLabelText(/select all that apply/i)).not.toBeChecked();
   });
 });
 
@@ -93,7 +97,7 @@ describe('turning it on', () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByLabelText(/allow more than one answer/i));
+    await user.click(screen.getByLabelText(/select all that apply/i));
 
     expect(screen.getAllByRole('checkbox', { name: /is correct/i })).toHaveLength(2);
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
@@ -102,7 +106,7 @@ describe('turning it on', () => {
   it('lets several answers be correct at once', async () => {
     const user = userEvent.setup();
     renderEditor();
-    await user.click(screen.getByLabelText(/allow more than one answer/i));
+    await user.click(screen.getByLabelText(/select all that apply/i));
 
     const boxes = screen.getAllByRole('checkbox', { name: /is correct/i });
     await user.click(boxes[1]);
@@ -114,7 +118,7 @@ describe('turning it on', () => {
   it('lets a correct answer be un-marked, unlike a radio', async () => {
     const user = userEvent.setup();
     renderEditor();
-    await user.click(screen.getByLabelText(/allow more than one answer/i));
+    await user.click(screen.getByLabelText(/select all that apply/i));
 
     const boxes = screen.getAllByRole('checkbox', { name: /is correct/i });
     await user.click(boxes[0]);
@@ -126,7 +130,7 @@ describe('turning it on', () => {
     const user = userEvent.setup();
     renderEditor();
 
-    await user.click(screen.getByLabelText(/allow more than one answer/i));
+    await user.click(screen.getByLabelText(/select all that apply/i));
 
     expect(screen.getByText(/mark every correct one/i)).toBeInTheDocument();
   });
@@ -136,7 +140,7 @@ describe('turning it on', () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     renderEditor({ onSave });
 
-    await user.click(screen.getByLabelText(/allow more than one answer/i));
+    await user.click(screen.getByLabelText(/select all that apply/i));
     await user.click(screen.getByRole('button', { name: 'Save question' }));
 
     // Asserting the payload only: the second argument is the optional image,
@@ -150,7 +154,7 @@ describe('an existing multi-select question', () => {
   it('opens with the setting already on', () => {
     renderEditor({ initialAllowsMultiple: true });
 
-    expect(screen.getByLabelText(/allow more than one answer/i)).toBeChecked();
+    expect(screen.getByLabelText(/select all that apply/i)).toBeChecked();
     expect(screen.getAllByRole('checkbox', { name: /is correct/i })).toHaveLength(2);
   });
 });

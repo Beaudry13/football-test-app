@@ -313,6 +313,61 @@ the stored document, and the delivered-image proof after a replacement.
 
 ---
 
+## MULTI-SELECT / SELECT ALL THAT APPLY
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped as M1 `5d2f266`, M2 `ed37eac`, M3 `949fc6d`, plus the wording change.
+Carries migration `a7fd4276c072` - one boolean column and one join table,
+additive, with a backfill of every existing selection.
+
+A multiple-choice question can now accept more than one correct answer.
+
+**COACH**
+- [ ] The "Select all that apply" control is obvious and does not clutter the
+      editor
+- [ ] Marking several correct answers feels natural
+- [ ] Creating an ordinary single-choice question feels EXACTLY as it did
+
+**PLAYER**
+- [ ] "Select all that apply" is understandable at a glance
+- [ ] Whole answer rows are easy to tap on a phone
+- [ ] Selected state is obvious
+- [ ] Selections toggle naturally; no confirmation step
+- [ ] Refresh restores EVERY selection, not one
+
+**PRACTICE**
+- [ ] Check Answer gives an overall Correct / Incorrect
+- [ ] It does NOT reveal which individual boxes were right
+
+**GRADING**
+- [ ] Exact correct set -> correct
+- [ ] Missing one -> incorrect
+- [ ] One extra -> incorrect
+
+**COMPETITION**
+- [ ] Starting a competition on a quiz containing one is clearly blocked, and
+      the message says which question
+
+**The one thing worth your eyes most:** whether the editor still feels simple.
+The feature is one contextual checkbox by design, and whether that reads as
+"one more thing to understand" or as an obvious option is a judgement no test
+can make.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_multi_select_storage.py` (13), `test_multi_select_authoring.py` (12),
+`test_multi_select_play.py` (24), `test_multi_select_practice_and_competition.py`
+(9), `QuestionEditorMultiSelect.test.tsx` (13) and
+`QuestionInputMultiSelect.test.tsx` (12) cover exact-set grading in both
+directions, order independence, empty-set-is-unanswered, resume of the complete
+set, write-time validation of option ids, historical wording after a coach
+edit, the Competition fence, and that practice reveals no per-option verdicts.
+
+Migration rehearsed upgrade -> downgrade -> upgrade on real data: 20 answers
+with a selection, 20 backfilled rows, zero mismatches.
+
+---
+
 ## Known bounded gap - the Vitest collection flake
 
 `QuestionEditor.test.tsx` did not run in the `npm run test:ci` that shipped
