@@ -518,6 +518,27 @@ attempt keeps the version it was delivered.
   image, so replacing a picture can never re-bind an old drawing to the new
   one. `None` means "not recorded" (pre-Phase-A snapshots), never "matches
   anything".
-- **Still open:** the player's own results page says "Drawing submitted"
-  rather than showing the drawing, CSV prints an empty answer cell, and the
-  detailed PDF renders no drawing at all.
+- **Phase C: the player sees their own drawing.** `/play/results` returns the
+  document plus the DELIVERED image url, and `ResultsView` renders it with the
+  same `DrawingViewer` the coach uses - one component, so the two audiences
+  cannot disagree about scale or position.
+- **Phase D: exports carry it.** CSV says "Drawing submitted" / "No drawing"
+  (never metadata - a cell that cannot show a drawing must not pretend to
+  summarise it), and the detailed PDF draws the strokes as VECTOR paths over
+  the delivered image, at export time, from the canonical JSON. No flattened
+  bitmap is stored anywhere.
+- **THE PDF Y AXIS IS FLIPPED.** Browser canvas measures y downward from the
+  top-left; PDF user space measures it upward from the bottom-left. Drawing
+  raw values mirrors every stroke vertically and still looks like a plausible
+  drawing - which is why `test_export_drawings.py` asserts orientation
+  explicitly rather than checking that a PDF was produced.
+- **Export degradation is per stroke, never per export.** A malformed document
+  draws nothing; a bad stroke is skipped and its neighbours survive; an
+  unloadable image skips the overlay entirely rather than floating strokes on
+  a blank surface. One player's bad drawing must never cost a coach the other
+  nineteen results.
+- **COACH ANNOTATIONS ARE STILL NOT RENDERED IN THE PDF, and they are a
+  different thing from a player's drawing.** Annotations are Fabric.js shapes
+  with no server-side renderer; player strokes are polylines in a versioned
+  document. Phase D deliberately did not fold the two together. Recorded as a
+  follow-up, not a gap in Draw Response.

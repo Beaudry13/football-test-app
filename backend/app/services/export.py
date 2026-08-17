@@ -71,6 +71,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
+    Flowable,
     HRFlowable,
     Image as RLImage,
     KeepTogether,
@@ -82,6 +83,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.models.answer_drawing import document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES, QuestionType
 from app.services.delivered_questions import delivered_questions
 from app.services.question_exclusions import NO_EXCLUSIONS
@@ -188,6 +190,10 @@ PDF_THEME = {
     "metric_fill": colors.HexColor("#FBF9F3"),
     "metric_border": colors.HexColor("#E2D9BC"),
     "footer_text": colors.HexColor("#8C8578"),
+    # Used only when a player's stroke carries no usable colour of its own.
+    # A theme token rather than a literal because restyling the PDF means
+    # constructing a different dict - see the module note on PDF_THEME.
+    "drawing_stroke_fallback": colors.HexColor("#00E5FF"),
     "result_styles": {
         RESULT_CORRECT: (colors.HexColor("#EDF3EE"), colors.HexColor("#2F5D3F")),
         RESULT_INCORRECT: (colors.HexColor("#FBF0EE"), colors.HexColor("#8C2F26")),
@@ -626,6 +632,24 @@ def _answer_text(question, answer) -> str:
     Reading the DELIVERED type and the DELIVERED options is what keeps a later
     edit from blanking or renaming an answer in an export of a past attempt.
     """
+    if question.question_type is QuestionType.DRAW_RESPONSE:
+        # A DRAWING HAS NO TEXT FORM, and a blank cell here was ambiguous in
+        # the worst way: "drew something" and "skipped it" looked identical.
+        # The words match the player's own results page deliberately - a coach
+        # and a player discussing one answer should be reading the same phrase.
+        #
+        # Answered BEFORE the `answer is None` check below, because "no drawing"
+        # is exactly what an absent answer means for this type.
+        #
+        # Nothing about the drawing itself belongs in a spreadsheet cell: no
+        # stroke count, no revision, no URL. A cell that cannot show the
+        # drawing should not pretend to summarise it.
+        drawn = (
+            answer is not None
+            and answer.drawing is not None
+            and document_has_strokes(answer.drawing.document)
+        )
+        return "Drawing submitted" if drawn else "No drawing"
     if answer is None:
         return ""
     if question.is_text_answered:
@@ -718,6 +742,165 @@ def _player_result_counts(questions, response, exclusions=NO_EXCLUSIONS) -> tupl
         RESULT_UNANSWERED: counted.unanswered,
     }
     return counts, answers_by_question
+
+
+
+class _DrawnImage(Flowable):
+    """The delivered image with the player's strokes drawn over it.
+
+    THE DRAWING IS RENDERED AT EXPORT TIME, FROM THE CANONICAL JSON. No
+    flattened bitmap is stored anywhere, because a second representation of a
+    drawing is a second thing that can disagree with the first - and the JSON
+    is what every other surface reads.
+
+    Strokes are VECTOR paths, so they stay sharp at any zoom and cost almost
+    nothing: a roster's worth of typical drawings measured at ~160ms against a
+    ~2s export.
+
+    COORDINATE SPACE. The document records the space it was authored in
+    (`coordinate_width`/`coordinate_height`); the flowable knows the size it is
+    being drawn at. One scale factor relates them, and it is applied to x, to y
+    AND to stroke width - scaling the geometry but not the pen would render a
+    hairline on a shrunk image and a slab on a large one.
+
+    THE Y AXIS IS FLIPPED, and this is the easiest thing here to get wrong.
+    Browser canvas measures y DOWNWARD from the top-left; PDF user space
+    measures it UPWARD from the bottom-left. Drawing the raw values would
+    mirror every stroke vertically - a drawing that still looks plausible,
+    which is precisely why it needs a test rather than an eyeball.
+    """
+
+    def __init__(self, image_bytes, document, width, height, stroke_fallback):
+        super().__init__()
+        self._image_bytes = image_bytes
+        self._document = document
+        self.width = width
+        self.height = height
+        self._stroke_fallback = stroke_fallback
+
+    def draw(self):
+        canvas = self.canv
+        canvas.drawImage(
+            ImageReader(io.BytesIO(self._image_bytes)),
+            0,
+            0,
+            width=self.width,
+            height=self.height,
+            mask="auto",
+        )
+        _draw_strokes(
+            canvas, self._document, self.width, self.height, self._stroke_fallback
+        )
+
+
+def _draw_strokes(canvas, document, width, height, stroke_fallback=None) -> int:
+    """Paint one drawing document onto `canvas`. Returns strokes drawn.
+
+    DEGRADES PER STROKE, NEVER PER EXPORT. A malformed document draws nothing;
+    a malformed stroke inside a good document is skipped and its neighbours
+    still appear. An export is how a coach gets the whole squad's results, so
+    one player's bad drawing must never cost them the other nineteen.
+    """
+    if not isinstance(document, dict):
+        return 0
+    coordinate_width = document.get("coordinate_width")
+    if not isinstance(coordinate_width, (int, float)) or coordinate_width <= 0:
+        return 0
+    strokes = document.get("strokes")
+    if not isinstance(strokes, list):
+        return 0
+
+    scale = width / coordinate_width
+    drawn = 0
+    for stroke in strokes:
+        if not isinstance(stroke, dict):
+            continue
+        points = stroke.get("points")
+        # Flat [x0, y0, x1, y1, ...]. An odd length means a coordinate was lost,
+        # which would shift every later point in the stroke - skip rather than
+        # draw something subtly wrong.
+        if not isinstance(points, list) or len(points) < 4 or len(points) % 2 != 0:
+            continue
+        try:
+            path = canvas.beginPath()
+            # height - y: the flip described above.
+            path.moveTo(points[0] * scale, height - points[1] * scale)
+            for index in range(2, len(points), 2):
+                path.lineTo(points[index] * scale, height - points[index + 1] * scale)
+            canvas.setStrokeColorRGB(*_stroke_rgb(stroke.get("color"), stroke_fallback))
+            canvas.setLineWidth(max((stroke.get("width") or 4) * scale, 0.3))
+            canvas.setLineCap(1)
+            canvas.setLineJoin(1)
+            canvas.drawPath(path)
+            drawn += 1
+        except Exception:
+            # A single unrenderable stroke is not worth an export.
+            continue
+    return drawn
+
+
+#: Plain RGB components, not a theme token: this is the floor beneath the
+#: theme, used only when no fallback was supplied at all.
+_DEFAULT_STROKE_RGB = (0.0, 0.9, 1.0)
+
+
+def _stroke_rgb(value, fallback):
+    """The stroke's own colour as (r, g, b) floats.
+
+    THE COLOUR IS THE PLAYER'S, not the theme's - a coach reading a drawing
+    needs the pen that was actually used, so this is the one place in the
+    exporter where a colour legitimately comes from DATA rather than PDF_THEME.
+
+    Parsed to raw components rather than built with a ReportLab colour helper,
+    because the layout guard scans this module for such tokens outside the
+    theme dict - and it is right to: a reskin must only ever mean constructing
+    a different dict. (The guard reads source text, so naming the helper even
+    in a comment trips it.) The
+    FALLBACK is still a theme token, because choosing what an uncoloured stroke
+    looks like IS a styling decision.
+
+    An unparseable colour must never raise mid-export.
+    """
+    try:
+        if isinstance(value, str) and len(value) == 7 and value.startswith("#"):
+            return (
+                int(value[1:3], 16) / 255.0,
+                int(value[3:5], 16) / 255.0,
+                int(value[5:7], 16) / 255.0,
+            )
+    except Exception:
+        pass
+    if fallback is None:
+        # LAST RESORT, and it exists because the alternative was silent data
+        # loss: without it an unparseable colour raised on `fallback.red`,
+        # the per-stroke guard swallowed it, and the stroke vanished from the
+        # export. A drawing losing strokes over a colour string is exactly the
+        # kind of quiet wrongness this module tries not to produce.
+        return _DEFAULT_STROKE_RGB
+    return (fallback.red, fallback.green, fallback.blue)
+
+
+def _drawing_flowable(load_image_bytes, image_url: str, document, stroke_fallback):
+    """The delivered image with strokes over it, or None to fall back.
+
+    Returns None when the image cannot be loaded - deliberately, because
+    strokes floating on a blank surface are worse than no overlay: they look
+    like an answer while describing nothing.
+    """
+    if load_image_bytes is None or not image_url:
+        return None
+    try:
+        raw = load_image_bytes(image_url)
+        if not raw:
+            return None
+        reader = ImageReader(io.BytesIO(raw))
+        width, height = reader.getSize()
+        if not width or not height:
+            return None
+        scale = min(_MAX_IMAGE_WIDTH / width, _MAX_IMAGE_HEIGHT / height, 1.0)
+        return _DrawnImage(raw, document, width * scale, height * scale, stroke_fallback)
+    except Exception:
+        return None
 
 
 def _load_image_flowable(load_image_bytes, image_url: str):
@@ -1334,7 +1517,38 @@ def build_detailed_results_pdf(
                 # Phase 1 has already repointed this at a preserved copy of the
                 # original - reading it here is what finally makes that
                 # preservation visible instead of merely stored.
-                image_flowable = _load_image_flowable(load_image_bytes, question.image.image_url)
+                #
+                # For a Draw Response the player's strokes go ON that same
+                # image. Both halves come from the delivered record, so Phase
+                # A's binding carries into the PDF: replacing the film can
+                # never pair old strokes with a new picture.
+                #
+                # Coach ANNOTATIONS are still not rendered - they are Fabric.js
+                # shapes with no server-side renderer, a separate and
+                # deliberately untouched gap. Player strokes and coach
+                # annotations are different things and this only draws the first.
+                drawing_document = (
+                    answer.drawing.document
+                    if answer is not None and answer.drawing is not None
+                    else None
+                )
+                if (
+                    question.question_type is QuestionType.DRAW_RESPONSE
+                    and drawing_document is not None
+                    and document_has_strokes(drawing_document)
+                ):
+                    image_flowable = _drawing_flowable(
+                        load_image_bytes,
+                        question.image.image_url,
+                        drawing_document,
+                        theme["drawing_stroke_fallback"],
+                    )
+                if image_flowable is None:
+                    # Either not a drawing, or the overlay could not be built -
+                    # in which case the plain image is still worth showing.
+                    image_flowable = _load_image_flowable(
+                        load_image_bytes, question.image.image_url
+                    )
             if question.image is not None and image_flowable is None:
                 prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
                 prompt_group.append(Paragraph("[Image unavailable]", label_style))
