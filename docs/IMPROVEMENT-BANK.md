@@ -459,3 +459,115 @@ write path - and closing it is a documentation pass rather than a code change,
 so folding it into the deployment of a working feature would have mixed two
 unrelated risks. Worth doing next time API.md is touched for any reason.
 
+
+---
+
+## The Vitest collection flake is a HOST problem, not a suite problem
+
+Investigated 18 Aug 2026 after the guard fired on six of roughly a dozen full
+runs, dropping a different, untouched file almost every time
+(`QuestionEditor`, `QuizEditorPage`, `WaitingRoomPage`, and once a
+newly-added file).
+
+**The decisive fact: the failure threshold is SIXTY SECONDS, and it is
+hardcoded.** The error is
+
+```
+Failed to start forks worker for test files <X>
+Caused by: [vitest-pool-runner]: Timeout waiting for worker to respond
+```
+
+and in `vitest/dist/chunks/cli-api.*.js` that path is
+`withTimeout(this.waitForStart(), START_TIMEOUT)` with `START_TIMEOUT = 6e4`.
+It is not exposed as a config option.
+
+So this is **not** a marginal timing issue that a slightly slower machine
+tips over. A freshly forked Node process is occasionally failing to say
+"started" for a full minute. Nothing in the test suite runs before that
+point - the file has not been imported yet - which is why the dropped file
+changes run to run and why every dropped file passes on its own in seconds.
+
+**Measured host state during a failing period:**
+
+- 16 logical CPUs, 31.5 GB RAM - not an underpowered machine
+- **3.7 GB free** of 31.5 - roughly 12% headroom
+- Windows Defender real-time protection ON, no repository exclusion
+
+The gate runs `--no-file-parallelism`, so ~97 test files means ~97 sequential
+`node` process spawns, each loading a large module graph from `node_modules`.
+Under memory pressure, with real-time AV scanning each spawn, an occasional
+60-second stall is a plausible and sufficient explanation. It also matches the
+original observation recorded in CLAUDE.md, where the first drops happened
+"while a full backend pytest was saturating the machine".
+
+**Deliberately NOT done**, because each is either unavailable or a worse
+trade:
+
+- *Raise the timeout* - impossible, it is hardcoded.
+- *Retry until green* - hides the signal the guard exists to give.
+- *`isolate: false`* to stop respawning per file - **actively unsafe here.**
+  `QuestionEditor.test.tsx` mutates `HTMLElement.prototype.scrollIntoView` and
+  never restores it (already noted in CLAUDE.md), so sharing one worker across
+  files would leak that into every later file.
+- *`pool: 'threads'`* - would remove the per-file process spawn, but changes
+  the isolation model for a suite that does canvas/Fabric work, and would need
+  its own evaluation rather than being swapped in to quiet a flake.
+
+**What would actually help, in order, and all of them are the owner's call
+because they change the machine rather than the repo:**
+
+1. A Defender exclusion for the repo and its `node_modules`. Biggest expected
+   effect, and a security-posture decision, not a code one.
+2. Running the frontend gate with more free memory (it has never been observed
+   failing on an otherwise idle machine).
+3. If it persists on a healthy host, evaluate `pool: 'threads'` properly -
+   including the prototype-mutation cleanup above, which is worth doing on its
+   own merits.
+
+**The guard itself is working exactly as designed and must not be weakened.**
+It is the only reason any of this is visible: `vitest run` exits non-zero on
+this project regardless, so a silently shrinking suite would otherwise look
+identical to a healthy one.
+
+---
+
+## A playbook question has no picture in results or exports
+
+Found during the Playbook audit, 18 Aug 2026. **Not acted on.**
+
+Player results, the coach's expanded response, the CSV and the detailed PDF all
+render a question's picture from `question.image` - which is NULL for a
+region-backed question, because those carry a `question_regions` row instead.
+So a coach reviewing a finished Peira, or a player reading their own results,
+sees the question text and the answer but **never the play they were asked
+about**.
+
+This is a product gap rather than a defect: nothing is broken, the picture was
+simply never wired into those surfaces. It is worth doing together with, or
+just after, the delivered-visual work, since that is what makes "the picture
+they were actually shown" available to a historical reader in the first place.
+
+---
+
+## Foundations Selectable Player Boxes will reuse
+
+Recorded during the Playbook audit so the later project does not re-derive it.
+**No design and no implementation - a list of what already exists.**
+
+- `question_regions` already permits **many regions per question**. The
+  one-region limit lives in the route, not the schema, so lifting it needs no
+  migration.
+- `RegionRole` (mask / focus / crop) already separates what a rectangle MEANS
+  from the question's type - the extension point a selectable box needs, and
+  the reason a "hotspot" role would be additive.
+- Normalised 0-1 coordinates already survive re-render at any DPI and any
+  screen width, which is the hard part of making boxes tappable on a phone.
+- `RegionDraw` is a working draw / select / move / resize surface.
+- **The actual gap is association:** nothing links a region to an ANSWER
+  OPTION. That is the new concept, and it is small - `answer_selected_options`
+  (Multi-Select M1) already stores a selection as a SET keyed by option id with
+  no foreign key, so a tappable box that maps to an option would reuse the
+  existing selection storage and the existing exact-set grading rather than
+  needing either of its own.
+- Whatever the delivered-visual work records is what a historical selectable
+  answer must be resolved against, so that lands first regardless.
