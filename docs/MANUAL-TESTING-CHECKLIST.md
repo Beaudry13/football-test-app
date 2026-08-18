@@ -316,6 +316,8 @@ the stored document, and the delivered-image proof after a replacement.
 ## BUG - IMAGE QUESTION FIRST VISIT
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped in `5d05c43` (18 Aug 2026). Deployed and health verified.
+No migration - frontend only.
 
 A question's picture did not appear the first time a player arrived at it.
 Going forward a question and back made it appear, so the image existed and
