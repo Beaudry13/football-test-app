@@ -435,3 +435,27 @@ which is consistent with how question images already reach unauthenticated
 players. The projector is meant to be seen by the room. What must NOT happen is
 a player's own phone receiving other players' photos beyond what the podium
 legitimately shows - the player-private standing rule stays as it is.
+
+---
+
+## `docs/API.md` does not document `selected_option_ids`
+
+Recorded 18 Aug 2026, when Multi-Select v1 closed. **Not a blocker for
+Multi-Select v1** - the API accepts and returns the field correctly and it is
+covered by tests; only the written contract lags.
+
+`/api/play/submit` and `/api/play/answers` both accept `selected_option_ids`
+(the complete set for a "Select all that apply" question), and the attempt
+state returned by `/api/play/start` reports it back for every answer so a
+resumed attempt restores every ticked box. API.md's request example still
+shows only `selected_option_id`.
+
+Two other M4 additions are equally undocumented there: `Answer.selected_option_ids`
+on the coach-facing response payload, and `allows_multiple_answers` on the
+delivered-question objects. Both are additive.
+
+**Why it was left.** The gap predates M4 - it arrived with M3, which built the
+write path - and closing it is a documentation pass rather than a code change,
+so folding it into the deployment of a working feature would have mixed two
+unrelated risks. Worth doing next time API.md is touched for any reason.
+
