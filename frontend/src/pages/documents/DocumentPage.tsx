@@ -19,7 +19,19 @@ import { useRegionHistory } from './useRegionHistory';
 import nb from '../../styles/notebook.module.css';
 import styles from './DocumentPage.module.css';
 
-const LAST_QUIZ_KEY = 'peira.playbook.lastQuizId';
+/** A PLAYBOOK OPENS AS A PLAYBOOK.
+ *
+ * This screen used to be the authoring surface and nothing else: a quiz picker
+ * was the first control on it, existing masks were drawn over the page, and
+ * the last target quiz was restored from sessionStorage on mount - so a coach
+ * returning to read their playbook landed straight back in authoring mode with
+ * boxes over the pages. Reading one was not reachable at all.
+ *
+ * Now the default is browse, and everything to do with making questions
+ * appears only after the coach asks for it. The authoring machinery below is
+ * UNCHANGED - it is the same gestures, the same undo, the same fast path. It
+ * is simply behind a door now.
+ */
 
 /** The Playbook Quiz authoring surface.
  *
@@ -52,6 +64,10 @@ export function DocumentPage() {
   const [textRuns, setTextRuns] = useState<TextRun[]>([]);
   const [draft, setDraft] = useState<{ rect: NormalisedRect; answer: string } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  /** Browse by default. The ONE piece of state this redesign adds, and it
+   *  gates every authoring control on the page rather than each one deciding
+   *  for itself. */
+  const [isAuthoring, setIsAuthoring] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastPrompt, setLastPrompt] = useState('');
   const [status, setStatus] = useState<string | null>(null);
@@ -98,12 +114,11 @@ export function DocumentPage() {
         if (cancelled) return;
         setDocument(loaded);
         setQuizzes(allQuizzes);
-        // The quiz a coach was last filing into is almost always the one they
-        // want again. Re-picking it every visit is a click that buys nothing.
-        const remembered = Number(sessionStorage.getItem(LAST_QUIZ_KEY));
-        if (remembered && allQuizzes.some((q) => q.id === remembered)) {
-          setTargetQuizId(remembered);
-        }
+        // DELIBERATELY NOT RESTORED. Remembering the last target quiz saved a
+        // click for a coach who came back to author, and cost every coach who
+        // came back to READ the ability to do so - the page reopened covered
+        // in one quiz's masks. Opening a playbook now means opening a
+        // playbook; the quiz is chosen once, on the way in to authoring.
         if (loaded.pages.length > 0) void openPageNumber(loaded.pages[0].page_number);
       } catch (err) {
         if (!cancelled) setError(getErrorMessage(err));
@@ -119,7 +134,6 @@ export function DocumentPage() {
       setQuestions([]);
       return;
     }
-    sessionStorage.setItem(LAST_QUIZ_KEY, String(targetQuizId));
     let cancelled = false;
     (async () => {
       try {
@@ -415,7 +429,7 @@ export function DocumentPage() {
     return error ? <ErrorBanner message={error} /> : <LoadingState label="Loading playbook" />;
   }
 
-  const canAuthor = targetQuizId !== null;
+  const canAuthor = isAuthoring && targetQuizId !== null;
 
   return (
     <div>
@@ -427,11 +441,39 @@ export function DocumentPage() {
             {canAuthor && ` · ${pageQuestions.length} on this page`}
           </p>
         </div>
-        <Link to="/documents" className={nb.btnSecondary}>
-          All playbooks
-        </Link>
+        <div className={styles.headerActions}>
+          {isAuthoring ? (
+            <button
+              type="button"
+              className={nb.btnSecondary}
+              onClick={() => {
+                // Leaving clears the target as well, so the next entry is a
+                // deliberate choice rather than a remembered one - the same
+                // reason the sessionStorage restore was removed.
+                setIsAuthoring(false);
+                setTargetQuizId(null);
+                setDraft(null);
+                setSelectedId(null);
+              }}
+            >
+              Done
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={nb.btnSecondary}
+              onClick={() => setIsAuthoring(true)}
+            >
+              Create questions
+            </button>
+          )}
+          <Link to="/documents" className={nb.btnSecondary}>
+            All playbooks
+          </Link>
+        </div>
       </div>
 
+      {isAuthoring && (
       <div className={styles.quizPicker}>
         <label className={nb.fieldLabel} htmlFor="target-quiz">
           Add questions to
@@ -475,14 +517,17 @@ export function DocumentPage() {
           </>
         )}
       </div>
+      )}
 
-      <p className={styles.instruction}>
-        {!canAuthor
-          ? 'Choose a quiz above, then click a play name to turn it into a question.'
-          : textRuns.length > 0
-            ? 'Click a play name to mask it. Drag a box for diagrams. Click a mask to move, resize or delete it.'
-            : 'This page has no selectable text, so drag a box over what you want to mask.'}
-      </p>
+      {isAuthoring && (
+        <p className={styles.instruction}>
+          {!canAuthor
+            ? 'Choose a quiz, then click a play name to turn it into a question.'
+            : textRuns.length > 0
+              ? 'Click a play name to mask it. Drag a box for diagrams. Click a mask to move, resize or delete it.'
+              : 'This page has no selectable text, so drag a box over what you want to mask.'}
+        </p>
+      )}
 
       <ErrorBanner message={error} />
       {status && (
@@ -537,7 +582,22 @@ export function DocumentPage() {
               This page could not be opened. Choose another page from the strip.
             </p>
           )}
-          {!isRendering && openPage?.image_url && (
+          {/* BROWSING: the page and nothing on it. Rendering the plain image
+              rather than a disabled RegionDraw is deliberate - it guarantees
+              no mask, no hit target and no draw affordance can appear over
+              reference material, instead of relying on a flag to suppress
+              them. */}
+          {!isRendering && openPage?.image_url && !isAuthoring && (
+            <img
+              className={styles.pageImage}
+              src={resolveMediaUrl(openPage.image_url)}
+              alt={`${document_.title}, page ${openPage.page_number}`}
+              width={openPage.render_width}
+              height={openPage.render_height}
+              draggable={false}
+            />
+          )}
+          {!isRendering && openPage?.image_url && isAuthoring && (
             <RegionDraw
               existing={regions}
               selectedId={selectedId}
@@ -559,6 +619,7 @@ export function DocumentPage() {
           )}
         </div>
 
+        {isAuthoring && (
         <aside className={styles.side}>
           {draft && (
             <RegionQuestionForm
@@ -614,6 +675,7 @@ export function DocumentPage() {
             </div>
           )}
         </aside>
+        )}
       </div>
     </div>
   );

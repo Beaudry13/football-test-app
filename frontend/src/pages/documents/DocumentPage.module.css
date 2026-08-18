@@ -208,3 +208,11 @@
 .createdItem:hover .createdAnswer {
   text-decoration: underline;
 }
+
+/* The two header actions sit together: the door into authoring, and the way
+   back to the library. */
+.headerActions {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+}

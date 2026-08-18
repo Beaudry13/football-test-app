@@ -195,6 +195,14 @@ describe('DocumentPage tap-to-select authoring', () => {
         </Routes>
       </MemoryRouter>,
     );
+    // A playbook now OPENS AS A PLAYBOOK - browse first, authoring behind a
+    // deliberate action. Every test below is about the authoring surface, so
+    // they all step through the door; the browse default has its own tests in
+    // DocumentPageBrowse.test.tsx.
+    await screen.findByAltText('CROWN, page 1');
+    await userEvent.click(screen.getByRole('button', { name: 'Create questions' }));
+    // Re-read AFTER entering: while browsing the page is a plain <img> with no
+    // RegionDraw wrapper, so the drawing surface does not exist until now.
     const image = await screen.findByAltText('CROWN, page 1');
     const surface = image.parentElement as HTMLElement;
     surface.setPointerCapture = vi.fn();
@@ -261,11 +269,15 @@ describe('DocumentPage tap-to-select authoring', () => {
     expect(await screen.findByLabelText('Accepted answers')).toBeInTheDocument();
   });
 
-  it('remembers the target quiz between visits', async () => {
+  it('does NOT remember the target quiz between visits', async () => {
+    // REPLACES 'remembers the target quiz between visits'. Restoring it saved
+    // a click for a coach returning to author, and cost every coach returning
+    // to READ the ability to do so - the playbook reopened covered in one
+    // quiz's masks. The click is the cheaper of the two.
     setSurfaceSize();
     await renderReady();
-    // Choosing the quiz again on every visit is a click that buys nothing.
-    expect(sessionStorage.getItem('peira.playbook.lastQuizId')).toBe('7');
+
+    expect(sessionStorage.getItem('peira.playbook.lastQuizId')).toBeNull();
   });
 
   it('creates the question from a tap and reports it', async () => {
@@ -329,6 +341,8 @@ describe('DocumentPage undo after redo', () => {
         </Routes>
       </MemoryRouter>,
     );
+    await screen.findByAltText('CROWN, page 1');
+    await userEvent.click(screen.getByRole('button', { name: 'Create questions' }));
     const image = await screen.findByAltText('CROWN, page 1');
     const surface = image.parentElement as HTMLElement;
     surface.setPointerCapture = vi.fn();
@@ -407,6 +421,7 @@ describe('DocumentPage delete history with identical questions', () => {
       </MemoryRouter>,
     );
     await screen.findByAltText('CROWN, page 1');
+    await userEvent.click(screen.getByRole('button', { name: 'Create questions' }));
     await userEvent.selectOptions(screen.getByLabelText('Add questions to'), '7');
 
     // Select the SECOND twin and delete it. The two are indistinguishable
@@ -450,8 +465,16 @@ describe('DocumentPage delete history with identical questions', () => {
     options: [],
   };
 
-  function mockRememberedQuiz() {
-    sessionStorage.setItem('peira.playbook.lastQuizId', '7');
+  /** WAS mockRememberedQuiz. Nothing is remembered any more - the coach steps
+   *  into authoring and picks the quiz, which `enterAuthoring` below does. */
+  /** Step through the door and choose the destination quiz - the two things a
+   *  coach now does once, on the way in to authoring. */
+  async function enterAuthoring() {
+    await userEvent.click(screen.getByRole('button', { name: 'Create questions' }));
+    await userEvent.selectOptions(screen.getByLabelText('Add questions to'), '7');
+  }
+
+  function mockQuizWithQuestion() {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([
       { id: 7, title: 'Install' },
     ] as never);
@@ -463,7 +486,7 @@ describe('DocumentPage delete history with identical questions', () => {
   }
 
   it('survives a playbook with no pages while a quiz is remembered', async () => {
-    mockRememberedQuiz();
+    mockQuizWithQuestion();
     vi.spyOn(documentsApi, 'getDocument').mockResolvedValue({
       ...sampleDocument,
       title: 'TIGER',
@@ -481,7 +504,7 @@ describe('DocumentPage delete history with identical questions', () => {
   });
 
   it('does not treat an ordinary question as belonging to the open page', async () => {
-    mockRememberedQuiz();
+    mockQuizWithQuestion();
     vi.spyOn(documentsApi, 'getDocument').mockResolvedValue(sampleDocument);
     vi.spyOn(documentsApi, 'getDocumentPage').mockResolvedValue(
       makePage(1, { image_url: '/api/media/v1.page1.sig' }),
@@ -490,6 +513,7 @@ describe('DocumentPage delete history with identical questions', () => {
 
     renderDocument();
     await screen.findByText('CROWN');
+    await enterAuthoring();
 
     // A question with no region belongs to no page - the count must be 0, not
     // 1, and the page must not crash reading its non-existent region.
@@ -497,7 +521,7 @@ describe('DocumentPage delete history with identical questions', () => {
   });
 
   it('survives a page that fails to open while a quiz is remembered', async () => {
-    mockRememberedQuiz();
+    mockQuizWithQuestion();
     vi.spyOn(documentsApi, 'getDocument').mockResolvedValue({
       ...sampleDocument,
       title: 'TIGER',
@@ -513,7 +537,6 @@ describe('DocumentPage delete history with identical questions', () => {
   });
 
   it('skips a region-typed question whose region is missing rather than crashing', async () => {
-    sessionStorage.setItem('peira.playbook.lastQuizId', '7');
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([{ id: 7, title: 'Install' }] as never);
     vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({
       id: 7,
@@ -533,6 +556,7 @@ describe('DocumentPage delete history with identical questions', () => {
     renderDocument();
 
     expect(await screen.findByText('CROWN')).toBeInTheDocument();
+    await enterAuthoring();
     await waitFor(() => expect(screen.getByText(/0 on this page/)).toBeInTheDocument());
   });
 });
