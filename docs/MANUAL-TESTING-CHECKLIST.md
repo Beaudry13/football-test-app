@@ -313,6 +313,65 @@ the stored document, and the delivered-image proof after a replacement.
 
 ---
 
+## PLAYBOOK — DELIVERED MASK FROZEN, AND CLEAN BROWSE MODE
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+Shipped as `fd39fe2` (region historical integrity) and `c523d16` (browse
+mode). No migration — the delivered geometry rides in the existing JSONB
+snapshot.
+
+**The bug that was fixed:** an attempt that had already been served a playbook
+question could be served DIFFERENT pixels for it afterwards. The masked URL
+named the QUESTION, so it resolved through the live region every time. Region
+edits are refused once a question has been ANSWERED, but not once it has been
+DELIVERED — so `player starts, coach fixes a mask, player continues` changed
+the picture underneath them.
+
+**HISTORICAL INTEGRITY**
+- [ ] Start an attempt on a quiz with a playbook question; note the picture
+- [ ] Without answering it, move that question's rectangle as the coach
+- [ ] Resume the SAME attempt — the picture must be EXACTLY as delivered
+- [ ] Start a NEW attempt as a different player — must show the NEW rectangle
+- [ ] Answer, submit, and reopen results — still the delivered picture
+- [ ] Confirm the mask still covers the answer on the frozen render
+
+**PLAYBOOK BROWSE MODE — the change most worth your eyes**
+- [ ] Open a playbook — it should look like a playbook: pages, no quiz picker,
+      no masks, no Undo/Redo, no instruction paragraph
+- [ ] Author some questions, leave, come back — it must STILL open clean
+      (the remembered-quiz behaviour was deliberately removed)
+- [ ] "Create questions" — choose the destination quiz ONCE
+- [ ] Confirm rapid authoring is still fast: tap a play name, press Enter, and
+      both the mask and the accepted answer come from the PDF's text layer
+- [ ] Leave authoring — confirm the page is clean again
+- [ ] Check on a tablet, which is where a coach would actually read a playbook
+
+**Why your eyes:** whether the playbook now READS like reference material is a
+judgement no assertion makes. The tests prove the controls are gone and the
+bytes are frozen; they cannot tell you whether opening it feels right.
+
+**Failure signals — stop and report:** an in-progress attempt's picture
+changes; a new attempt shows the OLD rectangle; a playbook opens with masks on
+it; bulk authoring asks which quiz more than once.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_delivered_region_preserved.py` (15) covers byte-identity across a region
+move for answered, unanswered, refreshed and resumed attempts; that a NEW
+attempt gets the new rectangle; that the frozen render still hides the answer;
+that snapshots do not mutate; that Preview still follows the LIVE region and is
+never delivery-keyed; that a tampered token 404s; and that no geometry, storage
+key or answer key reaches any payload.
+`test_region_delivery_invariant.py` (6) is the before-and-after record — its
+two assertions were INVERTED when the fix landed rather than deleted.
+`DocumentPageBrowse.test.tsx` (9) covers the clean default, that no authoring
+control renders until asked, and that the remembered quiz is gone.
+
+Legacy attempts with no recorded geometry keep using the live region. No
+backfill, ever.
+
+---
+
 ## BUG - PLAYBOOK QUESTION INVISIBLE IN PREVIEW
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
