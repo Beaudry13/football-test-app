@@ -291,12 +291,16 @@ class TestNoUnmaskedLeak:
 
 
 class TestDeliveredBehaviourUnchanged:
-    def test_the_snapshot_still_records_no_region_geometry(
+    def test_the_snapshot_records_the_delivered_geometry(
         self, app, client, playbook_quiz
     ):
-        """THE REGION EXCEPTION IS UNCHANGED BY THIS FIX, deliberately. Closing
-        it is the Option C work and is not what a Preview bug fix should
-        smuggle in. Pinned so that remains a decision rather than a drift."""
+        """WAS: an assertion that the snapshot recorded NO region geometry,
+        written to stop a Preview bug fix from smuggling in the Option C work.
+        It did its job - the region exception was then closed deliberately, in
+        its own commit, and this is the inversion that records that.
+
+        Preview is still resolved from the LIVE region; the assertions above
+        cover that. What is frozen here is what an ATTEMPT was delivered."""
         client.post(
             "/api/play/start",
             json={"access_code_id": playbook_quiz["code"]["id"], "player_name": PLAYER},
@@ -307,5 +311,9 @@ class TestDeliveredBehaviourUnchanged:
 
             rows = AttemptQuestionSnapshot.query.all()
             assert rows, "the attempt really did record a delivery"
-            for row in rows:
-                assert "region" not in (row.snapshot or {})
+            region_rows = [r for r in rows if r.question_id == playbook_quiz["region_question_id"]]
+            assert region_rows, "including the playbook question"
+            for row in region_rows:
+                assert row.snapshot["region"]["document_page_id"] == playbook_quiz["page_id"]
+                # Geometry only - never stored pixels.
+                assert "masked_image_key" not in str(row.snapshot)

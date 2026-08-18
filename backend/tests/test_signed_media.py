@@ -76,9 +76,20 @@ class TestTokenRoundTrip:
         # the change that could quietly create such a capability, so it should
         # not be possible to do it without this test failing and forcing the
         # question to be asked again.
-        from app.services.signed_media import VALID_KINDS
+        from app.services.signed_media import KIND_DELIVERED_MASK, VALID_KINDS
 
-        assert VALID_KINDS == {KIND_PAGE, KIND_THUMBNAIL, KIND_QUESTION_MASK}
+        # `dmask` was added when delivered region geometry started being
+        # frozen into the snapshot. It resolves an
+        # `attempt_question_snapshots` row to a mask rendered from the
+        # rectangle that attempt was given - still a page-derived image, and
+        # still nothing that names the document. The question this test exists
+        # to force was asked, which is the test working rather than failing.
+        assert VALID_KINDS == {
+            KIND_PAGE,
+            KIND_THUMBNAIL,
+            KIND_QUESTION_MASK,
+            KIND_DELIVERED_MASK,
+        }
         # Every kind resolves to a rendered image derived from a page. None
         # names the document itself.
         assert all("pdf" not in kind and "document" not in kind for kind in VALID_KINDS)

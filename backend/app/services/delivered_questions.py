@@ -101,6 +101,15 @@ class DeliveredQuestion:
     #: False means this attempt predates Phase 1 and the content below came
     #: from the live question. Never silently conflate the two.
     from_snapshot: bool
+    #: The `attempt_question_snapshots` row this came from, or None for the
+    #: legacy live fallback. It is what a delivered-mask URL is keyed by, so a
+    #: region question's picture can be resolved from the DELIVERY rather than
+    #: from a rectangle the coach may have moved since.
+    snapshot_id: int | None = None
+    #: True when that row froze region geometry. False for a delivery captured
+    #: before it was recorded - which must fall back to the live region, since
+    #: nothing about what it received was ever written down.
+    has_delivered_region: bool = False
 
     @property
     def id(self) -> int | None:
@@ -229,6 +238,8 @@ def _from_snapshot(row: AttemptQuestionSnapshot, number: int) -> DeliveredQuesti
             else None
         ),
         from_snapshot=True,
+        snapshot_id=row.id,
+        has_delivered_region=bool(data.get("region")),
     )
 
 

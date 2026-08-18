@@ -67,7 +67,17 @@ KIND_THUMBNAIL = "thumb"
 #: token issued for one question can never render another's view of the same
 #: page. This is the only kind a player is ever issued.
 KIND_QUESTION_MASK = "qmask"
-VALID_KINDS = frozenset({KIND_PAGE, KIND_THUMBNAIL, KIND_QUESTION_MASK})
+#: The mask ONE ATTEMPT WAS DELIVERED. `id` is an `attempt_question_snapshots`
+#: row, not a question - which is the point: the row carries the frozen
+#: geometry, so the render cannot follow a rectangle the coach has since moved.
+#:
+#: Keyed by row id rather than carrying the geometry in the token because the
+#: token travels to a browser. Coordinates and storage keys stay server-side,
+#: exactly as they do for every other kind here.
+KIND_DELIVERED_MASK = "dmask"
+VALID_KINDS = frozenset(
+    {KIND_PAGE, KIND_THUMBNAIL, KIND_QUESTION_MASK, KIND_DELIVERED_MASK}
+)
 
 #: Audience for a coach-issued URL.
 AUDIENCE_COACH = "coach"

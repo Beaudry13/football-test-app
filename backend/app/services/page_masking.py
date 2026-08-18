@@ -25,7 +25,7 @@ from PIL import Image, ImageDraw
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import QuestionRegion
+from app.models import DocumentPage, QuestionRegion
 from app.models.question_region import RegionRole
 from app.services import document_render
 from app.services.document_geometry import normalised_to_pixels
@@ -119,9 +119,15 @@ def ensure_page_raster(page) -> bytes:
     return raster
 
 
-def build_masked_render(region: QuestionRegion) -> bytes:
-    """The page with this region's rectangle filled in."""
-    page = region.document_page
+def render_mask(page, x: float, y: float, width: float, height: float) -> bytes:
+    """A page with ONE rectangle filled in, from normalised coordinates.
+
+    PURE WITH RESPECT TO THE DATABASE: it takes numbers, not a region row. That
+    is what lets the same renderer serve a LIVE rectangle and a rectangle
+    FROZEN into a delivered snapshot, so the two can never drift into producing
+    different pictures from the same geometry - which is the entire basis of
+    the byte-identity guarantee.
+    """
     raster = ensure_page_raster(page)
 
     image = Image.open(io.BytesIO(raster)).convert("RGB")
@@ -135,12 +141,12 @@ def build_masked_render(region: QuestionRegion) -> bytes:
             "against the recorded size would be misplaced."
         )
 
-    left, top, width, height = normalised_to_pixels(
-        region.x, region.y, region.width, region.height, image.width, image.height
+    left, top, box_width, box_height = normalised_to_pixels(
+        x, y, width, height, image.width, image.height
     )
     draw = ImageDraw.Draw(image)
     draw.rectangle(
-        [left, top, left + width - 1, top + height - 1],
+        [left, top, left + box_width - 1, top + box_height - 1],
         fill=MASK_FILL,
         outline=MASK_OUTLINE,
         width=MASK_OUTLINE_WIDTH,
@@ -149,6 +155,70 @@ def build_masked_render(region: QuestionRegion) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="WEBP", lossless=True, quality=90, method=4)
     return buffer.getvalue()
+
+
+def build_masked_render(region: QuestionRegion) -> bytes:
+    """The page with this region's LIVE rectangle filled in."""
+    return render_mask(
+        region.document_page, region.x, region.y, region.width, region.height
+    )
+
+
+def delivered_mask_bytes(snapshot_row) -> bytes | None:
+    """The mask THIS ATTEMPT was delivered, regenerated from frozen geometry.
+
+    THE HISTORICAL READER. `masked_render_bytes` below answers "what does this
+    question look like now"; this answers "what did this attempt receive", and
+    the two stop agreeing the moment a coach moves the rectangle.
+
+    Returns None when the snapshot records no geometry - a delivery captured
+    before this was recorded, or a question that never had a region. The caller
+    falls back to the live region, which is honest for a legacy attempt and is
+    the only thing that could be said about it.
+
+    THE CACHE FAST PATH IS AN OPTIMISATION, NOT A SECOND SOURCE OF TRUTH. When
+    the live rectangle still equals the delivered one - overwhelmingly the
+    common case, since most regions are never edited - the region's existing
+    cached render is byte-identical by construction, so it is served rather
+    than re-rendered. When they differ, this renders from the frozen numbers.
+    Nothing new is stored either way.
+    """
+    frozen = (snapshot_row.snapshot or {}).get("region")
+    if not frozen:
+        return None
+
+    page = db.session.get(DocumentPage, frozen.get("document_page_id"))
+    if page is None:
+        # The page is protected by ON DELETE RESTRICT while any region
+        # references it, so this is not reachable today. Returning None rather
+        # than raising keeps a missing page a 404 for one picture instead of a
+        # 500 for the whole attempt.
+        return None
+
+    # A FOCUS or CROP region hides nothing, so the delivered picture is the
+    # plain page - the same rule masked_render_bytes applies to a live region.
+    if frozen.get("role") != RegionRole.MASK:
+        return ensure_page_raster(page)
+
+    live = (
+        QuestionRegion.query.filter_by(question_id=snapshot_row.question_id)
+        .order_by(QuestionRegion.position)
+        .first()
+    )
+    if (
+        live is not None
+        and live.masked_image_key
+        and live.document_page_id == frozen.get("document_page_id")
+        and (live.x, live.y, live.width, live.height)
+        == (frozen.get("x"), frozen.get("y"), frozen.get("width"), frozen.get("height"))
+    ):
+        cached = get_private_storage().load_private(live.masked_image_key)
+        if cached is not None:
+            return cached
+
+    return render_mask(
+        page, frozen["x"], frozen["y"], frozen["width"], frozen["height"]
+    )
 
 
 def masked_render_bytes(region: QuestionRegion) -> bytes:

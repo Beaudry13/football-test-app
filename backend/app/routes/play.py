@@ -34,6 +34,7 @@ from app.models.question_region import QuestionRegion
 from app.models.answer_drawing import AnswerDrawing, document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
 from app.services.signed_media import (
+    KIND_DELIVERED_MASK,
     KIND_QUESTION_MASK,
     audience_for_access_code,
     sign_media_token,
@@ -165,7 +166,27 @@ def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
             continue
         live = live_by_id.get(delivered.question_id)
         masked = None
-        if live is not None and live.id in region_question_ids:
+        # THE DELIVERED RECTANGLE WINS. Keying the URL on this attempt's
+        # snapshot row rather than on the question is what stops a coach moving
+        # the rectangle from changing the picture under an attempt already in
+        # progress - the integrity bug proved in
+        # tests/test_region_delivery_invariant.py.
+        #
+        # DELIVERY, NOT ANSWERING, IS THE BOUNDARY. The old behaviour survived
+        # scrutiny because region edits are refused once a question has been
+        # ANSWERED, but a delivered-and-unanswered question was always editable.
+        if delivered.has_delivered_region and delivered.snapshot_id is not None:
+            token = sign_media_token(
+                KIND_DELIVERED_MASK,
+                delivered.snapshot_id,
+                audience=audience_for_access_code(attempt.access_code_id),
+            )
+            masked = f"/api/media/{token}"
+        elif live is not None and live.id in region_question_ids:
+            # LEGACY ONLY: a delivery captured before geometry was recorded.
+            # The live region is a compatibility fallback, not a record of what
+            # this attempt received - nothing about that was ever written down,
+            # and inventing it would be worse than admitting it.
             token = sign_media_token(
                 KIND_QUESTION_MASK,
                 live.id,

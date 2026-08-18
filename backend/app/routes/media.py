@@ -24,10 +24,11 @@ from flask import Blueprint, Response, abort
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import DocumentPage, Question
-from app.services.page_masking import masked_render_bytes
+from app.models import AttemptQuestionSnapshot, DocumentPage, Question
+from app.services.page_masking import delivered_mask_bytes, masked_render_bytes
 from app.services.private_storage import get_private_storage
 from app.services.signed_media import (
+    KIND_DELIVERED_MASK,
     KIND_QUESTION_MASK,
     KIND_THUMBNAIL,
     InvalidMediaToken,
@@ -57,6 +58,22 @@ def _masked_question_bytes(question_id: int) -> bytes | None:
         return None
 
 
+def _delivered_mask_bytes(snapshot_id: int) -> bytes | None:
+    """The mask one attempt was delivered, from its frozen geometry.
+
+    Serves the SNAPSHOT, never the live region - that is the whole reason this
+    kind exists. A missing row or a snapshot with no recorded geometry returns
+    None and 404s, the same honest failure every other kind here gives.
+    """
+    row = db.session.get(AttemptQuestionSnapshot, snapshot_id)
+    if row is None:
+        return None
+    try:
+        return delivered_mask_bytes(row)
+    except ApiError:
+        return None
+
+
 @media_bp.get("/<token>")
 def serve_signed_media(token: str):
     try:
@@ -66,7 +83,9 @@ def serve_signed_media(token: str):
 
     kind = payload["k"]
 
-    if kind == KIND_QUESTION_MASK:
+    if kind == KIND_DELIVERED_MASK:
+        data = _delivered_mask_bytes(payload["i"])
+    elif kind == KIND_QUESTION_MASK:
         data = _masked_question_bytes(payload["i"])
     else:
         page = db.session.get(DocumentPage, payload["i"])

@@ -1,7 +1,12 @@
-"""CHARACTERISATION: what a player was shown IS currently rewritable.
+"""THE REGION EXCEPTION, AND ITS CLOSURE.
 
-THE DOCUMENTED ASSUMPTION, AND WHY IT IS WRONG
------------------------------------------------
+STATUS: the gap this file was written to measure is now FIXED. The two
+assertions that recorded the broken behaviour have been INVERTED rather than
+deleted, so the file is a before-and-after record instead of a bug report.
+See tests/test_delivered_region_preserved.py for the full guarantee.
+
+THE DOCUMENTED ASSUMPTION, AND WHY IT WAS WRONG
+------------------------------------------------
 CLAUDE.md records THE REGION EXCEPTION like this: a region question's masked
 URL comes from the LIVE region, and that "is only truthful while region editing
 stays blocked after delivery."
@@ -18,12 +23,13 @@ So the gap is reachable with no unusual sequence at all:
 
 and the picture under the player changes mid-attempt.
 
-WHAT THESE TESTS ARE
---------------------
-They assert TODAY'S behaviour, including the part that is wrong. They exist to
-make the gap a measured fact rather than an inference, and to fail loudly when
-Option C fixes it - at which point the assertions marked THE BUG get inverted
-rather than deleted.
+WHAT REMAINS TRUE
+-----------------
+The LOCK is still about answering, not delivery - `TestTheLockIsAboutAnswering`
+is unchanged and still passes, because that product rule was deliberately left
+alone. What changed is that history no longer depends on it: the delivered
+picture is now frozen whether or not the coach is permitted to move the
+rectangle.
 """
 
 import io
@@ -177,32 +183,31 @@ class TestTheLockIsAboutAnswering:
         assert "already answered" in moved.get_json()["error"]
 
 
-class TestTheDeliveredPictureIsRewritable:
-    def test_THE_BUG_an_in_progress_attempt_sees_the_new_mask(
+class TestTheDeliveredPictureIsNowFrozen:
+    def test_FIXED_an_in_progress_attempt_keeps_its_original_mask(
         self, client, coach_headers, region_quiz
     ):
-        """A PLAYER'S PICTURE CHANGES UNDERNEATH THEM.
+        """WAS: the player's picture changed underneath them.
 
-        This asserts the CURRENT, WRONG behaviour. When Option C lands, this
-        assertion inverts to `==` - it is written this way so the fix cannot
-        land without something failing here and forcing the record to be
-        updated deliberately.
+        This assertion was written as `!=` while the bug existed, precisely so
+        the fix could not land without failing here. It did fail, and this is
+        the deliberate inversion.
         """
         before = delivered_picture(client, region_quiz)
 
         assert move_the_mask(client, coach_headers, region_quiz).status_code == 200
         after = delivered_picture(client, region_quiz)
 
-        assert before != after, (
-            "if this now passes as equal, the delivered picture has become "
-            "immutable - invert this assertion and update the region exception"
-        )
+        assert before == after
 
-    def test_the_snapshot_records_nothing_that_could_restore_it(
+    def test_the_snapshot_now_records_what_the_mask_is_made_of(
         self, app, client, region_quiz
     ):
-        """WHY it is rewritable: the delivery record has no picture in it. The
-        reader has nothing to fall back on but the live region."""
+        """WHY it is now stable: the delivery record carries the geometry, so
+        the reader no longer has to consult the live region.
+
+        WAS: `assert "region" not in row.snapshot` - the reason the picture was
+        rewritable at all."""
         delivered_picture(client, region_quiz)
 
         with app.app_context():
@@ -212,9 +217,10 @@ class TestTheDeliveredPictureIsRewritable:
                 question_id=region_quiz["question_id"]
             ).one()
 
+            # Still no stored PIXELS - geometry only, which is the whole point.
             assert row.snapshot.get("image") is None
-            assert "region" not in row.snapshot
-            assert "masked" not in str(row.snapshot)
+            assert row.snapshot["region"]["x"] == 0.1
+            assert row.snapshot["region"]["role"] == "mask"
 
 
 class TestWhatIsAlreadySafe:

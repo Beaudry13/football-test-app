@@ -57,13 +57,13 @@ def build_snapshot(question: Question) -> dict:
       a property of the delivery, not of the question.
     - timestamps, quiz_id, and every other Question column. This is not a copy
       of the row; do not grow it into one.
-    - region geometry. A region-backed question's picture is a cached masked
-      render that is explicitly derived and regenerable
-      (models/question_region.py), not a stored asset a coach can destroy the
-      way an uploaded still can be. Its text, type and accepted answers - the
-      things it is actually graded on - are captured like any other question.
+    (Region geometry USED to be on this list, on the reasoning that a
+    regenerable asset needs no snapshot. It is now recorded - see the `region`
+    key below for why that reasoning was wrong.)
     """
     image = question.image
+    # V1 permits exactly one region per question; the schema allows more.
+    region = question.regions[0] if question.regions else None
     return {
         "version": SNAPSHOT_VERSION,
         "question_text": question.question_text,
@@ -114,6 +114,42 @@ def build_snapshot(question: Question) -> dict:
                 "annotations": image.annotations or [],
             }
             if image is not None
+            else None
+        ),
+        # WHAT THIS ATTEMPT'S MASK WAS A FUNCTION OF, frozen.
+        #
+        # None for a question that is not built from a playbook page.
+        #
+        # GEOMETRY, NOT PIXELS, and that is the whole design. A mask is
+        # rendered from an IMMUTABLE page raster plus a rectangle; freezing the
+        # rectangle therefore freezes the render, with no stored object, no
+        # storage lifecycle and no orphan to sweep. It also keeps this module's
+        # existing stance - masks are derived and regenerable - and changes
+        # only what they are derived FROM: this record instead of the live row.
+        #
+        # This used to be deliberately EXCLUDED, on the reasoning that a
+        # regenerable asset needs no snapshot. That reasoning was wrong, and
+        # measurably so (see tests/test_region_delivery_invariant.py): the
+        # regeneration read the LIVE rectangle, so a coach moving it changed
+        # the picture under an attempt already in progress.
+        #
+        # `document_page_id` is recorded as a historical fact rather than a
+        # live foreign key, exactly as `image_id` above is. The page itself is
+        # immutable and cannot be deleted while any region references it.
+        "region": (
+            {
+                "document_page_id": region.document_page_id,
+                "x": region.x,
+                "y": region.y,
+                "width": region.width,
+                "height": region.height,
+                # The role decides what the render MEANS - a FOCUS or CROP
+                # region hides nothing - so a mask cannot be reproduced
+                # without it.
+                "role": region.role,
+                "shape": region.shape,
+            }
+            if region is not None
             else None
         ),
     }
