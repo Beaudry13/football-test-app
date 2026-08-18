@@ -313,6 +313,43 @@ the stored document, and the delivered-image proof after a replacement.
 
 ---
 
+## BUG - IMAGE QUESTION FIRST VISIT
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+
+A question's picture did not appear the first time a player arrived at it.
+Going forward a question and back made it appear, so the image existed and
+could render - it was invisible until the player performed a navigation cycle
+nobody told them about. Reported from a real Peira sent 17 Aug 2026, Q18.
+
+Root cause was client-side only: Fabric restores a canvas element's inline
+style on dispose, which wrote `display: none` back underneath React, and the
+reload then set an already-true flag so React never re-applied the style. Only
+questions whose image has COACH ANNOTATIONS were affected, and only when
+arrived at from another annotated-image question.
+
+- [ ] open the 17 Aug 2026 Peira, go to Q18, confirm the image appears
+      immediately with no forward/back
+- [ ] next/back, confirm the image remains correct
+- [ ] confirm the annotations still sit in the right place on the picture
+- [ ] confirm mobile sizing looks right
+
+**Why your eyes and not a test:** the automated test proves the canvas is
+displayed and that the delivered picture was the one requested. It cannot
+judge whether the picture LOOKS right on a phone, and jsdom paints nothing -
+annotation alignment is a visual property no assertion here covers.
+
+### Already covered automatically - do NOT re-test by hand
+
+`QuizStepQuestionImage.test.tsx` (6) drives the real player flow with the real
+AnnotationViewer and the real Fabric StaticCanvas: first visit after another
+annotated question, first visit after a question with no picture, the plain
+unannotated path, next/back across annotated questions, the exact reported
+sequence, and that the DELIVERED picture is the one loaded rather than the
+live one. Four of the six fail against the unfixed code.
+
+---
+
 ## MULTI-SELECT / SELECT ALL THAT APPLY
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**

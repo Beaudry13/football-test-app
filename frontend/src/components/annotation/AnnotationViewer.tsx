@@ -41,6 +41,28 @@ export function AnnotationViewer({
     let cancelled = false;
     let staticCanvas: StaticCanvas | null = null;
 
+    // HIDDEN AGAIN UNTIL *THIS* RUN HAS PAINTED, AND THIS LINE IS LOAD-BEARING.
+    //
+    // Fabric restores the canvas element's inline style on dispose: its
+    // constructor captures `el.style.cssText` and `cleanupDOM` writes that
+    // exact string back. That is an imperative mutation React knows nothing
+    // about, so React's own style diffing still believes whatever it last
+    // rendered.
+    //
+    // Without the reset, a viewer REUSED for a second image (this effect
+    // re-runs on `imageUrl`, so reuse is a supported case, not a misuse)
+    // deadlocked: dispose wrote back the cssText captured at construction -
+    // `display: none`, because isReady was false then - and the reload
+    // finished with `setIsReady(true)` while isReady was ALREADY true. React
+    // bailed out of the no-op update, never re-rendered, and never re-applied
+    // `display`. The new image was loaded and painted onto a permanently
+    // hidden canvas.
+    //
+    // A player met that as: the picture on this question simply is not there.
+    // Resetting here guarantees a real false -> true transition after every
+    // dispose, which is what makes React write the style back.
+    setIsReady(false);
+
     async function setup() {
       try {
         // capWidth is the coordinate space every saved annotation's x/y is relative to - it
