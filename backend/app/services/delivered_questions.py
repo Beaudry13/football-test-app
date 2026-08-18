@@ -110,6 +110,15 @@ class DeliveredQuestion:
     #: before it was recorded - which must fall back to the live region, since
     #: nothing about what it received was ever written down.
     has_delivered_region: bool = False
+    #: The playbook page this question was built from, as a coach reads it -
+    #: ("Defensive Playbook", 12). Both frozen at delivery: a page number could
+    #: be looked up live and stay honest, but a playbook can be RENAMED, and a
+    #: rename must not rewrite an export of a Peira that finished months ago.
+    #:
+    #: None on a delivery captured before these were recorded. The caller falls
+    #: back to the live document and says so - see `playbook_reference`.
+    delivered_document_title: str | None = None
+    delivered_page_number: int | None = None
 
     @property
     def id(self) -> int | None:
@@ -240,6 +249,8 @@ def _from_snapshot(row: AttemptQuestionSnapshot, number: int) -> DeliveredQuesti
         from_snapshot=True,
         snapshot_id=row.id,
         has_delivered_region=bool(data.get("region")),
+        delivered_document_title=(data.get("region") or {}).get("document_title"),
+        delivered_page_number=(data.get("region") or {}).get("page_number"),
     )
 
 
@@ -317,6 +328,48 @@ def delivered_by_question_id(attempt, quiz) -> dict[int, DeliveredQuestion]:
         for delivered in delivered_questions(attempt, quiz)
         if delivered.question_id is not None
     }
+
+
+PLAYBOOK_REFERENCE_SEPARATOR = " - "
+
+
+def playbook_reference(delivered: DeliveredQuestion, live_question=None) -> str | None:
+    """"Defensive Playbook - Page 12", or None if this is not a playbook question.
+
+    THE ONE PLACE THAT TURNS A DELIVERY INTO WORDS A COACH READS. A CSV cell
+    cannot hold a picture, so it holds the thing a coach can act on instead:
+    enough to open the right playbook at the right page. Deliberately no id,
+    coordinate, URL or token - none of those help anyone holding a spreadsheet.
+
+    THE DELIVERED VALUES WIN, and the title is why. `PATCH /documents/<id>`
+    renames a playbook, so resolving it live would rewrite the export of a
+    Peira that finished months ago. The page number would have been safe either
+    way - a DocumentPage is immutable - but both are frozen together so a
+    reader never has to combine one frozen value with one live lookup.
+
+    `live_question` is a COMPATIBILITY FALLBACK for a delivery captured before
+    those fields existed, and only that. It is the same concession
+    `from_snapshot` marks elsewhere: nothing about what those attempts received
+    was written down, and the choice is between today's title and no reference
+    at all. Only the title can be stale there, and it is not claimed otherwise.
+    """
+    title = delivered.delivered_document_title
+    page = delivered.delivered_page_number
+
+    if title is None or page is None:
+        region = (
+            live_question.regions[0]
+            if live_question is not None and live_question.regions
+            else None
+        )
+        if region is None or region.document_page is None:
+            return None
+        page = page if page is not None else region.document_page.page_number
+        title = title if title is not None else region.document_page.source_document.title
+
+    if title is None or page is None:
+        return None
+    return f"{title}{PLAYBOOK_REFERENCE_SEPARATOR}Page {page}"
 
 
 def selection_texts(delivered: DeliveredQuestion, answer) -> list[str]:

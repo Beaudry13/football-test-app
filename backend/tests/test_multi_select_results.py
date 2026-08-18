@@ -216,6 +216,13 @@ def coach_responses(client, headers, fixture):
     return got.get_json()
 
 
+#: Index of the Answer column. Named because the CSV gained a "Playbook"
+#: column and every positional assertion below silently pointed one column to
+#: the left until it was fixed - counting commas is how that happens twice.
+ANSWER_COL = 6
+VERDICT_COL = 7
+
+
 def csv_rows(client, headers, quiz_id):
     got = client.get(f"/api/quizzes/{quiz_id}/export.csv", headers=headers)
     assert got.status_code == 200
@@ -395,7 +402,7 @@ class TestHistoricalWording:
             == "Mike; Nickel"
         )
         row = csv_rows(client, coach_headers, multi["quiz_id"])[1]
-        assert row[5] == "Mike; Nickel"
+        assert row[6] == "Mike; Nickel"
         assert "MIKE LINEBACKER (edited)" not in pdf_text(
             client, coach_headers, multi["quiz_id"]
         )
@@ -456,7 +463,7 @@ class TestSingleChoiceIsUntouched:
     def test_the_csv_cell_is_the_one_option(self, client, coach_headers, single):
         answer_single_and_submit(client, single, "Cover 3")
 
-        assert csv_rows(client, coach_headers, single["quiz_id"])[1][5] == "Cover 3"
+        assert csv_rows(client, coach_headers, single["quiz_id"])[1][6] == "Cover 3"
 
 
 class TestExcludedFromScoring:
@@ -487,8 +494,8 @@ class TestExcludedFromScoring:
     ):
         row = csv_rows(client, coach_headers, excluded["quiz_id"])[1]
 
-        assert row[5] == "Mike; Nickel; Boundary Safety"
-        assert row[6] == "Excluded"
+        assert row[6] == "Mike; Nickel; Boundary Safety"
+        assert row[7] == "Excluded"
 
 
 class TestTheEmptySet:
@@ -533,8 +540,8 @@ class TestTheEmptySet:
         """
         row = csv_rows(client, coach_headers, emptied["quiz_id"])[1]
 
-        assert row[5] == ""
-        assert row[6] == "Ungraded"
+        assert row[6] == ""
+        assert row[7] == "Ungraded"
 
 
 # ---------------------------------------------------------------------------
@@ -549,7 +556,7 @@ class TestCsv:
         answer_and_submit(client, multi, CORRECT)
 
         assert (
-            csv_rows(client, coach_headers, multi["quiz_id"])[1][5]
+            csv_rows(client, coach_headers, multi["quiz_id"])[1][6]
             == "Mike; Nickel; Boundary Safety"
         )
 
@@ -563,7 +570,7 @@ class TestCsv:
         row = csv_rows(client, coach_headers, multi["quiz_id"])[1]
 
         assert len(row) == len(csv_rows(client, coach_headers, multi["quiz_id"])[0])
-        assert row[5].count(";") == 2
+        assert row[6].count(";") == 2
 
     def test_tap_order_does_not_reach_the_spreadsheet(
         self, client, coach_headers, multi
@@ -576,7 +583,7 @@ class TestCsv:
         )
 
         assert (
-            csv_rows(client, coach_headers, multi["quiz_id"])[1][5]
+            csv_rows(client, coach_headers, multi["quiz_id"])[1][6]
             == "Mike; Nickel; Boundary Safety"
         )
 

@@ -40,14 +40,31 @@ def test_export_csv_has_one_row_per_player_per_question(client, coach_headers):
     assert 'filename="week-1-prep-results.csv"' in response.headers["Content-Disposition"]
 
     rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))
-    assert rows[0] == ["Player", "Submitted At", "Question #", "Question", "Type", "Answer", "Correct", "Coach Feedback"]
+    # "Playbook" carries a human reference - "Defensive Playbook - Page 12" -
+    # and is blank for every question not built from a playbook page.
+    assert rows[0] == [
+        "Player",
+        "Submitted At",
+        "Question #",
+        "Question",
+        "Type",
+        "Playbook",
+        "Answer",
+        "Correct",
+        "Coach Feedback",
+    ]
     data_rows = rows[1:]
     assert len(data_rows) == 2  # one response x two questions
     by_question_text = {row[3]: row for row in data_rows}
-    assert by_question_text["Is this cover 2?"][5] == "True"
-    assert by_question_text["Is this cover 2?"][6] == "Yes"
-    assert by_question_text["Describe your assignment."][5] == "I set the edge."
-    assert by_question_text["Describe your assignment."][6] == "Ungraded"
+    # Columns shifted by one when "Playbook" was inserted before "Answer".
+    ANSWER, VERDICT, PLAYBOOK = 6, 7, 5
+    assert by_question_text["Is this cover 2?"][ANSWER] == "True"
+    assert by_question_text["Is this cover 2?"][VERDICT] == "Yes"
+    assert by_question_text["Describe your assignment."][ANSWER] == "I set the edge."
+    assert by_question_text["Describe your assignment."][VERDICT] == "Ungraded"
+    # Neither question came from a playbook, so the new column stays empty
+    # rather than carrying a placeholder.
+    assert by_question_text["Is this cover 2?"][PLAYBOOK] == ""
 
 
 def test_export_csv_with_no_responses_is_just_the_header(client, coach_headers):

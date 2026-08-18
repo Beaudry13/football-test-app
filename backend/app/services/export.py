@@ -83,10 +83,14 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from app.extensions import db
+from app.models.question_region import QuestionRegion
+from app.models import Question
 from app.models.answer_drawing import document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES, QuestionType
 from app.services.delivered_questions import (
     delivered_questions,
+    playbook_reference,
     selection_text,
     selection_texts,
 )
@@ -99,7 +103,22 @@ from app.services.scoring import (
     score_percent,
 )
 
-CSV_HEADER = ["Player", "Submitted At", "Question #", "Question", "Type", "Answer", "Correct", "Coach Feedback"]
+#: "Playbook" holds a HUMAN REFERENCE - "Defensive Playbook - Page 12" - and is
+#: blank for every question not built from a playbook page. A cell cannot hold
+#: the picture, so it holds the thing a coach can act on instead: enough to open
+#: the right playbook at the right page. Deliberately no id, coordinate, URL or
+#: token - see delivered_questions.playbook_reference.
+CSV_HEADER = [
+    "Player",
+    "Submitted At",
+    "Question #",
+    "Question",
+    "Type",
+    "Playbook",
+    "Answer",
+    "Correct",
+    "Coach Feedback",
+]
 
 #: The CSV's OWN vocabulary for the same four outcomes the PDF labels
 #: differently. A spreadsheet column headed "Correct" reads better as Yes/No
@@ -940,6 +959,36 @@ def _drawing_flowable(load_image_bytes, image_url: str, document, stroke_fallbac
         return None
 
 
+def _delivered_mask_flowable(snapshot_id: int):
+    """A playbook question's DELIVERED masked page, as a PDF image.
+
+    Resolved server-side from the snapshot row, so no signed token is minted
+    and no storage key is involved - the export already has database access,
+    and a URL would only be a longer way to reach the same bytes.
+
+    Best-effort in the same way every other image here is: an unreadable render
+    degrades to no picture rather than failing a whole report over one question.
+    """
+    from app.models import AttemptQuestionSnapshot
+    from app.services.page_masking import delivered_mask_bytes
+
+    try:
+        row = db.session.get(AttemptQuestionSnapshot, snapshot_id)
+        if row is None:
+            return None
+        raw = delivered_mask_bytes(row)
+        if not raw:
+            return None
+        reader = ImageReader(io.BytesIO(raw))
+        width, height = reader.getSize()
+        if not width or not height:
+            return None
+        scale = min(_MAX_IMAGE_WIDTH / width, _MAX_IMAGE_HEIGHT / height, 1.0)
+        return RLImage(io.BytesIO(raw), width=width * scale, height=height * scale)
+    except Exception:
+        return None
+
+
 def _load_image_flowable(load_image_bytes, image_url: str):
     """Best-effort: a missing file, a network failure, or an unreadable
     image all degrade to None (rendered by the caller as a documented
@@ -967,6 +1016,29 @@ def build_results_csv(quiz, responses: list, exclusions=NO_EXCLUSIONS) -> str:
     writer = csv.writer(buffer)
     writer.writerow(CSV_HEADER)
 
+    # Only needed for the LEGACY playbook reference - a delivery captured
+    # before the title and page number were frozen.
+    #
+    # WHICH QUESTIONS HAVE A REGION AT ALL, IN ONE QUERY. Handing every
+    # question to `playbook_reference` instead made it walk `question.regions`
+    # per row to discover there was nothing there, which is a lazy load for
+    # every ORDINARY question in the export - an N+1 that
+    # test_multi_select_results_performance's flatness guard caught the moment
+    # it appeared. Only a question that actually has a region needs the
+    # fallback, and only a pre-freeze delivery consults it.
+    region_question_ids = {
+        question_id
+        for (question_id,) in db.session.query(QuestionRegion.question_id)
+        .join(Question, Question.id == QuestionRegion.question_id)
+        .filter(Question.quiz_id == quiz.id)
+        .all()
+    }
+    live_by_id = {
+        question.id: question
+        for question in quiz.questions
+        if question.id in region_question_ids
+    }
+
     for response in sorted(responses, key=lambda r: r.display_name.lower()):
         answers_by_question = {a.question_id: a for a in response.answers}
         # PER RESPONSE, because two attempts at the same quiz can have received
@@ -989,6 +1061,7 @@ def build_results_csv(quiz, responses: list, exclusions=NO_EXCLUSIONS) -> str:
                     question.number,
                     question.text,
                     question.question_type.value,
+                    playbook_reference(question, live_by_id.get(question.question_id)) or "",
                     _answer_text(question, answer),
                     verdict,
                     (answer.coach_feedback or "") if answer else "",
@@ -1549,7 +1622,21 @@ def build_detailed_results_pdf(
                 )
 
             image_flowable = None
-            if question.image is not None:
+            # A PLAYBOOK QUESTION HAS NO `question_images` ROW - the masked
+            # render IS its picture, and until now the report simply had a gap
+            # where the play should be. A coach reviewing a finished Peira
+            # could read the question and the answer but never see what the
+            # player was actually looking at.
+            #
+            # Regenerated from the DELIVERED rectangle, not the live one, so a
+            # coach who has since moved it cannot change a report already
+            # shared. Same frozen geometry the player's own resume reads.
+            #
+            # It lands in `image_flowable`, the ordinary question-image slot -
+            # no separate playbook section, and the card is the same card.
+            if question.image is None and question.snapshot_id is not None:
+                image_flowable = _delivered_mask_flowable(question.snapshot_id)
+            if image_flowable is None and question.image is not None:
                 # THE DELIVERED image. After a coach replaces the live one,
                 # Phase 1 has already repointed this at a preserved copy of the
                 # original - reading it here is what finally makes that

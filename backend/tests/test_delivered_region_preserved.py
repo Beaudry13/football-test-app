@@ -269,6 +269,12 @@ class TestTheSnapshot:
             "height": 0.1,
             "role": "mask",
             "shape": "rect",
+            # WHAT THE COACH CALLS IT, frozen alongside the geometry. The page
+            # number could be looked up live and stay honest - a DocumentPage
+            # is immutable - but a playbook can be RENAMED, so the title must
+            # be recorded or a rename would rewrite a finished Peira's export.
+            "document_title": "Defensive Playbook",
+            "page_number": 1,
         }
 
     def test_it_does_not_mutate_when_read_or_when_the_region_moves(

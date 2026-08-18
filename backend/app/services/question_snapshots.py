@@ -148,6 +148,29 @@ def build_snapshot(question: Question) -> dict:
                 # without it.
                 "role": region.role,
                 "shape": region.shape,
+                # WHAT THE COACH CALLS THIS PAGE, frozen at delivery.
+                #
+                # `page_number` could be looked up live and stay honest - a
+                # DocumentPage is immutable. THE TITLE CANNOT: `PATCH
+                # /documents/<id>` renames a playbook, so resolving it live
+                # would let a rename rewrite an export of a Peira that finished
+                # months ago. Both are recorded together rather than only the
+                # unsafe one, so a reader never has to combine one frozen value
+                # with one live lookup and reason about which is which.
+                #
+                # These are for a HUMAN to read - the CSV prints
+                # "Defensive Playbook - Page 12". No id, no coordinate and no
+                # token belongs in that string.
+                "document_title": (
+                    region.document_page.source_document.title
+                    if region.document_page is not None
+                    else None
+                ),
+                "page_number": (
+                    region.document_page.page_number
+                    if region.document_page is not None
+                    else None
+                ),
             }
             if region is not None
             else None
