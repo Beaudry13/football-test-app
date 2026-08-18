@@ -30,6 +30,7 @@ from app.models.question_region import RegionRole
 from app.services import document_render
 from app.services.document_geometry import normalised_to_pixels
 from app.services.private_storage import get_private_storage
+from app.services.signed_media import KIND_QUESTION_MASK, sign_media_token
 
 #: Solid, opaque, and visibly deliberate - a player must read it as "something
 #: has been hidden here", not as a printing defect. Near-black rather than pure
@@ -39,6 +40,41 @@ MASK_FILL = (17, 20, 24)
 #: identifiable as a mask.
 MASK_OUTLINE = (240, 240, 240)
 MASK_OUTLINE_WIDTH = 2
+
+
+def attach_masked_media(quiz_payload: dict, *, audience: str) -> None:
+    """Give every region-backed question in `quiz_payload` a signed URL to its
+    MASKED page.
+
+    THE ONE PLACE THAT DECIDES WHAT A REGION QUESTION'S PICTURE IS. A region
+    question has no `question_images` row, so this URL is the only picture it
+    has; a caller that forgets to attach it renders a question with nothing to
+    look at. That is exactly what happened to Preview, which built its screen
+    from the coach payload and showed an empty card for every playbook
+    question while the real player flow was fine.
+
+    THE URL IS SAFE TO ISSUE TO EITHER AUDIENCE, and that is the property that
+    lets one function serve both. It resolves to the MASKED render - the same
+    pixels a player receives, with the answer already removed from them. There
+    is deliberately no token kind that resolves to the unmasked page or the
+    source PDF, so this cannot be widened into a leak by passing a different
+    argument.
+
+    `audience` is still recorded per caller: `ac:<id>` for a player, `coach`
+    for a coach. Nothing enforces it today - it is what a future revocation
+    check keys on, and it keeps a leaked URL traceable to why it was issued.
+
+    Mutates in place, and only for questions that HAVE a region. An ordinary
+    uploaded-image question is untouched and keeps rendering from
+    `image.image_url`.
+    """
+    for question in quiz_payload.get("questions", []):
+        if not question.get("region"):
+            continue
+        token = sign_media_token(
+            KIND_QUESTION_MASK, question["id"], audience=audience
+        )
+        question["masked_image_url"] = f"/api/media/{token}"
 
 
 def ensure_page_raster(page) -> bytes:

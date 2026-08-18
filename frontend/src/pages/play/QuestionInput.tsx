@@ -250,7 +250,7 @@ export function QuestionInput({
            would then mark wrong. */
         <input
           type="text"
-          className={styles.writtenAnswer}
+          className={`${styles.writtenAnswer} ${styles.blankAnswer}`}
           aria-label="Your answer"
           autoComplete="off"
           autoCapitalize="none"

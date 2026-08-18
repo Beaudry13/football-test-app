@@ -313,6 +313,51 @@ the stored document, and the delivered-image proof after a replacement.
 
 ---
 
+## BUG - PLAYBOOK QUESTION INVISIBLE IN PREVIEW
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+No migration - one payload field plus one CSS class.
+
+Preview showed an empty card for every playbook question. The masked page was
+minted only on the two PLAYER routes, so the coach payload Preview builds its
+screen from had no picture in it at all - and with the picture gone, the only
+thing left was the Fill in the Blank answer field, which had wrongly inherited
+the written-response box's 7em height. A tall empty rectangle.
+
+The real player attempt was always correct, which is the part that made this
+worth fixing quickly: Preview is what a coach checks before sending a Peira,
+and it was the only surface lying.
+
+- [ ] Preview a quiz containing a playbook question - the masked page appears
+      immediately, first render, no navigation
+- [ ] The mask still covers the answer (it must NOT be readable)
+- [ ] Take the same quiz as a player - same picture, same mask
+- [ ] The Fill in the Blank box looks like an answer field, not an empty panel
+- [ ] A Written Response question still has its tall box
+- [ ] An ordinary uploaded-image question is unchanged
+- [ ] Check on a phone - the masked page is legible at that width
+
+**Why your eyes:** the tests prove the same BYTES reach both audiences and
+that the field carries the right class. Whether the mask reads as deliberate
+on a real playbook page, and whether the answer field now looks right beside
+it, are visual judgements no assertion here makes.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_preview_masked_media.py` (11) covers the coach payload carrying the URL
+on first read, the URL actually serving an image, both audiences resolving to
+byte-identical pixels, no storage key or unmasked page anywhere in the raw
+coach body, the issued token decoding to the mask kind, the player payload
+still carrying no answer key, and that the snapshot STILL records no region
+geometry - so closing the region exception stays a separate decision.
+`QuizPreviewPlaybook.test.tsx` (7) covers the client half, including that a
+missing URL renders no picture rather than reaching for the raw page.
+
+Five of the backend tests and one frontend test were confirmed to FAIL against
+the unfixed code.
+
+---
+
 ## BUG - IMAGE QUESTION FIRST VISIT
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**

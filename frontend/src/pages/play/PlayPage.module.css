@@ -225,6 +225,19 @@
   resize: vertical;
 }
 
+/* A FILL IN THE BLANK ANSWER IS A PLAY NAME, NOT AN ESSAY.
+   It shares every other property with .writtenAnswer above - the same border,
+   padding, colours and the 16px that stops iOS zooming the page - and differs
+   only in height. Reusing that class outright gave a single-line <input> a
+   7em minimum, so it rendered as a tall empty rectangle: on a playbook
+   question whose picture was missing it was the ONLY thing on the card, which
+   is how it got reported as "a large empty area". Written Response keeps the
+   tall box, because an essay needs one. */
+.blankAnswer {
+  min-height: 0;
+  resize: none;
+}
+
 .writtenAnswer:focus {
   border-color: var(--color-primary);
   background: var(--color-surface);

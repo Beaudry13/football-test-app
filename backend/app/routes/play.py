@@ -73,6 +73,7 @@ from app.services.delivered_questions import (
     selection_text,
     to_player_payload,
 )
+from app.services.page_masking import attach_masked_media
 from app.services.question_exclusions import load_for_quizzes
 from app.services.question_snapshots import capture_attempt_snapshots
 from app.utils.validation import load_json_body
@@ -121,27 +122,6 @@ def _resolve_answer_text(question, answer: Answer | None) -> str | None:
     # coach's view, so a player and a coach discussing one answer are reading
     # the same words in the same order.
     return selection_text(question, answer)
-
-
-def _attach_masked_media(quiz_payload: dict, access_code_id: int) -> None:
-    """Give every region-backed question a signed URL to its MASKED page.
-
-    Signed here rather than in `Question.to_dict` for two reasons. The audience
-    is the access code, which the model has no idea about; and keeping it out
-    of to_dict means the default serialisation of a question can never
-    accidentally hand a player an unmasked page - the coach-facing payload
-    carries the region's geometry but no image URL at all, and this is the one
-    function that turns a question into something a player can look at.
-    """
-    for question in quiz_payload.get("questions", []):
-        if not question.get("region"):
-            continue
-        token = sign_media_token(
-            KIND_QUESTION_MASK,
-            question["id"],
-            audience=audience_for_access_code(access_code_id),
-        )
-        question["masked_image_url"] = f"/api/media/{token}"
 
 
 def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
@@ -341,7 +321,7 @@ def validate_code():
 
     quiz = access_code.quiz
     quiz_payload = quiz.to_dict(include_questions=True, include_correct_answers=False)
-    _attach_masked_media(quiz_payload, access_code.id)
+    attach_masked_media(quiz_payload, audience=audience_for_access_code(access_code.id))
 
     return jsonify(
         {

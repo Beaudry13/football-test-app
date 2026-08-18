@@ -33,9 +33,11 @@ from app.models import (
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
 from app.services.file_storage import StorageError, get_file_storage
+from app.services.page_masking import attach_masked_media
 from app.services.question_exclusions import sql_not_excluded
 from app.services.question_snapshots import delivered_question_ids_for_quiz
 from app.services.scoring import score_percent
+from app.services.signed_media import AUDIENCE_COACH
 from app.utils.auth import (
     current_coach,
     get_editable_quiz,
@@ -318,11 +320,23 @@ def _flag_delivered(payload: dict, quiz_id: int) -> dict:
 @jwt_required()
 def get_quiz(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
-    return jsonify(
-        _flag_delivered(
-            quiz.to_dict(include_questions=True, include_correct_answers=True), quiz.id
-        )
+    payload = _flag_delivered(
+        quiz.to_dict(include_questions=True, include_correct_answers=True), quiz.id
     )
+    # IF THE PLAYER WILL SEE IT, PREVIEW MUST SHOW IT.
+    #
+    # A region-backed question has no `question_images` row: the masked render
+    # IS its picture. Without this, Preview built a player's screen from a
+    # payload that had no picture in it at all and drew an empty card for every
+    # playbook question - while the real attempt was fine, so the one surface a
+    # coach uses to check a quiz before sending it was the only one lying.
+    #
+    # The URL resolves to the MASKED render - the same pixels the player gets,
+    # with the answer already removed from them. No unmasked page and no source
+    # PDF is reachable from any token, so this widens nothing. See
+    # services/page_masking.attach_masked_media.
+    attach_masked_media(payload, audience=AUDIENCE_COACH)
+    return jsonify(payload)
 
 
 @quizzes_bp.patch("/<int:quiz_id>")
