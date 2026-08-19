@@ -38,6 +38,16 @@ class QuestionCreateSchema(Schema):
     allows_multiple_answers = fields.Bool(required=False, load_default=False)
     position = fields.Int(required=False, load_default=None)
     answer_explanation = _ANSWER_EXPLANATION
+    document_page_id = fields.Int(required=False, load_default=None, allow_none=True)
+    region = fields.Nested(lambda: RegionSchema(), required=False, load_default=None, allow_none=True)
+    expected_answers = fields.List(
+        fields.Str(), required=False, load_default=None, allow_none=True,
+        validate=validate.Length(min=1, max=25),
+    )
+    answer_matching = fields.Str(
+        required=False, load_default=None, allow_none=True,
+        validate=validate.OneOf(MATCHING_MODES),
+    )
 
 
 class QuestionUpdateSchema(Schema):

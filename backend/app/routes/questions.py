@@ -221,15 +221,14 @@ def _create_payload() -> tuple[dict, object | None]:
 @questions_bp.post("/<int:quiz_id>/questions")
 @jwt_required()
 def create_question(quiz_id: int):
-    """Create a question, and its image if one was sent, in ONE operation.
-
-    Everything commits together or nothing does. A rejected image - wrong type,
-    too large, corrupt - leaves no question behind, which is the whole point:
-    the old two-request flow could not fail halfway without stranding a
-    placeholder that a coach then had to find and delete.
-    """
-    quiz = get_editable_quiz(quiz_id)
+    """Create a question, and its image if one was sent, in ONE operation."""
     data, uploaded_image = _create_payload()
+    return create_question_from(quiz_id, data, uploaded_image)
+
+
+def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
+    """THE ONE PLACE A QUESTION IS CREATED."""
+    quiz = get_editable_quiz(quiz_id)
     # Only multiple choice can be a "select all that apply". Anything else
     # silently keeps the default rather than erroring: a client sending it on a
     # written question is confused, not malicious, and the question it actually
@@ -239,6 +238,30 @@ def create_question(quiz_id: int):
         and data["question_type"] == QuestionType.MULTIPLE_CHOICE.value
     )
     validate_options_for_type(data["question_type"], data["options"], allows_multiple)
+
+    # EVERY REJECTION HAPPENS BEFORE THE INSERT BELOW, and that ordering is
+    # load-bearing rather than tidy. `db.session.add` + `flush` writes a row and
+    # takes locks; a validation that raises after it leaves the request dead
+    # with an open transaction, and the connection sits `idle in transaction`
+    # until something else waits on it forever. Measured: the suite deadlocked
+    # with `DELETE FROM quizzes` in teardown blocked by exactly that.
+    #
+    # The original route validated everything up front for this reason. The
+    # shared path lost that ordering in the move - which is the sort of thing a
+    # refactor drops silently, because every test that only exercises the happy
+    # path still passes.
+    rect = page = None
+    if data.get("document_page_id") is not None and data.get("region") is not None:
+        rect = _validated_rect(data["region"])
+        page = _org_document_page(data["document_page_id"])
+
+    expected = None
+    if data["question_type"] == QuestionType.FILL_BLANK.value:
+        expected = clean_expected_answers(data.get("expected_answers") or [])
+        if not expected:
+            raise ApiError(
+                "Add at least one accepted answer that isn't blank.", status_code=422
+            )
 
     next_position = data["position"]
     if next_position is None:
@@ -255,6 +278,15 @@ def create_question(quiz_id: int):
     db.session.add(question)
     db.session.flush()
     _replace_options(question, data["options"])
+
+    if page is not None:
+        # Already validated above, before the insert. Attaching is pure
+        # mutation and cannot reject.
+        _apply_region(question, page, rect)
+
+    if expected is not None:
+        question.expected_answers = expected
+        question.answer_matching = data.get("answer_matching") or DEFAULT_MODE
 
     # Written to storage before the commit, so a commit failure would leave the
     # bytes orphaned. Tracked and removed on any failure - the same discipline
@@ -343,43 +375,23 @@ def _apply_region(question: Question, page: DocumentPage, rect: dict) -> Questio
 @questions_bp.post("/<int:quiz_id>/questions/from-region")
 @jwt_required()
 def create_region_question(quiz_id: int):
-    """Create a Fill in the Blank question from a rectangle on a playbook page.
-
-    Separate from `create_question` rather than folded into it: this one needs
-    a page, a rectangle and a set of accepted answers, none of which any other
-    question type has, and merging them would make both signatures a union of
-    fields that are each only valid for one branch.
-    """
-    quiz = get_editable_quiz(quiz_id)
+    """COMPATIBILITY CALLER. Translates and delegates; owns no creation logic."""
     data = load_json_body(RegionQuestionCreateSchema())
-    page = _org_document_page(data["document_page_id"])
-    rect = _validated_rect(data["region"])
-
-    expected = clean_expected_answers(data["expected_answers"])
-    if not expected:
-        raise ApiError(
-            "Add at least one accepted answer that isn't blank.", status_code=422
-        )
-
-    position = data["position"]
-    if position is None:
-        position = len(quiz.questions)
-
-    question = Question(
-        quiz_id=quiz.id,
-        question_text=data["question_text"],
-        question_type=QuestionType.FILL_BLANK,
-        position=position,
-        expected_answers=expected,
-        answer_matching=data["answer_matching"] or DEFAULT_MODE,
-        answer_explanation=(data.get("answer_explanation") or None),
+    return create_question_from(
+        quiz_id,
+        {
+            "question_text": data["question_text"],
+            "question_type": data.get("question_type") or QuestionType.FILL_BLANK.value,
+            "options": [],
+            "allows_multiple_answers": False,
+            "position": data["position"],
+            "answer_explanation": data.get("answer_explanation"),
+            "document_page_id": data["document_page_id"],
+            "region": data["region"],
+            "expected_answers": data["expected_answers"],
+            "answer_matching": data["answer_matching"],
+        },
     )
-    db.session.add(question)
-    db.session.flush()
-
-    _apply_region(question, page, rect)
-    db.session.commit()
-    return jsonify(question.to_dict(include_correct_answers=True)), 201
 
 
 @questions_bp.patch("/<int:quiz_id>/questions/<int:question_id>/region")
