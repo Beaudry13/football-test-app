@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
-import { getErrorMessage } from '../../api/client';
+import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import type { DocumentPage } from '../../api/documents';
+import { PlaybookPicker } from './PlaybookPicker';
+import { RegionDraw, type NormalisedRect } from '../documents/RegionDraw';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionEditor.module.css';
 
@@ -74,6 +77,15 @@ export function QuestionEditor({
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
+  /** A PLAYBOOK PAGE AS THE PICTURE, and the one thing hidden on it if the
+   *  coach chose to hide anything. Held here until save, exactly as an
+   *  uploaded file is - nothing is created until the question is. */
+  const [playbookPage, setPlaybookPage] = useState<
+    { page: DocumentPage; documentTitle: string } | null
+  >(null);
+  const [hidden, setHidden] = useState<NormalisedRect | null>(null);
+  const [isPicking, setIsPicking] = useState(false);
+  const [isHiding, setIsHiding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -116,6 +128,12 @@ export function QuestionEditor({
     // memory until it is.
     return () => URL.revokeObjectURL(url);
   }, [image]);
+
+  function clearPlaybookPage() {
+    setPlaybookPage(null);
+    setHidden(null);
+    setIsHiding(false);
+  }
 
   function clearImage() {
     setImage(null);
@@ -243,6 +261,17 @@ export function QuestionEditor({
           // but sending a truthful value is cheaper than sending a stale one.
           allows_multiple_answers: questionType === 'multiple_choice' && allowsMultiple,
           answer_explanation: explanation.trim(),
+          // The page the coach chose, and the one thing they hid on it. Both
+          // omitted entirely when no playbook was used, so an ordinary
+          // question's payload is byte-for-byte what it was before.
+          ...(playbookPage
+            ? {
+                document_page_id: playbookPage.page.id,
+                // PRESENCE IS THE MEANING: a rectangle says "hide this", its
+                // absence says "show the page as it is". No role, no mode.
+                ...(hidden ? { region: hidden } : {}),
+              }
+            : {}),
         },
         image,
       );
@@ -446,7 +475,81 @@ export function QuestionEditor({
       {allowImage && (
         <div className={nb.field}>
           <span className={nb.fieldLabel}>Image (optional)</span>
-          {preview ? (
+
+          {isPicking ? (
+            <PlaybookPicker
+              onCancel={() => setIsPicking(false)}
+              onPicked={(choice) => {
+                // An uploaded file and a playbook page are two answers to the
+                // same question, so choosing one clears the other rather than
+                // leaving the coach to wonder which will win.
+                clearImage();
+                setPlaybookPage(choice);
+                setHidden(null);
+                setIsPicking(false);
+              }}
+            />
+          ) : playbookPage ? (
+            <div className={styles.imagePreview}>
+              {isHiding ? (
+                <RegionDraw
+                  existing={hidden ? [{ id: 1, rect: hidden, label: 'Hidden' }] : []}
+                  selectedId={hidden ? 1 : null}
+                  onClick={() => {}}
+                  onSelect={() => {}}
+                  onDrawn={(rect) => {
+                    setHidden(rect);
+                    setIsHiding(false);
+                  }}
+                  onRegionChanged={(_id, rect) => setHidden(rect)}
+                >
+                  <img
+                    src={resolveMediaUrl(playbookPage.page.image_url ?? '')}
+                    alt={`${playbookPage.documentTitle}, page ${playbookPage.page.page_number}`}
+                  />
+                </RegionDraw>
+              ) : (
+                <img
+                  src={resolveMediaUrl(playbookPage.page.image_url ?? '')}
+                  alt={`${playbookPage.documentTitle}, page ${playbookPage.page.page_number}`}
+                />
+              )}
+              <p className={styles.imageHint}>
+                {playbookPage.documentTitle}, page {playbookPage.page.page_number}
+                {hidden ? ' · one part hidden from players' : ''}
+              </p>
+              <div className={styles.imageActions}>
+                {/* THE OPTIONAL HALF. A page that gives nothing away needs
+                    none of this, so the coach is never asked - the action
+                    simply sits here if they want it.
+                    There is deliberately NO "change page" here. Picking the
+                    wrong page is an uncommon correction, and Remove then
+                    choose again already does it; a third permanent button on
+                    every playbook question is the higher price. Optimise the
+                    common path, not every possible one. */}
+                {hidden ? (
+                  <button type="button" className={nb.btnSm} onClick={() => setHidden(null)}>
+                    Show it again
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={nb.btnSm}
+                    onClick={() => setIsHiding(true)}
+                  >
+                    {isHiding ? 'Drag over what to hide' : 'Hide something from players'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={`${nb.btnSm} ${nb.btnDanger}`}
+                  onClick={clearPlaybookPage}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : preview ? (
             <div className={styles.imagePreview}>
               {/* Previewed from the file itself, so the coach sees exactly what
                   they attached without a round-trip - and without anything
@@ -497,6 +600,20 @@ export function QuestionEditor({
               <span className={styles.dropZoneKeys}>Ctrl+V / Cmd+V</span>
               <span className={styles.dropZoneOr}>or drag &amp; drop, or choose a file</span>
             </div>
+          )}
+
+          {/* THE ONLY PERMANENT UI THIS FEATURE ADDS: one more line beside the
+              two ways of supplying a picture the coach already has. A coach who
+              never opens a playbook reads six extra words and is otherwise
+              unaffected. */}
+          {!isPicking && !playbookPage && !preview && (
+            <button
+              type="button"
+              className={styles.playbookLink}
+              onClick={() => setIsPicking(true)}
+            >
+              or choose from a Playbook
+            </button>
           )}
 
           {imageError && (

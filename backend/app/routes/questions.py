@@ -250,10 +250,25 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
     # shared path lost that ordering in the move - which is the sort of thing a
     # refactor drops silently, because every test that only exercises the happy
     # path still passes.
+    # A PLAYBOOK PAGE AS THE PICTURE, and optionally one thing hidden on it.
+    #
+    # The presence of a rectangle IS the difference, which is why no "role"
+    # crosses the API. A coach who picked a page and hid nothing sends a page;
+    # a coach who hid something sends the rectangle they drew. Neither has to
+    # know the words mask, region, crop or role - those are ours.
+    #
+    # A whole-page picture is stored as a CROP covering the page rather than as
+    # "no region", so the delivered-visual freezing, the masked-media route and
+    # the exports all keep working through exactly one path.
     rect = page = None
-    if data.get("document_page_id") is not None and data.get("region") is not None:
-        rect = _validated_rect(data["region"])
+    region_role = RegionRole.MASK
+    if data.get("document_page_id") is not None:
         page = _org_document_page(data["document_page_id"])
+        if data.get("region") is not None:
+            rect = _validated_rect(data["region"])
+        else:
+            rect = WHOLE_PAGE
+            region_role = RegionRole.CROP
 
     expected = None
     if data["question_type"] == QuestionType.FILL_BLANK.value:
@@ -282,7 +297,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
     if page is not None:
         # Already validated above, before the insert. Attaching is pure
         # mutation and cannot reject.
-        _apply_region(question, page, rect)
+        _apply_region(question, page, rect, region_role)
 
     if expected is not None:
         question.expected_answers = expected
@@ -345,9 +360,23 @@ def _validated_rect(rect: dict) -> dict:
     return rect
 
 
-def _apply_region(question: Question, page: DocumentPage, rect: dict) -> QuestionRegion:
+#: The rectangle for "use this whole page". Stored rather than left implicit so
+#: every downstream reader - the delivered snapshot, the media route, the PDF -
+#: sees one shape of region instead of two.
+WHOLE_PAGE = {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
+
+
+def _apply_region(
+    question: Question, page: DocumentPage, rect: dict, role: str = RegionRole.MASK
+) -> QuestionRegion:
     """Create or move this question's single region. `rect` must already have
     been through `_validated_rect`.
+
+    THE ROLE DECIDES WHAT THE PLAYER SEES, and defaulting it to MASK is what
+    keeps the playbook's bulk authoring identical: there, the rectangle IS the
+    thing being hidden. A question that simply USES a page as its picture
+    passes CROP, which renders the page untouched - a whole-page MASK would
+    black the entire thing out.
 
     V1 permits exactly one region per question. The schema allows several so
     that hotspots and multi-part questions are additive later; the limit lives
@@ -355,7 +384,7 @@ def _apply_region(question: Question, page: DocumentPage, rect: dict) -> Questio
     """
     region = question.regions[0] if question.regions else None
     if region is None:
-        region = QuestionRegion(question_id=question.id, position=0, role=RegionRole.MASK)
+        region = QuestionRegion(question_id=question.id, position=0, role=role)
         db.session.add(region)
         question.regions.append(region)
     else:
@@ -364,6 +393,7 @@ def _apply_region(question: Question, page: DocumentPage, rect: dict) -> Questio
         # between a resized mask and a mask that still shows the answer.
         invalidate_masked_render(region)
 
+    region.role = role
     region.document_page_id = page.id
     region.x = rect["x"]
     region.y = rect["y"]

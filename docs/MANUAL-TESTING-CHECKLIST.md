@@ -313,6 +313,68 @@ the stored document, and the delivered-image proof after a replacement.
 
 ---
 
+## PLAYBOOK — A PAGE AS A QUESTION'S PICTURE
+
+**Status: MANUAL PRODUCTION VERIFICATION DEFERRED**
+No migration. Backend `aeaae55`, editor in the Q2 commit.
+
+A coach writing an ordinary question can now use a page from their playbook as
+its picture, and optionally hide one thing on it. Choosing a page says nothing
+about how the player answers - the old dedicated route turned every playbook
+question into Fill in the Blank, and that is gone.
+
+**THE COACH WHO NEVER USES A PLAYBOOK**
+- [ ] Create an ordinary question - the editor must feel completely unchanged
+      (one extra line of text under the image area is the only difference)
+
+**CHOOSING A PAGE**
+- [ ] "or choose from a Playbook" - is it obvious what it does?
+- [ ] Picking the playbook and page feels quick, not like a detour
+- [ ] The chosen page looks good at REAL browser width - this is the item the
+      tests cannot judge at all
+- [ ] It is clear which page was chosen without reading small print
+
+**HIDING SOMETHING**
+- [ ] "Hide something from players" - is drawing the box obvious without
+      instruction?
+- [ ] The hidden area is clearly visible to the coach as hidden
+- [ ] "Show it again" restores it
+- [ ] Remove takes the page off the question entirely
+
+**THE PLAYER'S SIDE**
+- [ ] Preview shows the same picture the player will get
+- [ ] Start the Peira as a player - the intended picture appears on FIRST
+      arrival, no next/back needed
+- [ ] What was hidden is genuinely unreadable in the delivered image
+
+**ALL FIVE ANSWER TYPES**
+- [ ] Multiple Choice, Select All That Apply, Fill in the Blank, Written
+      Response and Draw Response each feel natural with a playbook picture
+
+**THE QUESTION THAT MATTERS MOST, and no test can answer it:**
+Does this feel like ADDING A PICTURE TO A QUESTION, or like operating a
+playbook subsystem? It should feel like the former. If it feels like a
+subsystem, say what causes that feeling rather than adding UI to explain it.
+
+The known candidate: the picker briefly shows its own header with the playbook
+title and a Cancel button, which is momentarily a small screen inside the
+field. It is brief and self-closing, but it is the part worth watching at real
+dimensions.
+
+### Already covered automatically - do NOT re-test by hand
+
+`test_playbook_visual_source.py` (20) covers all five answer types keeping the
+type the coach chose, a whole page rendering UNTOUCHED (asserted on pixels, not
+a role), hiding covering exactly the right area, the bulk route still masking,
+a foreign page refused 404, no storage key in any payload, and the delivered
+picture staying frozen after the coach hides something on the live question.
+`QuestionEditorPlaybook.test.tsx` (11) covers the ordinary question being
+byte-identical, playbooks never loading until asked, the page appearing
+immediately, hiding never being required, the coach never meeting the words
+mask/region/crop/role, and that exactly two actions exist on a chosen page.
+
+---
+
 ## PLAYBOOK — DELIVERED MASK FROZEN, AND CLEAN BROWSE MODE
 
 **Status: MANUAL PRODUCTION VERIFICATION DEFERRED**

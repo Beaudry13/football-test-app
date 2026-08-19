@@ -184,3 +184,21 @@
   font-size: 0.82rem;
   margin-top: 2px;
 }
+
+/* A quiet third option under the drop zone, not a button competing with Save.
+   Deliberately text-weight: uploading is still the common case, and this must
+   not shout at the coach who never uses playbooks. */
+.playbookLink {
+  margin-top: 0.4em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.playbookLink:hover {
+  text-decoration: underline;
+}

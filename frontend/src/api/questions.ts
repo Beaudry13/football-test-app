@@ -18,6 +18,14 @@ export interface QuestionInput {
    *  never before. Sent as an empty string to clear it; the server stores
    *  that as null so "no explanation" has one representation, not two. */
   answer_explanation?: string | null;
+  /** A PLAYBOOK PAGE AS THIS QUESTION'S PICTURE. Optional, and independent of
+   *  `question_type` - a page says what the player SEES, never how they
+   *  answer. */
+  document_page_id?: number | null;
+  /** The one thing the coach chose to hide on that page, if any. Its PRESENCE
+   *  is the whole difference: absent means show the page as it is. The words
+   *  mask, region and crop stay on the server's side of this boundary. */
+  region?: { x: number; y: number; width: number; height: number } | null;
 }
 
 /** Creates a question, and its image if one is supplied, in ONE request.

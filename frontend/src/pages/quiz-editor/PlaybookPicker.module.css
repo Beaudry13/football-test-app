@@ -1,0 +1,117 @@
+/* Sized to sit INSIDE the question editor's existing image field, not to be a
+   screen of its own. */
+.picker {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.75em;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75em;
+  margin-bottom: 0.6em;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0.4em 0;
+  color: var(--color-text-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4em;
+}
+
+.listItem {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75em;
+  padding: 0.6em 0.7em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.listItem:hover {
+  border-color: var(--color-accent);
+}
+
+.listTitle {
+  font-weight: 600;
+}
+
+.listMeta {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.back {
+  margin-bottom: 0.5em;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A grid of pages, because a coach recognises the play by looking at it - a
+   list of page numbers would make them count. */
+.pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 0.5em;
+  max-height: 22em;
+  overflow-y: auto;
+}
+
+.page {
+  width: 100%;
+  padding: 0.25em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  cursor: pointer;
+  display: grid;
+  gap: 0.2em;
+  justify-items: center;
+}
+
+.page:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.page:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.page img,
+.blank {
+  width: 100%;
+  display: block;
+  background: var(--color-surface);
+}
+
+.pageNumber {
+  font-size: 0.75em;
+  color: var(--color-text-muted);
+}
