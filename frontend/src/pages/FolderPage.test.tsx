@@ -8,6 +8,7 @@ import { DashboardPage } from './DashboardPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
 import * as authContext from '../auth/AuthContext';
+import { openRowMenu } from '../test/rowMenu';
 import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { Coach, Folder, Quiz } from '../api/types';
 
@@ -189,6 +190,7 @@ describe('FolderPage', () => {
     renderAtFolder(20);
 
     await screen.findByText('Install Quiz');
+    await openRowMenu(user, 'Install Quiz');
     const select = screen.getByLabelText('Move "Install Quiz" to folder');
     await user.selectOptions(select, '2026 Season');
 

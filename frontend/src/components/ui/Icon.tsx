@@ -22,8 +22,7 @@ import {
   X,
   type LucideProps,
   FolderOpen,
-  FileText,
-} from 'lucide-react';
+  FileText, MoreHorizontal } from 'lucide-react';
 
 /** Every icon the app uses, named for what it MEANS rather than which
  * glyph draws it - callers write <Icon name="delete" />, never import
@@ -51,6 +50,8 @@ const ICONS = {
   info: Info,
   download: Download,
   add: Plus,
+  // The quiet affordance for row actions - see components/ui/MenuButton.
+  more: MoreHorizontal,
   spinner: Loader2,
   // Drawing board tools (see components/drawing/). `eraser` is deliberately
   // separate from `delete`: one removes a stroke from a drawing, the other

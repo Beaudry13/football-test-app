@@ -1,0 +1,77 @@
+.wrapper {
+  position: relative;
+  /* Sits above the card's stretched link, which is what makes the rest of the
+     card clickable without swallowing these controls. */
+  z-index: 1;
+  flex-shrink: 0;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 40px, not the 24px the glyph needs: this is the one control on a card a
+     coach hits with a thumb, and a small target beside a big link is a
+     mis-tap waiting to happen. */
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 11em;
+  display: grid;
+  padding: 0.25em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface, var(--color-bg));
+  box-shadow: 0 6px 20px rgb(0 0 0 / 18%);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  width: 100%;
+  padding: 0.55em 0.6em;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--color-border);
+  outline: none;
+}
+
+/* Coloured, not shouted. Delete is destructive and should read that way once
+   a coach has gone looking for it - but it no longer competes with the quiz
+   title from across the page. */
+.destructive {
+  color: var(--color-danger);
+}

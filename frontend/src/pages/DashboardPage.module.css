@@ -27,7 +27,12 @@
   gap: 12px;
 }
 
+/* The card is the click target. `.quizInfo::after` stretches the single real
+   link over the whole card, so there is one link and one tab stop rather than
+   a button nested inside an anchor. `position: relative` here is what that
+   overlay is measured against. */
 .quizCard {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -270,4 +275,30 @@ button.actionDelete:hover:not(:disabled) {
    the last and marching off the right edge. Depth 0 is unaffected. */
 .folderSection {
   margin-left: calc(var(--folder-depth, 0) * 20px);
+}
+
+
+/* Sits under the stretched link, so text selection and the link both behave. */
+.quizInfo {
+  position: static;
+}
+
+.quizInfo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* "Move to" inside the actions menu. A label and a select, not a new
+   interaction - the control is the one that was on the card, relocated. */
+.moveField {
+  display: grid;
+  gap: 0.2em;
+  padding: 0.4em 0.6em 0.55em;
+}
+
+.moveLabel {
+  font-size: 0.78em;
+  color: var(--color-text-muted);
 }

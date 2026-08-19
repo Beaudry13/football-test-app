@@ -8,6 +8,7 @@ import { FolderPage } from './FolderPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
 import * as authContext from '../auth/AuthContext';
+import { openRowMenu } from '../test/rowMenu';
 import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
 import type { Coach, Folder, Quiz } from '../api/types';
 
@@ -179,7 +180,8 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
-    await user.click(screen.getByRole('button', { name: 'Duplicate' }));
+    await openRowMenu(user, 'Week 1 Prep');
+    await user.click(screen.getByRole('menuitem', { name: 'Duplicate' }));
 
     await waitFor(() => expect(duplicateSpy).toHaveBeenCalledWith(1));
   });
@@ -191,7 +193,8 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await openRowMenu(user, 'Week 1 Prep');
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
 
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('Delete Quiz?');
     await cancelConfirm(user);
@@ -205,7 +208,8 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await openRowMenu(user, 'Week 1 Prep');
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }));
     await acceptConfirm(user, 'Delete Quiz');
 
     await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith(1));
@@ -217,6 +221,9 @@ describe('DashboardPage', () => {
 
     await screen.findByText('Week 1 Prep');
     expect(screen.queryByText('Uncategorized')).not.toBeInTheDocument();
+    // Opened first: an assertion that a control is absent proves nothing if
+    // it is merely behind a closed menu.
+    await openRowMenu(userEvent.setup(), 'Week 1 Prep');
     expect(screen.queryByLabelText(/Move ".*" to folder/)).not.toBeInTheDocument();
   });
 
@@ -252,6 +259,7 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
+    await openRowMenu(user, 'Week 1 Prep');
     const select = screen.getByLabelText('Move "Week 1 Prep" to folder');
     await user.selectOptions(select, 'Fall Camp');
 
@@ -399,6 +407,7 @@ describe('DashboardPage', () => {
     // Selected by value, not by visible text: options are indented by depth,
     // and a test that matches the indentation breaks every time the tree's
     // presentation changes without the behaviour changing.
+    await openRowMenu(user, 'Week 1 Prep');
     const select = screen.getByLabelText('Move "Week 1 Prep" to folder');
     await user.selectOptions(select, '20');
 
@@ -417,6 +426,7 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('Week 1 Prep');
 
+    await openRowMenu(user, 'Week 1 Prep');
     await user.selectOptions(screen.getByLabelText('Move "Week 1 Prep" to folder'), '30');
 
     await waitFor(() => expect(updateSpy).toHaveBeenCalledWith(1, { folder_id: 30 }));
@@ -438,10 +448,13 @@ describe('DashboardPage', () => {
 
     await screen.findByText("Jones's quiz");
     expect(screen.getByText(/by coach_jones/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+
+    // The permissions are unchanged; only where the actions live has moved.
+    await openRowMenu(userEvent.setup(), "Jones's quiz");
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/to folder/)).not.toBeInTheDocument();
     // Duplicating a teammate's quiz is always allowed - the copy is yours.
-    expect(screen.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Duplicate' })).toBeInTheDocument();
   });
 
   it('lets an admin edit a teammate\'s quiz', async () => {
@@ -451,7 +464,8 @@ describe('DashboardPage', () => {
     renderDashboard();
 
     await screen.findByText('Week 1 Prep');
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    await openRowMenu(userEvent.setup(), 'Week 1 Prep');
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
   });
 
   it('does not label or restrict the coach\'s own quiz', async () => {
@@ -460,7 +474,8 @@ describe('DashboardPage', () => {
 
     await screen.findByText('Week 1 Prep');
     expect(screen.queryByText(/by coach1/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    await openRowMenu(userEvent.setup(), 'Week 1 Prep');
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
   });
 
   it('falls back gracefully when the creator has left the organization', async () => {

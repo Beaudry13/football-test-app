@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Coach, Folder, Quiz } from '../api/types';
-import { Icon } from './ui/Icon';
+import { MenuButton, MenuItem } from './ui/MenuButton';
 import { folderTreeOrder } from '../pages/folderTotals';
 import nb from '../styles/notebook.module.css';
 import styles from '../pages/DashboardPage.module.css';
@@ -34,24 +34,24 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
 
   return (
     <div className={`${nb.card} ${nb.cardHoverable} ${styles.quizCard}`}>
-      <div className={nb.accentStripe} />
-      <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo} style={{ flex: 1 }}>
-        {/* h2, not h3: this card sits directly under each page's own h1
-            ("Your Quizzes" / a folder name), so h3 would skip a level. */}
+      {/* THE WHOLE CARD OPENS THE QUIZ. The link stretches over the card via
+          CSS rather than by wrapping it, so there is still exactly ONE link
+          and one tab stop - wrapping would have put a button inside an
+          anchor, which is invalid and unusable by keyboard.
+
+          Before this, the card hover-lifted as though it were clickable while
+          only its left portion actually was; clicking the right third did
+          nothing. */}
+      <Link to={`/quizzes/${quiz.id}`} className={styles.quizInfo}>
         <h2>
           {quiz.title}
           {quiz.is_active && (
             <span className={`${nb.badge} ${nb.badgeSuccess} ${styles.activeBadge}`}>Active</span>
           )}
         </h2>
-        <div className={styles.quizMeta}>
-          {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
-          {new Date(quiz.updated_at).toLocaleDateString()}
-          {isTeammates && <> · by {quiz.created_by_username ?? 'a former coach'}</>}
-        </div>
-        {/* Only present on list_quizzes, and only once there's something to
-            report - a brand-new quiz has no completed attempts yet, and no
-            average_score_percent until at least one answer's been graded. */}
+        {/* RESULTS FIRST, AUTHORING DETAIL SECOND. "How did my players do" is
+            the reason a coach opens a quiz; the question count and the date
+            are how they recognise which one it is. */}
         {quiz.completed_count !== undefined && (
           <div className={styles.quizStats}>
             {quiz.average_score_percent !== undefined && (
@@ -67,41 +67,56 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
             </span>
           </div>
         )}
+        <div className={styles.quizMeta}>
+          {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
+          {new Date(quiz.updated_at).toLocaleDateString()}
+          {isTeammates && <> · by {quiz.created_by_username ?? 'a former coach'}</>}
+        </div>
       </Link>
-      <div className={styles.actions}>
+
+      {/* Everything a coach does OCCASIONALLY. Three permanent controls per
+          card - a folder dropdown, Duplicate and a red Delete - became one
+          quiet affordance. Duplicate is the most frequent of the three and
+          still moved: a permanent button on every card is a worse price than
+          one extra click on an occasional action. */}
+      <MenuButton label={`Actions for ${quiz.title}`}>
+        <MenuItem onSelect={() => onDuplicate(quiz.id)}>Duplicate</MenuItem>
+
         {canEdit && folderOptions.length > 0 && (
-          <select
-            className={styles.folderSelect}
-            value={quiz.folder_id ?? ''}
-            onChange={(e) => onMoveToFolder(quiz.id, e.target.value ? Number(e.target.value) : null)}
-            aria-label={`Move "${quiz.title}" to folder`}
-          >
-            <option value="">Uncategorized</option>
-            {folderOptions.map(({ folder, depth }) => (
-              <option key={folder.id} value={folder.id}>
-                {/* Non-breaking spaces: a <select> collapses ordinary ones,
-                    so plain indentation would render flat. */}
-                {'  '.repeat(depth)}
-                {depth > 0 ? '↳ ' : ''}
-                {folder.name}
-              </option>
-            ))}
-          </select>
+          <div className={styles.moveField}>
+            <label className={styles.moveLabel} htmlFor={`move-${quiz.id}`}>
+              Move to
+            </label>
+            {/* Still a real <select>, and still carrying the same accessible
+                name it always had. Relocating a control is not a reason to
+                rebuild how it works. */}
+            <select
+              id={`move-${quiz.id}`}
+              className={styles.folderSelect}
+              value={quiz.folder_id ?? ''}
+              onChange={(e) =>
+                onMoveToFolder(quiz.id, e.target.value ? Number(e.target.value) : null)
+              }
+              aria-label={`Move "${quiz.title}" to folder`}
+            >
+              <option value="">Uncategorized</option>
+              {folderOptions.map(({ folder, depth }) => (
+                <option key={folder.id} value={folder.id}>
+                  {'  '.repeat(depth)}
+                  {depth > 0 ? '↳ ' : ''}
+                  {folder.name}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
-        {/* Duplicate stays available to everyone: the copy belongs to
-            whoever made it, so starting from a teammate's quiz is safe. */}
-        <button className={`${nb.btnSm} ${styles.actionDuplicate}`} onClick={() => onDuplicate(quiz.id)}>
-          <Icon name="duplicate" size={13} /> Duplicate
-        </button>
+
         {canEdit && (
-          <button
-            className={`${nb.btnSm} ${nb.btnDanger} ${styles.actionDelete}`}
-            onClick={() => onDelete(quiz.id, quiz.title)}
-          >
-            <Icon name="close" size={13} /> Delete
-          </button>
+          <MenuItem destructive onSelect={() => onDelete(quiz.id, quiz.title)}>
+            Delete
+          </MenuItem>
         )}
-      </div>
+      </MenuButton>
     </div>
   );
 }
