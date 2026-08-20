@@ -10,7 +10,7 @@ import { QuizCard } from '../components/QuizCard';
 import { NotebookPage } from '../components/notebook/NotebookPage';
 import { NotebookHeader } from '../components/notebook/NotebookHeader';
 import { Icon } from '../components/ui/Icon';
-import { CoachFolderSection } from './CoachFolderSection';
+import { FolderRow } from './FolderRow';
 import { ActiveCompetitionBanner } from './compete/ActiveCompetitionBanner';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -29,12 +29,6 @@ export function DashboardPage() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(new Set());
-  // Keyed by root folder id - a separate "new subfolder" input per root,
-  // only ever one shown at a time in practice but each root keeps its own
-  // draft text independently.
-  const [newSubfolderNames, setNewSubfolderNames] = useState<Record<number, string>>({});
-  const [isCreatingSubfolderFor, setIsCreatingSubfolderFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Bumped when this page changes something the setup checklist derives from,
   // so it re-checks instead of sitting stale. Only quiz create/duplicate/
@@ -160,31 +154,9 @@ export function DashboardPage() {
     }
   }
 
-  async function handleCreateSubfolder(event: FormEvent, rootId: number) {
-    event.preventDefault();
-    const name = (newSubfolderNames[rootId] ?? '').trim();
-    if (!name) return;
-    setIsCreatingSubfolderFor(rootId);
-    setError(null);
-    try {
-      await createFolder({ name, parent_folder_id: rootId });
-      setNewSubfolderNames((prev) => ({ ...prev, [rootId]: '' }));
-      await refresh();
-    } catch (err) {
-      setError(getErrorMessage(err));
-    } finally {
-      setIsCreatingSubfolderFor(null);
-    }
-  }
-
-  function toggleFolder(folderId: number) {
-    setCollapsedFolderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) next.delete(folderId);
-      else next.add(folderId);
-      return next;
-    });
-  }
+  // Subfolders are created on the folder's OWN page now - FolderPage already
+  // had that form. Creating one from here meant a per-folder input on the
+  // dashboard for every folder a coach owned.
 
   function renderQuizCard(quiz: Quiz) {
     return (
@@ -200,10 +172,9 @@ export function DashboardPage() {
     );
   }
 
-  // Only root folders start the recursion; CoachFolderSection renders each
-  // folder's own subfolders inline, to any depth. Subfolders used to be links
-  // out to FolderPage, which only worked while nesting was capped at two
-  // levels - a five-deep season would otherwise be five pages to walk.
+  // Only ROOT folders appear here. A subfolder is reached by opening its
+  // parent, which is what keeps this screen the same size whether a coach has
+  // three folders or a five-deep season structure.
   const rootFolders = folders?.filter((f) => f.parent_folder_id === null) ?? [];
   const hasFolders = rootFolders.length > 0;
   const uncategorized = quizzes?.filter((q) => q.folder_id === null) ?? [];
@@ -275,35 +246,39 @@ export function DashboardPage() {
           <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
         ) : (
           <div className={styles.folderSections}>
-            {rootFolders.map((folder) => (
-              <CoachFolderSection
-                key={folder.id}
-                folder={folder}
-                depth={0}
-                allFolders={folders ?? []}
-                quizzes={quizzes}
-                collapsedIds={collapsedFolderIds}
-                onToggle={toggleFolder}
-                renamingId={renamingFolderId}
-                renameValue={renameValue}
-                onRenameValueChange={setRenameValue}
-                onStartRename={(f) => {
-                  setRenamingFolderId(f.id);
-                  setRenameValue(f.name);
-                }}
-                onCancelRename={() => setRenamingFolderId(null)}
-                onRename={handleRenameFolder}
-                onDelete={handleDeleteFolder}
-                subfolderNames={newSubfolderNames}
-                onSubfolderNameChange={(parentId, value) =>
-                  setNewSubfolderNames((prev) => ({ ...prev, [parentId]: value }))
-                }
-                creatingSubfolderFor={isCreatingSubfolderFor}
-                onCreateSubfolder={handleCreateSubfolder}
-                renderQuizCard={renderQuizCard}
-              />
-            ))}
+            {/* FOLDERS ARE PLACES TO GO, NOT THINGS TO UNFOLD. They used to
+                expand here and render every quiz inside them, recursively and
+                expanded by default - so a coach with a hundred quizzes met all
+                hundred at once and found the one they wanted by scrolling past
+                the rest. Opening a folder made the page bigger.
 
+                They now navigate into FolderPage, which already had the
+                breadcrumbs, the rename, the delete and the subfolder form and
+                was simply never linked to. See FolderRow.tsx. */}
+            <div className={styles.folderList}>
+              {rootFolders.map((folder) => (
+                <FolderRow
+                  key={folder.id}
+                  folder={folder}
+                  allFolders={folders ?? []}
+                  quizzes={quizzes}
+                  renamingId={renamingFolderId}
+                  renameValue={renameValue}
+                  onRenameValueChange={setRenameValue}
+                  onStartRename={(f) => {
+                    setRenamingFolderId(f.id);
+                    setRenameValue(f.name);
+                  }}
+                  onCancelRename={() => setRenamingFolderId(null)}
+                  onRename={handleRenameFolder}
+                  onDelete={handleDeleteFolder}
+                />
+              ))}
+            </div>
+
+            {/* Loose work stays inline. It is not a folder anybody filed
+                something into, so hiding it behind a click would bury the
+                quizzes a coach is most likely still working on. */}
             {uncategorized.length > 0 && (
               <div className={styles.folderSection}>
                 <div className={styles.folderHeader}>

@@ -106,10 +106,15 @@ export function MenuItem({
   children,
   onSelect,
   destructive = false,
+  disabled = false,
 }: {
   children: ReactNode;
   onSelect: () => void;
   destructive?: boolean;
+  /** Shown but refusing, for an action the server would reject anyway. Say
+   *  WHY in the label - a greyed item with no reason is a dead end the coach
+   *  has to guess at. */
+  disabled?: boolean;
 }) {
   const close = useContext(CloseMenu);
 
@@ -118,6 +123,7 @@ export function MenuItem({
       type="button"
       role="menuitem"
       className={`${styles.item} ${destructive ? styles.destructive : ''}`}
+      disabled={disabled}
       onClick={() => {
         onSelect();
         close();

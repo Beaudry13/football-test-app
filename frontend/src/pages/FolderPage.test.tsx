@@ -218,7 +218,9 @@ describe('FolderPage deep nesting', () => {
     );
   }
 
-  it('shows the current folder’s subfolders nested recursively', async () => {
+  it('SHOWS ITS OWN CHILDREN ONLY, NOT THE WHOLE BRANCH', async () => {
+    // A folder page that unfolded its descendants would recreate here exactly
+    // the wall the dashboard just stopped being. One level, then you go in.
     const deepQuiz: Quiz = { ...quizInSubfolder, id: 90, title: 'Deep Install', folder_id: 104 };
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([deepQuiz]);
@@ -227,11 +229,14 @@ describe('FolderPage deep nesting', () => {
     renderAtFolder(101);
 
     expect(await screen.findByRole('heading', { name: 'Week 3' })).toBeInTheDocument();
-    for (const name of ['Defense', 'Redzone', 'Install Quizzes']) {
-      expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument();
+    // Its own child is a row into itself...
+    const child = await screen.findByRole('link', { name: /Defense/ });
+    expect(child).toHaveAttribute('href', '/folders/102');
+    // ...and its grandchildren, and the quiz four levels down, are not here.
+    for (const buried of ['Redzone', 'Install Quizzes']) {
+      expect(screen.queryByRole('link', { name: new RegExp(buried) })).not.toBeInTheDocument();
     }
-    // And the quiz four levels down is reachable without navigating away.
-    expect(await screen.findByText('Deep Install')).toBeInTheDocument();
+    expect(screen.queryByText('Deep Install')).not.toBeInTheDocument();
   });
 
   it('shows the full ancestor path, not just the parent', async () => {
@@ -248,47 +253,36 @@ describe('FolderPage deep nesting', () => {
     }
   });
 
-  it('collapses a nested branch', async () => {
+  it('offers rename and delete on a child row, in one menu', async () => {
+    // They were two permanent buttons on every folder at every depth. Same
+    // "..." menu a quiz card uses, so a coach learns the pattern once.
     const user = userEvent.setup();
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     renderAtFolder(101);
 
-    await user.click(await screen.findByRole('button', { name: /Defense/ }));
+    await screen.findByRole('link', { name: /Defense/ });
+    await user.click(screen.getByRole('button', { name: 'Folder options for Defense' }));
 
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: /Redzone/ })).not.toBeInTheDocument(),
-    );
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Delete/ })).toBeInTheDocument();
   });
 
-  it('offers rename, delete and new-subfolder at nested levels', async () => {
-    vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
-    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
-    renderAtFolder(101);
-
-    await screen.findByRole('button', { name: /Defense/ });
-    // Every level gets the same controls - there is nothing special about depth.
-    expect(screen.getByLabelText('New subfolder inside "Redzone"')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Rename' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Delete folder' }).length).toBeGreaterThan(1);
-  });
-
-  it('creates a subfolder under a nested folder', async () => {
+  it('CREATES A SUBFOLDER OF THE FOLDER YOU ARE IN', async () => {
+    // There is one such form now, for this folder - not one per descendant on
+    // a page listing five of them.
     const user = userEvent.setup();
     vi.spyOn(foldersApi, 'listFolders').mockResolvedValue(deepChain());
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     const create = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(root);
     renderAtFolder(101);
 
-    const input = await screen.findByLabelText('New subfolder inside "Install Quizzes"');
+    const input = await screen.findByLabelText('New subfolder inside "Week 3"');
     await user.type(input, 'Even Deeper');
-    // Scoped to the form that owns this input - every level has a "New
-    // subfolder" button, so an unscoped query submits somebody else's.
-    const form = input.closest('form') as HTMLElement;
-    await user.click(within(form).getByRole('button', { name: 'New subfolder' }));
+    await user.click(screen.getByRole('button', { name: 'New subfolder' }));
 
     await waitFor(() =>
-      expect(create).toHaveBeenCalledWith({ name: 'Even Deeper', parent_folder_id: 104 }),
+      expect(create).toHaveBeenCalledWith({ name: 'Even Deeper', parent_folder_id: 101 }),
     );
   });
 

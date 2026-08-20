@@ -228,15 +228,31 @@ describe('DashboardPage', () => {
     expect(screen.queryByLabelText(/Move ".*" to folder/)).not.toBeInTheDocument();
   });
 
-  it('groups quizzes into folder sections, with unfoldered quizzes under Uncategorized', async () => {
+  it('KEEPS A FOLDER’S QUIZZES OFF THE DASHBOARD', async () => {
+    // THE WHOLE POINT OF THIS SCREEN. Folders used to unfold here and render
+    // every quiz inside them, so a coach with a hundred quizzes met all
+    // hundred at once. A folder is now a row you go into.
     const foldered: Quiz = { ...sampleQuiz, id: 2, title: 'Defense Install', folder_id: 10 };
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz, foldered]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
     renderDashboard();
 
-    await screen.findByText('Defense Install');
-    expect(screen.getByRole('button', { name: /Fall Camp/ })).toBeInTheDocument();
+    // The loose quiz is here; the filed one is not.
+    await screen.findByText('Week 1 Prep');
+    expect(screen.queryByText('Defense Install')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Uncategorized/).length).toBeGreaterThan(0);
+  });
+
+  it('makes the folder a link into itself, counting the whole tree', async () => {
+    const foldered: Quiz = { ...sampleQuiz, id: 2, title: 'Defense Install', folder_id: 10 };
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz, foldered]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
+    renderDashboard();
+
+    const link = await screen.findByRole('link', { name: /Fall Camp/ });
+    expect(link).toHaveAttribute('href', '/folders/10');
+    // The count is why a coach can decide whether to go in without going in.
+    expect(link).toHaveTextContent('1');
   });
 
   it('creates a folder from the inline form', async () => {
@@ -274,9 +290,14 @@ describe('DashboardPage', () => {
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
     const deleteFolderSpy = vi.spyOn(foldersApi, 'deleteFolder').mockResolvedValue(undefined);
     renderDashboard();
-    await screen.findByText('Week 1 Prep');
+    // The quiz is inside the folder now, so it is NOT on this screen - wait
+    // for the folder row instead.
+    await screen.findByRole('link', { name: /Fall Camp/ });
 
-    await user.click(screen.getByRole('button', { name: 'Delete folder' }));
+    // Rename and Delete were two permanent buttons on every folder row; they
+    // are now in the same "..." menu a quiz card uses.
+    await user.click(screen.getByRole('button', { name: 'Folder options for Fall Camp' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Delete folder' }));
     await acceptConfirm(user, 'Delete Folder');
 
     await waitFor(() => expect(deleteFolderSpy).toHaveBeenCalledWith(10));
@@ -307,21 +328,23 @@ describe('DashboardPage', () => {
     );
   }
 
-  it('renders a subfolder inline inside its parent, not as a link away', async () => {
-    // Subfolders used to be links out to their own page, which only worked
-    // while nesting was capped at two levels. Now that a season can be five
-    // deep, they expand in place - otherwise the coach walks five pages.
-    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+  it('SHOWS ONLY ROOT FOLDERS, WHATEVER THE DEPTH', async () => {
+    // The dashboard is the library, not the whole shelf. A subfolder is
+    // reached by opening its parent, which is what keeps this screen the same
+    // size for a coach with three folders and one with a five-deep season.
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
     renderDashboard();
 
-    await screen.findByRole('button', { name: /Fall Camp/ });
-    // Its own expandable section, with its own controls, exactly like a root.
-    expect(screen.getByRole('button', { name: /Week 1 \(/ })).toBeInTheDocument();
-    expect(screen.getByLabelText('New subfolder inside "Week 1"')).toBeInTheDocument();
+    await screen.findByRole('link', { name: /Fall Camp/ });
+    // No quizzes in this case on purpose: a QuizCard is itself a link, so a
+    // loose "Week 1 Prep" would match a folder-name pattern and prove nothing.
+    expect(screen.queryByRole('link', { name: /Week 1/ })).not.toBeInTheDocument();
   });
 
-  it('nests folders five levels deep, each expandable in place', async () => {
+  it('STAYS THE SAME HEIGHT AS A SEASON GETS DEEPER', async () => {
+    // Five levels and a quiz at the bottom used to render as five nested
+    // sections plus the quiz. It is now one row.
     const chain = ['2026 Season', 'Week 3', 'Defense', 'Redzone', 'Install Quizzes'].map(
       (name, index) => ({
         ...sampleFolder,
@@ -335,47 +358,47 @@ describe('DashboardPage', () => {
     vi.mocked(foldersApi.listFolders).mockResolvedValue(chain);
     renderDashboard();
 
-    // Expanded by default in Coach View, so the whole chain is present and the
-    // quiz at the bottom is reachable without navigating anywhere.
-    for (const name of ['2026 Season', 'Week 3', 'Defense', 'Redzone', 'Install Quizzes']) {
-      expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument();
+    const root = await screen.findByRole('link', { name: /2026 Season/ });
+    // The count still tells the truth about what is down there.
+    expect(root).toHaveTextContent('1');
+    for (const buried of ['Week 3', 'Defense', 'Redzone', 'Install Quizzes']) {
+      expect(screen.queryByRole('link', { name: new RegExp(buried) })).not.toBeInTheDocument();
     }
-    expect(await screen.findByText('Deep Install')).toBeInTheDocument();
+    expect(screen.queryByText('Deep Install')).not.toBeInTheDocument();
   });
 
-  it('collapsing a folder hides everything nested below it', async () => {
-    const user = userEvent.setup();
-    const chain = ['Season', 'Week', 'Defense'].map((name, index) => ({
-      ...sampleFolder,
-      id: 200 + index,
-      name,
-      parent_folder_id: index === 0 ? null : 200 + index - 1,
-    }));
-    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
-    vi.mocked(foldersApi.listFolders).mockResolvedValue(chain);
-    renderDashboard();
-
-    await user.click(await screen.findByRole('button', { name: /Season/ }));
-
-    await waitFor(() =>
-      expect(screen.queryByRole('button', { name: /Defense/ })).not.toBeInTheDocument(),
-    );
-  });
-
-  it('creates a subfolder from the inline form inside its root folder', async () => {
+  it('renames a folder in place from its menu', async () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder]);
-    const createFolderSpy = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(sampleSubfolder);
+    const renameSpy = vi.spyOn(foldersApi, 'renameFolder').mockResolvedValue(sampleFolder);
     renderDashboard();
-    await screen.findByRole('button', { name: /Fall Camp/ });
+    await screen.findByRole('link', { name: /Fall Camp/ });
 
-    await user.type(screen.getByLabelText('New subfolder inside "Fall Camp"'), 'Week 1');
-    await user.click(screen.getByRole('button', { name: 'New subfolder' }));
+    await user.click(screen.getByRole('button', { name: 'Folder options for Fall Camp' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    const input = screen.getByLabelText('Rename folder "Fall Camp"');
+    await user.clear(input);
+    await user.type(input, 'Spring Camp');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
-      expect(createFolderSpy).toHaveBeenCalledWith({ name: 'Week 1', parent_folder_id: 10 }),
+      expect(renameSpy).toHaveBeenCalledWith(10, { name: 'Spring Camp' }),
     );
+  });
+
+  it('REFUSES TO DELETE A FOLDER THAT STILL HAS FOLDERS, AND SAYS WHY', async () => {
+    // The API returns 422 for this. Offering it anyway meant a confirmation
+    // promising the quizzes would move to Uncategorized, then an error.
+    const user = userEvent.setup();
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    vi.mocked(foldersApi.listFolders).mockResolvedValue([sampleFolder, sampleSubfolder]);
+    renderDashboard();
+    await screen.findByRole('link', { name: /Fall Camp/ });
+
+    await user.click(screen.getByRole('button', { name: 'Folder options for Fall Camp' }));
+
+    expect(screen.getByRole('menuitem', { name: /empty its folders first/ })).toBeDisabled();
   });
 
   it('opens a subfolder and navigates back to its parent via the breadcrumb', async () => {

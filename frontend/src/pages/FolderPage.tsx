@@ -17,19 +17,20 @@ import styles from './FolderPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Icon } from '../components/ui/Icon';
-import { CoachFolderSection } from './CoachFolderSection';
+import { FolderRow } from './FolderRow';
 
 /** A single folder's own page: its place in the tree, its quizzes, and its
- * subfolders nested recursively beneath it.
+ * subfolders listed beneath it.
  *
  * Reachable by URL, so bookmarks and shared links keep working - it is just no
  * longer the only way to open a subfolder, since the dashboard now nests them
  * inline as well.
  *
- * The subfolders are rendered by the SAME CoachFolderSection the dashboard
- * uses. There is deliberately no second tree implementation here: two copies
- * of "how does a folder expand" would drift, and the scoping that keeps a
- * coach from seeing a teammate's quizzes lives in what gets passed in.
+ * The subfolders are rendered by the SAME FolderRow the dashboard uses, and
+ * they are rows you go INTO rather than sections that unfold - a folder page
+ * that expanded its children would recreate here exactly the wall the
+ * dashboard just stopped being. The scoping that keeps a coach from seeing a
+ * teammate's quizzes lives in what gets passed in.
  *
  * The breadcrumb walks the full ancestor chain rather than assuming a single
  * parent, which is what the old two-level nesting cap used to guarantee. */
@@ -46,7 +47,6 @@ export function FolderPage() {
   // folder, these track a rename happening on a nested subfolder.
   const [nestedRenamingId, setNestedRenamingId] = useState<number | null>(null);
   const [nestedRenameValue, setNestedRenameValue] = useState('');
-  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
   const [subfolderNames, setSubfolderNames] = useState<Record<number, string>>({});
   const [creatingSubfolderFor, setCreatingSubfolderFor] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,14 +94,6 @@ export function FolderPage() {
     }
   }
 
-  function toggleFolder(id: number) {
-    setCollapsedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   async function handleNestedRename(id: number) {
     if (!nestedRenameValue.trim()) return;
@@ -329,24 +321,22 @@ export function FolderPage() {
           </span>
         </div>
 
-        {/* This folder's own subfolders, nested recursively - rendered by the
-            SAME component the dashboard uses, rather than a second tree
-            implementation that would drift from it.
+        {/* This folder's subfolders, as rows you go into - the SAME component
+            the dashboard uses, rather than a second idea of what a folder
+            looks like. They no longer unfold in place: a folder page that
+            expanded its children would recreate on this screen exactly the
+            wall the dashboard just stopped being.
 
-            `quizzes` came from listQuizzes(), which is own-only, so nesting
-            can never surface a teammate's quiz here any more than it can on
-            the dashboard. */}
+            `quizzes` came from listQuizzes(), which is own-only, so a
+            teammate's work can never surface here. */}
         {subfolders.length > 0 && (
-          <div className={dashboardStyles.folderSections}>
+          <div className={dashboardStyles.folderList}>
             {subfolders.map((sub) => (
-              <CoachFolderSection
+              <FolderRow
                 key={sub.id}
                 folder={sub}
-                depth={0}
                 allFolders={folders}
                 quizzes={quizzes}
-                collapsedIds={collapsedIds}
-                onToggle={toggleFolder}
                 renamingId={nestedRenamingId}
                 renameValue={nestedRenameValue}
                 onRenameValueChange={setNestedRenameValue}
@@ -357,13 +347,6 @@ export function FolderPage() {
                 onCancelRename={() => setNestedRenamingId(null)}
                 onRename={handleNestedRename}
                 onDelete={handleNestedDelete}
-                subfolderNames={subfolderNames}
-                onSubfolderNameChange={(parentId, value) =>
-                  setSubfolderNames((prev) => ({ ...prev, [parentId]: value }))
-                }
-                creatingSubfolderFor={creatingSubfolderFor}
-                onCreateSubfolder={handleCreateSubfolder}
-                renderQuizCard={renderQuizCard}
               />
             ))}
           </div>

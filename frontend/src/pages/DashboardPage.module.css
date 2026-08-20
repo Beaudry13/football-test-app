@@ -302,3 +302,74 @@ button.actionDelete:hover:not(:disabled) {
   font-size: 0.78em;
   color: var(--color-text-muted);
 }
+
+/* --- Folders as destinations --------------------------------------------
+ * A folder is a row you go into, not a section that unfolds. The list is
+ * therefore as tall as the number of FOLDERS, not the number of quizzes -
+ * which is the whole point: a coach with a hundred quizzes sees eight rows.
+ */
+.folderList {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 1.5rem;
+}
+
+.folderRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--nb-border, #3a3a38);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+/*
+ * THE WHOLE ROW IS THE TARGET, not just the words. A folder name is a small
+ * thing to hit on a phone, and the ::after stretch means the menu button
+ * beside it stays independently clickable - a link wrapping a button is
+ * neither valid HTML nor operable by keyboard.
+ */
+.folderLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  color: var(--nb-text);
+  text-decoration: none;
+}
+
+.folderLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+}
+
+.folderRow:hover {
+  border-color: var(--nb-accent);
+}
+
+.folderIcon {
+  display: inline-flex;
+  color: var(--nb-text-muted);
+  flex-shrink: 0;
+}
+
+.folderName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sits at the far end so a column of folders reads as names first. It is the
+   only thing on the row besides the name, because it is the only thing that
+   helps a coach decide whether to go in. */
+.folderRow .folderCount {
+  margin-left: auto;
+  color: var(--nb-text-muted);
+  font-size: 0.9em;
+  flex-shrink: 0;
+}

@@ -75,3 +75,10 @@
 .destructive {
   color: var(--color-danger);
 }
+
+/* An action the server would refuse anyway. The label says why - a greyed
+   item with no reason is a dead end the coach has to guess at. */
+.item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
