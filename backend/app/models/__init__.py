@@ -1,5 +1,6 @@
 """Model package. Import order matters for relationship string resolution."""
 
+from app.models.beta_invite import BetaInvite
 from app.models.organization import Organization, OrganizationInvite
 from app.models.coach import Coach, CoachRole
 from app.models.folder import Folder
@@ -27,6 +28,7 @@ from app.models.competition import (
 )
 
 __all__ = [
+    "BetaInvite",
     "Organization",
     "OrganizationInvite",
     "Coach",
