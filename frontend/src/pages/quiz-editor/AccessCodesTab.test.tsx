@@ -181,3 +181,50 @@ describe('AccessCodesTab activation guard', () => {
     expect(await screen.findAllByText('Practice')).not.toHaveLength(0);
   });
 })
+
+describe('AccessCodesTab sharing', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+    Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+  });
+
+  it('answers "how do I get this to my players" as one action on the active code', async () => {
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    // The share action is wired to the ACTIVE code, not to some other one.
+    await screen.findByRole('button', { name: 'Copy link' });
+    await userEvent.click(screen.getByRole('button', { name: 'Show QR code' }));
+
+    expect(screen.getByText(/Scan with your phone/)).toBeInTheDocument();
+  });
+
+  it('REPLACED the permanent read-only link box rather than adding to it', async () => {
+    // The box was plumbing a coach had to understand before it helped them,
+    // and on a phone it could not reach the apps they actually send with.
+    // Keeping both would have been two answers to one question.
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByRole('button', { name: 'Copy link' });
+
+    const readOnlyLinkBoxes = screen
+      .queryAllByRole('textbox')
+      .filter((el) => (el as HTMLInputElement).value.includes('/play/'));
+
+    expect(readOnlyLinkBoxes).toHaveLength(0);
+  });
+
+  it('shows no share action when there is nothing active to share', async () => {
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText('This Quiz has no active access code.');
+    expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show QR code' })).not.toBeInTheDocument();
+  });
+});

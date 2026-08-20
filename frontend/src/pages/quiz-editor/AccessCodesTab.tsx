@@ -5,12 +5,9 @@ import { getErrorMessage } from '../../api/client';
 import type { AccessCode, AssessmentMode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { SharePeira } from './SharePeira';
 import nb from '../../styles/notebook.module.css';
 import styles from './AccessCodesTab.module.css';
-
-function playLink(code: string): string {
-  return `${window.location.origin}/play/${code}`;
-}
 
 /** Says plainly whether an activation counts. Deliberately shown on the
  *  active code and on every row of the history: "did this one count?" is the
@@ -98,7 +95,6 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // The API refuses to activate a quiz with no questions (422). That one is
   // unambiguous from data this tab already has, so the button says so rather
@@ -167,12 +163,6 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     }
   }
 
-  async function handleCopyLink(code: string) {
-    await navigator.clipboard.writeText(playLink(code));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   const activeCode = codes?.find((c) => c.is_active && c.is_valid);
 
   return (
@@ -190,17 +180,12 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
             {activeCode.groups.length > 0 && (
               <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
             )}
-            <div className={styles.linkRow}>
-              <input
-                className={nb.input}
-                readOnly
-                value={playLink(activeCode.code)}
-                onFocus={(e) => e.target.select()}
-              />
-              <button className={nb.btnSm} onClick={() => handleCopyLink(activeCode.code)}>
-                {copied ? 'Copied!' : 'Copy link'}
-              </button>
-            </div>
+            {/* The whole answer to "how do I get this to my players", as one
+                action. It replaced a permanent read-only link box and a Copy
+                button: the box was plumbing the coach had to understand before
+                it helped them, and on a phone it could not reach the apps they
+                actually send with. See SharePeira.tsx. */}
+            <SharePeira code={activeCode.code} quizTitle={quiz.title} />
             <div className={styles.expiry}>
               Expires {new Date(activeCode.expires_at).toLocaleString()}
             </div>

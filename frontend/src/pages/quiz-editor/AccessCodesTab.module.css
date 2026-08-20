@@ -17,19 +17,6 @@
   color: var(--nb-accent);
 }
 
-.linkRow {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  align-items: center;
-  margin-top: 0.75em;
-}
-
-.linkRow input {
-  width: 320px;
-  max-width: 100%;
-}
-
 .expiry {
   font-size: 0.9em;
   color: var(--nb-text-muted);
