@@ -16,6 +16,19 @@ export function renameOrganization(input: { name: string }): Promise<Organizatio
   return api.patch<Organization>('/organizations', input);
 }
 
+/** Asks for one of your staff to be let into YOUR organization.
+ *
+ * Creates no invite and grants nothing - a person reviews it and, if they
+ * approve, Peira mints the single-use invitation. The organization comes from
+ * the authenticated coach, so there is deliberately nothing here to send.
+ */
+export function requestStaffInvite(input: {
+  name: string;
+  email: string;
+}): Promise<{ message: string }> {
+  return api.post<{ message: string }>('/organizations/staff-invite-requests', input);
+}
+
 export function listInvites(): Promise<OrganizationInvite[]> {
   return api.get<OrganizationInvite[]>('/organizations/invites');
 }

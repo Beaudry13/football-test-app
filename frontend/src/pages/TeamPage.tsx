@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import {
-  createInvite,
   getOrganization,
   listInvites,
   removeMember,
   renameOrganization,
+  requestStaffInvite,
   revokeInvite,
   updateMemberRole,
 } from '../api/organizations';
@@ -17,10 +17,6 @@ import nb from '../styles/notebook.module.css';
 import styles from './TeamPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
 
-function joinLink(code: string): string {
-  return `${window.location.origin}/join/${code}`;
-}
-
 export function TeamPage() {
   const { coach } = useAuth();
   const isAdmin = coach?.role === 'admin';
@@ -28,8 +24,8 @@ export function TeamPage() {
   const [org, setOrg] = useState<Organization | null>(null);
   const [invites, setInvites] = useState<OrganizationInvite[]>([]);
   const [orgName, setOrgName] = useState('');
-  const [newInviteCode, setNewInviteCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [staffRequest, setStaffRequest] = useState({ name: '', email: '' });
+  const [requestSent, setRequestSent] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
@@ -68,24 +64,22 @@ export function TeamPage() {
     }
   }
 
-  async function handleCreateInvite() {
+  async function handleRequestStaffInvite(event: FormEvent) {
+    event.preventDefault();
     setError(null);
     setIsBusy(true);
     try {
-      const invite = await createInvite();
-      setNewInviteCode(invite.code ?? null);
-      await refresh();
+      await requestStaffInvite({
+        name: staffRequest.name.trim(),
+        email: staffRequest.email.trim(),
+      });
+      setStaffRequest({ name: '', email: '' });
+      setRequestSent(true);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setIsBusy(false);
     }
-  }
-
-  async function handleCopy(code: string) {
-    await navigator.clipboard.writeText(joinLink(code));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
 
   async function handleRevoke(inviteId: number) {
@@ -224,33 +218,64 @@ export function TeamPage() {
         </table>
       </div>
 
+      {/* REPLACED "Create invite link", not added beside it. Two ways to get a
+          colleague in - one instant, one reviewed - would be two answers to one
+          question, and the instant one is exactly what Early Access is closing.
+          The backend agrees: see invites.may_issue_invites_directly. */}
       {isAdmin && (
         <div className={`${nb.card} ${styles.card}`}>
-          <h2 className={nb.subheading}>Invite a coach</h2>
+          <h2 className={nb.subheading}>Request a staff invite</h2>
           <p>
-            Generate a link and send it however you like. It works once, and expires after 14 days.
+            Tell us who to invite and we’ll send them a link to join {org.name}. They
+            won’t have to type your program name.
           </p>
-          <button className={nb.btnPrimary} onClick={handleCreateInvite} disabled={isBusy}>
-            {isBusy ? 'Generating…' : 'Create invite link'}
-          </button>
 
-          {newInviteCode && (
-            <>
-              <div className={styles.inviteLinkRow}>
+          {requestSent ? (
+            /* THE WHOLE CONFIRMATION. No queue position, no reference number,
+               no status to come back and check - approval is our job, and
+               exposing its mechanics would invite the coach to manage it. */
+            <p className={styles.requestSent}>
+              Request sent. We’ll email them an invite once it’s approved.{' '}
+              <button
+                type="button"
+                className={styles.requestAnother}
+                onClick={() => setRequestSent(false)}
+              >
+                Request another
+              </button>
+            </p>
+          ) : (
+            <form className={styles.requestForm} onSubmit={handleRequestStaffInvite}>
+              <div className={nb.field}>
+                <label className={nb.fieldLabel} htmlFor="staff-name">
+                  Name
+                </label>
                 <input
+                  id="staff-name"
                   className={nb.input}
-                  readOnly
-                  value={joinLink(newInviteCode)}
-                  onFocus={(e) => e.target.select()}
+                  type="text"
+                  required
+                  value={staffRequest.name}
+                  onChange={(e) => setStaffRequest((f) => ({ ...f, name: e.target.value }))}
                 />
-                <button className={nb.btnSm} onClick={() => handleCopy(newInviteCode)}>
-                  {copied ? 'Copied!' : 'Copy link'}
-                </button>
               </div>
-              <p className={styles.inviteNote}>
-                Copy this now — for security it isn’t shown again after you leave this page.
-              </p>
-            </>
+              <div className={nb.field}>
+                <label className={nb.fieldLabel} htmlFor="staff-email">
+                  Email
+                </label>
+                <input
+                  id="staff-email"
+                  className={nb.input}
+                  type="email"
+                  required
+                  value={staffRequest.email}
+                  onChange={(e) => setStaffRequest((f) => ({ ...f, email: e.target.value }))}
+                />
+              </div>
+              <button type="submit" className={nb.btnPrimary} disabled={isBusy}>
+                {isBusy ? 'Sending…' : 'Request invite'}
+              </button>
+            </form>
           )}
 
           {pendingInvites.length > 0 && (

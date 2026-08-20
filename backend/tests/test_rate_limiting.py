@@ -172,5 +172,11 @@ def test_invite_creation_is_rate_limited(monkeypatch):
     responses = [client.post("/api/organizations/invites", headers=headers) for _ in range(21)]
 
     statuses = [r.status_code for r in responses]
-    assert statuses.count(201) == 20  # the configured "20 per minute" limit
+    # THE LIMIT STILL BITES ON A ROUTE THAT NOW REFUSES EVERYONE. Direct
+    # minting is closed during Early Access (see
+    # invites.may_issue_invites_directly), so the first twenty are 403s rather
+    # than 201s - but the limiter runs BEFORE the view, and a closed route
+    # hammered 21 times a minute must still be cut off rather than answering
+    # forever. That is what this test is for, and it survives the closure.
+    assert statuses.count(403) == 20  # the configured "20 per minute" limit
     assert statuses[-1] == 429

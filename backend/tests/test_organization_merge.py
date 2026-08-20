@@ -411,11 +411,25 @@ class TestNothingIsLostOrReassigned:
             assert Coach.query.filter_by(email="src@school.test").one().role == CoachRole.ADMIN
 
     def test_source_invitations_are_revoked_not_moved(self, app, client, world):
-        client.post(
-            "/api/organizations/invites",
-            json={"email": "newcoach@school.test"},
-            headers=H(world["src_token"]),
-        )
+        # Written straight into the table rather than through the endpoint:
+        # coaches cannot mint invitations themselves during Early Access (see
+        # invites.may_issue_invites_directly), and what this test is about is
+        # what a MERGE does to an invitation that already exists - not how it
+        # came to exist.
+        with app.app_context():
+            from app.models import OrganizationInvite
+            from app.services.invites import INVITE_TTL_DAYS, generate_invite_code
+
+            db.session.add(
+                OrganizationInvite(
+                    organization_id=world["source_id"],
+                    code=generate_invite_code(),
+                    created_at=OrganizationInvite.default_expiry(0),
+                    expires_at=OrganizationInvite.default_expiry(INVITE_TTL_DAYS),
+                )
+            )
+            db.session.commit()
+
         with app.app_context():
             assert (
                 db.session.execute(

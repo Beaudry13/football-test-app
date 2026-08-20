@@ -22,7 +22,11 @@ from app.schemas.organization import (
     QuizOwnerUpdateSchema,
 )
 from app.services import staff_invite_requests
-from app.services.invites import INVITE_TTL_DAYS, generate_invite_code
+from app.services.invites import (
+    INVITE_TTL_DAYS,
+    generate_invite_code,
+    may_issue_invites_directly,
+)
 from app.utils.auth import current_coach, require_admin
 from app.utils.validation import load_json_body
 
@@ -98,7 +102,25 @@ def list_invites():
 @jwt_required()
 @limiter.limit("20 per minute")
 def create_invite():
+    """Mint an invitation directly. CLOSED DURING EARLY ACCESS.
+
+    Coaches ask for staff instead (`/staff-invite-requests`) and an approval
+    mints the invite, so every coach arrives through an invitation somebody
+    issued deliberately. Reopening this is a change to
+    `invites.may_issue_invites_directly` and nothing else.
+
+    The route is kept rather than deleted: the behaviour it performs is still
+    exactly what an approval does, and a 403 that names the alternative is
+    more use to a client than a 404 that pretends the concept is gone.
+    """
     coach = require_admin()
+
+    if not may_issue_invites_directly(coach):
+        raise ApiError(
+            "During Early Access, ask us to invite a coach instead - "
+            "use Request a staff invite on the Team page.",
+            status_code=403,
+        )
 
     invite = OrganizationInvite(
         organization_id=coach.organization_id,

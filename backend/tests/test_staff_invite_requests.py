@@ -436,16 +436,30 @@ class TestNothingElseChanged:
 
         assert created.status_code == 201
 
-    def test_an_admin_can_still_create_an_invite_directly(self, client, wildcats):
-        """DELIBERATELY UNCHANGED, and pinned so it is a decision rather than an
-        accident. The Early Access model wants this removed; removing it is a
-        live behaviour change for existing coaches and is the owner's call, not
-        a side effect of adding the request path."""
+    def test_MINTING_AN_INVITE_DIRECTLY_IS_CLOSED(self, app, client, wildcats):
+        """The other half of the Early Access model, and the reason removing the
+        button was not merely cosmetic. An admin who calls the endpoint directly
+        is refused too - otherwise "coaches cannot mint invitations" would be a
+        statement about a screen rather than about the product.
+        """
         headers = token_for(client, "head@example.com")
 
-        created = client.post("/api/organizations/invites", headers=headers)
+        refused = client.post("/api/organizations/invites", headers=headers)
 
-        assert created.status_code == 201
+        assert refused.status_code == 403
+        assert "Request a staff invite" in refused.get_json()["error"]
+        with app.app_context():
+            assert OrganizationInvite.query.count() == 0
+
+    def test_reopening_it_is_ONE_function(self, app, wildcats):
+        """THE PERMISSION SEAM. Letting trusted owners issue their own invites
+        again is meant to be a change to this one predicate - not a redesign of
+        how invitations work."""
+        from app.services import invites
+
+        with app.app_context():
+            coach = db.session.get(Coach, wildcats["admin_id"])
+            assert invites.may_issue_invites_directly(coach) is False
 
     def test_the_three_asking_concepts_stay_separate(self, app):
         from app.models import AccessRequest

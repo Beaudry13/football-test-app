@@ -135,14 +135,20 @@ def coach_headers(register_coach):
 
 
 @pytest.fixture
-def invite_teammate(client):
+def invite_teammate(app, client):
     """Adds a second coach to an existing coach's organization, the same way
-    a real one joins: the admin mints an invite, the teammate registers with
-    it. Returns (coach, token, auth_headers) for the new teammate.
+    a real one joins. Returns (coach, token, auth_headers) for the teammate.
 
     `register_coach` always creates a *separate* organization, so this is the
     only fixture that produces two coaches who can see each other's data -
     without it, org-sharing behaviour can't be tested at all.
+
+    IT FOLLOWS THE REAL ROUTE IN, WHICH CHANGED. Coaches can no longer mint an
+    invitation themselves during Early Access (see
+    `invites.may_issue_invites_directly`), so this asks and then approves,
+    exactly as a real teammate now arrives. Reaching into the table to forge an
+    invite would have been shorter and would have quietly stopped testing the
+    path the product actually uses.
     """
 
     def _invite(
@@ -151,9 +157,21 @@ def invite_teammate(client):
         email="teammate@example.com",
         password="password123",
     ):
-        invite = client.post("/api/organizations/invites", headers=admin_headers)
-        assert invite.status_code == 201, invite.get_json()
-        code = invite.get_json()["code"]
+        from app.models import Coach, StaffInviteRequest
+        from app.services import staff_invite_requests
+
+        me = client.get("/api/auth/me", headers=admin_headers)
+        assert me.status_code == 200, me.get_json()
+
+        with app.app_context():
+            admin = _db.session.get(Coach, me.get_json()["id"])
+            staff_invite_requests.submit(admin, username, email)
+            request = StaffInviteRequest.query.filter_by(
+                organization_id=admin.organization_id,
+                email=staff_invite_requests.normalise_email(email),
+            ).one()
+            code = staff_invite_requests.approve(request, approved_by=admin)
+            assert code, "approving the staff invite request should mint an invite"
 
         response = client.post(
             "/api/auth/register-with-invite",

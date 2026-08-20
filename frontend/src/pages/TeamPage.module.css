@@ -66,3 +66,30 @@
   color: var(--nb-text-muted);
   font-weight: 400;
 }
+
+/* --- Request a staff invite ---------------------------------------------
+ * Replaced the instant "Create invite link" control. Two fields, because the
+ * organization comes from the signed-in coach and nothing else is asked.
+ */
+.requestForm {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 26rem;
+}
+
+.requestSent {
+  color: var(--nb-text-muted);
+}
+
+/* A text button: asking for a second colleague is the rare path, and giving
+   it a real button would put two competing controls on a card whose whole
+   point is that it now asks for one thing. */
+.requestAnother {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--nb-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}

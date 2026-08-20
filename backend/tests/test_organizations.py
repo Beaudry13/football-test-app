@@ -8,6 +8,33 @@ otherwise look like passing security tests.
 """
 
 
+
+def mint_invite(app, client, admin_headers, email="invited@example.com"):
+    """An invitation, obtained the way one is now obtained: asked for, then
+    approved.
+
+    Coaches cannot mint invitations themselves during Early Access (see
+    `invites.may_issue_invites_directly`), so the tests below - which are about
+    what an invitation DOES, not about who may create one - go through the
+    approval path instead. Returns the full invite dict including its code.
+    """
+    from app.extensions import db
+    from app.models import Coach, OrganizationInvite, StaffInviteRequest
+    from app.services import staff_invite_requests
+
+    admin_id = client.get("/api/auth/me", headers=admin_headers).get_json()["id"]
+    with app.app_context():
+        admin = db.session.get(Coach, admin_id)
+        staff_invite_requests.submit(admin, "Invited Coach", email)
+        request = StaffInviteRequest.query.filter_by(
+            organization_id=admin.organization_id,
+            email=staff_invite_requests.normalise_email(email),
+        ).one()
+        code = staff_invite_requests.approve(request, approved_by=admin)
+        invite = OrganizationInvite.query.filter_by(code=code).one()
+        return invite.to_dict(include_code=True)
+
+
 def create_quiz(client, headers, title="Week 1 Prep"):
     response = client.post("/api/quizzes", json={"title": title}, headers=headers)
     assert response.status_code == 201
@@ -53,8 +80,8 @@ def test_invited_teammate_joins_the_same_org_as_a_member(client, coach_headers, 
     assert {m["username"] for m in org["members"]} == {"coach1", "teammate"}
 
 
-def test_invite_code_cannot_be_reused(client, coach_headers):
-    code = client.post("/api/organizations/invites", headers=coach_headers).get_json()["code"]
+def test_invite_code_cannot_be_reused(app, client, coach_headers):
+    code = mint_invite(app, client, coach_headers)["code"]
 
     first = client.post(
         "/api/auth/register-with-invite",
@@ -69,8 +96,8 @@ def test_invite_code_cannot_be_reused(client, coach_headers):
     assert second.status_code == 404
 
 
-def test_revoked_invite_is_rejected(client, coach_headers):
-    invite = client.post("/api/organizations/invites", headers=coach_headers).get_json()
+def test_revoked_invite_is_rejected(app, client, coach_headers):
+    invite = mint_invite(app, client, coach_headers)
     assert client.delete(f"/api/organizations/invites/{invite['id']}", headers=coach_headers).status_code == 204
 
     response = client.post(
@@ -91,7 +118,7 @@ def test_expired_invite_is_rejected(app, client, coach_headers):
     from app.extensions import db
     from app.models import OrganizationInvite
 
-    invite = client.post("/api/organizations/invites", headers=coach_headers).get_json()
+    invite = mint_invite(app, client, coach_headers)
     with app.app_context():
         row = db.session.get(OrganizationInvite, invite["id"])
         row.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
@@ -125,19 +152,26 @@ def test_garbage_invite_code_is_rejected(client):
 def test_members_cannot_create_or_list_invites(client, coach_headers, invite_teammate):
     _, _, teammate_headers = invite_teammate(coach_headers)
 
-    assert client.post("/api/organizations/invites", headers=teammate_headers).status_code == 403
+    refused = client.post("/api/organizations/invites", headers=teammate_headers)
+
+    # TWO REFUSALS NOW LIVE ON THIS ROUTE - not an admin, and (for admins)
+    # Early Access has closed direct minting. The admin gate runs first, so a
+    # member must still meet THAT one; asserting the message keeps the two
+    # distinguishable instead of letting this pass for the other reason.
+    assert refused.status_code == 403
+    assert refused.get_json()["error"] == "This action requires an organization admin"
     assert client.get("/api/organizations/invites", headers=teammate_headers).status_code == 403
 
 
-def test_invite_listing_does_not_leak_codes(client, coach_headers):
-    client.post("/api/organizations/invites", headers=coach_headers)
+def test_invite_listing_does_not_leak_codes(app, client, coach_headers):
+    mint_invite(app, client, coach_headers)
     invites = client.get("/api/organizations/invites", headers=coach_headers).get_json()
     assert len(invites) == 1
     assert "code" not in invites[0]
 
 
-def test_invite_preview_shows_only_the_org_name(client, coach_headers):
-    invite = client.post("/api/organizations/invites", headers=coach_headers).get_json()
+def test_invite_preview_shows_only_the_org_name(app, client, coach_headers):
+    invite = mint_invite(app, client, coach_headers)
     response = client.get(f"/api/auth/invites/{invite['code']}")
     assert response.status_code == 200
     assert response.get_json() == {"organization_name": "Wildcats"}
@@ -405,7 +439,7 @@ def test_removed_coach_immediately_loses_access_with_their_still_unexpired_token
     assert response.status_code == 401
 
 
-def test_an_existing_coach_cannot_accept_a_second_invite_with_their_own_identity(
+def test_an_existing_coach_cannot_accept_a_second_invite_with_their_own_identity(app, 
     client, coach_headers, register_coach
 ):
     """register_with_invite always creates a brand-new Coach row rather than
@@ -416,7 +450,7 @@ def test_an_existing_coach_cannot_accept_a_second_invite_with_their_own_identity
     organization, forever" true: there is no code path that lets an
     existing identity join a second org."""
     _, _, _ = register_coach(username="existing_coach", email="existing_coach@example.com")
-    invite = client.post("/api/organizations/invites", headers=coach_headers).get_json()
+    invite = mint_invite(app, client, coach_headers)
 
     response = client.post(
         "/api/auth/register-with-invite",

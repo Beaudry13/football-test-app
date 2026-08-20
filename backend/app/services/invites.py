@@ -40,6 +40,24 @@ def find_usable_invite(code: str) -> OrganizationInvite | None:
     return invite
 
 
+#: Whether a coach may mint an organization invitation THEMSELVES, without
+#: anybody reviewing it.
+#:
+#: FALSE DURING EARLY ACCESS, AND THAT IS THE WHOLE POINT. Every coach getting
+#: their own single-use invitation is what makes "how did this person get into
+#: the beta" answerable, and what stops a program's staff arriving through a
+#: link forwarded to somebody nobody vouched for. Coaches ask instead - see
+#: services/staff_invite_requests - and an approval mints the invite.
+#:
+#: THIS IS THE PERMISSION SEAM. Letting trusted organization owners issue their
+#: own invites again is meant to be a change to this ONE function - reading a
+#: column, a plan, an allowlist - and not a redesign of how invitations work.
+#: Nothing else in the invite model assumes the answer.
+def may_issue_invites_directly(coach) -> bool:
+    """Early Access: nobody. See the note above before changing this."""
+    return False
+
+
 def claim(invite: OrganizationInvite, coach_id: int) -> bool:
     """Accept this invite for `coach_id`. True if this call is the one that won.
 

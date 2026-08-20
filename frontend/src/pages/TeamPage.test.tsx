@@ -87,7 +87,7 @@ describe('TeamPage', () => {
     renderTeam();
 
     await screen.findByText('Wildcats');
-    expect(screen.getByRole('button', { name: 'Create invite link' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request invite' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Remove' }).length).toBeGreaterThan(0);
   });
 
@@ -98,25 +98,68 @@ describe('TeamPage', () => {
     renderTeam();
 
     await screen.findByText('Wildcats');
-    expect(screen.queryByRole('button', { name: 'Create invite link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request invite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
     // Members never call the admin-only invites endpoint at all.
     expect(listInvitesSpy).not.toHaveBeenCalled();
   });
 
-  it('creates an invite and shows the copyable link', async () => {
+  it('asks for a colleague with two fields and nothing else', async () => {
     const user = userEvent.setup();
     mockAuth(adminCoach);
     vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
     vi.spyOn(orgApi, 'listInvites').mockResolvedValue([]);
-    vi.spyOn(orgApi, 'createInvite').mockResolvedValue({ ...invite, code: 'secret-code-123' });
+    const request = vi
+      .spyOn(orgApi, 'requestStaffInvite')
+      .mockResolvedValue({ message: 'Request sent.' });
     renderTeam();
 
     await screen.findByText('Wildcats');
-    await user.click(screen.getByRole('button', { name: 'Create invite link' }));
+    await user.type(screen.getByLabelText('Name'), 'Coach Jordan');
+    await user.type(screen.getByLabelText('Email'), 'jordan@example.com');
+    await user.click(screen.getByRole('button', { name: 'Request invite' }));
 
-    const linkInput = await screen.findByDisplayValue(/secret-code-123/);
-    expect(linkInput).toBeInTheDocument();
+    // THE ORGANIZATION IS NOT SENT. It comes from the authenticated coach,
+    // which is what stops a fifth spelling of the program appearing.
+    expect(request).toHaveBeenCalledWith({
+      name: 'Coach Jordan',
+      email: 'jordan@example.com',
+    });
+  });
+
+  it('NO LONGER OFFERS TO MINT AN INVITE DIRECTLY', async () => {
+    // Replaced, not added beside. Two ways to get a colleague in - one
+    // instant, one reviewed - would be two answers to one question, and the
+    // instant one is exactly what Early Access is closing.
+    mockAuth(adminCoach);
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
+    vi.spyOn(orgApi, 'listInvites').mockResolvedValue([]);
+    renderTeam();
+
+    await screen.findByText('Wildcats');
+
+    expect(screen.queryByRole('button', { name: 'Create invite link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Copy link/ })).not.toBeInTheDocument();
+  });
+
+  it('confirms without exposing approval mechanics', async () => {
+    // No queue position, no reference number, no status to come back and
+    // check. Approval is our job; showing its machinery would invite the
+    // coach to manage it.
+    const user = userEvent.setup();
+    mockAuth(adminCoach);
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
+    vi.spyOn(orgApi, 'listInvites').mockResolvedValue([]);
+    vi.spyOn(orgApi, 'requestStaffInvite').mockResolvedValue({ message: 'Request sent.' });
+    renderTeam();
+
+    await screen.findByText('Wildcats');
+    await user.type(screen.getByLabelText('Name'), 'Coach Jordan');
+    await user.type(screen.getByLabelText('Email'), 'jordan@example.com');
+    await user.click(screen.getByRole('button', { name: 'Request invite' }));
+
+    expect(await screen.findByText(/Request sent/)).toBeInTheDocument();
+    expect(screen.queryByText(/pending|queue|position|status|reference/i)).not.toBeInTheDocument();
   });
 
   it('revokes a pending invite after confirming', async () => {
