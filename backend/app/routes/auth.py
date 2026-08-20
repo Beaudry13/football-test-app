@@ -6,7 +6,6 @@ one as a member. There is no way to join an organization without a valid
 invite - that's the tenancy boundary.
 """
 
-from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import create_access_token, jwt_required
@@ -16,7 +15,7 @@ from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import Coach, CoachRole, Organization
 from app.schemas.auth import LoginSchema, RegisterSchema, RegisterWithInviteSchema
-from app.services.invites import find_usable_invite
+from app.services.invites import claim, find_usable_invite
 from app.utils.auth import current_coach
 from app.utils.validation import load_json_body
 
@@ -81,8 +80,20 @@ def register_with_invite():
     db.session.add(coach)
     db.session.flush()
 
-    invite.accepted_at = datetime.now(timezone.utc)
-    invite.accepted_by_coach_id = coach.id
+    # CLAIMED BY CONDITIONAL UPDATE, and the rollback below is half the fix.
+    #
+    # Assigning `accepted_at` here used to be a plain write after the read
+    # above, so two people opening the same link could both pass
+    # `find_usable_invite` and both get an account in the organization - a
+    # single-use invitation admitting two people to a program's data.
+    #
+    # Losing means the invite was taken between the read and now, so the coach
+    # created a moment ago must not survive: the rollback discards it and the
+    # caller is told the same generic thing every other failure says.
+    if not claim(invite, coach.id):
+        db.session.rollback()
+        raise ApiError(INVALID_INVITE, status_code=404)
+
     db.session.commit()
 
     token = create_access_token(identity=str(coach.id))
