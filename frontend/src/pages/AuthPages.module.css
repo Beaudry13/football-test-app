@@ -41,3 +41,38 @@
   color: var(--nb-text-muted);
   font-weight: 400;
 }
+
+/* --- The Early Access front door ----------------------------------------
+ * Two paths and one sentence. A coach either has an invitation or does not;
+ * there is no third case, so there is nothing else to explain here.
+ */
+.earlyAccessPath {
+  margin: 1.25rem 0 1rem;
+}
+
+/*
+ * The code box is deliberately quieter than the request button. An invited
+ * coach arrives through their own unique link and never sees this page - this
+ * is for a code given by voice or on paper, which is the rare case.
+ */
+.inviteCodeRow {
+  border-top: 1px solid var(--nb-border, #3a3a38);
+  padding-top: 1rem;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.inviteCodeLabel {
+  font-size: 0.9em;
+  color: var(--nb-text-muted);
+}
+
+.inviteCodeControls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.inviteCodeControls input {
+  flex: 1;
+  min-width: 0;
+}

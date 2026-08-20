@@ -7,7 +7,7 @@ import { NotebookLayout } from './components/notebook/NotebookLayout';
 import { HomePage } from './pages/HomePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
+import { EarlyAccessPage } from './pages/EarlyAccessPage';
 import { FolderPage } from './pages/FolderPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
@@ -57,7 +57,11 @@ function App() {
               back in the app automatically every time they open the site. */}
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          {/* Still /register so an old bookmark lands somewhere sensible -
+              but it now tells the truth instead of showing a signup form that
+              would contradict it. The backend endpoint is untouched; see
+              EarlyAccessPage.tsx. */}
+          <Route path="/register" element={<EarlyAccessPage />} />
           <Route path="/join/:inviteCode" element={<JoinOrgPage />} />
           {/* A DIFFERENT INVITE, AND A DIFFERENT ROUTE. /join adds a coach to a
               program that already exists; this one creates the program. Sharing

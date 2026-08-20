@@ -37,8 +37,8 @@ export function HomePage() {
           <Link to="/login" className={styles.navBtnOutline}>
             Log In
           </Link>
-          <Link to="/register" className={styles.navBtnFilled}>
-            Sign Up
+          <Link to="/request-access" className={styles.navBtnFilled}>
+            Request Access
           </Link>
         </nav>
       </header>
@@ -52,11 +52,15 @@ export function HomePage() {
         </h1>
         <p className={styles.heroBody}>
           Peira lets coaches build quizzes, send them to their roster, and track who rises to the
-          challenge. Sign up free and send your first quiz in minutes.
+          challenge. It’s in early access — we’re building it alongside a small number of
+          programs.
         </p>
         <div className={styles.heroActions}>
-          <Link to="/register" className={styles.heroBtnFilled}>
-            Sign Up as a Coach
+          {/* Peira is invite-only for now, so the honest public action is to
+              ask. An invited coach arrives through their own link and never
+              needs a button here. */}
+          <Link to="/request-access" className={styles.heroBtnFilled}>
+            Request Early Access
           </Link>
           <Link to="/login" className={styles.heroBtnOutline}>
             Log In

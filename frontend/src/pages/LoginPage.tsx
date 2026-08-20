@@ -78,7 +78,7 @@ export function LoginPage() {
             {isSubmitting ? 'Logging in…' : 'Log in'}
           </button>
           <p className={styles.footer}>
-            New here? <Link to="/register">Create an account</Link>
+            New here? <Link to="/register">Peira is in early access</Link>
           </p>
         </form>
       </div>
