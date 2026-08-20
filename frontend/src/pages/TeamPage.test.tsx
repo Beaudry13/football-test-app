@@ -142,6 +142,30 @@ describe('TeamPage', () => {
     expect(screen.queryByRole('button', { name: /Copy link/ })).not.toBeInTheDocument();
   });
 
+  it('PROMISES NOTHING PEIRA DOES NOT DO', async () => {
+    // Peira sends no email - a person reads the request and passes the invite
+    // on by hand. The screen showed "we'll email them an invite", describing a
+    // feature that does not exist, and a coach who believed it would wait for
+    // a message nothing was going to send. It now renders what the SERVER
+    // said, so the promise lives in one place.
+    const user = userEvent.setup();
+    mockAuth(adminCoach);
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org);
+    vi.spyOn(orgApi, 'listInvites').mockResolvedValue([]);
+    vi.spyOn(orgApi, 'requestStaffInvite').mockResolvedValue({
+      message: 'Thanks - we review these by hand.',
+    });
+    renderTeam();
+
+    await screen.findByText('Wildcats');
+    await user.type(screen.getByLabelText('Name'), 'Coach Jordan');
+    await user.type(screen.getByLabelText('Email'), 'jordan@example.com');
+    await user.click(screen.getByRole('button', { name: 'Request invite' }));
+
+    expect(await screen.findByText(/we review these by hand/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/email them|we.ll email/i);
+  });
+
   it('confirms without exposing approval mechanics', async () => {
     // No queue position, no reference number, no status to come back and
     // check. Approval is our job; showing its machinery would invite the

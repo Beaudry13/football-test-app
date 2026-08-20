@@ -49,7 +49,13 @@ from app.services.invites import INVITE_TTL_DAYS, generate_invite_code
 #: What a coach is told when they ask. One message whether or not this is the
 #: first time they have asked for this person - a second identical request is
 #: a coach wondering whether the first one worked, not something to scold.
-REQUEST_RECEIVED = "Thanks - we'll review this and send them an invite."
+#:
+#: IT PROMISES NOTHING PEIRA DOES NOT DO. Peira sends no email; a person reads
+#: the request, decides, and passes the invite on by hand. Saying "we'll email
+#: them" described a feature that does not exist, and a coach who believed it
+#: would sit waiting for a message nothing was going to send. Naming the delay
+#: is also the more useful sentence: it tells them not to ask again in an hour.
+REQUEST_RECEIVED = "Thanks - we review these by hand, so it won't be instant."
 
 
 def normalise_email(raw: str) -> str:

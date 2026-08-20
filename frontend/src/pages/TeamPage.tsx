@@ -25,7 +25,8 @@ export function TeamPage() {
   const [invites, setInvites] = useState<OrganizationInvite[]>([]);
   const [orgName, setOrgName] = useState('');
   const [staffRequest, setStaffRequest] = useState({ name: '', email: '' });
-  const [requestSent, setRequestSent] = useState(false);
+  // The server's confirmation text, or null while the form is showing.
+  const [requestSent, setRequestSent] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
@@ -69,12 +70,12 @@ export function TeamPage() {
     setError(null);
     setIsBusy(true);
     try {
-      await requestStaffInvite({
+      const result = await requestStaffInvite({
         name: staffRequest.name.trim(),
         email: staffRequest.email.trim(),
       });
       setStaffRequest({ name: '', email: '' });
-      setRequestSent(true);
+      setRequestSent(result.message);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -226,8 +227,8 @@ export function TeamPage() {
         <div className={`${nb.card} ${styles.card}`}>
           <h2 className={nb.subheading}>Request a staff invite</h2>
           <p>
-            Tell us who to invite and we’ll send them a link to join {org.name}. They
-            won’t have to type your program name.
+            Tell us who should join {org.name}. They won’t have to type your program
+            name.
           </p>
 
           {requestSent ? (
@@ -235,11 +236,17 @@ export function TeamPage() {
                no status to come back and check - approval is our job, and
                exposing its mechanics would invite the coach to manage it. */
             <p className={styles.requestSent}>
-              Request sent. We’ll email them an invite once it’s approved.{' '}
+              {/* THE SERVER'S WORDS, not our own. Peira sends no email - a
+                  person reads the request and passes the invite on by hand -
+                  and a screen that composed its own promise here is exactly
+                  how "we'll email them" got shipped describing a feature that
+                  does not exist. One source of truth, same as
+                  RequestAccessPage. */}
+              {requestSent}{' '}
               <button
                 type="button"
                 className={styles.requestAnother}
-                onClick={() => setRequestSent(false)}
+                onClick={() => setRequestSent(null)}
               >
                 Request another
               </button>
