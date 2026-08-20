@@ -13,11 +13,11 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import AccessCode, Group
 from app.models.question import QuestionType
-from app.schemas.access_code import ActivateQuizSchema
+from app.schemas.access_code import ActivateQuizSchema, SetExpirySchema
 from app.services.access_codes import generate_unique_code
 from app.services.attempts import deliverable_questions
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
-from app.utils.validation import load_optional_json_body
+from app.utils.validation import load_json_body, load_optional_json_body
 
 access_codes_bp = Blueprint("access_codes", __name__)
 
@@ -147,11 +147,15 @@ def activate_quiz(quiz_id: int):
             existing_code.is_active = False
 
     ttl_hours = current_app.config["ACCESS_CODE_TTL_HOURS"]
+    # A coach who said when this should stop gets exactly that; everyone else
+    # gets the historical 24-hour window. Validated the same way a later change
+    # is, so "available until" cannot mean one thing here and another there.
+    expires_at = _validated_expiry(data.get("expires_at")) or AccessCode.default_expiry(ttl_hours)
     access_code = AccessCode(
         quiz_id=quiz.id,
         code=generate_unique_code(),
         activated_at=datetime.now(timezone.utc),
-        expires_at=AccessCode.default_expiry(ttl_hours),
+        expires_at=expires_at,
         is_active=True,
         # The assignment decides how the quiz is being used. Every attempt
         # started under this code copies it and freezes it.
@@ -165,6 +169,61 @@ def activate_quiz(quiz_id: int):
     db.session.add(access_code)
     db.session.commit()
     return jsonify(access_code.to_dict()), 201
+
+
+def _validated_expiry(value):
+    """An expiry the server is willing to stand behind, or None if none given.
+
+    THE CLIENT CLOCK IS NEVER TRUSTED. The instant arrives absolute, but
+    "is it in the future" is decided here against the server's own clock - a
+    laptop an hour slow must not be able to create a code that is already dead,
+    or one that outlives what its coach chose.
+
+    A past instant is REFUSED rather than clamped. Silently moving it to "now"
+    would look identical to success and kill an activation the coach believed
+    they had just extended; `Deactivate now` is how you end one deliberately.
+    """
+    if value is None:
+        return None
+    if value <= datetime.now(timezone.utc):
+        raise ApiError(
+            "Pick a time in the future. To end it right now, use Deactivate.",
+            status_code=422,
+        )
+    return value
+
+
+@access_codes_bp.patch("/<int:quiz_id>/access-codes/<int:access_code_id>")
+@jwt_required()
+def set_expiry(quiz_id: int, access_code_id: int):
+    """Change when an activation stops - SAME CODE, SAME LINK.
+
+    THIS IS AN UPDATE, NOT A REACTIVATION, and that distinction is the whole
+    point. Reactivating mints a new code and silently kills the link already
+    sitting in twenty players' group text. Extending a session that runs late,
+    or pulling one in, must not cost a coach the thing they already shared -
+    so this touches one column and nothing else.
+
+    Attempts reference the code by id and never copy its expiry, so a player
+    already partway through is unaffected by either direction.
+    """
+    quiz = get_editable_quiz(quiz_id)
+    data = load_json_body(SetExpirySchema())
+
+    access_code = AccessCode.query.filter_by(id=access_code_id, quiz_id=quiz.id).first()
+    if access_code is None:
+        raise ApiError("Access code not found", status_code=404)
+    if not access_code.is_active:
+        # Nothing to extend. Reviving a deactivated code by moving its expiry
+        # would resurrect a link a coach deliberately killed.
+        raise ApiError(
+            "That code has been deactivated. Activate the quiz again to share it.",
+            status_code=409,
+        )
+
+    access_code.expires_at = _validated_expiry(data["expires_at"])
+    db.session.commit()
+    return jsonify(access_code.to_dict())
 
 
 @access_codes_bp.post("/<int:quiz_id>/access-codes/<int:access_code_id>/deactivate")

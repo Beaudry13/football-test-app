@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { activateQuiz, deactivateAccessCode, listAccessCodes } from '../../api/accessCodes';
+import {
+  activateQuiz,
+  deactivateAccessCode,
+  listAccessCodes,
+  setAccessCodeExpiry,
+} from '../../api/accessCodes';
 import { listGroups } from '../../api/groups';
 import { getErrorMessage } from '../../api/client';
 import type { AccessCode, AssessmentMode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { AvailableUntil } from './AvailableUntil';
+import { DEFAULT_PRESET } from './availableUntilTimes';
 import { SharePeira } from './SharePeira';
 import nb from '../../styles/notebook.module.css';
 import styles from './AccessCodesTab.module.css';
@@ -92,6 +99,11 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   // Practice-only. Reset when the coach switches back to graded so a
   // toggle left on cannot travel silently into a graded activation.
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  // Always a real moment, so activation never demands a decision. The default
+  // is the window activation always used, so a coach who does not care about
+  // timing behaves exactly as before.
+  const [availableUntil, setAvailableUntil] = useState<Date>(() => DEFAULT_PRESET.at());
+  const [isChangingExpiry, setIsChangingExpiry] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
@@ -136,13 +148,31 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     setError(null);
     setIsActivating(true);
     try {
-      await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions);
+      await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions, availableUntil);
       await load();
       setMode('GRADED');
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setIsActivating(false);
+    }
+  }
+
+  /** Moves when the CURRENT code stops - same code, same link, same QR.
+   *
+   * Deliberately not "reactivate": that mints a new code and silently kills
+   * the URL already sitting in a team group text. A session running late needs
+   * the opposite. */
+  async function handleChangeExpiry(accessCodeId: number, when: Date) {
+    setError(null);
+    setIsChangingExpiry(true);
+    try {
+      await setAccessCodeExpiry(quiz.id, accessCodeId, when);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsChangingExpiry(false);
     }
   }
 
@@ -180,15 +210,22 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
             {activeCode.groups.length > 0 && (
               <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
             )}
+            {/* THE LIVE ANSWER, in the same words the chooser used before
+                activation. Changing it moves this one code's expiry - the
+                shared link and the QR are untouched, which is the whole
+                reason this is not "reactivate". */}
+            <AvailableUntil
+              label="Active until"
+              value={new Date(activeCode.expires_at)}
+              onChange={(when) => handleChangeExpiry(activeCode.id, when)}
+            />
+            {isChangingExpiry && <p className={styles.expiry}>Updating…</p>}
             {/* The whole answer to "how do I get this to my players", as one
                 action. It replaced a permanent read-only link box and a Copy
                 button: the box was plumbing the coach had to understand before
                 it helped them, and on a phone it could not reach the apps they
                 actually send with. See SharePeira.tsx. */}
             <SharePeira code={activeCode.code} quizTitle={quiz.title} />
-            <div className={styles.expiry}>
-              Expires {new Date(activeCode.expires_at).toLocaleString()}
-            </div>
             <>
               <ModePicker
                 mode={mode}
@@ -236,6 +273,11 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
         ) : (
           <>
             <p>This Quiz has no active access code.</p>
+
+            {/* Chosen BEFORE activating, with a default already selected, so
+                the coach who does not care about timing still just clicks
+                Activate. */}
+            <AvailableUntil value={availableUntil} onChange={setAvailableUntil} />
 
             {groups.length > 0 && (
               <div className={styles.groupPicker}>

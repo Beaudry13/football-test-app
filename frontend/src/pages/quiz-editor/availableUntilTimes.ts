@@ -1,0 +1,66 @@
+/**
+ * When a Peira stops being available - the moments, not the control.
+ *
+ * KEPT SEPARATE FROM THE COMPONENT for the same reason `playUrl.ts` is: what
+ * needs guarding is the VALUE. A preset that lands on the wrong hour, or a
+ * summary that reads back a different time from the one chosen, is the bug
+ * that matters - and these are pure functions a test can assert exactly,
+ * including across a DST boundary.
+ *
+ * THE BROWSER OWNS THE TIMEZONE. Every moment here is resolved through the
+ * platform Date, which carries a real IANA database, so "tomorrow at 9" means
+ * 9am where the coach is even across a clock change. The value handed to the
+ * server is an absolute instant; Peira stores no coach timezone, and this is
+ * the reason it does not need one yet.
+ */
+
+export interface Preset {
+  label: string;
+  at: () => Date;
+}
+
+function atHour(daysAhead: number, hour: number): Date {
+  const when = new Date();
+  when.setDate(when.getDate() + daysAhead);
+  when.setHours(hour, 0, 0, 0);
+  return when;
+}
+
+/** Resolved against the coach's own clock at click time, so "tonight" means
+ *  tonight where they are - including across a DST change, which the browser's
+ *  own database handles. */
+export const PRESETS: Preset[] = [
+  { label: 'Tonight', at: () => atHour(0, 23) },
+  { label: 'Tomorrow morning', at: () => atHour(1, 9) },
+  { label: 'In 24 hours', at: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
+  { label: 'In 3 days', at: () => atHour(3, 9) },
+];
+
+/** The historical fixed window, still the default so activation asks nothing
+ *  extra of a coach who does not care. Changing this changes what every
+ *  activation does by default, so it is named rather than buried. */
+export const DEFAULT_PRESET = PRESETS[2];
+
+/** "Saturday at 9:00 AM" - the sentence the coach should be able to check at a
+ *  glance. Rendered in their own locale and timezone, which is the same one
+ *  the value was resolved in. */
+export function describe(when: Date): string {
+  const day = when.toLocaleDateString(undefined, { weekday: 'long' });
+  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const today = new Date();
+  const isToday = when.toDateString() === today.toDateString();
+  const isTomorrow =
+    when.toDateString() === new Date(today.getTime() + 86400000).toDateString();
+  const label = isToday ? 'today' : isTomorrow ? 'tomorrow' : day;
+  return `${label} at ${time}`;
+}
+
+/** A `datetime-local` value for a Date, in the browser's own timezone.
+ *  `toISOString` would shift it to UTC and show the coach the wrong clock. */
+export function toLocalInputValue(when: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}` +
+    `T${pad(when.getHours())}:${pad(when.getMinutes())}`
+  );
+}

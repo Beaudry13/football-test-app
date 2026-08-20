@@ -21,3 +21,27 @@ class ActivateQuizSchema(Schema):
         load_default=DEFAULT_MODE,
         validate=validate.OneOf(ASSESSMENT_MODES),
     )
+    #: When this activation stops working, as an ABSOLUTE INSTANT.
+    #:
+    #: Optional, and omitting it keeps the historical 24-hour window exactly -
+    #: so every existing client, and every existing integration, activates as
+    #: it does today. The default lives in config, not here, because it is an
+    #: operational value rather than a contract.
+    #:
+    #: AwareDateTime, so a naive wall-clock is REFUSED rather than guessed at.
+    #: The client resolves what the coach picked through the browser's own
+    #: timezone database; the server never interprets "9:00 PM".
+    expires_at = fields.AwareDateTime(required=False, load_default=None)
+
+
+class SetExpirySchema(Schema):
+    """Change when the CURRENT active code stops working.
+
+    An ABSOLUTE INSTANT, never a wall-clock string. The client converts what
+    the coach picked using the browser's own timezone database and sends the
+    moment it resolves to; the server compares instants and stores one. A naive
+    "2026-08-22 09:00" would have to be guessed at as server-local or UTC, and
+    either guess is wrong for somebody - see routes/access_codes.set_expiry.
+    """
+
+    expires_at = fields.AwareDateTime(required=True)

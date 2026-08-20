@@ -61,7 +61,7 @@ describe('AccessCodesTab group selection', () => {
     await screen.findByText('This Quiz has no active access code.');
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'GRADED', false));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'GRADED', false, expect.any(Date)));
   });
 
   it('passes the checked group ids through to activateQuiz', async () => {
@@ -74,7 +74,7 @@ describe('AccessCodesTab group selection', () => {
     await user.click(await screen.findByRole('checkbox', { name: /Defense/ }));
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7], 'GRADED', false));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7], 'GRADED', false, expect.any(Date)));
   });
 
   it('shows which groups the active code is restricted to', async () => {
@@ -167,7 +167,7 @@ describe('AccessCodesTab activation guard', () => {
     await user.click(screen.getByRole('radio', { name: /Practice/ }));
     await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
 
-    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'PRACTICE', false));
+    await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'PRACTICE', false, expect.any(Date)));
   });
 
   it('says on the active code whether it counts', async () => {
@@ -226,5 +226,70 @@ describe('AccessCodesTab sharing', () => {
     await screen.findByText('This Quiz has no active access code.');
     expect(screen.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show QR code' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AccessCodesTab available-until', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+  });
+
+  it('sends the chosen moment as an absolute instant when activating', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText('This Quiz has no active access code.');
+    await user.click(screen.getByRole('button', { name: 'Tomorrow morning' }));
+    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+
+    const [, , , , expiresAt] = activate.mock.calls[0];
+    expect(expiresAt).toBeInstanceOf(Date);
+    expect((expiresAt as Date).getHours()).toBe(9);
+  });
+
+  it('ACTIVATING STILL TAKES ONE CLICK for a coach who does not care when', async () => {
+    // A default is always selected, so adding the choice did not add a
+    // required decision.
+    const user = userEvent.setup();
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText('This Quiz has no active access code.');
+    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+
+    expect(activate).toHaveBeenCalledTimes(1);
+    const [, , , , expiresAt] = activate.mock.calls[0];
+    expect((expiresAt as Date).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('EXTENDS THE LIVE CODE WITHOUT REACTIVATING IT', async () => {
+    // The link is already in a team group text. Reactivating would mint a new
+    // code and silently kill it; this must not.
+    const user = userEvent.setup();
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+    const setExpiry = vi
+      .spyOn(accessCodesApi, 'setAccessCodeExpiry')
+      .mockResolvedValue(activeCode);
+    const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+    await user.click(screen.getByRole('button', { name: 'In 3 days' }));
+
+    expect(setExpiry).toHaveBeenCalledWith(quiz.id, activeCode.id, expect.any(Date));
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it('shows when the active code stops in plain language', async () => {
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+    // Not "TTL", not "expires_at", not a raw ISO string.
+    expect(document.body.textContent).not.toMatch(/TTL|expires_at|GMT|Z$/);
   });
 });
