@@ -3,6 +3,8 @@
 `flask owner grant|revoke|list` is how platform ownership is conferred.
 `flask staff-invite list|approve|decline` is how a coach's request for a
 colleague becomes an actual invitation.
+`flask access-request list` shows who has asked to be let in, and which
+existing programs each request MIGHT already be.
 
 WHY A COMMAND AND NOT A MIGRATION OR AN ENV VAR
 ------------------------------------------------
@@ -20,8 +22,8 @@ from flask import Flask
 from flask.cli import AppGroup
 
 from app.extensions import db
-from app.models import Coach, Organization, StaffInviteRequest
-from app.services import staff_invite_requests
+from app.models import AccessRequest, Coach, Organization, StaffInviteRequest
+from app.services import similar_organizations, staff_invite_requests
 
 owner_cli = AppGroup("owner", help="Manage Peira platform owners.")
 
@@ -173,6 +175,57 @@ def decline(request_id: int):
     click.echo(f"Declined #{request_id}: {request.name} <{request.email}>. No invite was created.")
 
 
+access_request_cli = AppGroup(
+    "access-request", help="Review people who have asked to be let into Peira."
+)
+
+
+@access_request_cli.command("list")
+@click.option("--limit", default=50, show_default=True, help="How many to show.")
+def list_access_requests(limit: int):
+    """Who has asked for access, and which existing programs they might be.
+
+    THE SIMILAR-NAME LIST IS A HINT FOR A HUMAN, NEVER AN ACTION. Nothing is
+    merged, linked or pre-filled from it. It exists so the decision - does this
+    person start a new program, or should they be sent a staff invite into one
+    that already exists - is made with the duplicate in view rather than
+    discovered six weeks later.
+
+    `AccessRequest` is the only path where somebody still TYPES a program name;
+    they have no account yet, so there is nothing to copy it from. Everyone
+    joining an existing program via a staff invite never types one at all.
+    """
+    requests = (
+        AccessRequest.query.order_by(AccessRequest.requested_at.desc()).limit(limit).all()
+    )
+    if not requests:
+        click.echo("No access requests yet.")
+        return
+
+    click.echo(f"{len(requests)} access request(s), newest first:")
+    for request in requests:
+        click.echo("")
+        click.echo(f"  #{request.id}  {request.name} <{request.email}>")
+        click.echo(f"      asked {request.requested_at:%Y-%m-%d}")
+        click.echo(f"      team:  {request.team or '(not given)'}")
+
+        matches = similar_organizations.candidates_for(request.team)
+        if not matches:
+            click.echo("      POSSIBLE EXISTING: none found")
+            continue
+        click.echo("      POSSIBLE EXISTING PROGRAM(S):")
+        for match in matches:
+            coaches = match["coach_count"]
+            click.echo(
+                f"        - {match['name']}  (org {match['organization_id']}, "
+                f"{coaches} coach{'' if coaches == 1 else 'es'})"
+            )
+    click.echo("")
+    click.echo("These are name similarities only - nothing has been merged or linked.")
+    click.echo("If one is the same program, ask a coach there to request a staff invite.")
+
+
 def register_cli(app: Flask) -> None:
     app.cli.add_command(owner_cli)
     app.cli.add_command(staff_invite_cli)
+    app.cli.add_command(access_request_cli)
