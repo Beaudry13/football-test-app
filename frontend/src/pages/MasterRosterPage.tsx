@@ -169,8 +169,9 @@ export function MasterRosterPage() {
   return (
     <div>
       {dialog}
+      {/* No <h1> here: TeamLayout names the section and the active tab says
+          which area this is. Two headings stacked would just be repetition. */}
       <div className={styles.header}>
-          <h1 className={nb.heading}>Master Roster</h1>
           <span className={nb.countBadge}>
             {(players ?? []).length} Player{(players ?? []).length === 1 ? '' : 's'}
           </span>

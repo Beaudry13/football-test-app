@@ -19,19 +19,22 @@ const NAV_LINKS = [
     isActive: (path: string) => path.startsWith('/documents'),
     tour: 'playbooks',
   },
+  // ONE DESTINATION FOR PEOPLE. Roster, Groups and Team were three tabs all
+  // describing people in the same program - and "Roster" and "Team" are the
+  // same word to most coaches, so which one held what was something to
+  // remember rather than something to read. They are now areas inside Team;
+  // see TeamLayout.tsx.
+  //
+  // isActive still covers the old paths because /roster/:playerId and
+  // /groups/:groupId are still real destinations - opening one player should
+  // keep Team lit rather than leaving no tab active at all.
   {
-    to: '/roster',
-    label: 'Roster',
-    isActive: (path: string) => path.startsWith('/roster'),
+    to: '/team',
+    label: 'Team',
+    isActive: (path: string) =>
+      path.startsWith('/team') || path.startsWith('/roster') || path.startsWith('/groups'),
     tour: 'roster',
   },
-  {
-    to: '/groups',
-    label: 'Groups',
-    isActive: (path: string) => path.startsWith('/groups'),
-    tour: 'groups',
-  },
-  { to: '/team', label: 'Team', isActive: (path: string) => path.startsWith('/team') },
 ];
 
 // Shown only to admins, and kept out of NAV_LINKS so it renders visually

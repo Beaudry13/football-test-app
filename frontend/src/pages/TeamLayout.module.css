@@ -1,0 +1,44 @@
+/*
+ * Team: one place for the people in a program.
+ *
+ * The sub-navigation deliberately matches the Owner Dashboard's, because it is
+ * the same idea - one section, a few areas inside it - and a coach who has
+ * seen one should recognise the other without being taught.
+ */
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.subnav {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--nb-border, #3a3a38);
+  margin-bottom: 20px;
+  /* A phone should scroll these rather than wrap them into two rows that
+     shift the content below on every visit. */
+  overflow-x: auto;
+}
+
+.subnavLink {
+  padding: 8px 14px;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: var(--nb-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.subnavLink:hover {
+  color: var(--nb-text);
+}
+
+.subnavLinkActive {
+  color: var(--nb-text);
+  border-bottom-color: var(--nb-accent);
+}

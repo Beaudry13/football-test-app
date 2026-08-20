@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { TourProvider } from './help/tour/TourProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
@@ -12,6 +12,7 @@ import { FolderPage } from './pages/FolderPage';
 import { GroupsPage } from './pages/GroupsPage';
 import { GroupDetailPage } from './pages/GroupDetailPage';
 import { TeamPage } from './pages/TeamPage';
+import { TeamLayout } from './pages/TeamLayout';
 import { PlayerHistoryPage } from './pages/PlayerHistoryPage';
 import { MasterRosterPage } from './pages/MasterRosterPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
@@ -102,7 +103,17 @@ function App() {
             <Route path="/folders/:folderId" element={<FolderPage />} />
 
             <Route element={<NotebookLayout />}>
-              <Route path="/team" element={<TeamPage />} />
+              {/* ONE PLACE FOR PEOPLE. Roster, Groups and Team were three
+                  top-level destinations all describing people in the same
+                  program, and "Roster" and "Team" are the same word to most
+                  coaches. The three screens underneath are UNCHANGED - this is
+                  a shell with an Outlet, the same nested-route pattern
+                  OwnerLayout uses, not a merge. See TeamLayout.tsx. */}
+              <Route path="/team" element={<TeamLayout />}>
+                <Route index element={<MasterRosterPage />} />
+                <Route path="groups" element={<GroupsPage />} />
+                <Route path="coaches" element={<TeamPage />} />
+              </Route>
               <Route path="/admin/quizzes" element={<AdminQuizzesPage />} />
               {/* PEIRA OWNER DASHBOARD - a level above organizations, not a
                   section of Admin View. Rendering these routes is not a
@@ -124,9 +135,14 @@ function App() {
               </Route>
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:documentId" element={<DocumentPage />} />
-              <Route path="/roster" element={<MasterRosterPage />} />
+              {/* The old addresses still mean what they meant - a bookmark or
+                  a link in somebody's notes keeps working, it just arrives at
+                  the consolidated place. The DETAIL pages stay where they are:
+                  one player or one group is a destination in its own right,
+                  not a tab. */}
+              <Route path="/roster" element={<Navigate to="/team" replace />} />
               <Route path="/roster/:playerId" element={<PlayerProfilePage />} />
-              <Route path="/groups" element={<GroupsPage />} />
+              <Route path="/groups" element={<Navigate to="/team/groups" replace />} />
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />
               <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />

@@ -67,10 +67,7 @@ export function GroupsPage() {
   return (
     <div>
       {dialog}
-      <div className={styles.header}>
-        <h1 className={nb.heading}>Player groups</h1>
-      </div>
-
+      {/* No <h1>: the Groups tab already says where you are. */}
       <p className={styles.description}>
         Build reusable groups like "Varsity" or "Defense" once, then pick which group(s) can access a
         Quiz when you activate it.

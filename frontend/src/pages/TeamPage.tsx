@@ -141,8 +141,11 @@ export function TeamPage() {
   return (
     <div>
       {dialog}
+      {/* The program's own name, not a section heading - it is the one thing
+          on this tab a coach might need to check, and TeamLayout says "Team"
+          above it. */}
       <div className={styles.header}>
-        <h1 className={nb.heading}>{org.name}</h1>
+        <h2 className={nb.subheading}>{org.name}</h2>
       </div>
 
       <ErrorBanner message={error} />
