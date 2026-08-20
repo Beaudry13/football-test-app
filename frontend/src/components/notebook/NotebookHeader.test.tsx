@@ -25,6 +25,7 @@ function mockAuth() {
     login: vi.fn(),
     register: vi.fn(),
     registerWithInvite: vi.fn(),
+    registerWithBetaInvite: vi.fn(),
     logout: vi.fn(),
   });
 }
@@ -87,6 +88,7 @@ describe('NotebookHeader help', () => {
       login: vi.fn(),
       register: vi.fn(),
       registerWithInvite: vi.fn(),
+      registerWithBetaInvite: vi.fn(),
       logout: vi.fn(),
     });
     cleanup();
@@ -105,6 +107,7 @@ describe('NotebookHeader help', () => {
       login: vi.fn(),
       register: vi.fn(),
       registerWithInvite: vi.fn(),
+      registerWithBetaInvite: vi.fn(),
       logout: vi.fn(),
     });
     renderHeader();

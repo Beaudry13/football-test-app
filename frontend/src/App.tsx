@@ -16,6 +16,7 @@ import { PlayerHistoryPage } from './pages/PlayerHistoryPage';
 import { MasterRosterPage } from './pages/MasterRosterPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import { JoinOrgPage } from './pages/JoinOrgPage';
+import { BetaInvitePage } from './pages/BetaInvitePage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
@@ -57,6 +58,12 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/join/:inviteCode" element={<JoinOrgPage />} />
+          {/* A DIFFERENT INVITE, AND A DIFFERENT ROUTE. /join adds a coach to a
+              program that already exists; this one creates the program. Sharing
+              /join and telling them apart by the shape of the token is the kind
+              of cleverness that eventually puts a stranger in somebody else's
+              organization. See pages/BetaInvitePage.tsx. */}
+          <Route path="/invite/:token" element={<BetaInvitePage />} />
           <Route path="/play" element={<PlayPage />} />
           <Route path="/play/:code" element={<PlayPage />} />
           <Route path="/results" element={<ResultsCheckPage />} />

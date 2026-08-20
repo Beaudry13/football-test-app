@@ -14,7 +14,13 @@ from sqlalchemy import or_
 from app.errors import ApiError
 from app.extensions import db, limiter
 from app.models import Coach, CoachRole, Organization
-from app.schemas.auth import LoginSchema, RegisterSchema, RegisterWithInviteSchema
+from app.schemas.auth import (
+    LoginSchema,
+    RegisterSchema,
+    RegisterWithBetaInviteSchema,
+    RegisterWithInviteSchema,
+)
+from app.services import beta_invites
 from app.services.invites import claim, find_usable_invite
 from app.utils.auth import current_coach
 from app.utils.validation import load_json_body
@@ -30,12 +36,14 @@ def _reject_taken_identity(username: str, email: str) -> None:
         raise ApiError("Username or email is already taken", status_code=409)
 
 
-@auth_bp.post("/register")
-@limiter.limit("10 per hour")
-def register():
-    data = load_json_body(RegisterSchema())
-    _reject_taken_identity(data["username"], data["email"])
+def _start_a_program(data: dict) -> Coach:
+    """Create an organization and the coach who runs it, uncommitted.
 
+    Shared by open registration and beta-invite registration, which differ
+    only in what has to be true BEFORE this runs and what has to succeed
+    after. Keeping the account shape in one place is what stops the two paths
+    drifting into "a coach who signed up one way is subtly different".
+    """
     organization = Organization(name=data["organization"])
     db.session.add(organization)
     db.session.flush()  # assign organization.id without committing
@@ -49,8 +57,18 @@ def register():
         role=CoachRole.ADMIN,
     )
     coach.set_password(data["password"])
-
     db.session.add(coach)
+    db.session.flush()
+    return coach
+
+
+@auth_bp.post("/register")
+@limiter.limit("10 per hour")
+def register():
+    data = load_json_body(RegisterSchema())
+    _reject_taken_identity(data["username"], data["email"])
+
+    coach = _start_a_program(data)
     db.session.commit()
 
     token = create_access_token(identity=str(coach.id))
@@ -93,6 +111,50 @@ def register_with_invite():
     if not claim(invite, coach.id):
         db.session.rollback()
         raise ApiError(INVALID_INVITE, status_code=404)
+
+    db.session.commit()
+
+    token = create_access_token(identity=str(coach.id))
+    return jsonify({"coach": coach.to_dict(), "access_token": token}), 201
+
+
+@auth_bp.post("/register-with-beta-invite")
+@limiter.limit("10 per hour")
+def register_with_beta_invite():
+    """Create an account, and a program to run, from a Peira invite.
+
+    THE OTHER INVITE TYPE IS NOT THIS ONE. `/register-with-invite` above adds a
+    coach to an organization that already exists, as a MEMBER, and takes no
+    organization name because the invite supplies it. This one creates the
+    organization and makes the redeemer its ADMIN, so the name is asked for.
+    Two endpoints rather than one flag, because confusing them would put a
+    stranger inside somebody else's program.
+
+    IDENTITY IS CHECKED BEFORE THE INVITE IS SPENT. A coach who mistypes an
+    email that is already taken gets a 409 and STILL HAS THEIR INVITE - it is
+    single use, and burning one on a typo would mean asking the owner for
+    another.
+    """
+    data = load_json_body(RegisterWithBetaInviteSchema())
+
+    invite = beta_invites.find_usable(data["invite_code"])
+    if invite is None:
+        # One message for unknown / revoked / already-redeemed, so a guessed
+        # token cannot be probed for which invites exist.
+        raise ApiError(beta_invites.INVALID_INVITE, status_code=404)
+
+    _reject_taken_identity(data["username"], data["email"])
+
+    coach = _start_a_program(data)
+
+    # REDEEMED BY CONDITIONAL UPDATE, and the rollback is half of it. Losing
+    # means somebody else spent this invite between the lookup above and here,
+    # so the organization and coach just built must not survive - otherwise a
+    # program would exist that no invitation paid for. Same rule as
+    # organization invites; see services/invites.claim.
+    if not beta_invites.redeem(invite, coach.id):
+        db.session.rollback()
+        raise ApiError(beta_invites.INVALID_INVITE, status_code=404)
 
     db.session.commit()
 

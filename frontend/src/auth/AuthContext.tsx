@@ -3,6 +3,7 @@ import {
   login as apiLogin,
   register as apiRegister,
   registerWithInvite as apiRegisterWithInvite,
+  registerWithBetaInvite as apiRegisterWithBetaInvite,
   me as apiMe,
 } from '../api/auth';
 import { ApiError, clearToken, getToken, setToken } from '../api/client';
@@ -22,6 +23,13 @@ interface AuthContextValue {
     username: string;
     email: string;
     password: string;
+    invite_code: string;
+  }) => Promise<void>;
+  registerWithBetaInvite: (input: {
+    username: string;
+    email: string;
+    password: string;
+    organization: string;
     invite_code: string;
   }) => Promise<void>;
   logout: () => void;
@@ -77,6 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const registerWithBetaInvite = useCallback(
+    async (input: {
+      username: string;
+      email: string;
+      password: string;
+      organization: string;
+      invite_code: string;
+    }) => {
+      const result = await apiRegisterWithBetaInvite(input);
+      setToken(result.access_token);
+      setCoach(result.coach);
+    },
+    [],
+  );
+
   const logout = useCallback(() => {
     clearToken();
     setCoach(null);
@@ -84,7 +107,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ coach, isLoading, login, register, registerWithInvite, logout }}
+      value={{
+        coach,
+        isLoading,
+        login,
+        register,
+        registerWithInvite,
+        registerWithBetaInvite,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>

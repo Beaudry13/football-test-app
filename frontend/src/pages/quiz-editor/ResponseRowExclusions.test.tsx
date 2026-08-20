@@ -40,6 +40,7 @@ function mockAuth() {
     login: vi.fn(),
     register: vi.fn(),
     registerWithInvite: vi.fn(),
+    registerWithBetaInvite: vi.fn(),
     logout: vi.fn(),
   });
 }
