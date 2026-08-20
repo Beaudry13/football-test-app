@@ -2,7 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe as suite, expect, it, vi } from 'vitest';
 import { AvailableUntil } from './AvailableUntil';
-import { DEFAULT_PRESET, PRESETS, describe, type Preset } from './availableUntilTimes';
+import {
+  DEFAULT_PRESET,
+  PRESETS,
+  describe,
+  zoneLabel,
+  type Preset,
+} from './availableUntilTimes';
 
 /** A fixed "now" so weekday names are deterministic.
  *  Thursday 20 August 2026, 14:00 local. */
@@ -34,7 +40,7 @@ suite('AvailableUntil', () => {
       // "Saturday at 9:00" is what a coach is deciding. "In 44 hours" is
       // arithmetic they would have to do to check it.
       atFixedNow(() => {
-        expect(describe(new Date(2026, 7, 22, 9, 0))).toMatch(/Saturday at 9:00/);
+        expect(describe(new Date(2026, 7, 22, 9, 0))).toMatch(/Saturday, Aug 22 at 9:00/);
       });
     });
 
@@ -50,7 +56,7 @@ suite('AvailableUntil', () => {
         render(<AvailableUntil value={new Date(2026, 7, 22, 9, 0)} onChange={vi.fn()} />);
       });
 
-      expect(screen.getByText(/Saturday at 9:00/)).toBeInTheDocument();
+      expect(screen.getByText(/Saturday, Aug 22 at 9:00/)).toBeInTheDocument();
     });
   });
 
@@ -180,6 +186,18 @@ suite('AvailableUntil', () => {
       for (const preset of PRESETS) {
         expect(preset.at().getTime()).toBeGreaterThan(Date.now());
       }
+    });
+
+    it('NAMES THE CLOCK IT RESOLVED THE TIME IN', () => {
+      // Peira stores no organization timezone, so "9:00 AM" means 9:00 AM on
+      // the machine in front of the coach - right at home, surprising in a
+      // different one. Naming the zone costs three characters and removes the
+      // surprise, without asking anybody to configure anything.
+      const saturday = new Date(2026, 7, 22, 9, 0);
+      const zone = zoneLabel(saturday);
+
+      expect(zone).toBeTruthy();
+      expect(describe(saturday)).toContain(zone);
     });
 
     it('the value sent to the server is an absolute instant', () => {

@@ -41,22 +41,45 @@ export const PRESETS: Preset[] = [
  *  activation does by default, so it is named rather than buried. */
 export const DEFAULT_PRESET = PRESETS[2];
 
-/** "Saturday at 9:00 AM" - the sentence the coach should be able to check at a
- *  glance. Rendered in their own locale and timezone, which is the same one
- *  the value was resolved in. */
+/** The zone the browser actually resolved this in - "EDT", "GMT+1".
+ *
+ * SHOWN SO A TRAVELLING COACH IS NOT SETTING AN INSTANT THEY DID NOT MEAN.
+ * Peira stores no organization timezone, so "9:00 AM" means 9:00 AM on the
+ * machine in front of them - which is right at home and surprising in a
+ * different one. Naming it costs three characters and removes the surprise.
+ *
+ * Falls back to an empty string rather than throwing: a runtime without
+ * timeZoneName support should cost the label, never the summary.
+ */
+export function zoneLabel(when: Date): string {
+  try {
+    const parts = new Intl.DateTimeFormat(undefined, {
+      timeZoneName: 'short',
+    }).formatToParts(when);
+    return parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/** "Saturday, Aug 22 at 9:00 AM EDT" - the sentence the coach should be able
+ *  to check at a glance, including WHICH clock it is on. Rendered in their own
+ *  locale and timezone, which is the one the value was resolved in. */
 export function describe(when: Date): string {
-  const day = when.toLocaleDateString(undefined, { weekday: 'long' });
-  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const today = new Date();
   const isToday = when.toDateString() === today.toDateString();
   const isTomorrow =
     when.toDateString() === new Date(today.getTime() + 86400000).toDateString();
-  const label = isToday ? 'today' : isTomorrow ? 'tomorrow' : day;
-  return `${label} at ${time}`;
+  const day = isToday
+    ? 'today'
+    : isTomorrow
+      ? 'tomorrow'
+      : when.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const zone = zoneLabel(when);
+  return `${day} at ${time}${zone ? ` ${zone}` : ''}`;
 }
 
-/** A `datetime-local` value for a Date, in the browser's own timezone.
- *  `toISOString` would shift it to UTC and show the coach the wrong clock. */
 export function toLocalInputValue(when: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return (

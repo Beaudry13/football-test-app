@@ -104,6 +104,8 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   // timing behaves exactly as before.
   const [availableUntil, setAvailableUntil] = useState<Date>(() => DEFAULT_PRESET.at());
   const [isChangingExpiry, setIsChangingExpiry] = useState(false);
+  // Folded away while a Peira is live - see the active card below.
+  const [showReactivate, setShowReactivate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
@@ -151,6 +153,8 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions, availableUntil);
       await load();
       setMode('GRADED');
+      // The new code is live; the panel that made it has nothing left to say.
+      setShowReactivate(false);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -226,49 +230,72 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 it helped them, and on a phone it could not reach the apps they
                 actually send with. See SharePeira.tsx. */}
             <SharePeira code={activeCode.code} quizTitle={quiz.title} />
-            <>
-              <ModePicker
-                mode={mode}
-                onChange={(next) => {
-                  setMode(next);
-                  // Clearing on the way back to graded matters: a toggle left
-                  // on would otherwise ride along invisibly into an activation
-                  // whose form never showed it.
-                  if (next !== 'PRACTICE') setRandomizeQuestions(false);
-                }}
-              />
-              {/* Practice only, and HIDDEN rather than disabled for graded -
-                  a greyed control still asks the coach to think about
-                  something that does not apply. */}
-              {mode === 'PRACTICE' && (
-                <label className={styles.randomizeOption}>
-                  <input
-                    type="checkbox"
-                    checked={randomizeQuestions}
-                    onChange={(event) => setRandomizeQuestions(event.target.checked)}
-                  />
-                  <span>
-                    <span className={styles.randomizeLabel}>Randomize questions</span>
-                    <span className={styles.modeHint}>
-                      Mix the question order for each new practice attempt.
-                    </span>
-                  </span>
-                </label>
-              )}
-            </>
+
+            {/* WHILE A PEIRA IS LIVE, THE COACH HAS FOUR JOBS: know the code,
+                know when it closes, get it to players, stop it if they must.
+                How the NEXT activation should count is none of those, so the
+                mode and randomize controls used to sit in the middle of this
+                card asking about something that had already been decided.
+                They now live under "Reactivate with new code", which is the
+                only thing they affect. No new screen, no settings panel -
+                the same controls, folded behind the action that uses them. */}
             <div className={styles.historyActions}>
               <button className={nb.btnSm} onClick={() => handleDeactivate(activeCode.id)}>
                 Deactivate now
               </button>
               <button
-                className={nb.btnSm}
-                onClick={handleActivate}
-                disabled={isActivating || hasNoQuestions}
-                title={hasNoQuestions ? 'Add a question first' : undefined}
+                className={styles.reactivateToggle}
+                onClick={() => setShowReactivate((open) => !open)}
+                aria-expanded={showReactivate}
               >
-                {isActivating ? 'Generating…' : 'Reactivate with new code'}
+                {showReactivate ? 'Cancel' : 'Reactivate with new code'}
               </button>
             </div>
+
+            {showReactivate && (
+              <div className={styles.reactivatePanel}>
+                <p className={styles.reactivateWarning}>
+                  This creates a NEW code. The link you already shared stops working.
+                </p>
+                <AvailableUntil value={availableUntil} onChange={setAvailableUntil} />
+                <ModePicker
+                  mode={mode}
+                  onChange={(next) => {
+                    setMode(next);
+                    // Clearing on the way back to graded matters: a toggle left
+                    // on would otherwise ride along invisibly into an activation
+                    // whose form never showed it.
+                    if (next !== 'PRACTICE') setRandomizeQuestions(false);
+                  }}
+                />
+                {/* Practice only, and HIDDEN rather than disabled for graded -
+                    a greyed control still asks the coach to think about
+                    something that does not apply. */}
+                {mode === 'PRACTICE' && (
+                  <label className={styles.randomizeOption}>
+                    <input
+                      type="checkbox"
+                      checked={randomizeQuestions}
+                      onChange={(event) => setRandomizeQuestions(event.target.checked)}
+                    />
+                    <span>
+                      <span className={styles.randomizeLabel}>Randomize questions</span>
+                      <span className={styles.modeHint}>
+                        Mix the question order for each new practice attempt.
+                      </span>
+                    </span>
+                  </label>
+                )}
+                <button
+                  className={nb.btnSm}
+                  onClick={handleActivate}
+                  disabled={isActivating || hasNoQuestions}
+                  title={hasNoQuestions ? 'Add a question first' : undefined}
+                >
+                  {isActivating ? 'Generating…' : 'Create new code'}
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <>

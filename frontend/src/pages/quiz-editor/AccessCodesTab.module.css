@@ -114,3 +114,40 @@
   color: var(--nb-text-muted);
   white-space: nowrap;
 }
+
+/* --- Reactivation, folded away while a Peira is live ---------------------
+ * A text button, not a third button-shaped control. Making a NEW code is the
+ * rare and destructive path - it kills the link already in a team group text -
+ * so it should not compete visually with Share or sit open asking about the
+ * next activation while the current one is still running.
+ */
+.reactivateToggle {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.2rem;
+  font: inherit;
+  font-size: 0.9em;
+  color: var(--nb-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.reactivateToggle:hover {
+  color: var(--nb-accent);
+}
+
+.reactivatePanel {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--nb-border, #3a3a38);
+}
+
+/* Said before the controls, not after: the consequence is the reason a coach
+   might back out, and finding it underneath the button is too late. */
+.reactivateWarning {
+  margin: 0;
+  font-size: 0.9em;
+  color: var(--nb-danger, #e0796b);
+}

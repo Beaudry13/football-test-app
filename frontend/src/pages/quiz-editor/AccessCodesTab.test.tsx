@@ -293,3 +293,73 @@ describe('AccessCodesTab available-until', () => {
     expect(document.body.textContent).not.toMatch(/TTL|expires_at|GMT|Z$/);
   });
 });
+
+describe('AccessCodesTab active-card focus', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+  });
+
+  it('KEEPS NEXT-ACTIVATION SETTINGS OUT OF THE LIVE CARD', async () => {
+    // While a Peira is live the coach's jobs are: know the code, know when it
+    // closes, get it to players, stop it. How the NEXT activation should count
+    // is none of those, and it had already been decided.
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+
+    expect(screen.queryByText('How should this count?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Randomize questions')).not.toBeInTheDocument();
+  });
+
+  it('offers exactly the four live jobs', async () => {
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+
+    // Twice - the hero display and the activation history row below it.
+    expect(screen.getAllByText(activeCode.code).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Copy link|Share Peira/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show QR code' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deactivate now' })).toBeInTheDocument();
+  });
+
+  it('reveals those settings under Reactivate, with the consequence stated', async () => {
+    const user = userEvent.setup();
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Active until/);
+
+    await user.click(screen.getByRole('button', { name: 'Reactivate with new code' }));
+
+    expect(screen.getByText('How should this count?')).toBeInTheDocument();
+    // The destructive consequence is stated BEFORE the controls - finding it
+    // underneath the button would be too late to back out.
+    expect(screen.getByText(/stops working/)).toBeInTheDocument();
+  });
+
+  it('lets the coach back out without making a new code', async () => {
+    const user = userEvent.setup();
+    const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Active until/);
+
+    await user.click(screen.getByRole('button', { name: 'Reactivate with new code' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByText('How should this count?')).not.toBeInTheDocument();
+    expect(activate).not.toHaveBeenCalled();
+  });
+
+  it('still mints a new code when the coach goes through with it', async () => {
+    const user = userEvent.setup();
+    const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(activeCode);
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Active until/);
+
+    await user.click(screen.getByRole('button', { name: 'Reactivate with new code' }));
+    await user.click(screen.getByRole('button', { name: 'Create new code' }));
+
+    expect(activate).toHaveBeenCalledTimes(1);
+  });
+});
