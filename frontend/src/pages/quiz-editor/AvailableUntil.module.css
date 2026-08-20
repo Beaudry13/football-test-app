@@ -78,3 +78,23 @@
   font-size: 0.85em;
   color: var(--nb-danger, #e0796b);
 }
+
+/*
+ * Live state only. The expiry is an ANSWER once a Peira is running - the
+ * controls for moving it are the rare path, so they sit behind this rather
+ * than in front of a coach who came to read one sentence.
+ */
+.changeToggle {
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--nb-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.changeToggle:hover {
+  color: var(--nb-accent);
+}

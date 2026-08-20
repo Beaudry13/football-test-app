@@ -22,6 +22,14 @@ import styles from './AvailableUntil.module.css';
  * shown are the same sentence. The exact picker is one click away for the
  * cases the presets do not cover, rather than being the thing everyone meets.
  *
+ * TWO POSTURES, ONE COMPONENT. Before activation the coach is DECIDING, so
+ * the presets are open - it is the question being asked. Once a Peira is live
+ * the same fact is an ANSWER: "Active until Saturday at 9:00 AM EDT" is what
+ * they came to check, and five controls for changing something most coaches
+ * never change is five things to read past. `collapsible` folds them behind
+ * "Change", which is the rare path. The words and the value are identical
+ * either way - only the volume differs.
+ *
  * THE CONVERSION HAPPENS HERE, IN THE BROWSER, and that is deliberate. The
  * browser owns a real IANA timezone database, so DST and travel are already
  * correct; the value handed upward is an absolute Date, and the server never
@@ -33,22 +41,37 @@ export function AvailableUntil({
   value,
   onChange,
   label = 'Available until',
+  collapsible = false,
 }: {
   value: Date;
   onChange: (when: Date) => void;
   label?: string;
+  /** Live state: show the answer, and keep the controls behind "Change". */
+  collapsible?: boolean;
 }) {
   const [showExact, setShowExact] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
 
   const isPast = value.getTime() <= Date.now();
+  const controlsVisible = !collapsible || isChanging;
 
   return (
     <div className={styles.block}>
       <div className={styles.summaryRow}>
         <span className={styles.label}>{label}</span>
         <strong className={styles.summary}>{describe(value)}</strong>
+        {collapsible && !isChanging && (
+          <button
+            type="button"
+            className={styles.changeToggle}
+            onClick={() => setIsChanging(true)}
+          >
+            Change
+          </button>
+        )}
       </div>
 
+      {controlsVisible && (
       <div className={styles.presets} role="group" aria-label={label}>
         {PRESETS.map((preset) => (
           <button
@@ -72,8 +95,9 @@ export function AvailableUntil({
           {showExact ? 'Hide' : 'Pick date & time'}
         </button>
       </div>
+      )}
 
-      {showExact && (
+      {controlsVisible && showExact && (
         <input
           type="datetime-local"
           className={nb.input}

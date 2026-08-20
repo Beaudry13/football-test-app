@@ -207,7 +207,10 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       <div className={`${nb.card} ${styles.activeCard}`}>
         {activeCode ? (
           <>
-            <p>Share this code and link with players</p>
+            {/* No "Share this code with players" line: the code is the hero
+                and the Share button below says the action. A sentence telling
+                a coach to do the thing the button does is explanation where
+                structure already speaks. */}
             <div className={styles.codeDisplay}>{activeCode.code}</div>
             <ModeBadge mode={activeCode.mode} />
             <OrderBadge randomized={activeCode.randomize_questions} />
@@ -222,6 +225,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               label="Active until"
               value={new Date(activeCode.expires_at)}
               onChange={(when) => handleChangeExpiry(activeCode.id, when)}
+              // Live: this is the ANSWER a coach came to check, not the
+              // question they are being asked. Changing it is behind "Change".
+              collapsible
             />
             {isChangingExpiry && <p className={styles.expiry}>Updating…</p>}
             {/* The whole answer to "how do I get this to my players", as one

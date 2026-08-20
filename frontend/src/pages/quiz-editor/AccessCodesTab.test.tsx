@@ -278,10 +278,39 @@ describe('AccessCodesTab available-until', () => {
     render(<AccessCodesTab quiz={quiz} />);
 
     await screen.findByText(/Active until/);
+    // Live, the expiry is an ANSWER - the controls for moving it are behind
+    // "Change", so a coach reading the card meets one sentence, not five
+    // buttons for something most never touch.
+    await user.click(screen.getByRole('button', { name: 'Change' }));
     await user.click(screen.getByRole('button', { name: 'In 3 days' }));
 
     expect(setExpiry).toHaveBeenCalledWith(quiz.id, activeCode.id, expect.any(Date));
     expect(activate).not.toHaveBeenCalled();
+  });
+
+  it('SHOWS THE EXPIRY AS A SENTENCE, NOT AS FIVE CONTROLS', async () => {
+    // The mental model on a live Peira is: when does it close, and how do I
+    // get it to players. Presets for changing the close time are neither.
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+
+    expect(screen.queryByRole('button', { name: 'In 3 days' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick date & time' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument();
+  });
+
+  it('still asks the question openly BEFORE activation', async () => {
+    // Before activating, the coach is deciding - so the presets are the
+    // question being asked and belong in front of them.
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText('This Quiz has no active access code.');
+
+    expect(screen.getByRole('button', { name: 'In 3 days' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Change' })).not.toBeInTheDocument();
   });
 
   it('shows when the active code stops in plain language', async () => {
