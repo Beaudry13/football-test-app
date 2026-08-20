@@ -1,16 +1,16 @@
 """Merging one organization into another.
 
-THE WHOLE MECHANICAL MERGE IS SEVEN UPDATES
+THE WHOLE MECHANICAL MERGE IS SEVEN UPDATES AND A DELETE
 --------------------------------------------
-Only seven tables carry `organization_id`: coaches, players, quizzes, groups,
-folders, source_documents, organization_invites. Everything else - questions,
-answers, attempts, rosters, access codes, drawings, document pages, audit logs
-- is reached THROUGH those seven and needs no statement at all. Re-pointing
-them moves the entire organization.
+Only eight tables carry `organization_id`: coaches, players, quizzes, groups,
+folders, source_documents, staff_invite_requests, organization_invites.
+Everything else - questions, answers, attempts, rosters, access codes,
+drawings, document pages, audit logs - is reached THROUGH those eight and needs
+no statement at all. Re-pointing them moves the entire organization.
 
 That also means the source organization row deletes cleanly at the end: the
-seven `NO ACTION NOT NULL` references that normally make an organization
-undeletable are exactly the seven we just emptied. If that DELETE fails, some
+`NO ACTION NOT NULL` references that normally make an organization undeletable
+are exactly the ones we just emptied. If that DELETE fails, some
 row was missed, and the whole transaction rolls back. THE DATABASE IS THE
 FINAL CHECK, not a count we computed ourselves.
 
@@ -47,9 +47,9 @@ from app.extensions import db
 from app.models import Coach, CoachRole, Organization
 from app.models.organization_merge import OrganizationMerge
 
-#: The SIX organization-owned tables that are re-pointed. The seventh table
-#: carrying organization_id - organization_invites - is deleted instead, not
-#: moved (see INVITES_TABLE). Order is irrelevant to correctness, since these
+#: The SEVEN organization-owned tables that are re-pointed. The remaining
+#: table carrying organization_id - organization_invites - is deleted instead,
+#: not moved (see INVITES_TABLE). Order is irrelevant to correctness, since these
 #: are independent UPDATEs inside one transaction, but it is fixed so the
 #: audit's counts_moved is always keyed the same way.
 ORG_OWNED_TABLES = (
@@ -59,6 +59,13 @@ ORG_OWNED_TABLES = (
     "groups",
     "folders",
     "source_documents",
+    # A pending staff invite request MOVES rather than being revoked, and the
+    # distinction from organization_invites is the whole reason both exist. An
+    # invitation is a CREDENTIAL: redirecting one would drop somebody into an
+    # organization they never agreed to join. A request is an ASK with no token
+    # in it, and the coach who made it is being moved by this same merge - so
+    # carrying it across is what keeps their colleague's route in working.
+    "staff_invite_requests",
     # Live competitions are re-pointed like anything else the organization
     # owns. Their participants and answers reference the SESSION, not the
     # organization, so they follow without a rule of their own - which is the
@@ -455,7 +462,28 @@ def execute(
             {"src": source_id},
         ).rowcount
 
-        # 2. Re-point the six remaining organization-owned tables. Everything
+        # 2. Drop source staff invite requests the destination is ALREADY
+        #    waiting on. `staff_invite_requests` is the only moved table with
+        #    an organization-scoped unique index (one pending ask per person
+        #    per organization), so without this the UPDATE below would raise
+        #    on any person both programs happen to want - and a merge would
+        #    fail for a reason that has nothing to do with merging.
+        #
+        #    Nothing is lost: the identical ask already exists on the side
+        #    everything is moving to.
+        db.session.execute(
+            sa.text(
+                "DELETE FROM staff_invite_requests s "
+                "WHERE s.organization_id=:src "
+                "  AND s.approved_at IS NULL AND s.declined_at IS NULL "
+                "  AND EXISTS (SELECT 1 FROM staff_invite_requests d "
+                "              WHERE d.organization_id=:dst AND d.email=s.email "
+                "                AND d.approved_at IS NULL AND d.declined_at IS NULL)"
+            ),
+            {"dst": destination_id, "src": source_id},
+        )
+
+        # 3. Re-point the seven remaining organization-owned tables. Everything
         #    beneath them follows without a statement.
         for table in ORG_OWNED_TABLES:
             moved = db.session.execute(
@@ -466,7 +494,7 @@ def execute(
             ).rowcount
             counts_moved[table] = moved
 
-        # 3. Apply the role decisions. Done through the ORM so the native
+        # 4. Apply the role decisions. Done through the ORM so the native
         #    enum is written exactly as the model defines it.
         role_decisions = []
         for coach in plan["coaches"]:
@@ -483,7 +511,7 @@ def execute(
                 }
             )
 
-        # 4. The permanent record, written INSIDE the transaction so a
+        # 5. The permanent record, written INSIDE the transaction so a
         #    rollback cannot leave an audit row for a merge that never
         #    happened.
         audit = OrganizationMerge(
@@ -504,7 +532,7 @@ def execute(
         db.session.add(audit)
         db.session.flush()
 
-        # 5. The source organization must now delete cleanly. If ANY row
+        # 6. The source organization must now delete cleanly. If ANY row
         #    still points at it the foreign keys refuse - which is the real
         #    proof that nothing was left behind, better than any count we
         #    could compute ourselves.

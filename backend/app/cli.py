@@ -1,6 +1,8 @@
 """Operator CLI commands.
 
 `flask owner grant|revoke|list` is how platform ownership is conferred.
+`flask staff-invite list|approve|decline` is how a coach's request for a
+colleague becomes an actual invitation.
 
 WHY A COMMAND AND NOT A MIGRATION OR AN ENV VAR
 ------------------------------------------------
@@ -18,7 +20,8 @@ from flask import Flask
 from flask.cli import AppGroup
 
 from app.extensions import db
-from app.models import Coach
+from app.models import Coach, Organization, StaffInviteRequest
+from app.services import staff_invite_requests
 
 owner_cli = AppGroup("owner", help="Manage Peira platform owners.")
 
@@ -75,5 +78,101 @@ def list_owners():
         click.echo(f"  #{coach.id}  {coach.email}  ({coach.username})")
 
 
+staff_invite_cli = AppGroup(
+    "staff-invite", help="Review coaches' requests to add staff to their organization."
+)
+
+#: WHY A COMMAND AND NOT A SCREEN
+#: ------------------------------
+#: Approving is a rare, deliberate, one-person act during Early Access - a
+#: handful of requests, reviewed by the owner, from a Render shell. A screen
+#: for it would be a queue, a filter, a detail view and an empty state: an
+#: admin console built before there was anything to administer, and the start
+#: of the CRM this product keeps deciding not to have.
+#:
+#: The moment this is genuinely tedious is the moment it has earned a screen.
+#: Nothing here blocks building one later - the service holds the rules and a
+#: route would call the same three functions.
+
+
+def _pending_or_fail(request_id: int) -> StaffInviteRequest:
+    """Refuses rather than returning None. "Approved nobody" and "approved the
+    coach you meant" look identical on a terminal, and this is a command that
+    hands out access."""
+    request = db.session.get(StaffInviteRequest, request_id)
+    if request is None:
+        raise click.ClickException(f"No staff invite request with id {request_id}")
+    if not request.is_pending():
+        state = "approved" if request.approved_at else "declined"
+        raise click.ClickException(f"Request #{request_id} was already {state} - nothing to do.")
+    return request
+
+
+@staff_invite_cli.command("list")
+def list_requests():
+    """Show every staff invite request still waiting on a decision."""
+    requests = staff_invite_requests.pending()
+    if not requests:
+        click.echo("No staff invite requests waiting.")
+        return
+    click.echo(f"{len(requests)} request(s) waiting:")
+    for request in requests:
+        org = db.session.get(Organization, request.organization_id)
+        asked_by = db.session.get(Coach, request.requested_by_coach_id)
+        click.echo(
+            f"  #{request.id}  {request.name} <{request.email}>"
+            f"  -> {org.name} (org {org.id})"
+            f"  asked by {asked_by.email if asked_by else 'a deleted account'}"
+            f"  on {request.requested_at:%Y-%m-%d}"
+        )
+    click.echo("")
+    click.echo("Approve with: flask staff-invite approve <id>")
+
+
+@staff_invite_cli.command("approve")
+@click.argument("request_id", type=int)
+@click.option("--as-owner", default=None, help="Email of the owner recording the decision.")
+def approve(request_id: int, as_owner: str | None):
+    """Mint the single-use invite this request asked for, and print its link.
+
+    THE LINK IS PRINTED ONCE, HERE. Peira sends no email - delivering it is
+    still a human act, which at Early Access volume is a feature rather than a
+    gap: somebody reads the request, decides, and sends it themselves.
+    """
+    request = _pending_or_fail(request_id)
+    org = db.session.get(Organization, request.organization_id)
+    approver = _find(as_owner) if as_owner else None
+
+    code = staff_invite_requests.approve(request, approved_by=approver)
+    if code is None:
+        raise click.ClickException(
+            f"Request #{request_id} was decided by somebody else just now - no invite created."
+        )
+
+    click.echo(f"Approved #{request_id}: {request.name} <{request.email}>")
+    click.echo(f"They will join {org.name} (org {org.id}) as a MEMBER.")
+    click.echo("They are never asked to type a program name, so no duplicate can appear.")
+    click.echo("")
+    click.echo("Send them this link. It works once and expires in 14 days:")
+    click.echo(f"  /join/{code}")
+
+
+@staff_invite_cli.command("decline")
+@click.argument("request_id", type=int)
+def decline(request_id: int):
+    """Record that a request was not granted. Creates no invite, sends nothing.
+
+    Not a ban: the same person can be requested again, because the uniqueness
+    rule only covers requests still waiting.
+    """
+    request = _pending_or_fail(request_id)
+    if not staff_invite_requests.decline(request):
+        raise click.ClickException(
+            f"Request #{request_id} was decided by somebody else just now."
+        )
+    click.echo(f"Declined #{request_id}: {request.name} <{request.email}>. No invite was created.")
+
+
 def register_cli(app: Flask) -> None:
     app.cli.add_command(owner_cli)
+    app.cli.add_command(staff_invite_cli)

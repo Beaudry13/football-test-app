@@ -74,3 +74,29 @@ class RequestAccessSchema(Schema):
         if not isinstance(data, dict):
             return data
         return {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}
+
+
+class RequestStaffInviteSchema(Schema):
+    """A coach asking for one of their staff to be let into their organization.
+
+    TWO FIELDS. The organization, the requester's identity and the time all
+    come from the authenticated account - see services/staff_invite_requests.
+    There is deliberately no `organization` field to send, which is what makes
+    a near-duplicate program impossible on this path rather than merely
+    discouraged.
+
+    No title, no phone, no staff role, no message. The coach is saying one
+    thing, and a form that asks for more makes them hesitate over columns
+    nobody reads.
+    """
+
+    name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
+    email = fields.Email(required=True)
+
+    @pre_load
+    def strip_whitespace(self, data, **_kwargs):
+        """Trim before validating - an address pasted out of a mail client
+        arrives with spaces around it, and `fields.Email` refuses that."""
+        if not isinstance(data, dict):
+            return data
+        return {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}

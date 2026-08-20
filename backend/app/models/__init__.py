@@ -2,6 +2,7 @@
 
 from app.models.beta_invite import BetaInvite
 from app.models.access_request import AccessRequest
+from app.models.staff_invite_request import StaffInviteRequest
 from app.models.organization import Organization, OrganizationInvite
 from app.models.coach import Coach, CoachRole
 from app.models.folder import Folder
@@ -31,6 +32,7 @@ from app.models.competition import (
 __all__ = [
     "BetaInvite",
     "AccessRequest",
+    "StaffInviteRequest",
     "Organization",
     "OrganizationInvite",
     "Coach",

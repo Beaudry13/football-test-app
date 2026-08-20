@@ -15,11 +15,13 @@ from app.extensions import db, limiter
 from sqlalchemy.orm import selectinload
 
 from app.models import Coach, CoachRole, Folder, OrganizationInvite, Quiz
+from app.schemas.auth import RequestStaffInviteSchema
 from app.schemas.organization import (
     MemberRoleUpdateSchema,
     OrganizationUpdateSchema,
     QuizOwnerUpdateSchema,
 )
+from app.services import staff_invite_requests
 from app.services.invites import INVITE_TTL_DAYS, generate_invite_code
 from app.utils.auth import current_coach, require_admin
 from app.utils.validation import load_json_body
@@ -112,6 +114,33 @@ def create_invite():
     # The only response that carries the code - the client shows it as a
     # copyable join link immediately.
     return jsonify(invite.to_dict(include_code=True)), 201
+
+
+@organizations_bp.post("/staff-invite-requests")
+@jwt_required()
+@limiter.limit("20 per minute")
+def request_staff_invite():
+    """Ask for one of your staff to be let into your organization.
+
+    ANY COACH, NOT JUST AN ADMIN. Asking is not a privilege - a position coach
+    who knows the new hire is exactly who should be able to say so, and the
+    request grants nothing on its own.
+
+    THIS CREATES NO INVITE AND NO TOKEN. A `StaffInviteRequest` has no column
+    that could hold one; the credential is minted only when somebody approves
+    (`flask staff-invite approve`). That separation is the Early Access model -
+    a coach can vouch for a colleague without being able to admit them.
+
+    THE ORGANIZATION IS TAKEN FROM THE AUTHENTICATED COACH and cannot be sent.
+    That is what stops a fifth spelling of an existing program appearing, and
+    what stops a request being aimed at somebody else's organization.
+    """
+    coach = current_coach()
+    data = load_json_body(RequestStaffInviteSchema())
+
+    staff_invite_requests.submit(coach, data["name"], data["email"])
+
+    return jsonify({"message": staff_invite_requests.REQUEST_RECEIVED}), 202
 
 
 @organizations_bp.delete("/invites/<int:invite_id>")
