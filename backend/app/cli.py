@@ -5,6 +5,7 @@
 colleague becomes an actual invitation.
 `flask access-request list` shows who has asked to be let in, and which
 existing programs each request MIGHT already be.
+`flask beta-invite issue|list|revoke` hands somebody a way into Peira.
 
 WHY A COMMAND AND NOT A MIGRATION OR AN ENV VAR
 ------------------------------------------------
@@ -23,7 +24,8 @@ from flask.cli import AppGroup
 
 from app.extensions import db
 from app.models import AccessRequest, Coach, Organization, StaffInviteRequest
-from app.services import similar_organizations, staff_invite_requests
+from app.models.beta_invite import BetaInvite
+from app.services import beta_invites, similar_organizations, staff_invite_requests
 
 owner_cli = AppGroup("owner", help="Manage Peira platform owners.")
 
@@ -225,7 +227,86 @@ def list_access_requests(limit: int):
     click.echo("If one is the same program, ask a coach there to request a staff invite.")
 
 
+beta_invite_cli = AppGroup("beta-invite", help="Issue and manage Early Access invitations.")
+
+#: WHY THIS COMMAND HAD TO EXIST
+#: -----------------------------
+#: The beta invite model, its service and its signup screen all shipped before
+#: anything could CREATE one outside a Python shell - so the Early Access front
+#: door had a lock, a key and a door, and no way to cut a key. `flask shell`
+#: plus a hand-typed `beta_invites.issue()` is the exact thing the `flask
+#: owner` docstring says a command exists to replace: explicit, repeatable,
+#: reviewable, and hard to do by accident.
+
+
+@beta_invite_cli.command("issue")
+@click.option("--label", default=None, help='Your own note - e.g. "Coach Smith - Madeira".')
+@click.option("--as-owner", default=None, help="Email of the owner issuing it.")
+def issue_beta_invite(label: str | None, as_owner: str | None):
+    """Create ONE invitation and print its link. The token is shown once.
+
+    IT CANNOT BE SHOWN AGAIN. Only a hash is stored, so a lost invite is
+    revoked and reissued rather than looked up - which is what makes a stolen
+    database worth nothing. Copy it now.
+    """
+    issuer = _find(as_owner) if as_owner else None
+    invite, token = beta_invites.issue(
+        label=label, created_by_coach_id=issuer.id if issuer else None
+    )
+
+    click.echo(f"Issued invite #{invite.id}" + (f" for {invite.label}" if invite.label else ""))
+    click.echo("")
+    click.echo("Send them this link. It works ONCE and creates their account and program:")
+    click.echo(f"  /invite/{token}")
+    click.echo("")
+    click.echo("This is the only time the code is shown. It is not recoverable.")
+
+
+@beta_invite_cli.command("list")
+def list_beta_invites():
+    """Every invitation and what became of it.
+
+    Answers the question the table exists for - how did this coach get into
+    the beta - without ever showing a token that could still be used.
+    """
+    invites = BetaInvite.query.order_by(BetaInvite.id).all()
+    if not invites:
+        click.echo("No beta invites yet. Create one with: flask beta-invite issue --label '...'")
+        return
+
+    click.echo(f"{len(invites)} invite(s):")
+    for invite in invites:
+        if invite.redeemed_at:
+            coach = db.session.get(Coach, invite.redeemed_by_coach_id)
+            state = f"redeemed {invite.redeemed_at:%Y-%m-%d} by {coach.email if coach else 'a deleted account'}"
+        elif invite.revoked_at:
+            state = f"revoked {invite.revoked_at:%Y-%m-%d}"
+        else:
+            state = "UNUSED"
+        click.echo(f"  #{invite.id}  {invite.token_prefix}...  {invite.label or '(no note)'}  - {state}")
+
+
+@beta_invite_cli.command("revoke")
+@click.argument("invite_id", type=int)
+def revoke_beta_invite(invite_id: int):
+    """Stop an unused invitation working. Refuses one already redeemed.
+
+    History must not say an invite was cancelled when somebody used it, which
+    is why this can fail - see services/beta_invites.revoke.
+    """
+    invite = db.session.get(BetaInvite, invite_id)
+    if invite is None:
+        raise click.ClickException(f"No beta invite with id {invite_id}")
+    if not beta_invites.revoke(invite):
+        raise click.ClickException(
+            f"Invite #{invite_id} was already redeemed or revoked - nothing to do."
+        )
+    db.session.commit()
+    click.echo(f"Revoked invite #{invite_id}. It can no longer be used.")
+
+
 def register_cli(app: Flask) -> None:
     app.cli.add_command(owner_cli)
     app.cli.add_command(staff_invite_cli)
     app.cli.add_command(access_request_cli)
+    app.cli.add_command(beta_invite_cli)
