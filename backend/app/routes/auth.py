@@ -19,8 +19,9 @@ from app.schemas.auth import (
     RegisterSchema,
     RegisterWithBetaInviteSchema,
     RegisterWithInviteSchema,
+    RequestAccessSchema,
 )
-from app.services import beta_invites
+from app.services import access_requests, beta_invites
 from app.services.invites import claim, find_usable_invite
 from app.utils.auth import current_coach
 from app.utils.validation import load_json_body
@@ -161,6 +162,28 @@ def register_with_beta_invite():
     token = create_access_token(identity=str(coach.id))
     return jsonify({"coach": coach.to_dict(), "access_token": token}), 201
 
+
+
+@auth_bp.post("/request-access")
+@limiter.limit("10 per hour")
+def request_access():
+    """Somebody asking to be let into the beta. Always the same answer.
+
+    THE RESPONSE IS A CONSTANT, AND THAT IS THE SECURITY PROPERTY. A first
+    request, a repeat request and an address that already has a coach account
+    all return exactly this. Saying "you have already asked" or "that email is
+    taken" would turn a form open to the whole internet into a way to test
+    whether a particular person uses Peira.
+
+    It grants nothing. Recording a request creates no account and no
+    organization - an invite is still issued by hand, which is the entire
+    point of an invite-only beta.
+    """
+    data = load_json_body(RequestAccessSchema())
+
+    access_requests.record(data["name"], data["email"], data.get("team"))
+
+    return jsonify({"message": access_requests.REQUEST_RECEIVED}), 202
 
 @auth_bp.get("/invites/<invite_code>")
 @limiter.limit("20 per minute")

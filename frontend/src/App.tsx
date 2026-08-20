@@ -17,6 +17,7 @@ import { MasterRosterPage } from './pages/MasterRosterPage';
 import { PlayerProfilePage } from './pages/PlayerProfilePage';
 import { JoinOrgPage } from './pages/JoinOrgPage';
 import { BetaInvitePage } from './pages/BetaInvitePage';
+import { RequestAccessPage } from './pages/RequestAccessPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
@@ -64,6 +65,10 @@ function App() {
               of cleverness that eventually puts a stranger in somebody else's
               organization. See pages/BetaInvitePage.tsx. */}
           <Route path="/invite/:token" element={<BetaInvitePage />} />
+          {/* The other side of an invite: somebody asking for one. Deliberately
+              not linked from anywhere while public registration is still open -
+              see pages/RequestAccessPage.tsx. */}
+          <Route path="/request-access" element={<RequestAccessPage />} />
           <Route path="/play" element={<PlayPage />} />
           <Route path="/play/:code" element={<PlayPage />} />
           <Route path="/results" element={<ResultsCheckPage />} />

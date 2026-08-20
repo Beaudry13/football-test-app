@@ -49,6 +49,21 @@ export function previewInvite(inviteCode: string): Promise<{ organization_name: 
   );
 }
 
+/** Asks to be let into the beta. Grants nothing - it records that somebody
+ * put their hand up, and an invite is still issued by hand.
+ *
+ * THE ANSWER IS THE SAME WHATEVER HAPPENED. A first request, a repeat request
+ * and an address that already has an account all come back identically, so
+ * this form cannot be used to test whether a particular coach uses Peira.
+ * Callers must not try to distinguish them. */
+export function requestAccess(input: {
+  name: string;
+  email: string;
+  team?: string;
+}): Promise<{ message: string }> {
+  return api.post<{ message: string }>('/auth/request-access', input, { auth: false });
+}
+
 export function login(input: { email: string; password: string }): Promise<AuthResponse> {
   return api.post<AuthResponse>('/auth/login', input, { auth: false });
 }

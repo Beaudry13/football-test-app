@@ -1,6 +1,6 @@
 """Coach registration/login request schemas."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, fields, pre_load, validate
 
 
 class RegisterSchema(Schema):
@@ -44,3 +44,33 @@ class RegisterWithBetaInviteSchema(Schema):
     password = fields.Str(required=True, validate=validate.Length(min=8, max=128))
     organization = fields.Str(required=True, validate=validate.Length(min=1, max=255))
     invite_code = fields.Str(required=True, validate=validate.Length(min=1, max=64))
+
+
+class RequestAccessSchema(Schema):
+    """Asking to be let into the beta.
+
+    THREE FIELDS, AND `team` IS GENUINELY OPTIONAL. A coach who has not named
+    their program yet, or who is asking on behalf of one, must not be stopped
+    at the door by a field that only helps the owner recognise them later.
+
+    No message box, no "how did you hear about us", no phone number. Every
+    field here is one somebody fills in before they have any reason to trust
+    the product, and the owner can ask anything else in the reply.
+    """
+
+    name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
+    email = fields.Email(required=True)
+    team = fields.Str(load_default=None, allow_none=True, validate=validate.Length(max=200))
+
+    @pre_load
+    def strip_whitespace(self, data, **_kwargs):
+        """Trim before validating, not after.
+
+        An address pasted out of an email client arrives as
+        `"  coach@example.com  "`, and `fields.Email` rejects it - so a coach
+        would be told their perfectly good address was invalid. Stripping
+        afterwards is too late; the validator has already refused it.
+        """
+        if not isinstance(data, dict):
+            return data
+        return {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}
