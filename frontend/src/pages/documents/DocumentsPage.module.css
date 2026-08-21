@@ -35,6 +35,21 @@
   color: inherit;
 }
 
+/*
+ * THE WHOLE ROW OPENS THE PLAYBOOK, not just the words - the same stretch
+ * FolderRow uses, and for the same reason: a title is a small thing to hit on
+ * a phone. The options menu beside it stays independently clickable because
+ * MenuButton's wrapper carries its own z-index, which is why this is an
+ * ::after on the link rather than a link wrapped around the whole row (a link
+ * containing a button is neither valid HTML nor operable by keyboard).
+ */
+.rowLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
 .rowTitle {
   font-weight: 600;
   overflow-wrap: anywhere;

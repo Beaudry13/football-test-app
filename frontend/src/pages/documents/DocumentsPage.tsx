@@ -9,6 +9,7 @@ import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
 import nb from '../../styles/notebook.module.css';
 import styles from './DocumentsPage.module.css';
+import { MenuButton, MenuItem } from '../../components/ui/MenuButton';
 
 function formatSize(bytes: number): string {
   const megabytes = bytes / (1024 * 1024);
@@ -123,13 +124,18 @@ export function DocumentsPage() {
                   {formatSize(document.byte_size)}
                 </span>
               </Link>
-              <button
-                type="button"
-                className={`${nb.btnSm} ${nb.btnDanger}`}
-                onClick={() => handleDelete(document)}
-              >
-                Delete
-              </button>
+              {/* OPENING IS PRIMARY; DELETING IS MAINTENANCE.
+                  Delete was a permanent red button 13px from the link that
+                  opens the playbook - the highest-contrast thing on the row,
+                  beside the one action a coach actually came for, and an easy
+                  mis-tap on a phone. Quiz cards and folder rows already put
+                  this kind of action behind the same one control.
+                  The confirmation, its wording and the API are untouched. */}
+              <MenuButton label={`Options for ${document.title}`}>
+                <MenuItem destructive onSelect={() => handleDelete(document)}>
+                  Delete playbook
+                </MenuItem>
+              </MenuButton>
             </li>
           ))}
         </ul>

@@ -105,10 +105,26 @@ describe('DocumentsPage', () => {
     const remove = vi.spyOn(documentsApi, 'deleteDocument').mockResolvedValue(undefined);
     renderDocuments();
 
-    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    // Delete is behind the row's "..." now - opening the playbook is the
+    // primary action and deleting it is maintenance, the same arrangement
+    // quiz cards and folder rows use. The confirmation is unchanged.
+    await user.click(
+      await screen.findByRole('button', { name: `Options for ${sampleDocument.title}` }),
+    );
+    await user.click(screen.getByRole('menuitem', { name: 'Delete playbook' }));
     await acceptConfirm(user, 'Delete Playbook');
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith(3));
+  });
+
+  it('keeps Delete out of the row itself', async () => {
+    // The whole point: a destructive action should not be the
+    // highest-contrast control sitting beside the link a coach came to press.
+    vi.spyOn(documentsApi, 'listDocuments').mockResolvedValue([sampleDocument]);
+    renderDocuments();
+    await screen.findByText(sampleDocument.title);
+
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });
 
   it('only accepts PDFs at the file picker', async () => {
