@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,7 +31,7 @@ function mockAuth() {
 }
 
 function renderHeader() {
-  render(
+  return render(
     <MemoryRouter>
       <TourProvider>
         <NotebookHeader />
@@ -120,11 +120,27 @@ describe('NotebookHeader help', () => {
       registerWithBetaInvite: vi.fn(),
       logout: vi.fn(),
     });
-    renderHeader();
+    const { container } = renderHeader();
 
-    for (const label of ['Quizzes', 'Playbooks', 'Team']) {
-      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    // BOTH COPIES ARE IN THE DOM AND CSS CHOOSES BETWEEN THEM. The header
+    // holds the three section links for a desktop; SectionBar holds the same
+    // three for a phone, and each hides itself at the other's width. jsdom
+    // evaluates no media queries, so what a test can prove is that each list
+    // exists and holds the right destinations - the widths themselves were
+    // verified in a real browser at 375/640/768/960/1280.
+    const bar = container.querySelector('[data-section-bar]') as HTMLElement;
+    expect(bar).not.toBeNull();
+
+    const headerNav = container.querySelector('[class*="sectionLinks"]') as HTMLElement;
+    expect(headerNav).not.toBeNull();
+
+    for (const list of [headerNav, bar]) {
+      expect(within(list).getByRole('link', { name: 'Quizzes' })).toBeInTheDocument();
+      expect(within(list).getByRole('link', { name: 'Playbooks' })).toBeInTheDocument();
+      expect(within(list).getByRole('link', { name: 'Team' })).toBeInTheDocument();
     }
+
+    // The account cluster is in neither: it lives behind one control.
     expect(screen.queryByRole('link', { name: 'Admin View' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument();
 

@@ -144,6 +144,39 @@
   pointer-events: none;
 }
 
+/* A TIGHTER PILL ON A PHONE.
+ *
+ * With the section links moved to the bottom bar, the header holds the brand
+ * (100px) and the nav (174px: Help plus the account control). That is 274px
+ * plus a 16px gap in 270px of usable width - twenty pixels over one row, and
+ * twenty pixels is what was making it two.
+ *
+ * The floating pill's own margins and padding are where the twenty pixels
+ * are: 24px of margin and 20px of padding on each side spend 88px of a 375px
+ * screen on the frame around the navigation rather than on the navigation.
+ * Phone only; every other width keeps the pill exactly as it was.
+ *
+ * ::before is the mask that hides content scrolling up beside the pill, and
+ * it is inset by the header's own offsets - so it has to move with them or it
+ * stops reaching the edges of the screen. This block sits AFTER that rule on
+ * purpose: same specificity, so whichever comes last wins, and getting that
+ * backwards left the mask 7px past the right edge of a 375px screen and
+ * scrolled every page sideways.
+ */
+@media (max-width: 40rem) {
+  .header {
+    margin-inline: var(--space-4);
+    padding-inline: var(--space-4);
+    gap: var(--space-2);
+  }
+
+  .header::before {
+    left: calc(-1 * var(--space-4));
+    right: calc(-1 * var(--space-4));
+  }
+}
+
+
 /* Wraps a <PeiraLogo/> (see components/brand/PeiraLogo.tsx), which styles
    its own mark + wordmark inline - this class only needs to undo the
    <Link>'s default underline. */
@@ -190,10 +223,33 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* The three primary destinations, in the header. Hidden on a phone, where
+   SectionBar shows them along the bottom of the screen instead. */
+.sectionLinks {
+  display: contents;
+}
+
+@media (max-width: 40rem) {
+  .sectionLinks {
+    display: none;
+  }
+}
+
 .navDivider {
   width: 1px;
   height: 18px;
   background: var(--color-border-strong);
+}
+
+/* GONE ON A PHONE, and worth more than it looks. Each divider is one pixel
+   wide but sits in a 16px flex gap on both sides, so the two of them cost 66px
+   of a header whose usable width is 270px. With the section links moved to the
+   bottom bar, dropping them is the difference between the brand, Help and the
+   account control sharing one row and needing two. */
+@media (max-width: 40rem) {
+  .navDivider {
+    display: none;
+  }
 }
 
 /* `.whatIsPeira` lived here: the header link that opened the standalone
@@ -623,4 +679,24 @@ textarea.input {
 .badgeNeutral {
   background: var(--color-accent-bg);
   color: var(--nb-text-muted);
+}
+
+/*
+ * ROOM FOR THE BOTTOM BAR, and only when there is one.
+ *
+ * A fixed bar covers whatever the page's last element happens to be - the end
+ * of a hundred-quiz list, the Add question button, a form's Save. This adds
+ * exactly the bar's height plus whatever the device reserves for its home
+ * indicator, so the page can always be scrolled clear of it.
+ *
+ * `:has()` rather than a class, because `.page` is also the shell for the
+ * signed-out pages (Login, Early Access, the marketing homepage), which have
+ * no bar and must not get dead space at the bottom. Same mechanism as
+ * `.card:has(.table)` above; the bar carries a data attribute rather than a
+ * class so this does not depend on another module's hashed name.
+ */
+@media (max-width: 40rem) {
+  .page:has([data-section-bar]) {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
 }

@@ -3,40 +3,10 @@ import { useAuth } from '../../auth/AuthContext';
 import { PeiraLogo } from '../brand/PeiraLogo';
 import { HelpMenu } from '../../help/HelpMenu';
 import { MenuButton, MenuItem, MenuLink } from '../ui/MenuButton';
+import { SectionBar } from './SectionBar';
+import { SECTION_LINKS } from './sections';
 import styles from '../../styles/notebook.module.css';
 
-const NAV_LINKS = [
-  // isActive checks a prefix rather than exact match, so e.g. viewing a
-  // specific quiz (/quizzes/5) or its annotation tool still highlights
-  // "Quizzes" instead of showing no active tab at all.
-  {
-    to: '/dashboard',
-    label: 'Quizzes',
-    isActive: (path: string) => path === '/dashboard' || path.startsWith('/quizzes'),
-  },
-  {
-    to: '/documents',
-    label: 'Playbooks',
-    isActive: (path: string) => path.startsWith('/documents'),
-    tour: 'playbooks',
-  },
-  // ONE DESTINATION FOR PEOPLE. Roster, Groups and Team were three tabs all
-  // describing people in the same program - and "Roster" and "Team" are the
-  // same word to most coaches, so which one held what was something to
-  // remember rather than something to read. They are now areas inside Team;
-  // see TeamLayout.tsx.
-  //
-  // isActive still covers the old paths because /roster/:playerId and
-  // /groups/:groupId are still real destinations - opening one player should
-  // keep Team lit rather than leaving no tab active at all.
-  {
-    to: '/team',
-    label: 'Team',
-    isActive: (path: string) =>
-      path.startsWith('/team') || path.startsWith('/roster') || path.startsWith('/groups'),
-    tour: 'roster',
-  },
-];
 
 // Shown only to admins, and kept out of NAV_LINKS so it renders visually
 // apart from the normal tabs. Switching views is not the same kind of action
@@ -73,6 +43,7 @@ export function NotebookHeader() {
   }
 
   return (
+    <>
     <div className={styles.header}>
       {/* Signed in, this is the way back into the app; signed out (Login/
           Register/Join render this same header), "/" is the marketing
@@ -85,7 +56,12 @@ export function NotebookHeader() {
           the brand, for visual consistency with the rest of the app. */}
       {coach && (
         <div className={styles.nav}>
-          {NAV_LINKS.map((link) => (
+          {/* HIDDEN ON A PHONE, where SectionBar shows these same three along
+              the bottom instead. Never both: showing a coach the same three
+              destinations twice would spend the vertical space that
+              arrangement exists to give back. */}
+          <div className={styles.sectionLinks}>
+          {SECTION_LINKS.map((link) => (
             <Link
               key={link.to}
               to={link.to}
@@ -97,6 +73,7 @@ export function NotebookHeader() {
               {link.label}
             </Link>
           ))}
+          </div>
           <span className={styles.navDivider} />
           {/* Everything a coach can be taught lives behind this one control,
               admins and members alike. It replaced a standalone "What is
@@ -137,6 +114,17 @@ export function NotebookHeader() {
           </span>
         </div>
       )}
+
     </div>
+
+    {/* A SIBLING OF THE HEADER, NOT A CHILD OF IT. The header is sticky and
+        carries z-index 10, and anything inside it joins that stacking
+        context - which would have put this bar at the header's level rather
+        than the level it asks for, and made whether a row menu opens above
+        or below it depend on DOM order rather than on a decision. Rendered
+        from this component because it is the one thing every coach-facing
+        page already has, and it knows whether anybody is signed in. */}
+    {coach && <SectionBar />}
+    </>
   );
 }

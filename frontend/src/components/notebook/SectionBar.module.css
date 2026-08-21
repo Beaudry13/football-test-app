@@ -1,0 +1,57 @@
+/*
+ * The phone's primary navigation, fixed to the bottom of the viewport.
+ *
+ * MOBILE ONLY. Above 40rem the header holds these three links on one row and
+ * this is not rendered at all - `display: none` rather than a conditional in
+ * JS, so there is one source of truth for "is this a phone" and it is the
+ * same breakpoint the header uses to hide its own copy.
+ */
+.bar {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .bar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* Above page content (z-index 1), and deliberately BELOW the menus and
+       modals that can open over it: MenuButton's popovers sit at 10 and
+       modals at 100. A coach reaching for Delete in a row menu near the
+       bottom of the screen must not find this bar painted over it. */
+    z-index: 9;
+    background: var(--peira-surface);
+    border-top: 1px solid var(--color-border);
+    /* THE HOME INDICATOR. On a notched phone the bottom of the viewport is
+       not the bottom of the usable screen, so the bar's own padding grows by
+       whatever the device reserves. Zero everywhere else. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .item {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 48px, comfortably past the 44px floor for something a coach taps with a
+       thumb while holding a phone one-handed on a field. */
+    min-height: 48px;
+    padding: 4px 8px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--nb-text-muted);
+    text-decoration: none;
+    /* The active marker is drawn on this edge; the transparent border keeps
+       every item the same height whether or not it is the active one. */
+    border-top: 2px solid transparent;
+    margin-top: -1px;
+  }
+
+  .itemActive {
+    color: var(--nb-text);
+    border-top-color: var(--nb-accent);
+  }
+}
