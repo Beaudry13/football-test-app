@@ -186,36 +186,6 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             </div>
           </div>
 
-          <div className={styles.exportRow}>
-            <span className={styles.exportLabel}>Export Results:</span>
-            <button
-              type="button"
-              className={nb.btnPrimary}
-              onClick={() => handleExport('detailed-pdf')}
-              disabled={exporting !== null}
-              title="Every submitted Player, every question, every answer, and grading state - grouped by Player."
-            >
-              {exporting === 'detailed-pdf' ? 'Exporting…' : 'Detailed PDF'}
-            </button>
-            <button
-              type="button"
-              className={nb.btnSm}
-              onClick={() => handleExport('summary-pdf')}
-              disabled={exporting !== null}
-              title="One row per Player - score and grading status only, no per-question detail."
-            >
-              {exporting === 'summary-pdf' ? 'Exporting…' : 'Summary PDF'}
-            </button>
-            <button
-              type="button"
-              className={nb.btnSm}
-              onClick={() => handleExport('csv')}
-              disabled={exporting !== null}
-            >
-              {exporting === 'csv' ? 'Exporting…' : 'CSV'}
-            </button>
-          </div>
-
           {dashboard.missing_players.length > 0 && (
             <div className={`${nb.card} ${styles.missingCard}`}>
               <h2 className={nb.subheading}>
@@ -291,6 +261,55 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               </table>
             </div>
           )}
+
+          {/* EXPORTS COME AFTER THE ANSWER, NOT BEFORE IT.
+              A coach opens Results to find out how their players did. These
+              three buttons used to sit directly under the summary numbers, so
+              on a 375px phone the first screen of the Results tab was the
+              stats and then three ways to download a file - the scores
+              themselves began below the fold.
+
+              After the per-question breakdown and BEFORE the per-player list,
+              deliberately. The order now reads: how did we do, who is missing,
+              which questions did we miss, take it with you, then every
+              individual answer. Below the per-player list would have been the
+              other kind of wrong - with 24 players that list is 2,766px, and
+              "give the position coach a PDF" is a real job.
+
+              HONEST NUMBER: on a 20-question quiz this still puts the buttons
+              3.6 screens down at 375px, because the breakdown table alone is
+              1,948px. That is a presentation problem, not an ordering one -
+              the right answer to it is a denser breakdown, which belongs to
+              the visual pass and not to this change. */}
+          <div className={styles.exportRow}>
+            <span className={styles.exportLabel}>Export Results:</span>
+            <button
+              type="button"
+              className={nb.btnPrimary}
+              onClick={() => handleExport('detailed-pdf')}
+              disabled={exporting !== null}
+              title="Every submitted Player, every question, every answer, and grading state - grouped by Player."
+            >
+              {exporting === 'detailed-pdf' ? 'Exporting…' : 'Detailed PDF'}
+            </button>
+            <button
+              type="button"
+              className={nb.btnSm}
+              onClick={() => handleExport('summary-pdf')}
+              disabled={exporting !== null}
+              title="One row per Player - score and grading status only, no per-question detail."
+            >
+              {exporting === 'summary-pdf' ? 'Exporting…' : 'Summary PDF'}
+            </button>
+            <button
+              type="button"
+              className={nb.btnSm}
+              onClick={() => handleExport('csv')}
+              disabled={exporting !== null}
+            >
+              {exporting === 'csv' ? 'Exporting…' : 'CSV'}
+            </button>
+          </div>
         </>
       )}
 
