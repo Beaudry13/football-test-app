@@ -320,6 +320,8 @@ export function MasterRosterPage() {
             }
           />
         ) : (
+          /* SCROLLS THE TABLE, NOT THE PAGE - see the note in the stylesheet. */
+          <div className={styles.tableScroll}>
           <table className={nb.table}>
             <thead>
               <tr>
@@ -384,6 +386,7 @@ export function MasterRosterPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
     </div>
   );

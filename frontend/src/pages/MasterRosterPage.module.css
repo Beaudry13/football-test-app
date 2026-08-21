@@ -90,3 +90,25 @@
      on a narrow one. */
   margin-right: auto;
 }
+
+/*
+ * THE ROSTER TABLE SCROLLS ITSELF, RATHER THAN DRAGGING THE PAGE.
+ *
+ * `nb.table` carries `min-width: 32em` on a narrow screen so that a roster
+ * keeps every column instead of crushing them - the row-to-row comparison is
+ * the thing a coach reads a table FOR. That rule assumes something around the
+ * table is scrolling horizontally; everywhere else in Peira that something is
+ * the `nb.card` the table sits in.
+ *
+ * This page never had one. So with a real 53-player roster the table was
+ * 512px inside a 327px column and the whole PAGE scrolled sideways at 375px:
+ * the header, the tabs and the search box all slid off with it, and a coach
+ * had to drag the page back to reach the search they had just used.
+ *
+ * A scroll container, not a card, on purpose - a card would restyle a surface
+ * this change has no business restyling.
+ */
+.tableScroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
