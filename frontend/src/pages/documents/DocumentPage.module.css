@@ -137,7 +137,7 @@
   background: #fff;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 60rem) {
   /* Authoring is a desktop workflow (design doc §12), but simply viewing a
      playbook on a phone should not be broken. */
   .layout {

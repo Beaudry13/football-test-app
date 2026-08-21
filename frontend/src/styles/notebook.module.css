@@ -514,13 +514,23 @@ textarea.input {
 
 /* Data tables are the one thing that genuinely can't reflow into a phone
    width without losing the row-to-row comparison coaches read them for -
-   so below 700px the CARD scrolls horizontally instead, keeping every
+   so below 60rem the CARD scrolls horizontally instead, keeping every
    column intact and reachable. Without this, .card's overflow:hidden
    silently CLIPS the wider columns (measured: a 538px roster table cut
    off inside a 272px card at 320px wide) - the data was unreachable, not
    just awkward. -webkit-overflow-scrolling keeps momentum scrolling on
-   iOS. */
-@media (max-width: 700px) {
+   iOS.
+
+   60rem AND NOT 40rem, alone among the queries in this codebase. This was
+   written as 700px, which falls between the two standard breakpoints, and
+   rounding it DOWN to 40rem would have withdrawn the protection between
+   641px and 700px - the one direction that can reintroduce the clipping
+   the comment above records measuring. Rounding UP cannot: min-width 32em
+   is 512px, narrower than every viewport in the widened band, so a table
+   that already fits gains nothing and no scrollbar, and a table that does
+   not stays reachable instead of being cut off. When a breakpoint guards
+   against losing data, the tie breaks toward more protection. */
+@media (max-width: 60rem) {
   .card:has(.table) {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

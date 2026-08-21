@@ -140,7 +140,7 @@
   font-size: 0.8rem;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 60rem) {
   .summary,
   .quizMeta {
     display: none;

@@ -155,7 +155,7 @@
   font-style: normal;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
   .menu {
     width: min(320px, calc(100vw - 32px));
   }

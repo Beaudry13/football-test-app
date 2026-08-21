@@ -50,7 +50,7 @@
   opacity: 0.6;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
   .toolbar {
     flex-direction: column;
     align-items: stretch;

@@ -120,7 +120,7 @@
   padding-right: 4px;
 }
 
-@media (min-width: 700px) {
+@media (min-width: 40rem) {
   .toolButton {
     flex-direction: row;
     gap: 8px;

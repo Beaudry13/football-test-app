@@ -80,7 +80,7 @@
   flex-wrap: wrap;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
   .controlsRow input[type='text'],
   .controlsRow select {
     flex: 1 1 100%;

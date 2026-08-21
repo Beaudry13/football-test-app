@@ -253,7 +253,7 @@
   font-size: 12px;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 60rem) {
   .header {
     padding: 20px 24px;
   }

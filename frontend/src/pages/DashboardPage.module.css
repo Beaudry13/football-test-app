@@ -247,7 +247,7 @@ button.actionDelete:hover:not(:disabled) {
    (measured overflowing at 375px). Stack them instead, and let the forms
    above wrap too, so nothing needs horizontal scrolling on a phone.
    QuizCard is shared with FolderPage, so this fixes both surfaces. */
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
   .quizCard {
     flex-direction: column;
     align-items: stretch;

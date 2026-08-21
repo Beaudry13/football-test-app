@@ -92,7 +92,7 @@
   margin-top: 0.25em;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 40rem) {
   .statsGrid {
     grid-template-columns: repeat(2, 1fr);
   }

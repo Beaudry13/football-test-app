@@ -102,7 +102,7 @@
   margin-bottom: 0.75em;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 40rem) {
   .statusLists {
     grid-template-columns: 1fr;
   }

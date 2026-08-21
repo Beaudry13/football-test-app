@@ -230,7 +230,7 @@
 
 /* Phones: the action buttons stop fitting beside the text well before the
    text stops fitting, so the row becomes a stack rather than shrinking. */
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
   .step {
     flex-wrap: wrap;
   }

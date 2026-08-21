@@ -120,7 +120,7 @@
   color: var(--nb-text-muted);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
   .card {
     padding: 1em;
   }
