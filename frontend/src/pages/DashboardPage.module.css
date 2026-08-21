@@ -373,3 +373,18 @@ button.actionDelete:hover:not(:disabled) {
   font-size: 0.9em;
   flex-shrink: 0;
 }
+
+/*
+ * The two ways to add something, at rest.
+ *
+ * Replaces two permanently-open forms that held 175px between the heading and
+ * a coach's quizzes. Wraps rather than overflowing: both buttons measure
+ * ~250px together at 375px and fit one row, but a longer label in another
+ * language must push down, never sideways.
+ */
+.createRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}

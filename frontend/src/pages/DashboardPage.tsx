@@ -25,6 +25,9 @@ export function DashboardPage() {
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  /** Which creation form is open, if either. Null is the resting state -
+   *  see the note beside the create row. */
+  const [creating, setCreating] = useState<'quiz' | 'folder' | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
@@ -188,8 +191,10 @@ export function DashboardPage() {
         {/* Recovery for a live competition. Renders nothing when there is
             none, so the ordinary dashboard is unchanged. */}
         <ActiveCompetitionBanner />
-        <FirstSuccessChecklist reloadSignal={onboardingSignal} />
 
+        {/* What is live RIGHT NOW stays first: it is the one thing on this
+            page that can be time-critical. It renders nothing when nothing is
+            active, so it costs a returning coach no space on an ordinary day. */}
         <ActiveQuizStatusSection />
 
         {/* Tour target. An attribute rather than a class, so restyling this
@@ -206,37 +211,74 @@ export function DashboardPage() {
 
         <ErrorBanner message={error} />
 
-        <form className={styles.newQuizForm} onSubmit={handleCreate}>
-          <input
-            className={nb.input}
-            type="text"
-            placeholder="New Quiz title, e.g. Week 3 Prep"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-          />
-          <button type="submit" className={nb.btnPrimary} disabled={isCreating || !newTitle.trim()}>
-            {isCreating ? 'Creating…' : 'New Quiz'}
-          </button>
-        </form>
-
-        <form className={styles.newFolderForm} onSubmit={handleCreateFolder} data-tour="folders">
-          <input
-            className={nb.input}
-            type="text"
-            placeholder="New folder, e.g. Fall Camp"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-          />
-          <button type="submit" className={nb.btnSecondary} disabled={isCreatingFolder || !newFolderName.trim()}>
-            {isCreatingFolder ? (
-              'Creating…'
-            ) : (
-              <>
-                <Icon name="add" size={14} /> New folder
-              </>
-            )}
-          </button>
-        </form>
+        {/* CREATION IS ONE TAP FROM THE TOP, NOT TWO PERMANENT FORMS.
+            Two always-open forms held 175px between the heading and a coach's
+            actual work, on every visit, forever - and a coach creates a quiz
+            once in a session and reads their quizzes every time. The forms are
+            unchanged when open, including their disabled states and their
+            error handling; they simply are not what a returning coach has to
+            scroll past to reach the list. */}
+        {creating === null ? (
+          <div className={styles.createRow}>
+            <button type="button" className={nb.btnPrimary} onClick={() => setCreating('quiz')}>
+              <Icon name="add" size={14} /> New Quiz
+            </button>
+            <button
+              type="button"
+              className={nb.btnSecondary}
+              onClick={() => setCreating('folder')}
+              data-tour="folders"
+            >
+              <Icon name="add" size={14} /> New folder
+            </button>
+          </div>
+        ) : creating === 'quiz' ? (
+          <form className={styles.newQuizForm} onSubmit={handleCreate}>
+            <input
+              autoFocus
+              className={nb.input}
+              type="text"
+              placeholder="New Quiz title, e.g. Week 3 Prep"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setCreating(null)}
+            />
+            <button type="submit" className={nb.btnPrimary} disabled={isCreating || !newTitle.trim()}>
+              {isCreating ? 'Creating…' : 'New Quiz'}
+            </button>
+            <button type="button" className={nb.btnSm} onClick={() => setCreating(null)}>
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <form className={styles.newFolderForm} onSubmit={handleCreateFolder} data-tour="folders">
+            <input
+              autoFocus
+              className={nb.input}
+              type="text"
+              placeholder="New folder, e.g. Fall Camp"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setCreating(null)}
+            />
+            <button
+              type="submit"
+              className={nb.btnSecondary}
+              disabled={isCreatingFolder || !newFolderName.trim()}
+            >
+              {isCreatingFolder ? (
+                'Creating…'
+              ) : (
+                <>
+                  <Icon name="add" size={14} /> New folder
+                </>
+              )}
+            </button>
+            <button type="button" className={nb.btnSm} onClick={() => setCreating(null)}>
+              Cancel
+            </button>
+          </form>
+        )}
 
         {quizzes === null ? (
           <LoadingState />
@@ -291,6 +333,16 @@ export function DashboardPage() {
             )}
           </div>
         )}
+
+        {/* THE CHECKLIST, AFTER THE WORK IT IS ABOUT.
+            It used to open the dashboard, 609px of it, so a coach with a
+            hundred quizzes met "Get set up - 5 of 7 done" before they met any
+            of their own work. Nothing about it has changed except its
+            position, and for the coach it is actually FOR - a new one, whose
+            quiz list is a single empty-state line - it is still the first
+            thing on the screen after the heading. Returning coach first, new
+            coach second; both still served, in that order. */}
+        <FirstSuccessChecklist reloadSignal={onboardingSignal} />
       </div>
     </NotebookPage>
   );

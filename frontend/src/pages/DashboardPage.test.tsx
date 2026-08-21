@@ -161,6 +161,13 @@ describe('DashboardPage', () => {
     renderDashboard();
     await screen.findByText('No Quizzes yet. Create your first one above.');
 
+    // The form is not open at rest. It used to be, permanently, and held
+    // 175px between the heading and a coach's quizzes on every visit.
+    expect(screen.queryByPlaceholderText('New Quiz title, e.g. Week 3 Prep')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New Quiz' }));
+
+    // Everything below here is what this test always asserted: the submit is
+    // refused until there is a title, and creating refreshes the list.
     const newQuizButton = screen.getByRole('button', { name: 'New Quiz' });
     expect(newQuizButton).toBeDisabled();
 
@@ -172,6 +179,20 @@ describe('DashboardPage', () => {
 
     await waitFor(() => expect(createSpy).toHaveBeenCalledWith({ title: 'Week 3 Prep' }));
     expect(quizzesApi.listQuizzes).toHaveBeenCalledTimes(2); // initial load + refresh after create
+  });
+
+  it('shows a coach their own work before the setup checklist', async () => {
+    // RETURNING COACH FIRST. The checklist used to open the dashboard with
+    // 609px of itself, so a coach with a hundred quizzes met "Get set up" the
+    // moment they arrived and their own work after it. Both are still on the
+    // page; this pins which one comes first in the document.
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([sampleQuiz]);
+    renderDashboard();
+    await screen.findByText('Week 1 Prep');
+
+    const heading = screen.getByRole('heading', { name: 'Your Quizzes' });
+    const quiz = screen.getByText('Week 1 Prep');
+    expect(heading.compareDocumentPosition(quiz) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('duplicates a quiz and refreshes the list', async () => {
@@ -261,6 +282,9 @@ describe('DashboardPage', () => {
     const createFolderSpy = vi.spyOn(foldersApi, 'createFolder').mockResolvedValue(sampleFolder);
     renderDashboard();
     await screen.findByText('No Quizzes yet. Create your first one above.');
+
+    expect(screen.queryByPlaceholderText('New folder, e.g. Fall Camp')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'New folder' }));
 
     await user.type(screen.getByPlaceholderText('New folder, e.g. Fall Camp'), 'Fall Camp');
     await user.click(screen.getByRole('button', { name: 'New folder' }));
