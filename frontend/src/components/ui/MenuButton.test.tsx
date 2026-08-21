@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MenuButton, MenuItem } from './MenuButton';
-import { menuRightOffset } from './menuPosition';
+import { menuRightOffset, menuTopOffset } from './menuPosition';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -129,5 +129,45 @@ describe('the menu stays on the screen it is fixed to', () => {
     // to the left edge is the least bad answer, and it must not produce a
     // NEGATIVE offset, which would push it off the right instead.
     expect(menuRightOffset(90, MENU, 100)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('the menu opens where it can actually be used', () => {
+  /**
+   * THE SAME BUG AS THE LEFT EDGE, ON THE OTHER AXIS, AND WORSE.
+   *
+   * A menu is `position: fixed` and closes on scroll, so one that opens below
+   * the fold is not awkward - it is unreachable, and Rename, Duplicate, Move
+   * to and Delete go with it. Measured on a 375x812 screen: a trigger near
+   * the bottom of a folder list put its menu at y=816..966, entirely past the
+   * bottom of the viewport.
+   */
+  const H = 150; // a two-item menu
+  const VIEWPORT = 812;
+
+  it('opens BELOW the trigger when there is room', () => {
+    expect(menuTopOffset(100, 140, H, VIEWPORT)).toBe(144);
+  });
+
+  it('FLIPS ABOVE a trigger near the bottom rather than off the screen', () => {
+    // The measured case: trigger at y=772 on an 812px screen.
+    const top = menuTopOffset(772, 812, H, VIEWPORT);
+    expect(top + H).toBeLessThanOrEqual(VIEWPORT);
+    expect(top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('stays on screen even when neither side fits', () => {
+    // A menu taller than the screen it is on: it cannot fit either way, so it
+    // sits as high as it can and lets its own list scroll.
+    const top = menuTopOffset(400, 440, 900, VIEWPORT);
+    expect(top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('never returns a position that puts the top edge off the screen', () => {
+    for (const triggerTop of [0, 50, 300, 600, 780, 811]) {
+      const top = menuTopOffset(triggerTop, triggerTop + 40, H, VIEWPORT);
+      expect(top).toBeGreaterThanOrEqual(0);
+      expect(top).toBeLessThan(VIEWPORT);
+    }
   });
 });

@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from './Icon';
-import { menuRightOffset } from './menuPosition';
+import { menuRightOffset, menuTopOffset } from './menuPosition';
 import styles from './MenuButton.module.css';
 
 /** Lets a MenuItem close the menu it is in without the caller wiring it up.
@@ -80,7 +80,12 @@ export function MenuButton({
     const t = trigger.getBoundingClientRect();
     const width = menu.getBoundingClientRect().width;
 
-    setAt({ top: t.bottom + 4, right: menuRightOffset(t.right, width, window.innerWidth) });
+    const height = menu.getBoundingClientRect().height;
+
+    setAt({
+      top: menuTopOffset(t.top, t.bottom, height, window.innerHeight),
+      right: menuRightOffset(t.right, width, window.innerWidth),
+    });
   }, [isOpen]);
 
   useEffect(() => {
