@@ -29,13 +29,24 @@ function ModeBadge({ mode }: { mode: AssessmentMode }) {
   );
 }
 
-/** How the questions were ordered for this activation.
+/** How the questions were ordered for this activation. PRACTICE ONLY.
  *
- * Shown wherever the mode is, and for the same reason: a coach looking at a
- * code weeks later should not have to remember how they set it up. Rendered
- * for graded too - "Standard" is the honest answer there, and hiding it would
- * make its absence ambiguous. */
-function OrderBadge({ randomized }: { randomized: boolean }) {
+ * A coach looking at a code weeks later should not have to remember how they
+ * set it up - but on a GRADED code there is nothing to remember. Randomization
+ * is ignored entirely for graded: `routes/play.py` passes
+ * `randomize=access_code.is_practice and access_code.randomize_questions`, so
+ * a graded attempt always receives the authored order and this badge could
+ * only ever read "Standard".
+ *
+ * A label that cannot change is not information; it is a word taking up the
+ * space beside one that IS. So it renders where it can vary and stays quiet
+ * where it cannot - "Graded" already says the order is the authored one.
+ *
+ * This used to argue the opposite ("hiding it would make its absence
+ * ambiguous"). The absence is not ambiguous once the badge only ever appears
+ * on practice codes. */
+function OrderBadge({ mode, randomized }: { mode: AssessmentMode; randomized: boolean }) {
+  if (mode !== 'PRACTICE') return null;
   return (
     <span className={styles.orderBadge}>
       Question order: {randomized ? 'Randomized' : 'Standard'}
@@ -213,7 +224,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 structure already speaks. */}
             <div className={styles.codeDisplay}>{activeCode.code}</div>
             <ModeBadge mode={activeCode.mode} />
-            <OrderBadge randomized={activeCode.randomize_questions} />
+            <OrderBadge mode={activeCode.mode} randomized={activeCode.randomize_questions} />
             {activeCode.groups.length > 0 && (
               <p>Restricted to: {activeCode.groups.map((g) => g.name).join(', ')}</p>
             )}
@@ -400,7 +411,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                   <td>{code.groups.length > 0 ? code.groups.map((g) => g.name).join(', ') : '—'}</td>
                   <td>
                     <ModeBadge mode={code.mode} />
-                    <OrderBadge randomized={code.randomize_questions} />
+                    <OrderBadge mode={code.mode} randomized={code.randomize_questions} />
                   </td>
                   <td>
                     {code.is_active && code.is_valid ? (

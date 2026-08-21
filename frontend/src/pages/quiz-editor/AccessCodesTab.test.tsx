@@ -392,3 +392,50 @@ describe('AccessCodesTab active-card focus', () => {
     expect(activate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('AccessCodesTab question-order badge', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+  });
+
+  it('SAYS NOTHING ABOUT ORDER ON A GRADED CODE', async () => {
+    // Randomization is ignored entirely for graded - routes/play.py passes
+    // `randomize = is_practice and randomize_questions` - so the badge could
+    // only ever read "Standard". A label that cannot change is not
+    // information; it is a word beside one that is.
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([activeCode]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+
+    expect(screen.queryByText(/Question order/)).not.toBeInTheDocument();
+    // "Graded" already tells the coach the order is the authored one.
+    expect(screen.getAllByText('Graded').length).toBeGreaterThan(0);
+  });
+
+  it('still says it on a PRACTICE code, where it can vary', async () => {
+    const practice = { ...activeCode, mode: 'PRACTICE' as const, is_practice: true };
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([practice]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+
+    expect(screen.getAllByText(/Question order: Standard/).length).toBeGreaterThan(0);
+  });
+
+  it('distinguishes a randomized practice code', async () => {
+    const practice = {
+      ...activeCode,
+      mode: 'PRACTICE' as const,
+      is_practice: true,
+      randomize_questions: true,
+    };
+    vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([practice]);
+    render(<AccessCodesTab quiz={quiz} />);
+
+    await screen.findByText(/Active until/);
+
+    expect(screen.getAllByText(/Question order: Randomized/).length).toBeGreaterThan(0);
+  });
+});
