@@ -47,31 +47,9 @@
    different level of the product, and it should not read as another
    section of Coach View. */
 
-.subnav {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--peira-border);
-  margin-bottom: 20px;
-}
 
-.subnavLink {
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--peira-text-muted);
-  text-decoration: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
 
-.subnavLink:hover {
-  color: var(--peira-text);
-}
 
-.subnavLinkActive {
-  color: var(--peira-text);
-  border-bottom-color: var(--color-accent);
-}
 
 /* --- Metric strip --------------------------------------------------------
    Small tiles in a tight grid. Numbers are the content; labels are
@@ -407,7 +385,7 @@
   font-size: 13px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 40rem) {
   .page {
     padding: 14px 12px 48px;
   }

@@ -1,11 +1,12 @@
-import { Navigate, NavLink, Outlet } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
+import { Tabs, type Tab } from '../../components/ui/Tabs';
 import { useAuth } from '../../auth/AuthContext';
 import styles from './Owner.module.css';
 
-const TABS = [
+const TABS: Tab[] = [
   { to: '/owner', label: 'Overview', end: true },
-  { to: '/owner/organizations', label: 'Organizations', end: false },
-  { to: '/owner/coaches', label: 'Coaches', end: false },
+  { to: '/owner/organizations', label: 'Organizations' },
+  { to: '/owner/coaches', label: 'Coaches' },
 ];
 
 /** Shell for the Peira Owner Dashboard.
@@ -41,20 +42,7 @@ export function OwnerLayout() {
         customer football content.
       </p>
 
-      <nav className={styles.subnav}>
-        {TABS.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.end}
-            className={({ isActive }) =>
-              `${styles.subnavLink} ${isActive ? styles.subnavLinkActive : ''}`
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
+      <Tabs tabs={TABS} label="Owner dashboard sections" />
 
       <Outlet />
     </div>

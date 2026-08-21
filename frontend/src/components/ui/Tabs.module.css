@@ -1,0 +1,39 @@
+/*
+ * The areas inside one section - see Tabs.tsx.
+ *
+ * This is the two previous treatments merged, keeping the better half of each:
+ * the Owner Dashboard's type size (now the declared --peira-text-meta token)
+ * and Team's phone behaviour.
+ */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--peira-border);
+  margin-bottom: var(--space-5);
+  /* A phone scrolls these rather than wrapping them into two rows, which would
+     shift the content beneath on every visit. */
+  overflow-x: auto;
+}
+
+.tab {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  color: var(--peira-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  /* Sits the active underline on the container's own border rather than under
+     it, so the two read as one line. */
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--peira-text);
+}
+
+.tabActive {
+  color: var(--peira-text);
+  border-bottom-color: var(--color-accent);
+}

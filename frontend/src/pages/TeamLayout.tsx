@@ -1,11 +1,12 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
+import { Tabs, type Tab } from '../components/ui/Tabs';
 import nb from '../styles/notebook.module.css';
 import styles from './TeamLayout.module.css';
 
-const TABS = [
+const TABS: Tab[] = [
   { to: '/team', label: 'Players', end: true },
-  { to: '/team/groups', label: 'Groups', end: false },
-  { to: '/team/coaches', label: 'Coaches', end: false },
+  { to: '/team/groups', label: 'Groups' },
+  { to: '/team/coaches', label: 'Coaches' },
 ];
 
 /**
@@ -41,20 +42,7 @@ export function TeamLayout() {
         <h1 className={nb.heading}>Team</h1>
       </div>
 
-      <nav className={styles.subnav} aria-label="Team sections">
-        {TABS.map((tab) => (
-          <NavLink
-            key={tab.to}
-            to={tab.to}
-            end={tab.end}
-            className={({ isActive }) =>
-              `${styles.subnavLink} ${isActive ? styles.subnavLinkActive : ''}`
-            }
-          >
-            {tab.label}
-          </NavLink>
-        ))}
-      </nav>
+      <Tabs tabs={TABS} label="Team sections" />
 
       <Outlet />
     </div>
