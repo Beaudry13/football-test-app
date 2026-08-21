@@ -34,10 +34,15 @@
   outline-offset: 1px;
 }
 
+/*
+ * FIXED, NOT ABSOLUTE. `.card` carries `overflow: hidden` (notebook.module.css)
+ * and would clip this menu at the card's edge - the same rule that once cut a
+ * roster table off inside a card. Positioned against the viewport instead,
+ * with coordinates measured from the trigger at open time; MenuButton closes
+ * the menu on scroll or resize so those coordinates cannot go stale.
+ */
 .menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
+  position: fixed;
   z-index: 10;
   min-width: 11em;
   display: grid;

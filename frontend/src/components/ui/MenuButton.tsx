@@ -37,6 +37,8 @@ export function MenuButton({
   children: ReactNode;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Viewport coordinates for the open menu. See the positioning note below.
+  const [at, setAt] = useState<{ top: number; right: number } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -55,11 +57,22 @@ export function MenuButton({
       triggerRef.current?.focus();
     }
 
+    // A fixed menu is positioned against the viewport, so once the page moves
+    // underneath it the coordinates are stale. Closing is the honest response -
+    // and cheaper than tracking a moving target.
+    function onMove() {
+      setIsOpen(false);
+    }
+
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
     };
   }, [isOpen]);
 
@@ -79,7 +92,16 @@ export function MenuButton({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          setIsOpen((open) => {
+            if (open) return false;
+            // Measured at OPEN time, from the trigger, because the menu is
+            // fixed to the viewport rather than laid out inside the card.
+            const rect = triggerRef.current?.getBoundingClientRect();
+            if (rect) setAt({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+            return true;
+          });
+        }}
       >
         <Icon name="more" size={16} />
       </button>
@@ -90,6 +112,20 @@ export function MenuButton({
           role="menu"
           className={styles.menu}
           aria-label={label}
+          // POSITIONED AGAINST THE VIEWPORT, NOT THE CARD, AND THIS IS THE
+          // WHOLE FIX. `.card` is `overflow: hidden`, so an absolutely
+          // positioned menu was clipped at the card's edge - when the trigger
+          // sat low in a card, every item fell outside and became invisible
+          // AND unclickable, with the card's own stretched link occupying
+          // those coordinates. A coach reaching for "Move to" navigated into
+          // the quiz instead. Measured, not theorised: 82px of the Move
+          // control outside the card on a 375px viewport.
+          //
+          // `fixed` escapes ancestor overflow entirely. It is safe here
+          // because nothing above these menus sets transform/filter/contain,
+          // which would otherwise make a fixed element resolve against that
+          // ancestor instead of the viewport.
+          style={at ? { top: at.top, right: at.right } : undefined}
         >
           <CloseMenu.Provider value={() => setIsOpen(false)}>{children}</CloseMenu.Provider>
         </div>
