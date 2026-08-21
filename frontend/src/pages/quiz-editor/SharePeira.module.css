@@ -19,10 +19,21 @@
  * in my hand"), and giving it equal visual weight would make the coach choose
  * between two things when one of them is nearly always right.
  */
+/*
+ * TAPPABLE ON A PHONE, WITHOUT LOOKING ANY DIFFERENT.
+ *
+ * Styled as a text link, this was 16px tall - measured by hit-testing, not by
+ * reading the box - on the one screen a coach uses standing on a field with a
+ * phone in one hand. Padding grows the hit area; the equal negative margin
+ * puts the text back exactly where it was, so nothing moves and the control
+ * still reads as a quiet link rather than a second button competing with the
+ * primary one.
+ */
 .qrToggle {
   background: none;
   border: none;
-  padding: 0;
+  padding: 12px 8px;
+  margin: -12px -8px;
   font: inherit;
   font-size: 0.85rem;
   color: var(--peira-text-muted, #9aa5b1);

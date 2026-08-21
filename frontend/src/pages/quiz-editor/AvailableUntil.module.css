@@ -61,7 +61,8 @@
 .exactToggle {
   background: none;
   border: none;
-  padding: 0.25rem 0.2rem;
+  padding: 12px 8px;
+  margin: -12px -8px;
   font: inherit;
   font-size: 0.85em;
   color: var(--nb-text-muted);
@@ -84,10 +85,21 @@
  * controls for moving it are the rare path, so they sit behind this rather
  * than in front of a coach who came to read one sentence.
  */
+/*
+ * TAPPABLE ON A PHONE, WITHOUT LOOKING ANY DIFFERENT.
+ *
+ * Styled as a text link, this was 16px tall - measured by hit-testing, not by
+ * reading the box - on the one screen a coach uses standing on a field with a
+ * phone in one hand. Padding grows the hit area; the equal negative margin
+ * puts the text back exactly where it was, so nothing moves and the control
+ * still reads as a quiet link rather than a second button competing with the
+ * primary one.
+ */
 .changeToggle {
   background: none;
   border: none;
-  padding: 0 0.2rem;
+  padding: 12px 8px;
+  margin: -12px -8px;
   font: inherit;
   font-size: 0.85rem;
   color: var(--nb-text-muted);
