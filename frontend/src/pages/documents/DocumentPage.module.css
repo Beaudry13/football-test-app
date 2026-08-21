@@ -210,9 +210,17 @@
 }
 
 /* The two header actions sit together: the door into authoring, and the way
-   back to the library. */
+   back to the library.
+
+   WRAPPING, because on a 375px phone they do not fit beside the playbook's
+   title: the row ran 22px past the right edge and took the whole PAGE with
+   it, so the page scrolled sideways and the thumbnail strip below - which
+   scrolls horizontally on purpose - had a second, competing horizontal
+   scroll wrapped around it. Two nested horizontal scrolls on the same screen
+   is how a coach loses their place. */
 .headerActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5em;
   align-items: center;
 }
