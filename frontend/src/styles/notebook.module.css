@@ -207,6 +207,45 @@
   padding: 0 var(--space-1);
 }
 
+/* The account menu's trigger.
+ *
+ * Shaped like a nav control rather than the quiet "..." a row's overflow menu
+ * uses, because this one is not an overflow - it names who is signed in, and
+ * a coach looking for "am I in the right account" should be able to read the
+ * answer without opening anything.
+ *
+ * max-width so a long username can never be what pushes the header onto an
+ * extra row on a phone - the exact failure this consolidation exists to end.
+ */
+.accountTrigger {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+
+.accountTrigger:hover,
+.accountTrigger[aria-expanded='true'] {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+}
+
+.accountName {
+  display: block;
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+}
+
 .logoutButton {
   padding: 8px 18px;
   border-radius: var(--radius-pill);

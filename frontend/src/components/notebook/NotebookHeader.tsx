@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { PeiraLogo } from '../brand/PeiraLogo';
 import { HelpMenu } from '../../help/HelpMenu';
+import { MenuButton, MenuItem, MenuLink } from '../ui/MenuButton';
 import styles from '../../styles/notebook.module.css';
 
 const NAV_LINKS = [
@@ -96,53 +97,44 @@ export function NotebookHeader() {
               {link.label}
             </Link>
           ))}
-          {/* Admins only. Coach View is everything to the left of this and
-              is always where a page load lands; this is the one way out of
-              it, and clicking any tab above comes straight back. */}
-          {coach.role === 'admin' && (
-            <>
-              <span className={styles.navDivider} />
-              <Link
-                to={ADMIN_LINK.to}
-                className={`${styles.navLink} ${
-                  ADMIN_LINK.isActive(location.pathname) ? styles.navLinkActive : ''
-                }`}
-                // Absent for members, which is exactly how the tour's
-                // "admins only" step works - no role check, just a target
-                // that is not there.
-                data-tour="admin-view"
-              >
-                {ADMIN_LINK.label}
-              </Link>
-            </>
-          )}
-          {/* Peira platform owners only - a level above the organization,
-              rendered after Admin View so the escalation reads left to
-              right: my work, my organization, the product. Hiding it is
-              cosmetic; /api/owner enforces the permission server-side. */}
-          {coach.is_platform_owner && (
-            <>
-              <span className={styles.navDivider} />
-              <Link
-                to={OWNER_LINK.to}
-                className={`${styles.navLink} ${
-                  OWNER_LINK.isActive(location.pathname) ? styles.navLinkActive : ''
-                }`}
-              >
-                {OWNER_LINK.label}
-              </Link>
-            </>
-          )}
           <span className={styles.navDivider} />
           {/* Everything a coach can be taught lives behind this one control,
               admins and members alike. It replaced a standalone "What is
               Peira?" link, whose content is now a Help article. */}
           <HelpMenu />
-          <span className={styles.navDivider} />
-          <span className={styles.coachName}>{coach.username}</span>
-          <button className={styles.logoutButton} onClick={handleLogout}>
-            Log out
-          </button>
+          {/* WHERE THE ACCOUNT CLUSTER WENT.
+              Admin View, Owner, the coach's name and Log out used to sit in
+              this row as four more items. They are not navigation between
+              sections - they are who you are, which view you are in, and how
+              to leave - and on a 375px phone they were the difference between
+              a two-row header and a four-row one. Peira already puts
+              maintenance behind one control on quiz cards and folder rows;
+              this is the same decision applied to the header.
+
+              Rendered AFTER Help so the row reads: where you can go, how to
+              learn, who you are. */}
+          {/* data-tour lives on a wrapper, and ONLY for admins, so the tour's
+              "admins only" step keeps working exactly as it did: no role
+              check anywhere, just a target that is not there for members.
+              The step used to point at a visible Admin View link; it now
+              points at the control that contains it. */}
+          <span data-tour={coach.role === 'admin' ? 'admin-view' : undefined}>
+          <MenuButton
+            label={`Account: ${coach.username}`}
+            triggerClassName={styles.accountTrigger}
+            trigger={<span className={styles.accountName}>{coach.username}</span>}
+          >
+            {/* Admins only. Coach View is every destination to the left of
+                this and is always where a page load lands; this is the one
+                way out of it, and any tab comes straight back. */}
+            {coach.role === 'admin' && <MenuLink to={ADMIN_LINK.to}>{ADMIN_LINK.label}</MenuLink>}
+            {/* Peira platform owners only - a level above the organization.
+                Hiding it is cosmetic; /api/owner enforces the permission
+                server-side. */}
+            {coach.is_platform_owner && <MenuLink to={OWNER_LINK.to}>{OWNER_LINK.label}</MenuLink>}
+            <MenuItem onSelect={handleLogout}>Log out</MenuItem>
+          </MenuButton>
+          </span>
         </div>
       )}
     </div>

@@ -58,7 +58,7 @@ export const DASHBOARD_TOUR: TourStep[] = [
     // is not in a member's header, and a missing target is skipped.
     id: 'admin_view',
     title: 'Admin View',
-    body: 'Admin View lets you see and manage quizzes across the entire organization. Your normal Coach View still shows only your own work.',
+    body: 'Your name opens your account menu, and Admin View is inside it. Admin View lets you see and manage quizzes across the entire organization; your normal Coach View still shows only your own work.',
     target: '[data-tour="admin-view"]',
   },
 ];

@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { Link } from 'react-router-dom';
 import { Icon } from './Icon';
 import { menuRightOffset } from './menuPosition';
 import styles from './MenuButton.module.css';
@@ -40,11 +41,22 @@ const CloseMenu = createContext<() => void>(() => {});
 export function MenuButton({
   label,
   children,
+  trigger,
+  triggerClassName,
 }: {
   /** Names the menu for screen readers - "Actions for Week 3 Prep", not
    *  "More", so a list of twenty is not twenty identical buttons. */
   label: string;
   children: ReactNode;
+  /** What the trigger shows. Defaults to the quiet "..." glyph.
+   *
+   *  Exists so a menu that is NOT a row's overflow - the header's account
+   *  menu, which shows who you are signed in as - can look like itself
+   *  without a second popover implementation being written for it. The
+   *  positioning, the outside-click, the Escape handling and the on-screen
+   *  clamping are the parts worth sharing; the glyph is not. */
+  trigger?: ReactNode;
+  triggerClassName?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   // Viewport coordinates for the open menu. See the positioning note below.
@@ -115,14 +127,14 @@ export function MenuButton({
       <button
         ref={triggerRef}
         type="button"
-        className={styles.trigger}
+        className={triggerClassName ?? styles.trigger}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
         onClick={() => setIsOpen((open) => !open)}
       >
-        <Icon name="more" size={16} />
+        {trigger ?? <Icon name="more" size={16} />}
       </button>
 
       {isOpen && (
@@ -190,5 +202,23 @@ export function MenuItem({
     >
       {children}
     </button>
+  );
+}
+
+/** A real destination inside a MenuButton.
+ *
+ * A <Link>, not a button with navigate() in its onSelect, for the same reason
+ * the section tabs are links: Admin View and Owner are addresses a coach can
+ * bookmark, middle-click, or open in a second tab to compare against the one
+ * they are on. Routing them through an onSelect handler would quietly take
+ * all three away, and nothing about being inside a menu requires that.
+ */
+export function MenuLink({ to, children }: { to: string; children: ReactNode }) {
+  const close = useContext(CloseMenu);
+
+  return (
+    <Link to={to} role="menuitem" className={styles.item} onClick={close}>
+      {children}
+    </Link>
   );
 }
