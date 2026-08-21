@@ -94,10 +94,42 @@ describe('NotebookHeader help', () => {
     cleanup();
     renderHeader();
 
-    expect(screen.getByText('Admin View')).toBeInTheDocument();
+    // ...an admin does, inside the account menu. It moved there with the rest
+    // of the account cluster - name, log out, Owner - because none of those
+    // are navigation between sections, and on a 375px phone the four of them
+    // were the difference between a two-row header and a four-row one.
+    await user.click(screen.getByRole('button', { name: `Account: ${currentCoach.username}` }));
+    expect(screen.getByRole('menuitem', { name: 'Admin View' })).toBeInTheDocument();
+
     // ...but help is not a privilege.
     await user.click(screen.getByRole('button', { name: 'Help' }));
     expect(screen.getByRole('menu', { name: 'Help' })).toBeInTheDocument();
+  });
+
+  it('keeps the section links in the header and the account cluster out of it', async () => {
+    // THE POINT OF THE CONSOLIDATION. Where a coach can GO stays visible;
+    // who they are, which view they are in and how to leave go behind one
+    // control. A regression here is the header growing back.
+    const user = userEvent.setup();
+    vi.spyOn(authContext, 'useAuth').mockReturnValue({
+      coach: { ...currentCoach, role: 'admin' },
+      isLoading: false,
+      login: vi.fn(),
+      register: vi.fn(),
+      registerWithInvite: vi.fn(),
+      registerWithBetaInvite: vi.fn(),
+      logout: vi.fn(),
+    });
+    renderHeader();
+
+    for (const label of ['Quizzes', 'Playbooks', 'Team']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+    expect(screen.queryByRole('link', { name: 'Admin View' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: `Account: ${currentCoach.username}` }));
+    expect(screen.getByRole('menuitem', { name: 'Log out' })).toBeInTheDocument();
   });
 
   it('does not show anything for a logged-out visitor', () => {
