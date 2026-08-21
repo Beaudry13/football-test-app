@@ -29,6 +29,83 @@ const TYPE_LABELS: Record<string, string> = {
   fill_blank: 'Fill in the Blank',
 };
 
+
+/**
+ * "Move to position 1" without clicking Move up nineteen times.
+ *
+ * THE PROBLEM THIS SOLVES IS A COUNT, NOT A CONTROL. Move up / Move down are
+ * right for the adjustment a coach makes constantly while writing - nudge this
+ * one above that one. They are hopeless for the move a coach makes occasionally
+ * and decisively: this question belongs first. Nineteen clicks, each one a
+ * round trip, is not an interaction; it is a punishment.
+ *
+ * A NUMBER, NOT A DROPDOWN, and not drag-and-drop. A twenty-item select is a
+ * list to hunt through; dragging is a whole interaction system with a touch
+ * story and a keyboard story attached. A coach who wants question twenty first
+ * already knows the number they want.
+ *
+ * ONE-BASED, because that is what the screen says. "Question 1" is the label a
+ * coach reads; the zero-based index underneath is ours to keep to ourselves.
+ *
+ * REFUSES RATHER THAN GUESSES. Out of range, empty, or the position it already
+ * occupies - the button simply does not act. Clamping 0 to 1 would move a
+ * question somewhere the coach did not ask for and look like success.
+ */
+function MoveToPosition({
+  currentPosition,
+  total,
+  onMove,
+}: {
+  /** One-based, as shown on the card. */
+  currentPosition: number;
+  total: number;
+  onMove: (oneBasedTarget: number) => void;
+}) {
+  const [value, setValue] = useState('');
+  const parsed = Number(value);
+  const isValid =
+    value.trim() !== '' &&
+    Number.isInteger(parsed) &&
+    parsed >= 1 &&
+    parsed <= total &&
+    parsed !== currentPosition;
+
+  return (
+    <div className={styles.moveToField}>
+      <label className={styles.moveToLabel} htmlFor={`move-to-${currentPosition}`}>
+        Move to position
+      </label>
+      <div className={styles.moveToControls}>
+        <input
+          id={`move-to-${currentPosition}`}
+          className={nb.input}
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={total}
+          placeholder={`1-${total}`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && isValid) {
+              e.preventDefault();
+              onMove(parsed);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className={nb.btnSm}
+          disabled={!isValid}
+          onClick={() => onMove(parsed)}
+        >
+          Move
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -113,6 +190,25 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
     if (targetIndex < 0 || targetIndex >= questions.length) return;
     const ids = questions.map((q) => q.id);
     [ids[index], ids[targetIndex]] = [ids[targetIndex], ids[index]];
+    setError(null);
+    try {
+      await reorderQuestions(quiz.id, ids);
+      await reload();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+
+  /** Move one question to a one-based position, keeping every other question
+   *  in its existing relative order. Same `reorderQuestions` call the arrows
+   *  use - one ordered list of ids - so there is no second idea of what
+   *  ordering means. */
+  async function handleMoveTo(index: number, oneBasedTarget: number) {
+    const targetIndex = oneBasedTarget - 1;
+    if (targetIndex < 0 || targetIndex >= questions.length || targetIndex === index) return;
+    const ids = questions.map((q) => q.id);
+    const [moved] = ids.splice(index, 1);
+    ids.splice(targetIndex, 0, moved);
     setError(null);
     try {
       await reorderQuestions(quiz.id, ids);
@@ -248,6 +344,14 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                       >
                         {question.image ? 'Edit image' : 'Add image'}
                       </MenuItem>
+                    )}
+                    {/* Only worth offering when there is somewhere else to go. */}
+                    {questions.length > 1 && (
+                      <MoveToPosition
+                        currentPosition={index + 1}
+                        total={questions.length}
+                        onMove={(target) => handleMoveTo(index, target)}
+                      />
                     )}
                     {/* Edit changes what future players are asked. Stop sending
                         changes whether they are asked it at all. "Don't count

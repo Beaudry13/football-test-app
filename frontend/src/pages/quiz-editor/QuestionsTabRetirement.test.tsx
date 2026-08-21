@@ -26,7 +26,7 @@ vi.mock('../../api/questions', () => ({
   restoreQuestion: vi.fn().mockResolvedValue({}),
 }));
 
-import { restoreQuestion, retireQuestion } from '../../api/questions';
+import { reorderQuestions, restoreQuestion, retireQuestion } from '../../api/questions';
 
 const question = (over: Partial<Question> = {}): Question =>
   ({
@@ -253,5 +253,144 @@ describe('a question list that scales', () => {
 
     expect(screen.getByText(/Needs an image/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Add image' })).toBeInTheDocument();
+  });
+});
+
+describe('Move to position', () => {
+  /**
+   * THE PROBLEM THIS SOLVES IS A COUNT. Move up / Move down are right for the
+   * constant nudge while writing. They are hopeless for "this question belongs
+   * first" on a twenty-question install: nineteen clicks, each a round trip.
+   *
+   * Every test below asserts the ORDERED ID LIST sent to the API, because that
+   * list is the whole contract - the same one the arrows use.
+   */
+  function twenty() {
+    return Array.from({ length: 20 }, (_, i) =>
+      question({ id: i + 1, question_text: `Question ${i + 1}` }),
+    );
+  }
+
+  async function moveTo(user: ReturnType<typeof userEvent.setup>, from: number, to: number) {
+    await openQuestionMenu(user, from);
+    await user.type(screen.getByLabelText('Move to position'), String(to));
+    await user.click(screen.getByRole('button', { name: 'Move' }));
+  }
+
+  it('MOVES QUESTION 20 TO POSITION 1 IN ONE ACTION', async () => {
+    // The case that justified building this at all.
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await moveTo(user, 20, 1);
+
+    // 20 first, then 1..19 in their existing relative order - nothing else moved.
+    expect(reorderQuestions).toHaveBeenCalledWith(9, [
+      20, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+    ]);
+  });
+
+  it('moves question 1 to position 20', async () => {
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await moveTo(user, 1, 20);
+
+    expect(reorderQuestions).toHaveBeenCalledWith(9, [
+      2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 1,
+    ]);
+  });
+
+  it('moves a middle question to another middle position', async () => {
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await moveTo(user, 10, 5);
+
+    expect(reorderQuestions).toHaveBeenCalledWith(9, [
+      1, 2, 3, 4, 10, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    ]);
+  });
+
+  it('DOES NOTHING WHEN THE POSITION IS THE ONE IT ALREADY HAS', async () => {
+    // A no-op reorder is still a write and a reload. Refusing is cheaper and
+    // cannot reorder anything by accident.
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await openQuestionMenu(user, 7);
+    await user.type(screen.getByLabelText('Move to position'), '7');
+
+    expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled();
+    expect(reorderQuestions).not.toHaveBeenCalled();
+  });
+
+  it('REFUSES POSITION 0 RATHER THAN CLAMPING IT', async () => {
+    // Clamping 0 to 1 would move the question somewhere the coach did not ask
+    // for and look exactly like success.
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await openQuestionMenu(user, 5);
+    await user.type(screen.getByLabelText('Move to position'), '0');
+
+    expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled();
+    expect(reorderQuestions).not.toHaveBeenCalled();
+  });
+
+  it('refuses a position past the last question', async () => {
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await openQuestionMenu(user, 5);
+    await user.type(screen.getByLabelText('Move to position'), '21');
+
+    expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled();
+    expect(reorderQuestions).not.toHaveBeenCalled();
+  });
+
+  it('refuses an empty position', async () => {
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await openQuestionMenu(user, 5);
+
+    expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled();
+    expect(reorderQuestions).not.toHaveBeenCalled();
+  });
+
+  it('SPEAKS IN THE NUMBERS ON THE SCREEN, NOT ARRAY INDEXES', async () => {
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await openQuestionMenu(user, 3);
+
+    // "Question 3" is what the card says; 1-20 is what the field accepts.
+    const input = screen.getByLabelText('Move to position');
+    expect(input).toHaveAttribute('min', '1');
+    expect(input).toHaveAttribute('max', '20');
+  });
+
+  it('is not offered when there is nowhere else to go', async () => {
+    const user = userEvent.setup();
+    renderTab([question()]);
+
+    await openQuestionMenu(user, 1);
+
+    expect(screen.queryByLabelText('Move to position')).not.toBeInTheDocument();
+  });
+
+  it('LEAVES THE ARROWS EXACTLY AS THEY WERE', async () => {
+    // The common path is untouched: this is an addition for the rare decisive
+    // move, not a replacement for the constant nudge.
+    const user = userEvent.setup();
+    renderTab(twenty());
+
+    await user.click(screen.getAllByRole('button', { name: 'Move down' })[0]);
+
+    // A swap of the first two, exactly as before.
+    expect(reorderQuestions).toHaveBeenCalledWith(9, [
+      2, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    ]);
   });
 });

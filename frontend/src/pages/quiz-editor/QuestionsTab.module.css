@@ -149,3 +149,32 @@
   color: var(--peira-text-muted, #bbb);
   border: 1px dashed var(--peira-border, #555);
 }
+
+/* --- Move to position ----------------------------------------------------
+ * Lives inside the question's "..." menu. The arrows handle the constant
+ * nudge-it-up adjustment; this handles the decisive move that would otherwise
+ * cost nineteen clicks.
+ */
+.moveToField {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.4em 0.5em;
+  border-top: 1px solid var(--nb-card-border);
+  border-bottom: 1px solid var(--nb-card-border);
+  margin: 0.25em 0;
+}
+
+.moveToLabel {
+  font-size: 0.85em;
+  color: var(--nb-text-muted);
+}
+
+.moveToControls {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.moveToControls input {
+  width: 5.5em;
+  flex-shrink: 0;
+}
