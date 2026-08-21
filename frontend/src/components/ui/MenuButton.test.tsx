@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MenuButton, MenuItem } from './MenuButton';
+import { menuRightOffset } from './menuPosition';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -82,5 +83,51 @@ describe('the menu is not clipped by the card it sits in', () => {
     fireEvent(window, new Event('resize'));
 
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+});
+
+describe('the menu stays on the screen it is fixed to', () => {
+  /**
+   * THE SECOND HALF OF THE SAME BUG.
+   *
+   * Escaping the card's overflow fixed the clipping and introduced a new
+   * failure at phone widths. `.wrapper` stretches to fill the card's layout -
+   * 277px on a 375px viewport - and the 40px trigger sits at its LEFT end, so
+   * aligning the menu's right edge to the TRIGGER's put 87px of a 176px menu
+   * off the left of the screen. The old `right: 0` had aligned to the WRAPPER,
+   * whose right edge was on screen, which is why the regression only appeared
+   * once the menu was measured from the trigger.
+   *
+   * It was invisible on a desktop, where the trigger and the wrapper end at
+   * the same x - so these cases are written at the widths where they differ.
+   */
+  const MENU = 176;
+
+  it('CLAMPS a left-hand trigger so no part of the menu is off screen', () => {
+    // The real measurement: 375px viewport, trigger at 49..89.
+    const right = menuRightOffset(89, MENU, 375);
+    const left = 375 - right - MENU;
+
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(right).toBeGreaterThanOrEqual(0);
+  });
+
+  it('still right-aligns to the trigger when that fits', () => {
+    // 1280px viewport, trigger at 1091..1131 - the desktop case, which must
+    // not move: the menu hangs under the "..." it belongs to.
+    expect(menuRightOffset(1131, MENU, 1280)).toBe(1280 - 1131);
+  });
+
+  it('keeps the right edge on screen for a trigger at the very edge', () => {
+    // A trigger flush with the viewport's right edge would otherwise ask for
+    // an offset of 0 and sit against the glass.
+    expect(menuRightOffset(1280, MENU, 1280)).toBeGreaterThan(0);
+  });
+
+  it('does not fight a viewport narrower than the menu itself', () => {
+    // Nothing can keep a 176px menu fully inside a 100px screen. Anchoring it
+    // to the left edge is the least bad answer, and it must not produce a
+    // NEGATIVE offset, which would push it off the right instead.
+    expect(menuRightOffset(90, MENU, 100)).toBeGreaterThanOrEqual(0);
   });
 });

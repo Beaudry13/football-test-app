@@ -1,5 +1,15 @@
-import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Icon } from './Icon';
+import { menuRightOffset } from './menuPosition';
 import styles from './MenuButton.module.css';
 
 /** Lets a MenuItem close the menu it is in without the caller wiring it up.
@@ -41,7 +51,25 @@ export function MenuButton({
   const [at, setAt] = useState<{ top: number; right: number } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
+
+  /* MEASURED AFTER THE MENU EXISTS, because clamping it to the screen needs
+   * the menu's WIDTH, which does not exist until it renders - see
+   * `menuRightOffset`. That is why this is a layout effect and not another
+   * line in onClick. It runs before paint, so the coach never sees the
+   * unclamped position. */
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const trigger = triggerRef.current;
+    const menu = menuRef.current;
+    if (!trigger || !menu) return;
+
+    const t = trigger.getBoundingClientRect();
+    const width = menu.getBoundingClientRect().width;
+
+    setAt({ top: t.bottom + 4, right: menuRightOffset(t.right, width, window.innerWidth) });
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,16 +120,7 @@ export function MenuButton({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
-        onClick={() => {
-          setIsOpen((open) => {
-            if (open) return false;
-            // Measured at OPEN time, from the trigger, because the menu is
-            // fixed to the viewport rather than laid out inside the card.
-            const rect = triggerRef.current?.getBoundingClientRect();
-            if (rect) setAt({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-            return true;
-          });
-        }}
+        onClick={() => setIsOpen((open) => !open)}
       >
         <Icon name="more" size={16} />
       </button>
@@ -109,6 +128,7 @@ export function MenuButton({
       {isOpen && (
         <div
           id={menuId}
+          ref={menuRef}
           role="menu"
           className={styles.menu}
           aria-label={label}
@@ -125,6 +145,9 @@ export function MenuButton({
           // because nothing above these menus sets transform/filter/contain,
           // which would otherwise make a fixed element resolve against that
           // ancestor instead of the viewport.
+          //
+          // The coordinates come from the layout effect above, which also
+          // keeps the menu inside the screen on a phone.
           style={at ? { top: at.top, right: at.right } : undefined}
         >
           <CloseMenu.Provider value={() => setIsOpen(false)}>{children}</CloseMenu.Provider>
