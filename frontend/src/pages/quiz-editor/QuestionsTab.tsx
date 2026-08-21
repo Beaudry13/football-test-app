@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   createQuestion,
   deleteQuestion,
@@ -15,6 +15,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { QuestionEditor } from './QuestionEditor';
 import { Icon } from '../../components/ui/Icon';
+import { MenuButton, MenuItem } from '../../components/ui/MenuButton';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -33,6 +34,8 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
+  // The annotate screen is a route, so the menu navigates rather than linking.
+  const navigate = useNavigate();
 
   const questions = quiz.questions ?? [];
 
@@ -206,49 +209,64 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     <span>Needs an image before players can draw on it.</span>
                   </div>
                 )}
+                {/* WHAT A COACH DOES TO A QUESTION, AND WHAT THEY DO TO IT ONCE.
+                    Edit is the job - changing what players are asked - so it
+                    stays. Attaching a picture, stopping a question mid-season
+                    and deleting one are each things a coach does once or never,
+                    and six permanent controls per question meant 120 of them on
+                    a twenty-question quiz. Same "..." a quiz card uses, so the
+                    pattern is learned once. */}
                 <div className={styles.formActions}>
                   <button className={nb.btnSm} onClick={() => setEditingId(question.id)}>
                     Edit
                   </button>
-                  {/* Hidden for a question built from a playbook page: it
-                      already has an image, from its region, and a question may
-                      have only one source. The API refuses the upload too - this
-                      just avoids offering an action that would be rejected. */}
-                  {!question.region && (
-                  <Link
-                    className={nb.btnSm}
-                    to={`/quizzes/${quiz.id}/questions/${question.id}/annotate`}
-                  >
-                    {question.image ? 'Edit image' : 'Add image'}
-                  </Link>
-                  )}
-                  {/* THREE NEIGHBOURING ACTIONS, KEPT APART ON PURPOSE.
-                      Edit changes what future players are asked. Stop sending
-                      changes whether they are asked it at all. "Don't count
-                      this question" - which changes scoring for players who
-                      ALREADY answered - deliberately does not live here; it is
-                      on Results, next to the players it affects. */}
-                  {question.is_retired ? (
-                    <button
+
+                  {/* THE ONE EXCEPTION, and the reason it is not in the menu:
+                      the card above says this question is unanswerable without
+                      a picture, and a fix hidden behind a menu is a warning
+                      with no button. Once an image exists, changing it is
+                      maintenance and moves inside. */}
+                  {!question.region && question.needs_image && (
+                    <Link
                       className={nb.btnSm}
-                      onClick={() => handleRestore(question.id)}
+                      to={`/quizzes/${quiz.id}/questions/${question.id}/annotate`}
                     >
-                      Start sending it again
-                    </button>
-                  ) : (
-                    <button
-                      className={nb.btnSm}
-                      onClick={() => handleRetire(question.id, index + 1)}
-                    >
-                      Stop sending it
-                    </button>
+                      Add image
+                    </Link>
                   )}
-                  <button
-                    className={`${nb.btnSm} ${nb.btnDanger}`}
-                    onClick={() => handleDelete(question.id, index + 1)}
-                  >
-                    Delete
-                  </button>
+
+                  <MenuButton label={`More actions for question ${index + 1}`}>
+                    {/* Hidden for a question built from a playbook page: it
+                        already has an image, from its region, and a question
+                        may have only one source. The API refuses the upload
+                        too - this just avoids offering a rejected action. */}
+                    {!question.region && !question.needs_image && (
+                      <MenuItem
+                        onSelect={() =>
+                          navigate(`/quizzes/${quiz.id}/questions/${question.id}/annotate`)
+                        }
+                      >
+                        {question.image ? 'Edit image' : 'Add image'}
+                      </MenuItem>
+                    )}
+                    {/* Edit changes what future players are asked. Stop sending
+                        changes whether they are asked it at all. "Don't count
+                        this question" - which changes scoring for players who
+                        ALREADY answered - deliberately does not live here; it
+                        is on Results, next to the players it affects. */}
+                    {question.is_retired ? (
+                      <MenuItem onSelect={() => handleRestore(question.id)}>
+                        Start sending it again
+                      </MenuItem>
+                    ) : (
+                      <MenuItem onSelect={() => handleRetire(question.id, index + 1)}>
+                        Stop sending it
+                      </MenuItem>
+                    )}
+                    <MenuItem destructive onSelect={() => handleDelete(question.id, index + 1)}>
+                      Delete
+                    </MenuItem>
+                  </MenuButton>
                 </div>
               </div>
               <div className={styles.reorderActions}>

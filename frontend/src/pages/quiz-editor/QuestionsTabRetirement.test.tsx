@@ -56,11 +56,23 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+
+/** Opens a question's "..." menu and returns the item by name.
+ *
+ * Stopping and deleting a question are things a coach does once or never, so
+ * they moved out of six permanent per-question controls and into the same menu
+ * a quiz card uses. Reaching them costs one click here, and costs a coach
+ * looking at a twenty-question quiz nothing at all. */
+async function openQuestionMenu(user: ReturnType<typeof userEvent.setup>, n = 1) {
+  await user.click(screen.getByRole('button', { name: `More actions for question ${n}` }));
+}
+
 describe('stopping a question', () => {
   it('offers "Stop sending it" on an active question', () => {
     renderTab([question()]);
 
-    expect(screen.getByRole('button', { name: 'Stop sending it' })).toBeInTheDocument();
+    // Behind the menu now - a coach stops a question once, or never.
+    expect(screen.getByRole('button', { name: 'More actions for question 1' })).toBeInTheDocument();
   });
 
   it('avoids the word "retire", which reads as jargon to a coach', () => {
@@ -73,7 +85,8 @@ describe('stopping a question', () => {
     const user = userEvent.setup();
     renderTab([question()]);
 
-    await user.click(screen.getByRole('button', { name: 'Stop sending it' }));
+    await openQuestionMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Stop sending it' }));
 
     // The reassurance is the load-bearing half: a coach reaching for this has
     // just found a broken question and needs to know existing results are safe.
@@ -85,7 +98,8 @@ describe('stopping a question', () => {
     const user = userEvent.setup();
     renderTab([question()]);
 
-    await user.click(screen.getByRole('button', { name: 'Stop sending it' }));
+    await openQuestionMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Stop sending it' }));
     // Scoped to the dialog: the confirm button deliberately repeats the card's
     // wording, so an unscoped query matches both. The role is `alertdialog`,
     // not `dialog` - querying the wrong one finds nothing and would make the
@@ -115,7 +129,8 @@ describe('a stopped question', () => {
     const user = userEvent.setup();
     renderTab([question({ is_retired: true })]);
 
-    await user.click(screen.getByRole('button', { name: 'Start sending it again' }));
+    await openQuestionMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Start sending it again' }));
 
     await waitFor(() => expect(restoreQuestion).toHaveBeenCalledWith(9, 1));
   });
@@ -125,7 +140,8 @@ describe('a stopped question', () => {
     const user = userEvent.setup();
     renderTab([question({ is_retired: true })]);
 
-    await user.click(screen.getByRole('button', { name: 'Start sending it again' }));
+    await openQuestionMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Start sending it again' }));
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
@@ -139,7 +155,7 @@ describe('a stopped question', () => {
   it('shows only one of stop/restore at a time', () => {
     renderTab([question({ is_retired: true })]);
 
-    expect(screen.queryByRole('button', { name: 'Stop sending it' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Stop sending it' })).not.toBeInTheDocument();
   });
 });
 
@@ -158,7 +174,8 @@ describe('separation from Phase 3 exclusion', () => {
     const user = userEvent.setup();
     renderTab([question()]);
 
-    await user.click(screen.getByRole('button', { name: 'Stop sending it' }));
+    await openQuestionMenu(user);
+    await user.click(screen.getByRole('menuitem', { name: 'Stop sending it' }));
 
     expect(screen.queryByText(/won't count/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/removed from scoring/i)).not.toBeInTheDocument();
@@ -174,5 +191,67 @@ describe('a mixed list', () => {
 
     expect(screen.getByText('Question 1')).toBeInTheDocument();
     expect(screen.getByText('Question 2')).toBeInTheDocument();
+  });
+});
+
+describe('a question list that scales', () => {
+  /**
+   * THE OLD DASHBOARD PROBLEM, IN A DIFFERENT PLACE. Every question used to
+   * carry six permanent controls - Edit, image, Stop sending, Delete, Move up,
+   * Move down - so a twenty-question quiz put a hundred and twenty of them on
+   * one screen. Fine with three, a wall with twenty.
+   *
+   * Edit and the two reorder arrows stay: those are the jobs a coach does
+   * WHILE authoring, repeatedly. The rest are once-or-never and moved into the
+   * same "..." a quiz card uses.
+   */
+  it('KEEPS ONLY THE AUTHORING JOBS PERMANENTLY VISIBLE', async () => {
+    renderTab([question()]);
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move up' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move down' })).toBeInTheDocument();
+
+    // The once-or-never actions are not competing for attention.
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Stop sending it' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit image/ })).not.toBeInTheDocument();
+  });
+
+  it('SCALES: permanent controls grow by four per question, not six', async () => {
+    // Four = Edit, Move up, Move down, and the menu trigger itself. The
+    // difference is what turns a twenty-question quiz from a wall back into a
+    // list.
+    const many = Array.from({ length: 20 }, (_, i) =>
+      question({ id: i + 1, question_text: `Question ${i + 1}` }),
+    );
+    renderTab(many);
+
+    const buttons = screen.getAllByRole('button');
+    const perQuestion = buttons.filter((b) =>
+      /^(Edit|Move up|Move down|More actions for question \d+)$/.test(
+        b.getAttribute('aria-label') || b.textContent || '',
+      ),
+    );
+
+    expect(perQuestion).toHaveLength(20 * 4);
+  });
+
+  it('still reaches Delete, in one click', async () => {
+    const user = userEvent.setup();
+    renderTab([question()]);
+
+    await openQuestionMenu(user);
+
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('KEEPS "Add image" VISIBLE WHEN THE QUESTION CANNOT BE ANSWERED WITHOUT ONE', () => {
+    // The card says this question is unanswerable without a picture. A fix
+    // hidden behind a menu is a warning with no button.
+    renderTab([question({ needs_image: true, image: null } as Partial<Question>)]);
+
+    expect(screen.getByText(/Needs an image/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Add image' })).toBeInTheDocument();
   });
 });
