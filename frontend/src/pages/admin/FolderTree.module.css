@@ -32,7 +32,7 @@
 
 .folderRow:hover,
 .quizRow:hover {
-  background: var(--nb-surface-raised, rgba(255, 255, 255, 0.05));
+  background: var(--peira-surface-raised);
 }
 
 .folderRow:focus-visible {
@@ -116,7 +116,7 @@
 }
 
 .ownerTag {
-  background: var(--nb-surface-raised, rgba(255, 255, 255, 0.08));
+  background: var(--peira-surface-raised-strong);
   color: var(--nb-text-muted);
 }
 

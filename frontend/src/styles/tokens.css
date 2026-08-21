@@ -110,6 +110,44 @@
   --peira-border: rgba(255, 255, 255, 0.1);
   --color-border-strong: rgba(255, 255, 255, 0.14);
 
+  /* --- Color: washes and fills ---------------------------------------------
+   * NAMED FOR THEIR JOB, NOT THEIR OPACITY, and that is the point of this
+   * block existing at all.
+   *
+   * These ten values were raw `rgba(255, 255, 255, 0.0x)` literals in nine
+   * stylesheets. On a dark ground, white-at-low-alpha is how this codebase
+   * draws "slightly lifted" and "hovered" - it works, and it is invisible the
+   * moment the ground turns to paper. There is no light equivalent of "white
+   * at 2%": the light theme needs dark-at-low-alpha, which is a different
+   * declaration rather than a different number.
+   *
+   * So they are gathered here FIRST, at their exact current values, changing
+   * nothing. The light theme then edits ten values in one file instead of
+   * hunting fourteen literals across nine.
+   *
+   * Several of these will collapse into one another on light (the three
+   * drop-zone states almost certainly become two). Leaving them distinct here
+   * keeps this step honest: it is an inventory, not a redesign.
+   *
+   * --nb-surface-raised was REFERENCED by three rules and DEFINED nowhere, so
+   * its fallbacks were the live values - and the three disagreed with each
+   * other (0.05, 0.06, 0.08). Each now names the wash it actually wanted.
+   */
+  --peira-wash-hover: rgba(255, 255, 255, 0.02);
+  --peira-wash-control-hover: rgba(255, 255, 255, 0.05);
+  --peira-wash-control-hover-strong: rgba(255, 255, 255, 0.08);
+  --peira-surface-raised: rgba(255, 255, 255, 0.05);
+  --peira-surface-raised-strong: rgba(255, 255, 255, 0.08);
+  --peira-dropzone: rgba(255, 255, 255, 0.02);
+  --peira-dropzone-focus: rgba(255, 255, 255, 0.04);
+  --peira-dropzone-active: rgba(255, 255, 255, 0.06);
+  --peira-chip: rgba(255, 255, 255, 0.06);
+  /* A field a coach types into. Already a LIGHT fill on the dark theme - the
+     one place the interface was light all along, which is why it needs the
+     least thought when the rest of it follows. */
+  --peira-field: rgba(255, 255, 255, 0.92);
+  --peira-field-soft: rgba(255, 255, 255, 0.6);
+
   /* --- Color: text (collide with index.css - --peira-* prefixed) ----------
      Every text token here clears WCAG AA (4.5:1 for small text) against all
      three surfaces it can land on - the page (--peira-bg), a card

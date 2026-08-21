@@ -214,13 +214,13 @@
 
 .navLink:hover {
   color: var(--nb-text);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--peira-wash-control-hover);
 }
 
 .navLinkActive,
 .navLinkActive:hover {
   color: var(--nb-text);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--peira-wash-control-hover-strong);
 }
 
 /* The three primary destinations, in the header. Hidden on a phone, where

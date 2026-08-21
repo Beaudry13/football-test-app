@@ -38,7 +38,7 @@
 .titleInput:hover,
 .titleInput:focus {
   border-color: var(--nb-input-border);
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--peira-field-soft);
   outline: none;
 }
 
@@ -86,7 +86,7 @@
 .descriptionInput:hover,
 .descriptionInput:focus {
   border-color: var(--nb-input-border);
-  background: rgba(255, 255, 255, 0.6);
+  background: var(--peira-field-soft);
   outline: none;
 }
 
