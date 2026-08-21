@@ -42,6 +42,35 @@
   outline: none;
 }
 
+/*
+ * THE TITLE GETS ITS OWN ROW ON A PHONE.
+ *
+ * `.titleRow` puts the title field and two link-buttons - Preview as player,
+ * Start Competition - on one flex line. Both links carry white-space: nowrap
+ * and so refuse to shrink; the input does not refuse, so it took the whole
+ * squeeze. At 375px it measured EIGHTEEN PIXELS wide: the name of the quiz
+ * was neither readable nor editable on a phone, while the two things a coach
+ * came to the editor least often to do had the entire row.
+ *
+ * Only below 40rem, and only flex-basis: at every width where the three
+ * already fitted on one line, nothing changes. Wrapping unconditionally would
+ * have pushed the links onto a second row on a desktop too, because the input
+ * asks for 100% and the links would never fit beside it.
+ *
+ * The 40px type is left alone deliberately - it shows very little of a title
+ * in a 327px field, but choosing the size a heading shrinks to on a phone is
+ * the visual pass's decision, not this fix's.
+ */
+@media (max-width: 40rem) {
+  .titleRow {
+    flex-wrap: wrap;
+  }
+
+  .titleInput {
+    flex-basis: 100%;
+  }
+}
+
 .descriptionInput {
   width: 100%;
   border: 1px solid transparent;
