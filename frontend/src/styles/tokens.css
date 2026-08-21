@@ -149,6 +149,27 @@
   --font-heading: 'Peira Plain Symbols', 'Playfair Display', serif;
   --font-body: 'Inter', sans-serif;
 
+  /* --- Type scale ---------------------------------------------------------
+   * DECLARED, because it was already being used. These six sizes are what the
+   * coach interface actually renders today; they were simply written as
+   * literals in a dozen stylesheets, so nothing stopped a seventh appearing.
+   *
+   * NOT a search-and-replace mandate. Existing literals stay until the screen
+   * around them is redesigned - migrating everything now would be a large
+   * diff that changes nothing a coach can see, on screens that are about to
+   * change anyway.
+   *
+   * --peira- prefixed for the same reason the radius tokens are: index.css
+   * declares its own :root for the player theme, two :root blocks are global,
+   * and load order decides collisions silently.
+   */
+  --peira-text-page: 32px;    /* page title - one per screen */
+  --peira-text-section: 24px; /* section heading */
+  --peira-text-title: 19px;   /* quiz / question / card title */
+  --peira-text-body: 15px;    /* body copy */
+  --peira-text-control: 14px; /* buttons and inputs */
+  --peira-text-meta: 13px;    /* metadata, labels, badges */
+
   /* --- Radius (sm/md collide with index.css - --peira-* prefixed) --------- */
   --peira-radius-sm: 7px;
   --peira-radius-md: 10px;
@@ -168,6 +189,24 @@
   --space-6: 24px;
   --space-7: 32px;
   --space-8: 48px;
+
+  /* --- Breakpoints ---------------------------------------------------------
+   * THESE ARE NOT CUSTOM PROPERTIES, AND CANNOT BE. A media query cannot read
+   * var(), so these two numbers are written literally in every stylesheet that
+   * needs them. Recorded here so there is one place that says what they mean:
+   *
+   *   40rem / 640px   phone -> tablet.  Below it: one column, stacked
+   *                   toolbars, full-width actions, tables scroll inside
+   *                   their card.
+   *   60rem / 960px   tablet -> desktop. Multi-column layouts appear at or
+   *                   above it, and nowhere below.
+   *
+   * Capability queries - hover: hover, prefers-reduced-motion - are a
+   * different axis and are deliberately NOT folded into these.
+   *
+   * Competition keeps its own breakpoints: it is a projector stage, frozen at
+   * M2, and shares neither this layout nor this theme.
+   */
 
   /* --- Motion ------------------------------------------------------------- */
   --duration-fast: 0.1s;
