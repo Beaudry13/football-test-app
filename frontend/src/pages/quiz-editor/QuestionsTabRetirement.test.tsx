@@ -394,3 +394,34 @@ describe('Move to position', () => {
     ]);
   });
 });
+
+describe('reaching Add question on a long quiz', () => {
+  /** A COACH BUILDING A QUIZ SHOULD NOT SCROLL THE QUIZ TO EXTEND IT.
+   *
+   * With 20 questions the only "+ Add question" sat at y=4922 on a 375px
+   * phone - six screens down, past every question already written. There is
+   * now a second control at the near end of the list. jsdom computes no
+   * layout, so what can be pinned is the structure: two controls for the same
+   * action, and opening either leaves exactly one form and no stray buttons.
+   */
+  it('offers the same action at both ends of the list', async () => {
+    const user = userEvent.setup();
+    renderTab(Array.from({ length: 20 }, (_, i) =>
+      question({ id: i + 1, question_text: `Question ${i + 1}`, position: i }),
+    ));
+
+    const controls = screen.getAllByRole('button', { name: '+ Add question' });
+    expect(controls).toHaveLength(2);
+
+    await user.click(controls[0]);
+
+    // One form, and no add buttons left to press while it is open.
+    expect(screen.queryAllByRole('button', { name: '+ Add question' })).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Add question' })).toBeInTheDocument();
+  });
+
+  it('offers only one on an empty quiz, where both would be adjacent', () => {
+    renderTab([]);
+    expect(screen.getAllByRole('button', { name: '+ Add question' })).toHaveLength(1);
+  });
+});

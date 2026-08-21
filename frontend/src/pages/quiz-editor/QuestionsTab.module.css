@@ -178,3 +178,11 @@
   width: 5.5em;
   flex-shrink: 0;
 }
+
+/* The near-end add control. Secondary weight on purpose: it is the same
+   action as the primary button at the far end of the list, offered closer to
+   hand, and two identical primary buttons on one screen would read as two
+   different things. */
+.addRow {
+  margin-bottom: var(--space-4);
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   createQuestion,
@@ -108,6 +108,21 @@ function MoveToPosition({
 
 export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
+  /* The add form lives at the BOTTOM, because that is where a new question
+     lands. The control at the top opens that same form and brings it into
+     view, rather than opening a second form somewhere the question will not
+     appear - an add box above the list would be telling the coach the
+     question goes there, and it does not. */
+  const addFormRef = useRef<HTMLDivElement>(null);
+  const [scrollToAddForm, setScrollToAddForm] = useState(false);
+
+  useEffect(() => {
+    if (!isAdding || !scrollToAddForm) return;
+    setScrollToAddForm(false);
+    // Optional call: jsdom has no scrollIntoView, and a test that adds a
+    // question should not fail on the scroll that made it visible.
+    addFormRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [isAdding, scrollToAddForm]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
@@ -222,6 +237,30 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
     <div>
       {dialog}
       <ErrorBanner message={error} />
+
+      {/* A COACH BUILDING A QUIZ SHOULD NOT SCROLL THE QUIZ TO EXTEND IT.
+          With 20 questions the only "+ Add question" was at y=4922 on a
+          375px phone - six screens down, past every question already
+          written. This is the same control at the near end of the list.
+
+          Not a floating button, and not sticky: both spend permanent screen
+          space, on a surface whose problem is that it has too little. Hidden
+          while the form is open, so there is only ever one way to cancel,
+          and absent on an empty quiz, where the two controls would be
+          adjacent and one of them redundant. */}
+      {questions.length > 0 && !isAdding && (
+        <div className={styles.addRow}>
+          <button
+            className={nb.btnSecondary}
+            onClick={() => {
+              setScrollToAddForm(true);
+              setIsAdding(true);
+            }}
+          >
+            + Add question
+          </button>
+        </div>
+      )}
 
       <div className={styles.list}>
         {questions.length === 0 && !isAdding && (
@@ -390,18 +429,20 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         )}
       </div>
 
-      {isAdding ? (
-        <QuestionEditor
-          submitLabel="Add question"
-          allowImage
-          onSave={handleCreate}
-          onCancel={() => setIsAdding(false)}
-        />
-      ) : (
-        <button className={nb.btnPrimary} onClick={() => setIsAdding(true)}>
-          + Add question
-        </button>
-      )}
+      <div ref={addFormRef}>
+        {isAdding ? (
+          <QuestionEditor
+            submitLabel="Add question"
+            allowImage
+            onSave={handleCreate}
+            onCancel={() => setIsAdding(false)}
+          />
+        ) : (
+          <button className={nb.btnPrimary} onClick={() => setIsAdding(true)}>
+            + Add question
+          </button>
+        )}
+      </div>
     </div>
   );
 }
