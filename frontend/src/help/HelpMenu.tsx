@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { menuRightOffset } from '../components/ui/menuPosition';
 import { restoreOnboarding } from '../api/onboarding';
 import { useTour } from './tour/tourContext';
 import { useWhatsNew } from './whatsNew/useWhatsNew';
@@ -18,9 +19,47 @@ export function HelpMenu() {
   const [open, setOpen] = useState(false);
   const [article, setArticle] = useState<HelpEntry | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // How far the menu's right edge sits left of the container's, in px. 0 is
+  // the desktop answer and what `right: 0` used to hardcode.
+  const [rightOffset, setRightOffset] = useState(0);
   const navigate = useNavigate();
   const tour = useTour();
   const whatsNew = useWhatsNew();
+
+  /* KEEP THE MENU ON THE SCREEN, WITHOUT MOVING IT OFF THE HEADER.
+   *
+   * `right: 0` aligned the menu's right edge to the trigger's, which is
+   * correct on a desktop and wrong on a phone: the Help trigger sits at
+   * x=165..221 in a 375px header, so a 320px menu started at x=-99 and a
+   * third of every topic title was off the left of the screen.
+   *
+   * SAME RULE AS THE CARD MENUS, DIFFERENT COORDINATE SPACE, AND DELIBERATELY
+   * SO. `menuRightOffset` is shared - there is one definition of "align to the
+   * trigger unless that would leave the screen" - but MenuButton applies it
+   * with `position: fixed` because it has to escape a card's overflow:hidden,
+   * and pays for that by closing itself on scroll. This menu has no clipping
+   * ancestor and lives in a STICKY header, so staying `absolute` keeps it
+   * travelling with the header the way a coach expects, and its own 70vh
+   * scrollable list keeps working. Going `fixed` here would buy nothing and
+   * cost both.
+   *
+   * So the shared rule is computed in viewport coordinates and then converted
+   * back into an offset from the container - which resolves to exactly 0 at
+   * any width where the menu already fit.
+   */
+  useLayoutEffect(() => {
+    if (!open) return;
+    const container = containerRef.current;
+    const menu = menuRef.current;
+    if (!container || !menu) return;
+
+    const box = container.getBoundingClientRect();
+    const width = menu.getBoundingClientRect().width;
+    const wantedRightEdge = window.innerWidth - menuRightOffset(box.right, width, window.innerWidth);
+
+    setRightOffset(box.right - wantedRightEdge);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -96,7 +135,13 @@ export function HelpMenu() {
       </button>
 
       {open && (
-        <div className={styles.menu} role="menu" aria-label="Help">
+        <div
+          className={styles.menu}
+          role="menu"
+          aria-label="Help"
+          ref={menuRef}
+          style={{ right: rightOffset }}
+        >
           <ul className={styles.group}>
             {HELP_ENTRIES.map((entry) => (
               <MenuItem
