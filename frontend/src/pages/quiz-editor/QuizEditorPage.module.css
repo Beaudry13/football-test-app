@@ -70,9 +70,28 @@
   margin-bottom: 1.5em;
 }
 
+/*
+ * WRAPS RATHER THAN PUSHING THE PAGE SIDEWAYS.
+ *
+ * Four labels measure 312px on a 375px phone and the strip is 327px wide, so
+ * the TABS fit - it is the 72px of gaps between them that did not. Without
+ * wrapping, a `nowrap` flex row is 384px in a 327px space and the whole page
+ * scrolls horizontally: the coach drags the entire editor left to reach
+ * Results, and every other screen they scroll past is 33px too wide.
+ *
+ * Wrapping, not scrolling the strip. A scrollable strip would put Results
+ * off the edge with no affordance saying it is there - on a surface where
+ * these four ARE the editor. Two rows shows all four, and a coach who can see
+ * every destination does not have to discover one.
+ *
+ * The column gap is unchanged, so nothing moves at any width where the four
+ * already fitted on one row - which is every width from 640 up. The row gap
+ * only ever applies once it has wrapped.
+ */
 .tabs {
   display: flex;
-  gap: 1.5em;
+  flex-wrap: wrap;
+  gap: 0.5em 1.5em;
   border-bottom: 2px solid var(--nb-card-border);
   margin-bottom: 1.5em;
 }
