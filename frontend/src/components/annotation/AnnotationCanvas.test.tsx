@@ -80,6 +80,11 @@ function renderCanvas() {
 
 async function waitForReady(onReady: ReturnType<typeof vi.fn>) {
   await waitFor(() => expect(onReady).toHaveBeenCalled());
+  // onReady firing is not the same as React having COMMITTED isReady, and the
+  // keyboard listener attaches in an effect gated on it. Tests that click a
+  // button first flush that commit by accident; a test that presses a key
+  // straight away does not, and would silently observe a dead listener.
+  await act(async () => {});
 }
 
 function clickAt(x: number, y: number) {
@@ -359,5 +364,125 @@ describe('AnnotationCanvas keyboard shortcuts', () => {
 
     press('z', { ctrlKey: true, shiftKey: true });
     await waitFor(() => expect(ref.current!.getAnnotations()).toHaveLength(1));
+  });
+});
+
+describe('sticky tools - a coach picks a tool once and keeps drawing', () => {
+  type ByTitle = (id: string | RegExp) => HTMLElement;
+  const isActive = (byTitle: ByTitle, label: string | RegExp) =>
+    byTitle(label).className.includes('Active');
+
+  it.each(['Line', 'Arrow', 'Rectangle', 'Circle / Ellipse'])(
+    'stays on %s after drawing one, and draws a second',
+    async (label) => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    fireEvent.click(getByTitle(label));
+    dragFrom([10, 10], [80, 80]);
+    const afterFirst = capturedCanvas!.getObjects().length;
+    expect(isActive(getByTitle, label)).toBe(true);
+
+    // The point of the phase: the SECOND shape costs no extra clicks.
+    dragFrom([100, 100], [170, 170]);
+    expect(capturedCanvas!.getObjects().length).toBeGreaterThan(afterFirst);
+    expect(isActive(getByTitle, label)).toBe(true);
+    },
+  );
+
+  it('stays on Route after a route is finished, ready for the next one', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    fireEvent.click(getByTitle(/Curve/));
+    clickAt(10, 10);
+    clickAt(50, 40);
+    clickAt(90, 10);
+    act(() => capturedCanvas!.fire('mouse:dblclick', {} as never));
+
+    expect(isActive(getByTitle, /Curve/)).toBe(true);
+  });
+
+  it('RETURNS TO SELECT after a text label, which is the one exception', async () => {
+    // Creating a label immediately opens it for typing. Staying on Text would
+    // mean the click that commits the edit lands on the canvas and stamps a
+    // SECOND empty label - the accidental-duplicate hazard sticky tools are
+    // otherwise free of.
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    fireEvent.click(getByTitle('Text label'));
+    clickAt(40, 40);
+
+    expect(isActive(getByTitle, 'Select')).toBe(true);
+    expect(isActive(getByTitle, 'Text label')).toBe(false);
+  });
+
+  it('Escape leaves a sticky tool and lands on Select', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    fireEvent.click(getByTitle('Arrow'));
+    expect(isActive(getByTitle, 'Arrow')).toBe(true);
+
+    press('Escape');
+    expect(isActive(getByTitle, 'Select')).toBe(true);
+  });
+
+  it('switches tools from the keyboard alone', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    press('l');
+    expect(isActive(getByTitle, 'Line')).toBe(true);
+    press('a');
+    expect(isActive(getByTitle, 'Arrow')).toBe(true);
+    press('r');
+    expect(isActive(getByTitle, /Curve/)).toBe(true);
+    press('o');
+    expect(isActive(getByTitle, 'Circle / Ellipse')).toBe(true);
+    press('v');
+    expect(isActive(getByTitle, 'Select')).toBe(true);
+  });
+
+  it('does not switch tools while the coach is typing in a quiz field', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    const field = document.createElement('textarea');
+    document.body.appendChild(field);
+    press('a', {}, field);
+    press('t', {}, field);
+    expect(isActive(getByTitle, 'Select')).toBe(true);
+    field.remove();
+  });
+
+  it('SAVES THE SAME DATA a non-sticky editor would have saved', async () => {
+    // The invariant for this phase: tool selection is interface state and must
+    // never reach the serialized annotation. Two lines drawn with a sticky
+    // tool must be byte-identical to two drawn by re-picking the tool between
+    // them.
+    const first = renderCanvas();
+    const getByTitle = first.getByTitle;
+    await waitForReady(first.onReady);
+    fireEvent.click(getByTitle('Line'));
+    dragFrom([10, 10], [80, 80]);
+    dragFrom([100, 100], [170, 170]);
+    const withoutIds = (layers: unknown[]) =>
+      JSON.stringify(layers.map((l) => ({ ...(l as Record<string, unknown>), id: undefined })));
+    const sticky = withoutIds(first.ref.current!.getAnnotations());
+    first.unmount();
+
+    const second = renderCanvas();
+    const getByTitle2 = second.getByTitle;
+    await waitForReady(second.onReady);
+    fireEvent.click(getByTitle('Line'));
+    dragFrom([10, 10], [80, 80]);
+    fireEvent.click(getByTitle('Select'));
+    fireEvent.click(getByTitle2('Line'));
+    dragFrom([100, 100], [170, 170]);
+    const rePicked = withoutIds(second.ref.current!.getAnnotations());
+
+    expect(sticky).toEqual(rePicked);
   });
 });

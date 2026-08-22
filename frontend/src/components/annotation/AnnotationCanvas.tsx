@@ -428,7 +428,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         history.isRestoring.current = false;
         refreshLayers();
         history.pushSnapshot();
-        setTool('select');
+        // STICKY: the tool stays Route. A coach drawing a coverage draws
+        // several routes in a row, and dropping back to Select after each one
+        // made the second route cost two actions instead of one.
         canvas!.requestRenderAll();
       }
 
@@ -586,11 +588,16 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           history.isRestoring.current = false;
           refreshLayers();
           history.pushSnapshot();
-          // Switch back to Select once the shape is placed - otherwise the
-          // very next click-and-drag (naturally read by the user as "move
-          // this shape") is instead interpreted as "draw another one",
-          // stamping out duplicates along the drag path.
-          setTool('select');
+          /* STICKY: the tool stays Line / Arrow / Box / Circle.
+             This used to return to Select, and the comment here warned that
+             the next click-and-drag would be read as "draw another one"
+             rather than "move this shape". That hazard is not real: while any
+             drawing tool is active every object is set selectable:false and
+             evented:false (see the tool effect above), so dragging an
+             existing shape is not offered until a coach asks for Select
+             anyway. What the reset actually cost was the second line, the
+             second arrow and the second box - each one a tool click a coach
+             had already made. */
         }
         shape = null;
         startPoint = null;
@@ -660,6 +667,10 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
           pasteObject(canvas).then(() => refreshLayers());
           return true;
         },
+        onSelectTool: (next) => {
+          setTool(next);
+          return true;
+        },
         onDelete: () => {
           const canvas = canvasRef.current;
           if (!canvas || canvas.getActiveObjects().length === 0) return false;
@@ -669,14 +680,17 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         onEscape: () => {
           const canvas = canvasRef.current;
           if (!canvas) return false;
-          if (curvePointsRef.current.length > 0 || curvePreviewRef.current) {
-            resetCurveState();
-            setTool('select');
-            canvas.requestRenderAll();
-            return true;
-          }
-          if (canvas.getActiveObject()) {
-            canvas.discardActiveObject();
+          /* THE WAY OUT OF A STICKY TOOL, and the reason sticky is safe.
+             Escape abandons a half-drawn route, drops any selection, and
+             always lands back on Select - so a coach who has been stamping
+             arrows is one key away from moving one. */
+          const wasDrawing = curvePointsRef.current.length > 0 || curvePreviewRef.current;
+          if (wasDrawing) resetCurveState();
+          const hadSelection = Boolean(canvas.getActiveObject());
+          if (hadSelection) canvas.discardActiveObject();
+          const wasToolActive = toolRef.current !== 'select';
+          if (wasToolActive) setTool('select');
+          if (wasDrawing || hadSelection || wasToolActive) {
             canvas.requestRenderAll();
             return true;
           }

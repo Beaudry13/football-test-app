@@ -1,6 +1,11 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isTypingTarget, useAnnotationKeyboard, type AnnotationKeyboardHandlers } from './useAnnotationKeyboard';
+import {
+  isTypingTarget,
+  TOOL_HOTKEYS,
+  useAnnotationKeyboard,
+  type AnnotationKeyboardHandlers,
+} from './useAnnotationKeyboard';
 
 function createHandlers(handled = true): AnnotationKeyboardHandlers {
   return {
@@ -10,6 +15,7 @@ function createHandlers(handled = true): AnnotationKeyboardHandlers {
     onPaste: vi.fn(() => handled),
     onDelete: vi.fn(() => handled),
     onEscape: vi.fn(() => handled),
+    onSelectTool: vi.fn(() => handled),
   };
 }
 
@@ -124,5 +130,85 @@ describe('useAnnotationKeyboard', () => {
     enabled.unmount();
     press('z', { ctrlKey: true });
     expect(handlers.onUndo).not.toHaveBeenCalled();
+  });
+});
+
+describe('tool hotkeys', () => {
+  it('maps every approved letter to its tool', () => {
+    // The coach's word on the left, the model's name on the right - Route is
+    // a curve, Draw is freehand, Box is a rectangle.
+    expect(TOOL_HOTKEYS).toEqual({
+      v: 'select',
+      l: 'line',
+      a: 'arrow',
+      r: 'curve',
+      d: 'freehand',
+      s: 'rectangle',
+      o: 'circle',
+      t: 'text',
+    });
+  });
+
+  it.each(Object.entries(TOOL_HOTKEYS))('%s switches to %s', (key, tool) => {
+    const handlers = createHandlers();
+    renderHook(() => useAnnotationKeyboard(handlers, true));
+    press(key);
+    expect(handlers.onSelectTool).toHaveBeenCalledWith(tool);
+  });
+
+  it('is case-insensitive, so Shift+L is still Line', () => {
+    const handlers = createHandlers();
+    renderHook(() => useAnnotationKeyboard(handlers, true));
+    press('L', { shiftKey: true });
+    expect(handlers.onSelectTool).toHaveBeenCalledWith('line');
+  });
+
+  it('NEVER fires with a modifier held', () => {
+    // The one that matters: Ctrl/Cmd+A is Select All, not Arrow. Cmd+V is
+    // Paste, not the pointer. Without the modifier guard both would switch
+    // tools out from under the shortcut the coach actually meant.
+    const handlers = createHandlers();
+    renderHook(() => useAnnotationKeyboard(handlers, true));
+    press('a', { ctrlKey: true });
+    press('a', { metaKey: true });
+    press('v', { ctrlKey: true });
+    press('s', { metaKey: true });
+    press('t', { altKey: true });
+    expect(handlers.onSelectTool).not.toHaveBeenCalled();
+  });
+
+  it.each(['INPUT', 'TEXTAREA'])('does nothing while typing in a %s', (tag) => {
+    // T must not become the Text tool while a coach types a question, and A
+    // must not become Arrow mid-answer.
+    const handlers = createHandlers();
+    renderHook(() => useAnnotationKeyboard(handlers, true));
+    const field = document.createElement(tag);
+    document.body.appendChild(field);
+    press('t', {}, field);
+    press('a', {}, field);
+    expect(handlers.onSelectTool).not.toHaveBeenCalled();
+    field.remove();
+  });
+
+  it('does nothing while editing text on the canvas itself', () => {
+    // Fabric mounts a hidden textarea while a text annotation is being
+    // edited; isTypingTarget already covers it, and this pins that it does.
+    const handlers = createHandlers();
+    renderHook(() => useAnnotationKeyboard(handlers, true));
+    const editable = document.createElement('div');
+    editable.contentEditable = 'true';
+    Object.defineProperty(editable, 'isContentEditable', { value: true });
+    document.body.appendChild(editable);
+    press('l', {}, editable);
+    expect(handlers.onSelectTool).not.toHaveBeenCalled();
+    editable.remove();
+  });
+
+  it('leaves an unmapped letter to the browser', () => {
+    const handlers = createHandlers();
+    renderHook(() => useAnnotationKeyboard(handlers, true));
+    const event = press('q');
+    expect(handlers.onSelectTool).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
   });
 });

@@ -1,5 +1,13 @@
 import { LINE_CAPS, STROKE_COLORS, type AnnotationStyle, type AnnotationTool, type LineCap } from './types';
+import { TOOL_HOTKEYS } from './useAnnotationKeyboard';
 import styles from './AnnotationToolbar.module.css';
+
+/** The letter that reaches each tool, derived from the keymap rather than
+ *  written out again - a hint that can drift from the binding is worse than
+ *  no hint. */
+const HOTKEY_FOR = Object.fromEntries(
+  Object.entries(TOOL_HOTKEYS).map(([key, tool]) => [tool, key.toUpperCase()]),
+) as Record<AnnotationTool, string>;
 
 const TOOLS: { key: AnnotationTool; label: string; icon: string }[] = [
   { key: 'select', label: 'Select', icon: '↖' },
@@ -48,14 +56,24 @@ export function AnnotationToolbar({
   return (
     <div className={styles.toolbar}>
       <div className={styles.toolGroup}>
+        {/* aria-keyshortcuts rather than appending the key to `title`: a
+            label is a name, not a place to stash a keybinding - and the
+            visible badge below is what actually teaches it. */}
         {TOOLS.map((t) => (
           <button
             key={t.key}
             title={t.label}
+            aria-keyshortcuts={HOTKEY_FOR[t.key]}
             className={`${styles.toolButton} ${tool === t.key ? styles.toolButtonActive : ''}`}
             onClick={() => onToolChange(t.key)}
           >
             {t.icon}
+            {/* The shortcut teaches itself from the control it belongs to,
+                rather than from a help panel nobody opens. Hidden where there
+                is no keyboard - see the stylesheet. */}
+            <span className={styles.hotkey} aria-hidden="true">
+              {HOTKEY_FOR[t.key]}
+            </span>
           </button>
         ))}
       </div>

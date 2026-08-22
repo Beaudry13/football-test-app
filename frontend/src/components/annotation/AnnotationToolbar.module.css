@@ -80,3 +80,37 @@
 .spacer {
   flex: 1;
 }
+
+/*
+ * THE SHORTCUT, ON THE TOOL IT BELONGS TO.
+ *
+ * Small and quiet: a coach who never touches the keyboard should read the
+ * icon and not notice this, and a coach who wants speed should find it
+ * without being told there is something to find.
+ *
+ * HIDDEN WHERE THERE IS NO KEYBOARD. `(hover: hover) and (pointer: fine)` is
+ * true for a mouse or trackpad and false for a finger, so a phone or tablet
+ * is not offered a hint for a key it has no way to press.
+ */
+.hotkey {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .toolButton {
+    position: relative;
+  }
+
+  .hotkey {
+    display: block;
+    position: absolute;
+    right: 3px;
+    bottom: 1px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+}
