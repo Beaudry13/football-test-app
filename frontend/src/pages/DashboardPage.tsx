@@ -15,6 +15,8 @@ import { ActiveCompetitionBanner } from './compete/ActiveCompetitionBanner';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ActiveQuizStatusSection } from './ActiveQuizStatus';
+import { DashboardRail, DashboardQuietNote } from './DashboardRail';
+import { useActiveStatus } from '../hooks/useActiveStatus';
 import { FirstSuccessChecklist } from '../components/onboarding/FirstSuccessChecklist';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
@@ -28,6 +30,10 @@ export function DashboardPage() {
   /** Which creation form is open, if either. Null is the resting state -
    *  see the note beside the create row. */
   const [creating, setCreating] = useState<'quiz' | 'folder' | null>(null);
+  /* Polled once here and handed to both readers - the live card and the rail
+     show different faces of the same payload, and two hooks would mean two
+     requests for one round trip's worth of data. */
+  const activeEntries = useActiveStatus();
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
@@ -192,10 +198,19 @@ export function DashboardPage() {
             none, so the ordinary dashboard is unchanged. */}
         <ActiveCompetitionBanner />
 
-        {/* What is live RIGHT NOW stays first: it is the one thing on this
-            page that can be time-critical. It renders nothing when nothing is
-            active, so it costs a returning coach no space on an ordinary day. */}
-        <ActiveQuizStatusSection />
+        {/* TWO COLUMNS ONLY WHEN THERE IS A SECOND COLUMN. The grid switches on
+            `:has(> aside)` rather than on a flag computed here, so the layout
+            cannot disagree with DashboardRail about whether a rail exists -
+            the rail returns null when it has nothing true to say, and the page
+            widens to one column in the same breath. */}
+        <div className={styles.layout}>
+          <div className={styles.main}>
+            {/* What is live RIGHT NOW stays first: it is the one thing on this
+                page that can be time-critical. It renders nothing when nothing
+                is active, so it costs a returning coach no space on an
+                ordinary day. */}
+            <ActiveQuizStatusSection entries={activeEntries} />
+            <DashboardQuietNote entries={activeEntries} quizzes={quizzes} />
 
         {/* Tour target. An attribute rather than a class, so restyling this
             header can never silently unhook the Dashboard Tour - see
@@ -333,6 +348,10 @@ export function DashboardPage() {
             )}
           </div>
         )}
+          </div>
+
+          <DashboardRail entries={activeEntries} quizzes={quizzes} />
+        </div>
 
         {/* THE CHECKLIST, AFTER THE WORK IT IS ABOUT.
             It used to open the dashboard, 609px of it, so a coach with a

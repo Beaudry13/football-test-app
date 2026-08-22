@@ -388,3 +388,32 @@ button.actionDelete:hover:not(:disabled) {
   gap: var(--space-2);
   margin-bottom: var(--space-4);
 }
+
+/*
+ * THE DASHBOARD'S TWO COLUMNS, WHICH ONLY EXIST WHEN THE SECOND ONE DOES.
+ *
+ * DashboardRail returns null unless it has something true to say, so this
+ * switches on `:has(> aside)` rather than on a class the page computes. The
+ * layout and the rail therefore cannot disagree: on a quiet day there is no
+ * aside, the grid stays one column, and the quizzes get the whole width
+ * instead of sitting beside a column of empty cards.
+ *
+ * Below 60rem it is one column at any time and the rail's panels fall under
+ * the quiz list - after a coach's work, not stacked on top of it.
+ */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-7);
+  align-items: start;
+}
+
+.main {
+  min-width: 0;
+}
+
+@media (min-width: 60rem) {
+  .layout:has(> aside) {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}

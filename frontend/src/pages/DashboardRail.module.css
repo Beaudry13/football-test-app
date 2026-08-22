@@ -1,0 +1,201 @@
+/*
+ * The dashboard's right-hand rail: what is happening, and what is owed.
+ *
+ * EVERY PANEL IS CONDITIONAL, and so is the rail itself - DashboardRail
+ * returns null when it has nothing true to say. There is no empty state here
+ * on purpose: an "Activity" card reading "no activity" costs a coach the same
+ * space as a real one and tells them less than the absence would.
+ */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.panel {
+  background: var(--peira-surface);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  padding: var(--space-5) var(--space-5);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.panelTitle {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.panelHead .panelTitle {
+  margin-bottom: var(--space-4);
+}
+
+/* Says the feed is live without a spinner or a count that would have to be
+   kept honest. */
+.livePip {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--peira-success);
+  margin-bottom: var(--space-4);
+  flex-shrink: 0;
+}
+
+/* --- Needs attention ----------------------------------------------------- */
+
+.attention {
+  display: flex;
+  gap: var(--space-3);
+  color: var(--color-warning);
+}
+
+.attentionLine {
+  font-size: var(--peira-text-body);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--nb-text);
+}
+
+.attentionMeta {
+  margin-top: var(--space-1);
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+/* --- Activity ------------------------------------------------------------ */
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feedRow {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.feedRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.feedTime {
+  flex-shrink: 0;
+  width: 62px;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+  /* Times line up, so the column reads as a column rather than ragged text. */
+  font-variant-numeric: tabular-nums;
+}
+
+.feedText {
+  font-size: var(--peira-text-control);
+  line-height: 1.4;
+  min-width: 0;
+}
+
+/* --- Closing soon -------------------------------------------------------- */
+
+.closingList,
+.resultList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.closingRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.closingRow:last-child,
+.resultRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.closingName,
+.resultName {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  color: var(--nb-text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closingName:hover,
+.resultName:hover {
+  color: var(--peira-accent-text);
+}
+
+.closingWhen {
+  flex-shrink: 0;
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  color: var(--color-warning);
+  white-space: nowrap;
+}
+
+/* --- Results ------------------------------------------------------------- */
+
+.resultRow {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.resultMeta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.resultScore {
+  font-size: var(--peira-text-title);
+  font-weight: 700;
+  color: var(--nb-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The quiet day. A rule and a sentence, where the rail would have been. */
+.quietNote {
+  margin: 0 0 var(--space-7);
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--nb-card-border);
+  font-size: var(--peira-text-body);
+  line-height: 1.6;
+  color: var(--nb-text-muted);
+}
+
+.quietLink {
+  font-weight: 600;
+  color: var(--nb-text);
+  text-decoration: none;
+}
+
+.quietLink:hover {
+  color: var(--peira-accent-text);
+}

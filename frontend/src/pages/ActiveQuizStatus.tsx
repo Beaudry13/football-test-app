@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getActiveStatus } from '../api/quizzes';
+
 import { getQuizDashboard } from '../api/grading';
+import { useActiveStatus, ACTIVE_STATUS_POLL_MS } from '../hooks/useActiveStatus';
 import { usePolling } from '../hooks/usePolling';
 import type { ActiveQuizStatus as ActiveQuizStatusEntry, QuestionBreakdown } from '../api/types';
 import { Icon } from '../components/ui/Icon';
@@ -9,7 +10,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 import nb from '../styles/notebook.module.css';
 import styles from './ActiveQuizStatus.module.css';
 
-const POLL_INTERVAL_MS = 15000;
+const POLL_INTERVAL_MS = ACTIVE_STATUS_POLL_MS;
 
 function formatRelativeExpiry(expiresAt: string): string {
   const diffMs = new Date(expiresAt).getTime() - Date.now();
@@ -207,28 +208,13 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
  * one) with a live submitted/pending breakdown. Renders nothing at all when
  * no quiz is active, rather than an empty-state card, so the common case
  * doesn't add clutter to the dashboard. */
-export function ActiveQuizStatusSection() {
-  const [entries, setEntries] = useState<ActiveQuizStatusEntry[] | null>(null);
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await getActiveStatus();
-      setEntries(data);
-    } catch {
-      // A background poll failing shouldn't blank out or error-banner a
-      // widget that was showing good data a moment ago - just leave the
-      // last known state up and let the next tick try again. If we've
-      // never loaded successfully, `entries` just stays null (renders
-      // nothing), same as "no active quiz" - acceptable for a live-status
-      // widget that isn't the only way to reach this data.
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchStatus();
-  }, [fetchStatus]);
-
-  usePolling(fetchStatus, POLL_INTERVAL_MS);
+export function ActiveQuizStatusSection({ entries: provided }: { entries?: ActiveQuizStatusEntry[] | null } = {}) {
+  /* The dashboard polls this once and shares it with the rail, which reads the
+     same submitted/not-started arrays - see hooks/useActiveStatus. Mounted on
+     its own (or in its own test) it still owns the poll, so nothing else has
+     to know where the data came from. */
+  const owned = useActiveStatus();
+  const entries = provided !== undefined ? provided : owned;
 
   if (!entries || entries.length === 0) return null;
 
