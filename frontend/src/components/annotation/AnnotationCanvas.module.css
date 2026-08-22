@@ -34,6 +34,13 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%) 50% / 20px 20px;
+  /* THE BUG THIS PREVENTS: drawing a route down the image and having the PAGE
+     scroll instead. The browser claims a one-finger drag for scrolling unless
+     told otherwise, and it makes that decision before any listener runs, so
+     preventDefault alone is too late. `none` hands every touch to us -
+     including the pinch, which the browser would otherwise zoom the document
+     with. */
+  touch-action: none;
 }
 
 /* Fabric wraps the <canvas> in its own .canvas-container div and sets inline

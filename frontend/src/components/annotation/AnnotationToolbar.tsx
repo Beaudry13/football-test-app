@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { LINE_CAPS, STROKE_COLORS, type AnnotationStyle, type AnnotationTool, type LineCap } from './types';
 import { TOOL_HOTKEYS } from './useAnnotationKeyboard';
 import styles from './AnnotationToolbar.module.css';
@@ -53,6 +54,15 @@ export function AnnotationToolbar({
   onDeleteSelected,
   hasSelection,
 }: AnnotationToolbarProps) {
+  /* THE STYLE CONTROLS FOLD ON A PHONE, and only on a phone.
+     Colour, width, dotted, fill and end caps were five wrapped rows at 375px -
+     168px of a screen whose whole point is the image. They are not removed and
+     nothing is unreachable; they are one tap away behind a control that shows
+     the current colour, so a coach can see what they are drawing with without
+     opening anything. On a desktop the media query below ignores this
+     entirely and every control stays laid out as it was. */
+  const [styleOpen, setStyleOpen] = useState(false);
+
   return (
     <div className={styles.toolbar}>
       <div className={styles.toolGroup}>
@@ -80,7 +90,21 @@ export function AnnotationToolbar({
 
       <div className={styles.divider} />
 
-      <div className={styles.styleGroup}>
+      <button
+        type="button"
+        className={styles.styleToggle}
+        onClick={() => setStyleOpen((open) => !open)}
+        aria-expanded={styleOpen}
+      >
+        <span
+          className={styles.styleToggleSwatch}
+          style={{ background: style.color }}
+          aria-hidden="true"
+        />
+        Style
+      </button>
+
+      <div className={`${styles.styleGroup} ${styleOpen ? styles.styleGroupOpen : ''}`}>
         <div className={styles.swatches}>
           {STROKE_COLORS.map((color) => (
             <button

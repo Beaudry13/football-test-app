@@ -28,8 +28,8 @@ import {
 } from './shapeFactories';
 import { resolveCanvasWidth } from './canvasSizing';
 import { loadPrescaledImage } from './imageLoading';
+import { attachTouchGestures } from './annotationGestures';
 import {
-
   fitView,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -73,6 +73,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
        re-subscribe every time it flips. */
     const [zoom, setZoom] = useState(1);
     const isSpaceDownRef = useRef(false);
+    /* Set by the mouse-handler effect so the gesture layer can throw away a
+       half-drawn shape when a second finger turns a stroke into a pinch. */
+    const abortDrawRef = useRef<() => void>(() => {});
     const panningRef = useRef<{ x: number; y: number } | null>(null);
     const toolRef = useRef(tool);
     toolRef.current = tool;
@@ -648,6 +651,25 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         if (toolRef.current === 'curve') finalizeCurve();
       }
 
+      /* THE STROKE A SECOND FINGER INTERRUPTS. Removing the shape rather than
+         finishing it is what keeps a pinch from leaving a stray mark, and it
+         is bracketed in isRestoring so the abandoned shape never reaches the
+         undo history. */
+      abortDrawRef.current = () => {
+        if (shape) {
+          history.isRestoring.current = true;
+          canvas.remove(shape);
+          history.isRestoring.current = false;
+          shape = null;
+          startPoint = null;
+          canvas.requestRenderAll();
+        }
+        if (curvePointsRef.current.length > 0 || curvePreviewRef.current) {
+          resetCurveState();
+          canvas.requestRenderAll();
+        }
+      };
+
       canvas.on('mouse:down', handleMouseDown);
       canvas.on('mouse:move', handleMouseMove);
       canvas.on('mouse:up', handleMouseUp);
@@ -776,6 +798,21 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       const observer = new ResizeObserver(applyFit);
       observer.observe(wrap);
       return () => observer.disconnect();
+    }, [isReady]);
+
+    /* TOUCH AND STYLUS. Attached to the wrapper rather than to Fabric's own
+       canvas so a capture-phase listener sees a second finger before Fabric
+       does - see annotationGestures for the one rule this all rests on. */
+    useEffect(() => {
+      const wrap = canvasWrapRef.current;
+      const canvas = canvasRef.current;
+      if (!wrap || !canvas || !isReady) return;
+      return attachTouchGestures({
+        element: wrap,
+        canvas,
+        onViewportChange: () => setZoom(canvas.getZoom()),
+        abortDraw: () => abortDrawRef.current(),
+      });
     }, [isReady]);
 
     function handleZoomStep(factor: number) {

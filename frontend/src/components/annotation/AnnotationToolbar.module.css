@@ -114,3 +114,85 @@
     pointer-events: none;
   }
 }
+
+/*
+ * PHONE LAYOUT: give the screen back to the image.
+ *
+ * The style controls were five wrapped rows at 375px. They fold behind one
+ * control that carries the current colour, so nothing is removed and nothing
+ * is hidden without a sign - a coach can still see what they are drawing with
+ * at a glance, and one tap opens the rest.
+ *
+ * The toggle does not exist above 40rem: on a desktop there is room for the
+ * controls and folding them would only add a click.
+ */
+.styleToggle {
+  display: none;
+}
+
+@media (max-width: 40rem) {
+  .styleToggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 40px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-pill);
+    background: var(--peira-surface);
+    color: var(--peira-text);
+    font: inherit;
+    font-size: var(--peira-text-meta);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .styleToggleSwatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px rgb(28 26 23 / 25%);
+  }
+
+  .styleGroup {
+    display: none;
+  }
+
+  /* Opened: a full-width row under the tools rather than squeezed beside
+     them, so the controls stay finger-sized instead of merely present. */
+  .styleGroupOpen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    width: 100%;
+  }
+
+  .divider {
+    display: none;
+  }
+
+  /* ONE ROW OF EIGHT, EDGE TO EDGE.
+     Eight 44px targets plus gaps is 380px in a 359px bar, so they wrapped to
+     two rows and cost a whole row for two buttons. Sharing the width equally
+     gives each tool 44.8px - still past the 44px floor for a thumb - and puts
+     every tool on one line. */
+  /* The TOOLS group only. The second .toolGroup is undo/redo/delete and must
+     stay its own size so it can share the second row with the style
+     control - matching both is what put them on separate lines. */
+  .toolGroup:first-child {
+    display: flex;
+    gap: 0;
+    width: 100%;
+  }
+
+  .toolGroup:first-child .toolButton {
+    flex: 1 1 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* The second row: how you style, and how you undo. */
+  .toolbar {
+    gap: var(--space-2);
+  }
+}
