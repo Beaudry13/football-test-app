@@ -5,6 +5,7 @@ import { Point, type Canvas } from 'fabric';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from './AnnotationCanvas';
 import { clearClipboard } from './annotationClipboard';
 import { resetRememberedStyle } from './styleMemory';
+import { clampZoom, MAX_ZOOM, MIN_ZOOM, sceneHitRadius } from './annotationViewport';
 
 // jsdom never actually loads image resources, so an <img>'s `load` event
 // never fires. History snapshots serialize the canvas background image to a
@@ -484,5 +485,182 @@ describe('sticky tools - a coach picks a tool once and keeps drawing', () => {
     const rePicked = withoutIds(second.ref.current!.getAnnotations());
 
     expect(sticky).toEqual(rePicked);
+  });
+});
+
+describe('viewport - zoom and pan are a window, never a change to the drawing', () => {
+  const stripIds = (layers: unknown[]) =>
+    JSON.stringify(layers.map((l) => ({ ...(l as Record<string, unknown>), id: undefined })));
+
+  async function withOneOfEach() {
+    const utils = renderCanvas();
+    await waitForReady(utils.onReady);
+    fireEvent.click(utils.getByTitle('Line'));
+    dragFrom([20, 20], [120, 90]);
+    fireEvent.click(utils.getByTitle('Arrow'));
+    dragFrom([40, 200], [220, 260]);
+    fireEvent.click(utils.getByTitle('Rectangle'));
+    dragFrom([300, 60], [420, 160]);
+    return utils;
+  }
+
+  it('SAVE A equals SAVE B across zoom, pan, zoom again and fit', async () => {
+    // The invariant this whole phase rests on.
+    const { ref } = await withOneOfEach();
+    const saveA = stripIds(ref.current!.getAnnotations());
+
+    act(() => {
+      capturedCanvas!.zoomToPoint(new Point(120, 90), 3.2);
+      capturedCanvas!.relativePan(new Point(-140, -75));
+      capturedCanvas!.zoomToPoint(new Point(40, 40), 0.4);
+      capturedCanvas!.relativePan(new Point(60, 25));
+      capturedCanvas!.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    });
+
+    expect(stripIds(ref.current!.getAnnotations())).toEqual(saveA);
+  });
+
+  it('leaves the drawing untouched even when the viewport is NOT reset', async () => {
+    // Reset-then-compare could hide a transform that was baked in and then
+    // unbaked. This one saves while still zoomed and panned.
+    const { ref } = await withOneOfEach();
+    const before = stripIds(ref.current!.getAnnotations());
+
+    act(() => {
+      capturedCanvas!.zoomToPoint(new Point(200, 150), 4);
+      capturedCanvas!.relativePan(new Point(-300, -200));
+    });
+
+    expect(stripIds(ref.current!.getAnnotations())).toEqual(before);
+    expect(capturedCanvas!.getZoom()).toBeCloseTo(4);
+  });
+
+  it('never serializes the viewport transform itself', async () => {
+    const { ref } = await withOneOfEach();
+    act(() => {
+      capturedCanvas!.zoomToPoint(new Point(50, 50), 2.5);
+      capturedCanvas!.relativePan(new Point(-40, -30));
+    });
+    expect(JSON.stringify(ref.current!.getAnnotations())).not.toMatch(/viewportTransform/);
+    expect(Array.from(capturedCanvas!.viewportTransform).slice(0, 4)).not.toEqual([1, 0, 0, 1]);
+  });
+
+  it('places a NEW shape at the same scene coordinates while zoomed', async () => {
+    // Fabric derives scenePoint through the inverse viewport, so a drag at 3x
+    // must land where the same drag lands at 1x.
+    const atOne = renderCanvas();
+    await waitForReady(atOne.onReady);
+    fireEvent.click(atOne.getByTitle('Line'));
+    dragFrom([60, 60], [180, 140]);
+    const plain = stripIds(atOne.ref.current!.getAnnotations());
+    atOne.unmount();
+
+    const zoomed = renderCanvas();
+    await waitForReady(zoomed.onReady);
+    act(() => {
+      capturedCanvas!.setZoom(3);
+    });
+    fireEvent.click(zoomed.getByTitle('Line'));
+    dragFrom([60, 60], [180, 140]);
+    expect(stripIds(zoomed.ref.current!.getAnnotations())).toEqual(plain);
+  });
+});
+
+describe('viewport - controls and bounds', () => {
+  it('clamps zoom to the usable range', () => {
+    expect(clampZoom(1000)).toBe(MAX_ZOOM);
+    expect(clampZoom(0.001)).toBe(MIN_ZOOM);
+    expect(clampZoom(2)).toBe(2);
+    expect(clampZoom(Number.NaN)).toBe(1);
+  });
+
+  it('keeps a hit target the same size on screen at every zoom', () => {
+    // 14 scene units at 0.25x is 3.5 screen pixels - an endpoint nobody can
+    // hit. The radius is a SCREEN measurement converted per zoom.
+    for (const zoom of [0.25, 0.5, 1, 2, 4]) {
+      expect(sceneHitRadius(14, zoom) * zoom).toBeCloseTo(14);
+    }
+    expect(sceneHitRadius(14, 1)).toBe(14);
+    expect(sceneHitRadius(14, 0.25)).toBe(56);
+    expect(sceneHitRadius(14, 4)).toBe(3.5);
+  });
+
+  it('Fit returns the viewport to identity', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+    act(() => {
+      capturedCanvas!.zoomToPoint(new Point(10, 10), 5);
+      capturedCanvas!.relativePan(new Point(-80, -60));
+    });
+    expect(capturedCanvas!.getZoom()).not.toBeCloseTo(1);
+
+    fireEvent.click(getByTitle('Fit the whole image'));
+    expect(capturedCanvas!.getZoom()).toBeCloseTo(1);
+    expect(Array.from(capturedCanvas!.viewportTransform)).toEqual([1, 0, 0, 1, 0, 0]);
+  });
+
+  it('zooms from the buttons and stays inside the bounds', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+    fireEvent.click(getByTitle('Zoom in'));
+    expect(capturedCanvas!.getZoom()).toBeGreaterThan(1);
+    for (let i = 0; i < 30; i += 1) fireEvent.click(getByTitle('Zoom in'));
+    expect(capturedCanvas!.getZoom()).toBeLessThanOrEqual(MAX_ZOOM);
+    for (let i = 0; i < 60; i += 1) fireEvent.click(getByTitle('Zoom out'));
+    expect(capturedCanvas!.getZoom()).toBeGreaterThanOrEqual(MIN_ZOOM);
+  });
+});
+
+describe('viewport - Space is a modifier, not a tool', () => {
+  const isActive = (byTitle: (t: string) => HTMLElement, label: string) =>
+    byTitle(label).className.includes('toolButtonActive');
+
+  it('pans while held and leaves the sticky tool exactly where it was', async () => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+
+    fireEvent.click(getByTitle('Arrow'));
+    expect(isActive(getByTitle, 'Arrow')).toBe(true);
+    const objectsBefore = capturedCanvas!.getObjects().length;
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', bubbles: true }));
+    });
+    act(() => {
+      capturedCanvas!.fire('mouse:down', {
+        scenePoint: new Point(50, 50),
+        e: { clientX: 50, clientY: 50 },
+      } as never);
+      capturedCanvas!.fire('mouse:move', {
+        scenePoint: new Point(90, 80),
+        e: { clientX: 90, clientY: 80 },
+      } as never);
+      capturedCanvas!.fire('mouse:up', {
+        scenePoint: new Point(90, 80),
+        e: { clientX: 90, clientY: 80 },
+      } as never);
+    });
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space', bubbles: true }));
+    });
+
+    // The drag panned - it did NOT draw an arrow.
+    expect(capturedCanvas!.getObjects().length).toBe(objectsBefore);
+    // And the toolbar never moved.
+    expect(isActive(getByTitle, 'Arrow')).toBe(true);
+  });
+
+  it('leaves Space alone while the coach is typing', async () => {
+    const { onReady } = renderCanvas();
+    await waitForReady(onReady);
+    const field = document.createElement('textarea');
+    document.body.appendChild(field);
+    const event = new KeyboardEvent('keydown', { code: 'Space', bubbles: true, cancelable: true });
+    act(() => {
+      field.dispatchEvent(event);
+    });
+    // Not swallowed: a space bar in a quiz field is a space character.
+    expect(event.defaultPrevented).toBe(false);
+    field.remove();
   });
 });

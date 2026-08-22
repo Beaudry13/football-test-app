@@ -28,8 +28,18 @@ import {
 } from './shapeFactories';
 import { resolveCanvasWidth } from './canvasSizing';
 import { loadPrescaledImage } from './imageLoading';
+import {
+
+  fitView,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  panBy,
+  sceneHitRadius,
+  zoomByStep,
+  ZOOM_STEP,
+} from './annotationViewport';
 import { copyObject, hasClipboardContent, pasteObject } from './annotationClipboard';
-import { useAnnotationKeyboard } from './useAnnotationKeyboard';
+import { isTypingTarget, useAnnotationKeyboard } from './useAnnotationKeyboard';
 import { getRememberedStyle, rememberStyle } from './styleMemory';
 import { ANNOTATION_PROPS, type AnnotationStyle, type AnnotationTool } from './types';
 import styles from './AnnotationCanvas.module.css';
@@ -56,6 +66,13 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       resolveCanvasWidth(savedCanvasWidth, initialAnnotations.length > 0),
     );
     const [tool, setTool] = useState<AnnotationTool>('select');
+    /* Viewport state. `zoom` exists only so the controls can render a number;
+       the truth is always canvas.getZoom(). Space-panning is a ref rather than
+       state because it is read inside Fabric's mouse handlers, which must not
+       re-subscribe every time it flips. */
+    const [zoom, setZoom] = useState(1);
+    const isSpaceDownRef = useRef(false);
+    const panningRef = useRef<{ x: number; y: number } | null>(null);
     const toolRef = useRef(tool);
     toolRef.current = tool;
     const [style, setStyle] = useState<AnnotationStyle>(getRememberedStyle);
@@ -408,6 +425,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         fixed: XY;
         style: AnnotationStyle;
       } | null = null;
+      /* A SCREEN radius, converted to scene units per zoom at the moment of
+         the test - see sceneHitRadius. Left as 14 so the feel at 1x is exactly
+         what it has always been. */
       const ENDPOINT_HIT_RADIUS = 14;
 
       function finalizeCurve() {
@@ -435,6 +455,14 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       }
 
       function handleMouseDown(opt: TPointerEventInfo) {
+        /* SPACE PRE-EMPTS THE TOOL, IT DOES NOT REPLACE IT. Holding Space
+           turns the next drag into a pan and returns nothing to the toolbar,
+           so an Arrow is still an Arrow when the key comes back up. */
+        if (isSpaceDownRef.current) {
+          const e = opt.e as MouseEvent;
+          panningRef.current = { x: e.clientX, y: e.clientY };
+          return;
+        }
         const currentTool = toolRef.current;
         const point = opt.scenePoint;
 
@@ -444,7 +472,8 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
             const { start: segStart, end: segEnd } = currentSegment(active);
             const distToStart = Math.hypot(point.x - segStart.x, point.y - segStart.y);
             const distToEnd = Math.hypot(point.x - segEnd.x, point.y - segEnd.y);
-            if (distToStart <= ENDPOINT_HIT_RADIUS || distToEnd <= ENDPOINT_HIT_RADIUS) {
+            const hitRadius = sceneHitRadius(ENDPOINT_HIT_RADIUS, canvas!.getZoom());
+            if (distToStart <= hitRadius || distToEnd <= hitRadius) {
               const which = distToStart <= distToEnd ? 'start' : 'end';
               const fixed = which === 'start' ? segEnd : segStart;
               draggingEndpoint = {
@@ -512,6 +541,13 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       }
 
       function handleMouseMove(opt: TPointerEventInfo) {
+        if (panningRef.current) {
+          const e = opt.e as MouseEvent;
+          panBy(canvas!, e.clientX - panningRef.current.x, e.clientY - panningRef.current.y);
+          panningRef.current = { x: e.clientX, y: e.clientY };
+          canvas!.requestRenderAll();
+          return;
+        }
         if (draggingEndpoint) {
           const point = opt.scenePoint;
           const newStart = draggingEndpoint.which === 'start' ? point : draggingEndpoint.fixed;
@@ -562,6 +598,10 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       }
 
       function handleMouseUp() {
+        if (panningRef.current) {
+          panningRef.current = null;
+          return;
+        }
         if (draggingEndpoint) {
           removeEndpointMarkers();
           history.isRestoring.current = false;
@@ -612,14 +652,100 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       canvas.on('mouse:up', handleMouseUp);
       canvas.on('mouse:dblclick', handleDoubleClick);
 
+      /* WHEEL OVER THE CANVAS ONLY. Fabric's mouse:wheel fires for this canvas
+         and nothing else, so the page keeps its own scrolling everywhere
+         outside it; preventDefault here stops the browser ALSO scrolling the
+         page out from under a coach who meant to zoom. */
+      function handleWheel(opt: TPointerEventInfo<WheelEvent>) {
+        const e = opt.e;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.shiftKey) {
+          // Sideways, for a wide playbook page.
+          panBy(canvas!, -e.deltaY - e.deltaX, 0);
+        } else {
+          // deltaY is positive scrolling down / away, which reads as "smaller".
+          const factor = e.deltaY > 0 ? 1 / ZOOM_STEP : ZOOM_STEP;
+          zoomByStep(canvas!, opt.viewportPoint, factor);
+        }
+        setZoom(canvas!.getZoom());
+        canvas!.requestRenderAll();
+      }
+      canvas.on('mouse:wheel', handleWheel);
+
       return () => {
         canvas.off('mouse:down', handleMouseDown);
         canvas.off('mouse:move', handleMouseMove);
         canvas.off('mouse:up', handleMouseUp);
         canvas.off('mouse:dblclick', handleDoubleClick);
+        canvas.off('mouse:wheel', handleWheel);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isReady]);
+
+    /* SPACE IS A MODIFIER, NOT A TOOL.
+       It lives here rather than in useAnnotationKeyboard because that hook
+       maps keys to actions, and this changes what a DRAG means for exactly as
+       long as the key is down. Nothing about the toolbar changes, so releasing
+       it leaves the coach on the Arrow they were already using.
+
+       isTypingTarget is the same guard the shortcuts use: Space must stay a
+       space character in a quiz field, and inside the hidden textarea Fabric
+       mounts while a label is being edited. */
+    useEffect(() => {
+      if (!isReady) return;
+
+      function onKeyDown(event: KeyboardEvent) {
+        if (event.code !== 'Space' || isTypingTarget(event.target)) return;
+        if (isSpaceDownRef.current) return;
+        isSpaceDownRef.current = true;
+        // Stops the page scrolling on a held space bar.
+        event.preventDefault();
+        const canvas = canvasRef.current;
+        if (canvas) canvas.defaultCursor = 'grab';
+      }
+
+      function onKeyUp(event: KeyboardEvent) {
+        if (event.code !== 'Space') return;
+        isSpaceDownRef.current = false;
+        panningRef.current = null;
+        const canvas = canvasRef.current;
+        if (canvas) canvas.defaultCursor = 'default';
+      }
+
+      /* A window that loses focus mid-pan (alt-tab with Space held) never
+         delivers the keyup, and the editor would stay stuck in pan. */
+      function onBlur() {
+        isSpaceDownRef.current = false;
+        panningRef.current = null;
+      }
+
+      document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+      window.addEventListener('blur', onBlur);
+      return () => {
+        document.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('keyup', onKeyUp);
+        window.removeEventListener('blur', onBlur);
+      };
+    }, [isReady]);
+
+    function handleZoomStep(factor: number) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      // The centre of the visible area, so a button press is not anchored to
+      // wherever the pointer happens to be resting.
+      zoomByStep(canvas, new Point(canvas.getWidth() / 2, canvas.getHeight() / 2), factor);
+      setZoom(canvas.getZoom());
+      canvas.requestRenderAll();
+    }
+
+    function handleFitView() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      fitView(canvas);
+      setZoom(canvas.getZoom());
+    }
 
     function handleDeleteSelected() {
       const canvas = canvasRef.current;
@@ -737,6 +863,47 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
             <div className={styles.canvasWrap} style={isReady ? undefined : { display: 'none' }}>
               <canvas ref={canvasElRef} />
             </div>
+            {/* THE MINIMUM THAT MAKES ZOOM DISCOVERABLE. A coach who never
+                learns the wheel or the space bar can still get in, get out and
+                get back to the whole image; anyone who does learn them never
+                needs to look here. Deliberately not a navigator or a minimap -
+                and built as its own row so the workspace shell can move it
+                without rebuilding it. */}
+            {isReady && (
+              <div className={styles.viewControls}>
+                <button
+                  type="button"
+                  className={styles.viewButton}
+                  onClick={() => handleZoomStep(1 / ZOOM_STEP)}
+                  disabled={zoom <= MIN_ZOOM + 0.001}
+                  title="Zoom out"
+                  aria-label="Zoom out"
+                >
+                  &minus;
+                </button>
+                <span className={styles.zoomReadout} aria-live="polite">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  className={styles.viewButton}
+                  onClick={() => handleZoomStep(ZOOM_STEP)}
+                  disabled={zoom >= MAX_ZOOM - 0.001}
+                  title="Zoom in"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className={styles.fitButton}
+                  onClick={handleFitView}
+                  title="Fit the whole image"
+                >
+                  Fit
+                </button>
+              </div>
+            )}
             <LayersPanel
               objects={objects}
               selectedId={selectedId}
