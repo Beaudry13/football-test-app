@@ -146,11 +146,21 @@ function App() {
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />
               <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />
-              <Route
-                path="/quizzes/:quizId/questions/:questionId/annotate"
-                element={<AnnotationPage />}
-              />
             </Route>
+
+            {/* ANNOTATION IS A MODE, NOT A PAGE, so it sits outside
+                NotebookLayout for the same reason Dashboard, Preview and the
+                Competition host screens do: it renders its own chrome. The
+                nav pill and the phone's section bar would be spending the top
+                and bottom of the screen on navigation a coach is not using
+                while they are drawing on a film still.
+
+                Still behind ProtectedRoute, and saveAnnotations re-checks
+                ownership server-side regardless of what renders. */}
+            <Route
+              path="/quizzes/:quizId/questions/:questionId/annotate"
+              element={<AnnotationPage />}
+            />
           </Route>
 
           <Route path="*" element={<NotFoundRedirect />} />

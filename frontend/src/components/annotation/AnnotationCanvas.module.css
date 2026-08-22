@@ -1,35 +1,66 @@
+/*
+ * FILLS WHATEVER IT IS GIVEN.
+ *
+ * The workspace (AnnotationPage) hands this a flex row with a fixed height;
+ * this column takes all of it and gives the leftover to the canvas. min-height
+ * and min-width of 0 are the load-bearing part: without them a flex child
+ * refuses to shrink below its content and the image pushes the toolbar off the
+ * bottom instead of fitting above it.
+ */
 .layout {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1em;
+  flex-direction: column;
+  flex-grow: 1;
+  min-height: 0;
+  min-width: 0;
+  gap: var(--space-2);
 }
 
-.layout > :first-child {
-  width: 100%;
-}
-
+/*
+ * THE IMAGE GETS EVERYTHING LEFT OVER.
+ *
+ * `place-items: center` keeps a still smaller than the workspace centred
+ * rather than pinned to a corner, which is what makes a portrait playbook page
+ * on a wide monitor look deliberate instead of abandoned.
+ */
 .canvasWrap {
+  flex-grow: 1;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  line-height: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow-x: auto;
-  overflow-y: hidden;
-  line-height: 0;
   background: repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%) 50% / 20px 20px;
-  max-width: 100%;
 }
 
-/* Fabric wraps the <canvas> in its own .canvas-container div and sets
-   inline pixel width/height on both it and the canvas elements themselves,
+/* Fabric wraps the <canvas> in its own .canvas-container div and sets inline
+   pixel width/height on both it and the canvas elements themselves,
    re-asserting them on every render - a plain max-width rule here doesn't
-   reach that inline style, hence the !important overrides. Fabric resolves
-   pointer coordinates via getBoundingClientRect() vs. the canvas's actual
-   width/height attributes, so scaling the *display* size like this doesn't
-   affect drawing/selection accuracy. */
+   reach that inline style, hence the !important overrides.
+
+   THIS IS DISPLAY SCALE, NOT ZOOM, and the distinction is the whole reason
+   the workspace can grow without touching anything saved. Fabric resolves
+   pointer coordinates by comparing getBoundingClientRect() against the
+   canvas's width/height ATTRIBUTES, so letting CSS letterbox the element
+   changes what a coach sees and not where a click lands. The backing store,
+   the coordinate space and question_images.canvas_width are all untouched.
+
+   The size comes from --fit-w/--fit-h, which AnnotationCanvas measures from
+   the workspace and writes onto .canvasWrap. It has to travel as a custom
+   property rather than as an inline style because Fabric re-asserts its own
+   inline width/height on every render and would overwrite anything set
+   directly on the element - the !important here is what wins that argument.
+   The fallback keeps the element at its natural size before the first
+   measurement lands. */
 .canvasWrap :global(.canvas-container),
 .canvasWrap :global(.canvas-container) canvas {
+  width: var(--fit-w, auto) !important;
+  height: var(--fit-h, auto) !important;
   max-width: 100% !important;
-  height: auto !important;
+  max-height: 100% !important;
 }
 
 /*
@@ -81,4 +112,24 @@
   font-size: var(--peira-text-meta);
   color: var(--peira-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * PHONE: the image is competing with the controls for a screen that has room
+ * for one of them.
+ *
+ * The toolbar keeps every tool - nothing is removed - but stops spending a
+ * full row on each group, and the layer list stops claiming fixed height at
+ * the bottom and scrolls inside a cap instead. Tool buttons keep their touch
+ * size; it is the gaps and the panels around them that give way.
+ */
+@media (max-width: 40rem) {
+  .layout {
+    gap: var(--space-1);
+  }
+
+  .canvasWrap {
+    /* Never let the controls squeeze the image below something usable. */
+    min-height: 45dvh;
+  }
 }

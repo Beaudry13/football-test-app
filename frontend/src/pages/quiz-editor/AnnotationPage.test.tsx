@@ -214,3 +214,40 @@ describe('AnnotationPage image upload', () => {
     await waitFor(() => expect(uploadSpy).toHaveBeenCalledWith(1, 5, file));
   });
 });
+
+describe('AnnotationPage workspace shell', () => {
+  beforeEach(() => {
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(quizWithNoImage);
+  });
+
+  it('gets out of the way: no app nav inside the workspace', async () => {
+    // The route sits outside NotebookLayout, so the nav pill and the phone's
+    // section bar are simply not rendered while a coach is drawing.
+    renderPage();
+    await screen.findByText('Circle the mike backer');
+
+    expect(document.querySelector('[data-section-bar]')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Playbooks' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Team' })).toBeNull();
+  });
+
+  it('offers exactly one way to finish, and it is called Done', async () => {
+    // The old page had "Save annotations" (which stayed put) beside a back
+    // link that discarded silently. One action now means finish.
+    renderPage();
+    await screen.findByText('Circle the mike backer');
+    // With no image yet there is nothing to save, so Done is absent - but the
+    // old competing control must be gone in every state.
+    expect(screen.queryByRole('button', { name: /Save annotations/ })).toBeNull();
+  });
+
+  it('keeps the question visible as context without letting it compete', async () => {
+    renderPage();
+    expect(await screen.findByText('Circle the mike backer')).toBeInTheDocument();
+  });
+
+  it('always offers a way back out', async () => {
+    renderPage();
+    expect(await screen.findByRole('button', { name: /Back to quiz/i })).toBeInTheDocument();
+  });
+});

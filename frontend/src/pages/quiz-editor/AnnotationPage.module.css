@@ -1,31 +1,129 @@
-/* Chrome only (header, back link, save button, upload empty-state) - the
-   AnnotationCanvas mount point and everything it renders internally keep
-   their own existing styling untouched. Shared notebook design system
-   (buttons, cards) lives in frontend/src/styles/notebook.module.css. */
+/*
+ * THE ANNOTATION WORKSPACE.
+ *
+ * Not a page with a canvas on it - a mode. The route sits outside
+ * NotebookLayout (see App.tsx) so the nav pill and the phone's section bar are
+ * not spending the top and bottom of the screen on navigation a coach is not
+ * using while they draw on a film still.
+ *
+ * The whole thing is one viewport-height column: a thin bar, then everything
+ * else is the image. Nothing scrolls the page - the canvas area owns whatever
+ * height is left, at every width.
+ */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  /* dvh, not vh: on a phone the browser's own chrome collapses as you scroll,
+     and vh would leave the bar hidden under it. */
+  height: 100dvh;
+  min-height: 100dvh;
+  background: var(--peira-bg);
+  color: var(--peira-text);
+  overflow: hidden;
+}
 
-.header {
+/* --- The bar -------------------------------------------------------------
+   How to get out, what you are drawing on, how to finish. In that order,
+   because that is the order a coach needs them in. */
+.bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1em;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  padding: var(--space-2) var(--space-4);
+  background: var(--peira-surface);
+  border-bottom: 1px solid var(--peira-border);
 }
 
-.backLink {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 20px;
-  color: var(--nb-text-muted);
-  text-decoration: none;
+.exit,
+.done {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  /* 44px: this is a control a coach hits with a thumb on a sideline. */
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.backLink:hover {
-  color: var(--nb-text);
+.exit {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--peira-text-muted);
+  padding-left: var(--space-2);
 }
 
-.questionHeading {
-  margin-bottom: 0.75em;
+.exit:hover {
+  color: var(--peira-text);
+  background: var(--peira-wash-control-hover);
 }
 
+.done {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.done:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--peira-border);
+  flex-shrink: 0;
+}
+
+/* The question, quietly. Enough to know what you are drawing on, not enough
+   to compete with it - one line, truncated, with the full text on hover. */
+.context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--peira-text-body);
+  font-weight: 600;
+  color: var(--peira-text);
+}
+
+.spacer {
+  flex-grow: 1;
+}
+
+.savedNote {
+  font-size: var(--peira-text-meta);
+  color: var(--peira-success);
+  white-space: nowrap;
+}
+
+/* --- The stage -----------------------------------------------------------
+   Everything the bar did not take. min-height:0 is what actually lets a flex
+   child shrink instead of pushing the column taller than the viewport. */
+.stage {
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  padding: var(--space-3);
+}
+
+.emptyStage {
+  flex-grow: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+/* --- The no-image state, unchanged in substance -------------------------- */
 .uploadCard {
   max-width: 480px;
   text-align: center;
@@ -44,7 +142,21 @@
   gap: 12px;
 }
 
-.savedNote {
-  font-size: 0.85em;
-  color: var(--nb-success);
+@media (max-width: 40rem) {
+  .bar {
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2);
+  }
+
+  /* The question text is the first thing to go on a phone: a coach who just
+     tapped Annotate on a question knows which one they tapped. */
+  .context,
+  .divider,
+  .savedNote {
+    display: none;
+  }
+
+  .stage {
+    padding: var(--space-2);
+  }
 }

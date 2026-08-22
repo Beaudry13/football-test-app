@@ -43,3 +43,14 @@
   font-size: 0.85em;
   color: var(--color-text-muted);
 }
+
+/* On a phone the layer list is the least urgent thing on screen while a coach
+   is drawing, so it stops claiming height and scrolls inside a cap. Every
+   layer is still reachable - it is the panel's footprint that gives way, not
+   its contents. */
+@media (max-width: 40rem) {
+  .panel {
+    max-height: 22dvh;
+    overflow-y: auto;
+  }
+}

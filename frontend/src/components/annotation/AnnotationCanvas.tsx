@@ -61,6 +61,7 @@ interface AnnotationCanvasProps {
 export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCanvasProps>(
   function AnnotationCanvas({ imageUrl, initialAnnotations, savedCanvasWidth, onReady }, ref) {
     const canvasElRef = useRef<HTMLCanvasElement>(null);
+    const canvasWrapRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<Canvas | null>(null);
     const canvasWidthRef = useRef(
       resolveCanvasWidth(savedCanvasWidth, initialAnnotations.length > 0),
@@ -730,6 +731,53 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
       };
     }, [isReady]);
 
+    /* FIT THE IMAGE TO THE WORKSPACE, IN DISPLAY PIXELS ONLY.
+     *
+     * scale = min(workspaceW / canvasW, workspaceH / canvasH) - contain, so a
+     * portrait playbook page and a wide film still both land whole, and the
+     * larger of the two ratios never crops.
+     *
+     * This is the SAME lever the stylesheet used to pull with `max-width:
+     * 100%`, just computed so the image can grow into a big monitor instead of
+     * stopping at its own resolution. It sets how large the element is drawn;
+     * the backing store, every object coordinate and question_images.
+     * canvas_width are all untouched, and Fabric keeps resolving pointers by
+     * comparing getBoundingClientRect() against the width/height ATTRIBUTES,
+     * so a click still lands where it looks like it lands.
+     *
+     * Deliberately NOT viewport zoom: zoom is the coach's, and having Fit
+     * silently spend it would mean the readout no longer said what they had
+     * chosen. 100% keeps meaning "the whole image, fitted".
+     */
+    useEffect(() => {
+      const wrap = canvasWrapRef.current;
+      if (!wrap || !isReady) return;
+
+      function applyFit() {
+        const canvas = canvasRef.current;
+        const el = canvasWrapRef.current;
+        if (!canvas || !el) return;
+        const availableW = el.clientWidth;
+        const availableH = el.clientHeight;
+        const sceneW = canvas.getWidth();
+        const sceneH = canvas.getHeight();
+        if (!availableW || !availableH || !sceneW || !sceneH) return;
+        const scale = Math.min(availableW / sceneW, availableH / sceneH);
+        el.style.setProperty('--fit-w', `${Math.round(sceneW * scale)}px`);
+        el.style.setProperty('--fit-h', `${Math.round(sceneH * scale)}px`);
+      }
+
+      applyFit();
+      /* jsdom has no ResizeObserver, and an editor that throws on mount in the
+         test environment is worse than one that simply does not re-fit there -
+         the fit itself is still applied once above, so the measurement path
+         stays covered. */
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(applyFit);
+      observer.observe(wrap);
+      return () => observer.disconnect();
+    }, [isReady]);
+
     function handleZoomStep(factor: number) {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -860,7 +908,11 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
               onDeleteSelected={handleDeleteSelected}
               hasSelection={selectedId !== null}
             />
-            <div className={styles.canvasWrap} style={isReady ? undefined : { display: 'none' }}>
+            <div
+              ref={canvasWrapRef}
+              className={styles.canvasWrap}
+              style={isReady ? undefined : { display: 'none' }}
+            >
               <canvas ref={canvasElRef} />
             </div>
             {/* THE MINIMUM THAT MAKES ZOOM DISCOVERABLE. A coach who never
