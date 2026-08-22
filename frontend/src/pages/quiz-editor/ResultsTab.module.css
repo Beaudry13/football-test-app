@@ -13,7 +13,7 @@
   font-family: var(--font-heading);
   font-size: 2.2em;
   font-weight: 700;
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }
 
 .statLabel {
@@ -74,7 +74,7 @@
 }
 
 .playerNameLink:hover {
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
   text-decoration: underline;
 }
 

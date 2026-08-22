@@ -54,7 +54,7 @@
 
 .preset:hover {
   border-color: var(--nb-accent);
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }
 
 /* A text link, because the exact picker is the rare path. */
@@ -71,7 +71,7 @@
 }
 
 .exactToggle:hover {
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }
 
 .warning {
@@ -108,5 +108,5 @@
 }
 
 .changeToggle:hover {
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }

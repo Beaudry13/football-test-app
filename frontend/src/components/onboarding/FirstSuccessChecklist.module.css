@@ -175,13 +175,13 @@
   border: none;
   padding: 0;
   font: inherit;
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
   cursor: pointer;
   text-decoration: underline;
 }
 
 .tourLink:hover {
-  color: var(--nb-accent-bright);
+  color: var(--peira-accent-text);
 }
 
 .footnoteDivider {

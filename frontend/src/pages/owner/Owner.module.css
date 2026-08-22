@@ -129,7 +129,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--color-accent);
+  color: var(--peira-accent-text);
   margin-bottom: 8px;
 }
 
@@ -216,7 +216,7 @@
 }
 
 .orgLink {
-  color: var(--color-accent-bright);
+  color: var(--peira-accent-text);
   text-decoration: none;
   font-weight: 600;
 }

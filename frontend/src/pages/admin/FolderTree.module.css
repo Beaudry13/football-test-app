@@ -54,7 +54,7 @@
 .folderIcon {
   display: inline-flex;
   flex: 0 0 auto;
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }
 
 .folderName {

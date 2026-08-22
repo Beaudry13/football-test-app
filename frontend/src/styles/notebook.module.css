@@ -38,7 +38,9 @@
   --nb-text-faint: var(--color-text-muted-2);
   --nb-accent: var(--color-accent);
   --nb-accent-bright: var(--color-accent-bright);
-  --nb-accent-deep: var(--color-accent);
+  /* A TEXT role, despite living beside the fill aliases - it is only ever
+     used as `color:`. Resolves to the readable gold, not the brand fill. */
+  --nb-accent-deep: var(--peira-accent-text);
   --nb-accent-hover: var(--color-accent-bright);
   --nb-card-border: var(--peira-border);
   --nb-input-border: var(--color-border-strong);
@@ -120,6 +122,32 @@
      descendants, which is a hazard for the dropdowns living inside here. */
   background: var(--peira-surface);
   border: 1px solid var(--color-border);
+}
+
+/* EVERY BARE <a> IN A COACH PAGE, and the one thing the light theme could
+   not have shipped without.
+
+   index.css styles `a { color: var(--color-primary) }` globally and sets
+   --color-primary to #c9a24b - brand gold. On the old dark ground that was
+   7.8:1 and read fine. On paper it is 2.25:1: a player's name in the roster,
+   a folder link, every unstyled link in the coach app, all failing AA at once.
+
+   SCOPED TO THE ANCHOR, NOT TO THE TOKEN. Re-declaring --color-primary on
+   .page fixed the links and broke the annotation toolbar's active tool, which
+   uses the SAME token as a FILL - 3.71:1, caught by the contrast guard rather
+   than by eye. The token means "the brand colour" and is legitimately both;
+   only its use as running text needed to change.
+
+   :not([class]) because `.page a` alone is (0,1,1) and OUTRANKS a component
+   class like .btnPrimary - it repainted the gold "Request early access"
+   button's own label deep-gold-on-gold, 2.11:1. An anchor carrying no class
+   is an unstyled link and is exactly what this is for; anything with a class
+   has already said what colour it wants.
+
+   index.css itself is untouched: that file is the PLAYER theme and stays
+   exactly as it is. */
+.page a:not([class]) {
+  color: var(--peira-accent-text);
 }
 
 /* The mask for the gap AROUND the floating pill.

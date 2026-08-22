@@ -75,12 +75,12 @@
 }
 
 .quizStat {
-  color: var(--nb-accent-deep);
+  color: var(--peira-accent-text);
   font-size: 12.5px;
 }
 
 .quizStat b {
-  color: var(--nb-accent-bright);
+  color: var(--peira-accent-text);
 }
 
 .actions {
@@ -98,7 +98,7 @@
 button.actionDuplicate {
   border: 1.5px solid var(--nb-accent);
   background: var(--color-accent-bg);
-  color: var(--nb-accent-bright);
+  color: var(--peira-accent-text);
   font-weight: 700;
 }
 
@@ -233,7 +233,7 @@ button.actionDelete:hover:not(:disabled) {
 }
 
 .subfolderLink:hover {
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
   text-decoration: underline;
 }
 

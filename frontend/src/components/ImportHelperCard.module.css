@@ -41,7 +41,7 @@
   font-size: 1.05em;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--nb-accent-bright);
+  color: var(--peira-accent-text);
   margin: 0;
 }
 
@@ -82,7 +82,7 @@
 .example summary {
   cursor: pointer;
   font-weight: 600;
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
   user-select: none;
 }
 
@@ -98,7 +98,7 @@
 
 .exampleArrow {
   text-align: center;
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
   font-size: 1.1em;
   margin: 0.3em 0;
 }

@@ -14,7 +14,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   margin: 0.2em 0;
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }
 
 .expiry {
@@ -133,7 +133,7 @@
 }
 
 .reactivateToggle:hover {
-  color: var(--nb-accent);
+  color: var(--peira-accent-text);
 }
 
 .reactivatePanel {

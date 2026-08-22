@@ -103,12 +103,12 @@
 
 :root {
   /* --- Color: surfaces (collide with index.css - --peira-* prefixed) ------ */
-  --peira-bg: #121212;
-  --peira-surface: #17181b;
-  --color-surface-input: #1a1b1e;
-  --color-border-subtle: rgba(255, 255, 255, 0.08);
-  --peira-border: rgba(255, 255, 255, 0.1);
-  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --peira-bg: #FAF7F2;
+  --peira-surface: #FFFFFF;
+  --color-surface-input: #FFFFFF;
+  --color-border-subtle: #F0EAE0;
+  --peira-border: #E4DED3;
+  --color-border-strong: #C3BBAE;
 
   /* --- Color: washes and fills ---------------------------------------------
    * NAMED FOR THEIR JOB, NOT THEIR OPACITY, and that is the point of this
@@ -133,20 +133,20 @@
    * its fallbacks were the live values - and the three disagreed with each
    * other (0.05, 0.06, 0.08). Each now names the wash it actually wanted.
    */
-  --peira-wash-hover: rgba(255, 255, 255, 0.02);
-  --peira-wash-control-hover: rgba(255, 255, 255, 0.05);
-  --peira-wash-control-hover-strong: rgba(255, 255, 255, 0.08);
-  --peira-surface-raised: rgba(255, 255, 255, 0.05);
-  --peira-surface-raised-strong: rgba(255, 255, 255, 0.08);
-  --peira-dropzone: rgba(255, 255, 255, 0.02);
-  --peira-dropzone-focus: rgba(255, 255, 255, 0.04);
-  --peira-dropzone-active: rgba(255, 255, 255, 0.06);
-  --peira-chip: rgba(255, 255, 255, 0.06);
+  --peira-wash-hover: rgba(28, 26, 23, 0.03);
+  --peira-wash-control-hover: rgba(28, 26, 23, 0.05);
+  --peira-wash-control-hover-strong: rgba(28, 26, 23, 0.08);
+  --peira-surface-raised: #FFFFFF;
+  --peira-surface-raised-strong: #F7F2E9;
+  --peira-dropzone: #FBF8F3;
+  --peira-dropzone-focus: #F7F2E9;
+  --peira-dropzone-active: rgba(201, 162, 75, 0.14);
+  --peira-chip: #F3EDE1;
   /* A field a coach types into. Already a LIGHT fill on the dark theme - the
      one place the interface was light all along, which is why it needs the
      least thought when the rest of it follows. */
-  --peira-field: rgba(255, 255, 255, 0.92);
-  --peira-field-soft: rgba(255, 255, 255, 0.6);
+  --peira-field: #FFFFFF;
+  --peira-field-soft: #FFFFFF;
 
   /* --- Color: text (collide with index.css - --peira-* prefixed) ----------
      Every text token here clears WCAG AA (4.5:1 for small text) against all
@@ -160,26 +160,38 @@
      case) while still reading as clearly-muted next to --peira-text-muted.
      Accessibility wins over an exact brand hex - the same rule that will
      later constrain per-organization colors. */
-  --peira-text: #f5f3ee;
-  --color-text-secondary: #edeae2;
-  --peira-text-muted: #8b8b86;
-  --color-text-muted-2: #85857f;
-  --color-text-muted-3: #9c9994;
+  --peira-text: #1C1A17;
+  --color-text-secondary: #3E3A34;
+  --peira-text-muted: #6B655C;
+  --color-text-muted-2: #6B655C;
+  --color-text-muted-3: #726B62;
 
   /* --- Color: accent (gold, flat - never a gradient; no index.css equivalent) */
   --color-accent: #c9a24b;
-  --color-accent-bright: #e4c066;
-  --color-accent-contrast: #121212;
-  --color-accent-bg: rgba(201, 162, 75, 0.12);
+  --color-accent-bright: #B4903D;
+  --color-accent-contrast: #1C1A17;
+  --color-accent-bg: rgba(201, 162, 75, 0.14);
+
+  /* GOLD AS INK, and the reason the brand colour did not have to change.
+     Measured: #c9a24b on the paper ground is 2.25:1 - it fails as text and
+     always would have. As a FILL with ink on it, the same gold is 7.24:1.
+     So gold splits by ROLE rather than by value: --color-accent keeps every
+     fill, rule, indicator and button, and this carries gold wherever it has
+     to be read as a word. 4.73:1 on paper, 5.05:1 on a card. */
+  --peira-accent-text: #8A6A1B;
 
   /* --- Color: status (collide with index.css - --peira-* prefixed) -------- */
-  --peira-success: #4fbe72;
-  --peira-success-bg: rgba(58, 164, 92, 0.15);
-  --color-warning: #e0a356;
-  --peira-warning-bg: rgba(224, 140, 64, 0.15);
-  --peira-danger: #e07a7a;
-  --peira-danger-bg: rgba(224, 90, 90, 0.08);
-  --color-danger-border: rgba(224, 90, 90, 0.3);
+  /* #1A6B3D, not the #1F7A46 the palette started at: the success chip puts
+     this colour on a 10% tint of ITSELF, and at #1F7A46 that pairing
+     measured 4.38:1 on paper - a hair under AA, and only findable by
+     compositing the tint rather than reading the token. 5.29:1 now. */
+  --peira-success: #1A6B3D;
+  --peira-success-bg: rgba(31, 122, 70, 0.10);
+  --color-warning: #8A5A12;
+  --peira-warning-bg: rgba(138, 90, 18, 0.10);
+  --peira-danger: #A33232;
+  --peira-danger-bg: rgba(163, 50, 50, 0.07);
+  --color-danger-border: rgba(163, 50, 50, 0.30);
 
   /* --- Typography (no index.css equivalent) -------------------------------- */
   /* 'Peira Plain Symbols' MUST come first - see the @font-face above. It
@@ -214,9 +226,9 @@
   --radius-pill: 999px;
 
   /* --- Shadow (flat design - used sparingly: floating nav, modals, hover lift) */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 1px 2px rgba(28, 26, 23, 0.06);
+  --shadow-md: 0 4px 14px rgba(28, 26, 23, 0.10);
+  --shadow-lg: 0 16px 40px rgba(28, 26, 23, 0.16);
 
   /* --- Spacing scale (4px base unit) ---------------------------------------- */
   --space-1: 4px;

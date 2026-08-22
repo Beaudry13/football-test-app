@@ -151,7 +151,7 @@
 }
 
 .emphasis {
-  color: var(--nb-accent-bright, var(--color-accent-bright));
+  color: var(--peira-accent-text);
   font-style: normal;
 }
 

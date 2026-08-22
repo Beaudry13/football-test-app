@@ -31,7 +31,7 @@ export function HomePage() {
     <NotebookPage>
       <header className={styles.header}>
         <Link to="/" className={styles.brand}>
-          <PeiraLogo variant="dark" />
+          <PeiraLogo variant="light" />
         </Link>
         <nav className={styles.navActions}>
           <Link to="/login" className={styles.navBtnOutline}>
