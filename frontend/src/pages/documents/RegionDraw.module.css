@@ -75,7 +75,7 @@
   padding: 0 5px;
   border-radius: 10px;
   background: var(--nb-accent);
-  color: #10131a;
+  color: var(--color-accent-contrast);
   font-size: 0.7rem;
   font-weight: 700;
   line-height: 20px;

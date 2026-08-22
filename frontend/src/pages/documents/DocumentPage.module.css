@@ -116,7 +116,7 @@
   border-radius: 4px;
   font-size: 0.7rem;
   line-height: 1.4;
-  color: #fff;
+  color: var(--peira-surface);
   /* Fixed dark scrim rather than a theme token: this sits on top of the page
      image, whose brightness has nothing to do with the app's theme. */
   background: rgba(0, 0, 0, 0.66);
@@ -134,7 +134,7 @@
   border: 1px solid var(--nb-border);
   /* Playbook pages are white paper; give them a white backing so a partially
      loaded image does not flash the dark coach theme through. */
-  background: #fff;
+  background: var(--peira-surface);
 }
 
 @media (max-width: 60rem) {

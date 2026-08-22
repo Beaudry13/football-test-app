@@ -1,5 +1,5 @@
 .card {
-  background: var(--color-surface, #17181b);
+  background: var(--color-surface, #FFFFFF);
   border: 1.5px solid var(--nb-accent);
   border-radius: var(--radius-md, 10px);
   padding: 1.1em 1.3em;
@@ -28,7 +28,7 @@
   height: 22px;
   border-radius: 50%;
   background: var(--nb-accent);
-  color: var(--color-accent-contrast, #121212);
+  color: var(--color-accent-contrast, #1C1A17);
   font-weight: 700;
   font-size: 0.85em;
   font-style: normal;

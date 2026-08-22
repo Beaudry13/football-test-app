@@ -141,7 +141,7 @@
   gap: 0.75rem;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--nb-border, #3a3a38);
+  border-top: 1px solid var(--nb-card-border);
 }
 
 /* Said before the controls, not after: the consequence is the reason a coach
@@ -149,5 +149,5 @@
 .reactivateWarning {
   margin: 0;
   font-size: 0.9em;
-  color: var(--nb-danger, #e0796b);
+  color: var(--color-danger);
 }

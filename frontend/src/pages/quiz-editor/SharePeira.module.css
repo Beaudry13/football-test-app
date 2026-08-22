@@ -36,13 +36,13 @@
   margin: -12px -8px;
   font: inherit;
   font-size: 0.85rem;
-  color: var(--peira-text-muted, #9aa5b1);
+  color: var(--peira-text-muted, #6B655C);
   text-decoration: underline;
   cursor: pointer;
 }
 
 .qrToggle:hover {
-  color: var(--peira-text, #e8edf2);
+  color: var(--peira-text, #1C1A17);
 }
 
 .qrBlock {
@@ -76,7 +76,7 @@
 .qrHint {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--peira-text-muted, #9aa5b1);
+  color: var(--peira-text-muted, #6B655C);
 }
 
 /* Only ever rendered when the clipboard refused - see SharePeira.tsx. */
@@ -89,5 +89,5 @@
 .fallback p {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--peira-text-muted, #9aa5b1);
+  color: var(--peira-text-muted, #6B655C);
 }

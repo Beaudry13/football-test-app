@@ -29,7 +29,7 @@
    whichever one the ancestor theme actually defines. */
 .warning {
   background: var(--color-warning-bg, rgba(224, 140, 64, 0.15));
-  color: var(--color-warning, var(--color-warning-text, #e0a356));
+  color: var(--color-warning, var(--color-warning-text, #8A5A12));
 }
 
 .info {

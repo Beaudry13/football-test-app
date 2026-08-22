@@ -145,9 +145,9 @@
 }
 
 .retiredBadge {
-  background: var(--peira-surface-3, #333);
-  color: var(--peira-text-muted, #bbb);
-  border: 1px dashed var(--peira-border, #555);
+  background: var(--peira-chip);
+  color: var(--peira-text-muted);
+  border: 1px dashed var(--peira-border);
 }
 
 /* --- Move to position ----------------------------------------------------

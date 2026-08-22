@@ -107,7 +107,16 @@ export function FolderRow({
             see routes/folders.delete_folder). Offering it anyway meant a
             confirmation promising the quizzes would move to Uncategorized,
             followed by an error - so it says why instead. */}
-        <MenuItem onSelect={() => onDelete(folder.id, folder.name)} disabled={subfolders.length > 0}>
+        {/* `destructive` for the same reason a quiz card's Delete carries it:
+            deleting a folder is the one irreversible thing in this menu, and
+            it read as ordinary ink beside Rename. The confirmation, and the
+            422 the API returns for a folder that still has subfolders, are
+            both unchanged. */}
+        <MenuItem
+          destructive
+          onSelect={() => onDelete(folder.id, folder.name)}
+          disabled={subfolders.length > 0}
+        >
           {subfolders.length > 0 ? 'Delete (empty its folders first)' : 'Delete folder'}
         </MenuItem>
       </MenuButton>

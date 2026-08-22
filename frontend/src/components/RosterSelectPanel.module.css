@@ -37,7 +37,7 @@
 
 .viewFilterActive {
   background: var(--nb-accent);
-  color: #14110b;
+  color: var(--color-accent-contrast);
   border-color: var(--nb-accent);
 }
 

@@ -26,7 +26,7 @@
 .notice {
   padding: 10px 14px;
   margin-bottom: 1em;
-  border: 1px solid var(--nb-warning, #b58900);
+  border: 1px solid var(--color-warning);
   border-left-width: 4px;
   border-radius: 6px;
   color: var(--nb-text);

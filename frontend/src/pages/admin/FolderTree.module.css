@@ -36,7 +36,7 @@
 }
 
 .folderRow:focus-visible {
-  outline: 2px solid var(--nb-accent);
+  outline: 2px solid var(--peira-accent-text);
   outline-offset: -2px;
 }
 
@@ -87,7 +87,7 @@
 }
 
 .quizRowUnassigned {
-  border-left-color: var(--nb-warning, #b58900);
+  border-left-color: var(--color-warning);
 }
 
 .quizIcon {
@@ -121,8 +121,8 @@
 }
 
 .unassignedTag {
-  background: var(--nb-warning, #b58900);
-  color: #10131a;
+  background: var(--peira-warning-bg);
+  color: var(--color-warning);
 }
 
 .quizMeta {

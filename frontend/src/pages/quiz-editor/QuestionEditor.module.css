@@ -60,7 +60,7 @@
   border-radius: 6px;
   border: 1px solid var(--nb-border);
   object-fit: contain;
-  background: #fff;
+  background: var(--peira-surface);
 }
 
 .imageActions {
@@ -159,9 +159,9 @@
   margin: 0 0 var(--peira-space-3, 12px);
   padding: var(--peira-space-3, 12px);
   border-radius: var(--peira-radius-sm, 6px);
-  background: var(--peira-surface-2, #2a2a2a);
-  border-left: 3px solid var(--peira-border, #555);
-  color: var(--peira-text-muted, #c4c4c4);
+  background: var(--peira-surface-raised-strong);
+  border-left: 3px solid var(--peira-border);
+  color: var(--peira-text-muted);
   font-size: 0.9rem;
   line-height: 1.45;
 }
@@ -180,7 +180,7 @@
 
 .allowMultiple small {
   display: block;
-  color: var(--peira-text-muted, #b9b3a4);
+  color: var(--peira-text-muted);
   font-size: 0.82rem;
   margin-top: 2px;
 }

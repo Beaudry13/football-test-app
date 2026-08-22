@@ -319,7 +319,7 @@ button.actionDelete:hover:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid var(--nb-border, #3a3a38);
+  border: 1px solid var(--nb-card-border);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
 }

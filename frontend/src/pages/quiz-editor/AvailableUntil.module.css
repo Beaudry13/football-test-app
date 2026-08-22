@@ -43,12 +43,12 @@
  */
 .preset {
   background: none;
-  border: 1px solid var(--nb-border, #3a3a38);
+  border: 1px solid var(--nb-card-border);
   border-radius: 999px;
   padding: 0.25rem 0.7rem;
   font: inherit;
   font-size: 0.85em;
-  color: var(--nb-text, #f5f3ee);
+  color: var(--nb-text);
   cursor: pointer;
 }
 
@@ -77,7 +77,7 @@
 .warning {
   margin: 0;
   font-size: 0.85em;
-  color: var(--nb-danger, #e0796b);
+  color: var(--color-danger);
 }
 
 /*
