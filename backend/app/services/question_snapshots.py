@@ -25,7 +25,12 @@ from app.services.attempts import delivery_question_ids
 #: row so a future reader can tell an old shape from a new one WITHOUT guessing
 #: from which keys happen to be present - the alternative is sniffing, and
 #: sniffing is how "delivered content not recorded" turns into a wrong answer.
-SNAPSHOT_VERSION = 1
+#: v2 adds `concept`. Everything v1 recorded is recorded identically - the
+#: version moves because a reader must be able to tell "this attempt had no
+#: concept" (v2, concept null) from "this attempt predates concepts entirely"
+#: (v1, key absent) WITHOUT sniffing for the key. Those two are different
+#: facts and only the version distinguishes them.
+SNAPSHOT_VERSION = 2
 
 
 class SnapshotError(RuntimeError):
@@ -45,7 +50,8 @@ def build_snapshot(question: Question) -> dict:
     Everything needed to answer "what was this question, and what counted as
     right, at the moment it was delivered": the text, the type, the options
     with their correctness, and - for a typed-answer question - the accepted
-    answers and the matching mode that graded them.
+    answers and the matching mode that graded them - and, since v2, the
+    concept it was tagged with.
 
     WHAT IS DELIBERATELY OUT
     ------------------------
@@ -85,6 +91,22 @@ def build_snapshot(question: Question) -> dict:
                 }
                 for option in question.options
             ]
+        ),
+        #: WHAT THIS QUESTION WAS ABOUT WHEN IT WAS DELIVERED.
+        #:
+        #: The name travels with the id, and that redundancy is the point. A
+        #: coach who renames "Cover 3" to "Cover 3 (base)" in November must not
+        #: change what September's analysis says the player was asked about,
+        #: and a concept that is later archived must still read. Resolving the
+        #: id against the live table at read time would do exactly the thing
+        #: this whole snapshot exists to prevent.
+        #:
+        #: None where the question was untagged - "General" is a rendering
+        #: choice, not a stored value, so nothing here has to be invented.
+        "concept": (
+            {"id": question.concept.id, "name": question.concept.name}
+            if question.concept is not None
+            else None
         ),
         "expected_answers": question.expected_answers or [],
         "answer_matching": question.answer_matching,
