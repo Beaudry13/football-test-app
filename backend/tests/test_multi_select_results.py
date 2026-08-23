@@ -810,11 +810,22 @@ class TestTheBreakdownGainedNothing:
     def test_it_still_reports_counts_and_no_set_specific_field(
         self, client, coach_headers, multi
     ):
-        """DELIBERATELY NOT EXTENDED. "Most common combination" is an
-        analytics question, not a display one, and v1 answers it by letting a
-        coach open the player's row. The breakdown carries no per-option
+        """STILL NO PER-OPTION DISTRIBUTION HERE. "Most common combination" is
+        an analytics question, not a display one, and v1 answers it by letting
+        a coach open the player's row. The breakdown carries no per-option
         distribution to become misleading for a set, which is why nothing here
-        needed a fallback."""
+        needed a fallback.
+
+        Phase C added `concept` - a single nullable tag naming what the
+        question is about. It is deliberately NOT the thing this guard exists
+        to prevent: it is one label per question, identical for a set question
+        and a single-choice one, and it cannot be mistaken for a distribution.
+        The distractor analysis Phase C DID build lives on the concept rows in
+        `concept_breakdown`, and reads only discrete-option questions - a
+        multi-select set is excluded there for exactly the reason named above.
+
+        This assertion stays an EXACT set on purpose: a distribution added
+        here later must fail this test rather than quietly ship."""
         answer_and_submit(client, multi, CORRECT)
 
         row = client.get(
@@ -834,4 +845,5 @@ class TestTheBreakdownGainedNothing:
             "ungraded_count",
             "is_excluded",
             "exclusions",
+            "concept",
         }
