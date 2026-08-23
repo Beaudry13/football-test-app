@@ -664,3 +664,93 @@ describe('viewport - Space is a modifier, not a tool', () => {
     field.remove();
   });
 });
+
+/** THE SHAPE MUST BE PAINTED BY THE RELEASE THAT FINISHED IT.
+ *
+ * Sticky tools removed the setTool('select') that used to run on mouse:up.
+ * The tool effect ends with requestRenderAll() and re-runs whenever `tool`
+ * changes, so that reset had been painting every finished shape as a SIDE
+ * EFFECT. Nothing in the finalize branch asked for the render itself, so once
+ * the reset went, mouseup left a complete, correct, INVISIBLE object - and the
+ * next interaction is what forced it onto the canvas.
+ *
+ * Measured in a real browser before the fix: after a full drag and release the
+ * ellipse existed at rx 120, ry 86, visible, opacity 1, with zero of its
+ * pixels drawn until a render was forced by hand.
+ */
+describe('a finished shape is painted on release, not on the next click', () => {
+  const DRAWING_TOOLS: [label: string, title: string | RegExp][] = [
+    ['Line', 'Line'],
+    ['Arrow', 'Arrow'],
+    ['Rectangle', 'Rectangle'],
+    ['Circle', /Circle/],
+  ];
+
+  it.each(DRAWING_TOOLS)('%s requests a paint on mouse:up', async (_label, title) => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+    act(() => fireEvent.click(getByTitle(title)));
+
+    const render = vi.spyOn(capturedCanvas!, 'requestRenderAll');
+    act(() => {
+      capturedCanvas!.fire('mouse:down', { scenePoint: new Point(20, 20) } as never);
+      capturedCanvas!.fire('mouse:move', { scenePoint: new Point(90, 70) } as never);
+    });
+    render.mockClear();
+
+    // The release, and nothing after it.
+    act(() => {
+      capturedCanvas!.fire('mouse:up', { scenePoint: new Point(90, 70) } as never);
+    });
+
+    expect(render).toHaveBeenCalled();
+    render.mockRestore();
+  });
+
+  it.each(DRAWING_TOOLS)('%s stays selected after drawing (still sticky)', async (_label, title) => {
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+    act(() => fireEvent.click(getByTitle(title)));
+
+    act(() => {
+      capturedCanvas!.fire('mouse:down', { scenePoint: new Point(20, 20) } as never);
+      capturedCanvas!.fire('mouse:move', { scenePoint: new Point(90, 70) } as never);
+      capturedCanvas!.fire('mouse:up', { scenePoint: new Point(90, 70) } as never);
+    });
+
+    // Drawing a second one must cost nothing but the drag.
+    const countAfterFirst = capturedCanvas!.getObjects().length;
+    act(() => {
+      capturedCanvas!.fire('mouse:down', { scenePoint: new Point(120, 120) } as never);
+      capturedCanvas!.fire('mouse:move', { scenePoint: new Point(180, 170) } as never);
+      capturedCanvas!.fire('mouse:up', { scenePoint: new Point(180, 170) } as never);
+    });
+    expect(capturedCanvas!.getObjects().length).toBe(countAfterFirst + 1);
+  });
+
+  it('leaves the canvas coordinate space alone while drawing', async () => {
+    // The paint fix must not touch the backing store, the zoom or anything
+    // saved coordinates are relative to.
+    const { onReady, getByTitle } = renderCanvas();
+    await waitForReady(onReady);
+    act(() => fireEvent.click(getByTitle('Rectangle')));
+
+    const before = {
+      width: capturedCanvas!.getWidth(),
+      height: capturedCanvas!.getHeight(),
+      zoom: capturedCanvas!.getZoom(),
+    };
+    for (let i = 0; i < 12; i++) {
+      act(() => {
+        capturedCanvas!.fire('mouse:down', { scenePoint: new Point(10 + i * 5, 10 + i * 4) } as never);
+        capturedCanvas!.fire('mouse:move', { scenePoint: new Point(60 + i * 5, 55 + i * 4) } as never);
+        capturedCanvas!.fire('mouse:up', { scenePoint: new Point(60 + i * 5, 55 + i * 4) } as never);
+      });
+    }
+
+    expect(capturedCanvas!.getObjects()).toHaveLength(12);
+    expect(capturedCanvas!.getWidth()).toBe(before.width);
+    expect(capturedCanvas!.getHeight()).toBe(before.height);
+    expect(capturedCanvas!.getZoom()).toBe(before.zoom);
+  });
+});

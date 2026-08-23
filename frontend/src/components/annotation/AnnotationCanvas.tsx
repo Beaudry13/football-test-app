@@ -641,7 +641,26 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
              existing shape is not offered until a coach asks for Select
              anyway. What the reset actually cost was the second line, the
              second arrow and the second box - each one a tool click a coach
-             had already made. */
+             had already made.
+
+             AND IT ALSO COST THE SHAPE ITS PAINT, which is the bug this line
+             fixes. The tool effect above ends with requestRenderAll() and
+             re-runs whenever `tool` changes, so setTool('select') here used to
+             render the finished shape as a SIDE EFFECT. Nothing in this branch
+             ever asked for that render on its own, so removing the reset
+             removed the paint with it: mouseup left a correct, complete object
+             that had never been drawn, and it appeared only when the next
+             interaction forced a render - which is exactly what a coach saw as
+             "the previous circle appears when I start the next one".
+
+             Measured after a full drag and release: the ellipse existed at
+             rx 120, ry 86, visible, opacity 1 - with zero of its pixels on the
+             canvas until a render was forced by hand.
+
+             Its three siblings all already end this way - the endpoint drag
+             above, finalizeCurve, and abortDraw. This branch was the omission,
+             which is why Route and Draw were never affected. */
+          canvas!.requestRenderAll();
         }
         shape = null;
         startPoint = null;
