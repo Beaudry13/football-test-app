@@ -16,6 +16,7 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import (
     Answer,
+    Concept,
     DocumentPage,
     Question,
     QuestionImage,
@@ -55,6 +56,25 @@ def _get_editable_question(quiz_id: int, question_id: int) -> Question:
     if question is None:
         raise ApiError("Question not found", status_code=404)
     return question
+
+
+def _validated_concept_id(quiz, concept_id):
+    """A concept id proven to belong to this quiz's organization, or None.
+
+    IDS FROM A CLIENT ARE NEVER TRUSTED - the same rule the option ids follow.
+    Without this check a coach could tag their question with another
+    organization's concept, and every count built on it afterwards would be
+    quietly wrong across a tenant boundary.
+
+    None is a legitimate value meaning "General", so it passes straight
+    through rather than being treated as absent.
+    """
+    if concept_id is None:
+        return None
+    concept = db.session.get(Concept, concept_id)
+    if concept is None or concept.organization_id != quiz.organization_id:
+        raise ApiError("That concept does not exist", status_code=422)
+    return concept.id
 
 
 def _replace_options(question: Question, options: list[dict]) -> None:
@@ -289,6 +309,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         question_type=QuestionType(data["question_type"]),
         position=next_position,
         allows_multiple_answers=allows_multiple,
+        concept_id=_validated_concept_id(quiz, data.get("concept_id")),
     )
     db.session.add(question)
     db.session.flush()
@@ -442,6 +463,11 @@ def update_region_question(quiz_id: int, question_id: int):
         question.allows_multiple_answers = allows_multiple
     if "question_text" in data:
         question.question_text = data["question_text"]
+    if "concept_id" in data:
+        # Only when SENT, matching every other field here. The update schema
+        # deliberately has no load_default, so an edit that never mentions the
+        # concept leaves the key absent and the existing tag alone.
+        question.concept_id = _validated_concept_id(question.quiz, data.get("concept_id"))
 
     # Deliberately NOT guarded by _reject_if_already_answered: the explanation
     # is teaching material shown after the fact, so improving it changes
@@ -506,6 +532,11 @@ def update_question(quiz_id: int, question_id: int):
         question.allows_multiple_answers = allows_multiple
     if "question_text" in data:
         question.question_text = data["question_text"]
+    if "concept_id" in data:
+        # Only when SENT, matching every other field here. The update schema
+        # deliberately has no load_default, so an edit that never mentions the
+        # concept leaves the key absent and the existing tag alone.
+        question.concept_id = _validated_concept_id(question.quiz, data.get("concept_id"))
 
     # Deliberately NOT guarded by _reject_if_already_answered: the explanation
     # is teaching material shown after the fact, so improving it changes

@@ -33,6 +33,8 @@ _ANSWER_EXPLANATION = fields.Str(
 class QuestionCreateSchema(Schema):
     question_text = fields.Str(required=True, validate=validate.Length(min=1))
     question_type = fields.Str(required=True, validate=validate.OneOf(QUESTION_TYPE_VALUES))
+    #: NULL is a real choice, not a missing value - it reads as "General".
+    concept_id = fields.Int(required=False, load_default=None, allow_none=True)
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False, load_default=list)
     #: "Select all that apply". Multiple choice only - validated below.
     allows_multiple_answers = fields.Bool(required=False, load_default=False)
@@ -53,6 +55,10 @@ class QuestionCreateSchema(Schema):
 class QuestionUpdateSchema(Schema):
     question_text = fields.Str(required=False, validate=validate.Length(min=1))
     question_type = fields.Str(required=False, validate=validate.OneOf(QUESTION_TYPE_VALUES))
+    #: NULL is a real choice, not a missing value - it reads as "General".
+    #: NO load_default: absence must remain absent, so a partial edit that
+    #: never mentions the concept cannot silently clear an existing tag.
+    concept_id = fields.Int(required=False, allow_none=True)
     options = fields.List(fields.Nested(QuestionOptionSchema), required=False)
     allows_multiple_answers = fields.Bool(required=False)
     # Editable in the same form that created it - no second screen.

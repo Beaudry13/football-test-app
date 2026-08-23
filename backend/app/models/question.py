@@ -77,6 +77,20 @@ class Question(db.Model):
     quiz_id = db.Column(db.Integer, db.ForeignKey("quizzes.id"), nullable=False, index=True)
     question_text = db.Column(db.Text, nullable=False)
     question_type = db.Column(db.Enum(QuestionType), nullable=False)
+    #: WHAT THIS QUESTION IS ABOUT. NULL is a real, ordinary state - it reads
+    #: as "General", and every question written before concepts existed is in
+    #: it honestly rather than being guessed into a bucket.
+    #:
+    #: SET NULL rather than CASCADE: losing a concept must never delete a
+    #: coach's question. Archiving is the normal way to retire one anyway (see
+    #: models/concept.py); this is the backstop for a genuine hard delete.
+    #:
+    #: This is the LIVE tag, and it is editable. What an attempt was delivered
+    #: under is frozen separately in its question snapshot, so retagging a
+    #: question cannot rewrite what past analysis says the player answered.
+    concept_id = db.Column(
+        db.Integer, db.ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
@@ -131,6 +145,7 @@ class Question(db.Model):
         db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True
     )
 
+    concept = db.relationship("Concept")
     quiz = db.relationship("Quiz", back_populates="questions")
     options = db.relationship(
         "QuestionOption",
@@ -176,6 +191,11 @@ class Question(db.Model):
             "quiz_id": self.quiz_id,
             "question_text": self.question_text,
             "question_type": self.question_type.value,
+            #: The LIVE tag. What an attempt was delivered under lives in its
+
+            #: question snapshot instead - see services/question_snapshots.
+
+            "concept": ({"id": self.concept.id, "name": self.concept.name} if self.concept else None),
             "position": self.position,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must

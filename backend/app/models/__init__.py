@@ -6,6 +6,7 @@ from app.models.staff_invite_request import StaffInviteRequest
 from app.models.organization import Organization, OrganizationInvite
 from app.models.coach import Coach, CoachRole
 from app.models.folder import Folder
+from app.models.concept import Concept
 from app.models.player import Player
 from app.models.group import Group, GroupPlayer
 from app.models.quiz import Quiz
@@ -30,6 +31,7 @@ from app.models.competition import (
 )
 
 __all__ = [
+    "Concept",
     "BetaInvite",
     "AccessRequest",
     "StaffInviteRequest",
