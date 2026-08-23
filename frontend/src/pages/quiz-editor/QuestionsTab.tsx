@@ -114,15 +114,51 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
      appear - an add box above the list would be telling the coach the
      question goes there, and it does not. */
   const addFormRef = useRef<HTMLDivElement>(null);
-  const [scrollToAddForm, setScrollToAddForm] = useState(false);
+  /* Not a boolean any more: a COUNTER. Two different controls open this form,
+     and a coach who cancels and immediately taps Add again must be taken to it
+     the second time too - with a boolean that reset itself, the second tap set
+     a flag that was already being cleared and the scroll silently did nothing
+     every other time. Bumping a number always changes the effect's input. */
+  const [addFormRequest, setAddFormRequest] = useState(0);
+
+  function openAddForm() {
+    setAddFormRequest((n) => n + 1);
+    setIsAdding(true);
+  }
 
   useEffect(() => {
-    if (!isAdding || !scrollToAddForm) return;
-    setScrollToAddForm(false);
+    if (!isAdding || addFormRequest === 0) return;
+    /* SMOOTH IS A PREFERENCE, NOT A GUARANTEE. Where the platform suppresses
+       smooth scrolling the call can complete having moved nothing at all, and
+       the coach is left looking at the same screen wondering whether the tap
+       registered. Honour reduced-motion explicitly and jump instead, which is
+       both the accessible behaviour and the one that cannot silently no-op. */
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const target = addFormRef.current;
     // Optional call: jsdom has no scrollIntoView, and a test that adds a
     // question should not fail on the scroll that made it visible.
-    addFormRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
-  }, [isAdding, scrollToAddForm]);
+    target?.scrollIntoView?.({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
+
+    /* AND THEN CHECK THAT IT ACTUALLY MOVED.
+       A smooth scroll is a request, not a promise: measured in a headless
+       Chromium here, scrollIntoView({behavior:'smooth'}) returned having moved
+       the page zero pixels, while 'auto' moved it 4830. Whatever the cause,
+       the failure mode is the one this whole change exists to remove - the
+       coach taps Add question and the screen does not change.
+
+       So a moment later, look. If the form still is not on screen, jump to it.
+       On every device where smooth works this sees the form already in view
+       and does nothing. */
+    if (!target?.getBoundingClientRect) return;
+    const settle = window.setTimeout(() => {
+      const box = target.getBoundingClientRect();
+      const onScreen = box.bottom > 0 && box.top < window.innerHeight;
+      if (!onScreen) target.scrollIntoView?.({ block: 'center', behavior: 'auto' });
+    }, 600);
+    return () => window.clearTimeout(settle);
+  }, [isAdding, addFormRequest]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
@@ -252,10 +288,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         <div className={styles.addRow}>
           <button
             className={nb.btnSecondary}
-            onClick={() => {
-              setScrollToAddForm(true);
-              setIsAdding(true);
-            }}
+            onClick={openAddForm}
           >
             + Add question
           </button>
@@ -432,13 +465,18 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
       <div ref={addFormRef}>
         {isAdding ? (
           <QuestionEditor
+            autoFocusQuestion
             submitLabel="Add question"
             allowImage
             onSave={handleCreate}
             onCancel={() => setIsAdding(false)}
           />
         ) : (
-          <button className={nb.btnPrimary} onClick={() => setIsAdding(true)}>
+          /* Same handler as the control at the top of the list. This one is
+             already on screen when a coach reaches it, but it must still focus
+             the field - and going through one function is what keeps the two
+             entry points from drifting apart again. */
+          <button className={nb.btnPrimary} onClick={openAddForm}>
             + Add question
           </button>
         )}

@@ -15,6 +15,13 @@ const TRUE_FALSE_OPTIONS: QuestionOptionInput[] = [
 ];
 
 interface QuestionEditorProps {
+  /** Put the cursor in the question field as soon as the form appears.
+   *
+   *  Set only by the caller that OPENED the form. An editor rendered inline
+   *  for an EXISTING question must never steal focus - the coach opened that
+   *  one to change one word, and yanking the cursor (and, on a phone, the
+   *  keyboard) is the opposite of helpful. */
+  autoFocusQuestion?: boolean;
   initialText?: string;
   initialType?: QuestionType;
   initialOptions?: QuestionOptionInput[];
@@ -51,6 +58,7 @@ interface QuestionEditorProps {
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 export function QuestionEditor({
+  autoFocusQuestion = false,
   initialText = '',
   initialType = 'true_false',
   initialOptions,
@@ -88,6 +96,21 @@ export function QuestionEditor({
   const [isHiding, setIsHiding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const questionRef = useRef<HTMLTextAreaElement>(null);
+
+  /* THE FORM OPENS WITH THE CURSOR ALREADY IN IT.
+     Tapping "+ Add question" used to bring the form into view and stop there,
+     leaving the coach one more tap from typing - and on a phone that tap is
+     into a field they must first find. Focusing it also raises the keyboard,
+     which is what a coach who just chose to add a question wants next.
+
+     preventScroll: the caller has just scrolled this form into view on
+     purpose, at block:'center'. Letting focus() perform its own scroll would
+     fight that and land somewhere else. */
+  useEffect(() => {
+    if (!autoFocusQuestion) return;
+    questionRef.current?.focus?.({ preventScroll: true });
+  }, [autoFocusQuestion]);
   const errorRef = useRef<HTMLDivElement>(null);
 
   /** Bring a failed save into view.
@@ -320,6 +343,7 @@ export function QuestionEditor({
         </label>
         <textarea
           id="question_text"
+          ref={questionRef}
           className={nb.input}
           required
           value={questionText}

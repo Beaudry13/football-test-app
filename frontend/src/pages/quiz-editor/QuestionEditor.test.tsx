@@ -659,3 +659,22 @@ describe('when saving fails', () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });
+
+describe('opening the form ready to type', () => {
+  it('puts the cursor in the question field when the caller opened the form', () => {
+    render(
+      <QuestionEditor autoFocusQuestion submitLabel="Add question" onSave={vi.fn()} onCancel={vi.fn()} />,
+    );
+
+    expect(document.activeElement).toBe(screen.getByLabelText('Question'));
+  });
+
+  it('does NOT steal focus by default', () => {
+    // An editor rendered inline for an existing question opens because the
+    // coach wants to change one word - moving the cursor (and, on a phone,
+    // raising the keyboard) would be the opposite of helpful.
+    render(<QuestionEditor submitLabel="Save" onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(document.activeElement).not.toBe(screen.getByLabelText('Question'));
+  });
+});
