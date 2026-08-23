@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 import { DashboardQuietNote, DashboardRail } from './DashboardRail';
-import { outstandingPlayers, recentActivity } from './dashboardRailData';
+import { outstandingPlayers, readyToSend, recentActivity } from './dashboardRailData';
 import type { ActiveQuizStatus, Quiz } from '../api/types';
 
 const liveEntry = (over: Partial<ActiveQuizStatus> = {}): ActiveQuizStatus =>
@@ -47,19 +47,35 @@ const draw = (entries: ActiveQuizStatus[] | null, quizzes: Quiz[] | null) =>
     </MemoryRouter>,
   );
 
-describe('the rail exists only when something is true', () => {
-  it('renders nothing on a quiet day, even when there are results to show', () => {
-    // THE QUIET-DAY RULE. Results alone would keep a second column on screen
-    // on the day the dashboard is meant to get simpler, and the quiz list
-    // would lose the width for it.
-    const { container } = draw([], [quiz({ average_score_percent: 76, completed_count: 18, roster_size: 24 })]);
+describe('the rail speaks whenever it has something true to say', () => {
+  it('CHANGES SUBJECT on a quiet day instead of disappearing', () => {
+    // THE REVERSED QUIET-DAY RULE. The rail used to return null the moment
+    // nothing was live, which made the ordinary day the day the dashboard had
+    // the least to say. It now keeps the panels that are still true - and
+    // drops only the ones that could only show zeros.
+    draw([], [quiz({ average_score_percent: 76, completed_count: 18, roster_size: 24 })]);
+    expect(screen.getByText('Results')).toBeInTheDocument();
+    expect(screen.queryByText('Activity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
+    expect(screen.queryByText('Closing soon')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing at all when it has nothing true to say', () => {
+    // The empty-handed case still returns null. A rail of empty panels is
+    // worse than no rail, and the page widens to one column behind it.
+    const { container } = draw([], [quiz({ is_active: true, completed_count: 4 })]);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders nothing before the first poll has answered', () => {
-    // null is "we have not been told", not "nothing is live".
-    const { container } = draw(null, [quiz({ average_score_percent: 76 })]);
-    expect(container).toBeEmptyDOMElement();
+  it('says nothing LIVE before the first poll has answered', () => {
+    // null is "we have not been told", not "nothing is live" - so no panel
+    // that describes live state may appear. Results comes from the quiz list,
+    // which we HAVE been told, so it is honest either way.
+    draw(null, [quiz({ average_score_percent: 76 })]);
+    expect(screen.queryByText('Activity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
+    expect(screen.queryByText('Closing soon')).not.toBeInTheDocument();
+    expect(screen.getByText('Results')).toBeInTheDocument();
   });
 
   it('shows no Needs attention panel when every player has submitted', () => {
@@ -129,6 +145,38 @@ describe('what the panels are allowed to say', () => {
     expect(screen.getByText('Graded quiz')).toBeInTheDocument();
     expect(screen.queryByText('Ungraded quiz')).not.toBeInTheDocument();
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+});
+
+describe('what counts as ready to send', () => {
+  it('offers a built quiz that has never gone out', () => {
+    const ready = readyToSend([quiz({ is_active: false, completed_count: 0, question_count: 9 })]);
+    expect(ready).toHaveLength(1);
+  });
+
+  it('NEVER guesses from a field the list endpoint did not send', () => {
+    // is_active and completed_count are OPTIONAL - omitted, not false/0, on
+    // every response but list_quizzes. A falsy check would read "we were not
+    // told" as "not active" and offer a quiz that may well be live.
+    expect(readyToSend([quiz({ question_count: 9 })])).toHaveLength(0);
+    expect(readyToSend([quiz({ is_active: false, question_count: 9 })])).toHaveLength(0);
+  });
+
+  it('excludes a quiz that is live, and one that has already been answered', () => {
+    expect(readyToSend([quiz({ is_active: true, completed_count: 0 })])).toHaveLength(0);
+    expect(readyToSend([quiz({ is_active: false, completed_count: 3 })])).toHaveLength(0);
+  });
+
+  it('excludes an empty quiz, which could not be activated anyway', () => {
+    const empty = quiz({ is_active: false, completed_count: 0, question_count: 0 });
+    expect(readyToSend([empty])).toHaveLength(0);
+  });
+
+  it('stays a glance rather than a second quiz list', () => {
+    const many = Array.from({ length: 9 }, (_, i) =>
+      quiz({ id: i + 1, is_active: false, completed_count: 0, question_count: 4 }),
+    );
+    expect(readyToSend(many).length).toBeLessThanOrEqual(3);
   });
 });
 

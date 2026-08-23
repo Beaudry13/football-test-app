@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/ui/Icon';
 import type { ActiveQuizStatus, Quiz } from '../api/types';
-import { MAX_RESULTS, outstandingPlayers, recentActivity } from './dashboardRailData';
+import { MAX_RESULTS, outstandingPlayers, readyToSend, recentActivity } from './dashboardRailData';
 import styles from './DashboardRail.module.css';
 
 export function DashboardRail({
@@ -33,16 +33,35 @@ export function DashboardRail({
         )
       : [];
 
-  /* THE RAIL IS A LIVE BOARD, so it exists only while something is live.
-     Results alone would keep a second column on screen on a day when nothing
-     is out with players - which is the day the approved design deliberately
-     makes the dashboard quieter and gives the quizzes the whole width. What a
-     coach loses is one glance at a score, and DashboardQuietNote gives that
-     back in a sentence. */
-  if (live.length === 0) return null;
+  /* Built and never sent. Unlike every panel above it this asks nothing of the
+     live poll, which is what lets the rail keep working on a quiet day. */
+  const unsent = readyToSend(quizzes ?? []);
 
+  /* THE RAIL IS NOT A LIVE BOARD ANY MORE, and this is a deliberate reversal.
+
+     It used to `return null` whenever nothing was live, on the reasoning that
+     a second column of results would be clutter on a quiet day. In practice
+     that made the quiet day - the ordinary one - the day the dashboard had the
+     least to say: one sentence and a list of quiz titles. The owner's call
+     after seeing it: a quiet day should still look intentional and useful, not
+     collapse into a mostly empty screen.
+
+     So the rail now CHANGES SUBJECT rather than disappearing. Live now,
+     Activity and Closing soon are still gated on live data and simply are not
+     rendered when there is none - they could only show zeros. Results and
+     Ready to send come from the quiz list, so they survive the quiet day and
+     answer the two questions a coach actually arrives with: how did the last
+     one go, and what is ready to go out next.
+
+     The empty-handed case still returns null. A rail with nothing true to say
+     is worse than no rail, and the layout follows it automatically - the grid
+     switches on `:has(> aside)`, so the page widens in the same breath. */
   const hasAnything =
-    activity.length > 0 || outstanding > 0 || scored.length > 0 || closing.length > 0;
+    activity.length > 0 ||
+    outstanding > 0 ||
+    scored.length > 0 ||
+    closing.length > 0 ||
+    unsent.length > 0;
   if (!hasAnything) return null;
 
   return (
@@ -127,6 +146,25 @@ export function DashboardRail({
                     </span>
                   )}
                 </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {unsent.length > 0 && (
+        <section className={styles.panel}>
+          <h2 className={styles.panelTitle}>Ready to send</h2>
+          <p className={styles.panelNote}>Built, with questions, never sent.</p>
+          <ul className={styles.unsentList}>
+            {unsent.map((quiz) => (
+              <li key={quiz.id} className={styles.unsentRow}>
+                <Link to={`/quizzes/${quiz.id}?tab=activate`} className={styles.unsentName}>
+                  {quiz.title}
+                </Link>
+                <span className={styles.unsentMeta}>
+                  {quiz.question_count} {quiz.question_count === 1 ? 'question' : 'questions'}
+                </span>
               </li>
             ))}
           </ul>

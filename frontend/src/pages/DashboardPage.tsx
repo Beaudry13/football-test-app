@@ -202,7 +202,11 @@ export function DashboardPage() {
             `:has(> aside)` rather than on a flag computed here, so the layout
             cannot disagree with DashboardRail about whether a rail exists -
             the rail returns null when it has nothing true to say, and the page
-            widens to one column in the same breath. */}
+            widens to one column in the same breath.
+
+            This is why the rail could change its own quiet-day rule without
+            touching the layout: it now keeps speaking when nothing is live
+            (Results, Ready to send) and the grid simply keeps two columns. */}
         <div className={styles.layout}>
           <div className={styles.main}>
             {/* What is live RIGHT NOW stays first: it is the one thing on this

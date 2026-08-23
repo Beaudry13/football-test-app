@@ -199,3 +199,60 @@
 .quietLink:hover {
   color: var(--peira-accent-text);
 }
+
+/* --- Ready to send ------------------------------------------------------
+   Reuses the closing/result row shape rather than inventing a third one: the
+   rail should read as one board, not three lists that happen to share a
+   column. Names extend the existing set so a future restyle finds them all
+   together. */
+
+/* The only panel with a subtitle. It earns one because "Ready to send" is a
+   claim about state a coach could reasonably read two ways, and the line says
+   exactly which quizzes qualify. */
+.panelNote {
+  margin: calc(var(--space-4) * -1) 0 var(--space-4);
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.unsentList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.unsentRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.unsentRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.unsentName {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  color: var(--nb-text);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unsentName:hover {
+  color: var(--peira-accent-text);
+}
+
+.unsentMeta {
+  flex-shrink: 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+  white-space: nowrap;
+}

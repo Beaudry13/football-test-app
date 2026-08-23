@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { TourProvider } from '../help/tour/TourProvider';
@@ -114,8 +114,13 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([withStats]);
     renderDashboard();
 
-    expect(await screen.findByText('82%')).toBeInTheDocument();
-    expect(screen.getByText('avg. score')).toBeInTheDocument();
+    /* Scoped to the QUIZ CARD's stats line, because 82% is now legitimately on
+       this page twice: the card states it, and the rail's Results panel does
+       too now that the rail keeps speaking on a quiet day. An unscoped
+       getByText would fail on the duplicate and, worse, would have passed for
+       the wrong element the moment the two ever disagreed. */
+    const avg = await screen.findByText('avg. score');
+    expect(within(avg.closest('span') as HTMLElement).getByText('82%')).toBeInTheDocument();
     expect(screen.getByText('4/4')).toBeInTheDocument();
     expect(screen.getByText('completed')).toBeInTheDocument();
   });

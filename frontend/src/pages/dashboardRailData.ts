@@ -1,4 +1,4 @@
-import type { ActiveQuizStatus } from '../api/types';
+import type { ActiveQuizStatus, Quiz } from '../api/types';
 
 /** What the dashboard rail is allowed to say, as plain functions.
  *
@@ -19,6 +19,7 @@ export interface ActivityRow {
 /** How many rows each panel is allowed. A rail is a glance, not a log. */
 export const MAX_ACTIVITY = 6;
 export const MAX_RESULTS = 3;
+export const MAX_UNSENT = 3;
 
 /** Most recent submissions across every live code, newest first.
  *
@@ -61,4 +62,33 @@ export function outstandingPlayers(entries: ActiveQuizStatus[]): number {
   return entries
     .filter((e) => !e.is_practice)
     .reduce((total, e) => total + e.not_started.length, 0);
+}
+
+/** Quizzes that are built and have never gone out.
+ *
+ * The one panel here that is about a quiet day rather than a live one, and the
+ * reason the rail can now say something useful when nothing is out with
+ * players: "what is ready to go" is exactly the question a coach opens Peira
+ * with on a Wednesday.
+ *
+ * EVERY TEST IS AGAINST AN EXPLICIT VALUE, never a falsy check, because both
+ * `is_active` and `completed_count` are OPTIONAL on the Quiz type - computed
+ * only by list_quizzes, and omitted (not false, not 0) on every other
+ * response. `!quiz.is_active` would read "we were not told" as "not active"
+ * and put quizzes in this panel that may well be live.
+ *
+ * `completed_count === 0` rather than "never activated": the product has no
+ * has-been-sent flag, and a quiz that went out and nobody answered is not
+ * ready to send - it has already been sent. Zero completions with no live code
+ * is the closest true statement the data supports.
+ *
+ * `question_count > 0` because an empty quiz cannot be activated at all, so
+ * offering it as ready would be a dead end.
+ */
+export function readyToSend(quizzes: Quiz[]): Quiz[] {
+  return quizzes
+    .filter(
+      (q) => q.is_active === false && q.completed_count === 0 && q.question_count > 0,
+    )
+    .slice(0, MAX_UNSENT);
 }
