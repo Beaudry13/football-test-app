@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
+import { createConcept, listConcepts, type Concept } from '../../api/concepts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { IMAGE_FILE_ACCEPT, describeUnsupportedImage } from '../../utils/imageFormat';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -17,6 +18,11 @@ const TRUE_FALSE_OPTIONS: QuestionOptionInput[] = [
 ];
 
 interface QuestionEditorProps {
+  /** The concept this question is already tagged with, if any. Passed in
+   *  rather than fetched so an ARCHIVED concept still shows: the list endpoint
+   *  withholds archived ones, and a question that references one must display
+   *  the truth rather than appear untagged. */
+  initialConcept?: Concept | null;
   /** Put the cursor in the question field as soon as the form appears.
    *
    *  Set only by the caller that OPENED the form. An editor rendered inline
@@ -60,6 +66,7 @@ interface QuestionEditorProps {
 
 export function QuestionEditor({
   autoFocusQuestion = false,
+  initialConcept = null,
   initialText = '',
   initialType = 'true_false',
   initialOptions,
@@ -96,6 +103,66 @@ export function QuestionEditor({
   const [isPicking, setIsPicking] = useState(false);
   const [isHiding, setIsHiding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [conceptId, setConceptId] = useState<number | null>(initialConcept?.id ?? null);
+  const [isNamingConcept, setIsNamingConcept] = useState(false);
+  const [newConceptName, setNewConceptName] = useState('');
+  const [conceptError, setConceptError] = useState<string | null>(null);
+  const [isSavingConcept, setIsSavingConcept] = useState(false);
+
+  /* The picker's options. Loaded once; a failure is silent on purpose - a
+     concept is optional, and a question a coach can no longer SAVE because a
+     label list did not load would be a far worse trade than an untagged one. */
+  useEffect(() => {
+    let cancelled = false;
+    listConcepts()
+      .then((rows) => {
+        if (!cancelled) setConcepts(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* WHAT THE SELECT ACTUALLY OFFERS.
+     The question's own concept is merged in, because an archived one is
+     deliberately absent from the list endpoint and would otherwise vanish from
+     its own question - the coach would see "Untagged" for a question that is
+     tagged, and saving would silently strip a real tag. */
+  const conceptOptions = (() => {
+    const rows = [...concepts];
+    if (initialConcept && !rows.some((c) => c.id === initialConcept.id)) {
+      rows.push(initialConcept);
+    }
+    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
+  async function handleCreateConcept() {
+    const name = newConceptName.trim();
+    if (!name) {
+      setConceptError('Give the concept a name.');
+      return;
+    }
+    setIsSavingConcept(true);
+    setConceptError(null);
+    try {
+      /* The server case-folds and hands back the existing concept if this name
+         is already taken - including one a teammate created a second ago - so
+         a race converges on one concept instead of erroring. */
+      const created = await createConcept(name);
+      setConcepts((rows) =>
+        rows.some((c) => c.id === created.id) ? rows : [...rows, created],
+      );
+      setConceptId(created.id);          // selected immediately, as asked
+      setIsNamingConcept(false);
+      setNewConceptName('');
+    } catch (err) {
+      setConceptError(getErrorMessage(err));
+    } finally {
+      setIsSavingConcept(false);
+    }
+  }
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const onPhone = useCoarsePointer();
@@ -286,6 +353,11 @@ export function QuestionEditor({
           // but sending a truthful value is cheaper than sending a stale one.
           allows_multiple_answers: questionType === 'multiple_choice' && allowsMultiple,
           answer_explanation: explanation.trim(),
+          // ALWAYS SENT, including null. The update route only touches the tag
+          // when the key is present, so omitting it would make "the coach
+          // cleared this to Untagged" indistinguishable from "this edit was
+          // not about the concept" - and clearing would silently never work.
+          concept_id: conceptId,
           // The page the coach chose, and the one thing they hid on it. Both
           // omitted entirely when no playbook was used, so an ordinary
           // question's payload is byte-for-byte what it was before.
@@ -376,6 +448,96 @@ export function QuestionEditor({
             Fill in the Blank
           </option>
         </select>
+      </div>
+
+      {/* CONCEPT: A LABEL, NOT ANOTHER FORM.
+          A native <select> deliberately, matching the folder picker a coach
+          already uses on every quiz card. On a phone that is one tap into the
+          OS wheel - no custom dropdown to mis-size at 375px, no combobox to
+          learn, and nothing that can overflow. Creating one swaps this single
+          row for a single text field, so the form never grows a screen. */}
+      <div className={nb.field}>
+        <label className={nb.fieldLabel} htmlFor="question_concept">
+          Concept
+        </label>
+        {isNamingConcept ? (
+          <div className={styles.conceptCreate}>
+            <input
+              id="question_concept_new"
+              className={nb.input}
+              value={newConceptName}
+              autoFocus
+              placeholder="e.g. Force / Contain"
+              aria-label="New concept name"
+              onChange={(e) => setNewConceptName(e.target.value)}
+              onKeyDown={(e) => {
+                // Enter saves the CONCEPT, not the question - without this the
+                // form would submit a half-written question from a field the
+                // coach opened to name a label.
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleCreateConcept();
+                }
+              }}
+            />
+            <div className={styles.conceptCreateActions}>
+              <button
+                type="button"
+                className={nb.btnSm}
+                onClick={handleCreateConcept}
+                disabled={isSavingConcept}
+              >
+                {isSavingConcept ? 'Adding…' : 'Add'}
+              </button>
+              <button
+                type="button"
+                className={nb.btnSm}
+                onClick={() => {
+                  setIsNamingConcept(false);
+                  setNewConceptName('');
+                  setConceptError(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.conceptRow}>
+            <select
+              id="question_concept"
+              className={nb.input}
+              value={conceptId ?? ''}
+              onChange={(e) => setConceptId(e.target.value ? Number(e.target.value) : null)}
+            >
+              {/* Untagged, not "General": a question nobody classified does not
+                  have a concept called General, and naming it one would invent
+                  a football idea the coach never assigned. */}
+              <option value="">Untagged</option>
+              {conceptOptions.map((concept) => (
+                <option key={concept.id} value={concept.id}>
+                  {concept.name}
+                  {concept.is_archived ? ' (archived)' : ''}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={nb.btnSm}
+              onClick={() => {
+                setIsNamingConcept(true);
+                setConceptError(null);
+              }}
+            >
+              New
+            </button>
+          </div>
+        )}
+        {conceptError && (
+          <p className={styles.imageError} role="alert">
+            {conceptError}
+          </p>
+        )}
       </div>
 
       {questionType === 'fill_blank' && (

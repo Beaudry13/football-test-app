@@ -478,6 +478,19 @@ def _copy_questions_into(original, copy_quiz, storage, copied_keys: list[str]) -
             # the flag would silently turn it into single-choice with several
             # options marked correct, which validation would then reject.
             allows_multiple_answers=question.allows_multiple_answers,
+            # THE COPY IS ABOUT THE SAME THING THE ORIGINAL WAS ABOUT.
+            #
+            # This list is explicit, so anything not named here is silently
+            # dropped - which is exactly how the explanation and the expected
+            # answers above were each lost once before. A duplicated quiz that
+            # arrived fully untagged would be worse than either: the coach sees
+            # a complete-looking copy, and the concept counts it should have
+            # fed simply never happen.
+            #
+            # Safe without an ownership check because duplication stays inside
+            # one organization - the copy belongs to the coach who made it, in
+            # their own org, and concepts are scoped to exactly that.
+            concept_id=question.concept_id,
         )
         db.session.add(copy_question)
         db.session.flush()

@@ -1,6 +1,6 @@
 import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuestionEditor } from './QuestionEditor';
 
 function renderEditor(props: Partial<React.ComponentProps<typeof QuestionEditor>> = {}) {
@@ -111,6 +111,12 @@ describe('QuestionEditor', () => {
         // must say so rather than omit it - the exact-shape assertion is what
         // makes a new field visible instead of silently accepted.
         allows_multiple_answers: false,
+        // Phase B. NULL, and SENT rather than omitted: the update route only
+        // touches the tag when the key is present, so an absent key would make
+        // "cleared to Untagged" indistinguishable from "this edit was not
+        // about the concept" - and clearing would silently never work. The
+        // exact-shape assertion is exactly what surfaced this addition.
+        concept_id: null,
       },
       null,
     );
@@ -734,5 +740,160 @@ describe('image entry follows the pointer, not the screen width', () => {
     expect(screen.queryByRole('button', { name: 'Take photo' })).toBeNull();
     // No capture-hinted input on a machine whose "camera" is a webcam.
     expect(screen.queryByLabelText('Take a photo for this question')).toBeNull();
+  });
+});
+
+/* Hoisted above every test in this file, so the defaults matter: each mock
+   resolves rather than returning undefined. Without that, every pre-existing
+   test in this file would throw inside the editor's concept-loading effect,
+   which has nothing to do with what those tests are checking. */
+vi.mock('../../api/concepts', () => ({
+  listConcepts: vi.fn(() => Promise.resolve([])),
+  createConcept: vi.fn(() => Promise.resolve({ id: 1, name: 'Stub', is_archived: false })),
+}));
+
+import { createConcept, listConcepts } from '../../api/concepts';
+
+describe('tagging a question with a concept', () => {
+  const concept = (id: number, name: string, is_archived = false) => ({ id, name, is_archived });
+
+  beforeEach(() => {
+    vi.mocked(listConcepts).mockResolvedValue([concept(1, 'Force / Contain'), concept(2, 'Run Fit')]);
+    vi.mocked(createConcept).mockReset();
+  });
+
+  it('defaults to UNTAGGED, and untagged is a real saveable state', async () => {
+    // Not "General": a question nobody classified does not have a concept
+    // called General, and naming it one invents football the coach never said.
+    const user = userEvent.setup();
+    const { onSave } = renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    expect((screen.getByLabelText('Concept') as HTMLSelectElement).value).toBe('');
+    await user.type(screen.getByLabelText('Question'), 'Who has force?');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toMatchObject({ concept_id: null });
+  });
+
+  it('saves the concept a coach picks', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    await user.type(screen.getByLabelText('Question'), 'Who has force?');
+    await user.selectOptions(screen.getByLabelText('Concept'), '2');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toMatchObject({ concept_id: 2 });
+  });
+
+  it('creates one inline and selects it immediately', async () => {
+    vi.mocked(createConcept).mockResolvedValue(concept(9, 'Motion Adjustment'));
+    const user = userEvent.setup();
+    renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.type(screen.getByLabelText('New concept name'), '  Motion Adjustment  ');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    // Trimmed on the way out - the server case-folds, but a name padded with
+    // spaces would still read wrong everywhere it is displayed.
+    await waitFor(() => expect(createConcept).toHaveBeenCalledWith('Motion Adjustment'));
+    await waitFor(() =>
+      expect((screen.getByLabelText('Concept') as HTMLSelectElement).value).toBe('9'),
+    );
+  });
+
+  it('does not submit the QUESTION when Enter names a concept', async () => {
+    // The coach opened a text field to name a label; Enter there must not
+    // save a half-written question.
+    vi.mocked(createConcept).mockResolvedValue(concept(9, 'Run Fit'));
+    const user = userEvent.setup();
+    const { onSave } = renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.type(screen.getByLabelText('New concept name'), 'Run Fit{Enter}');
+
+    await waitFor(() => expect(createConcept).toHaveBeenCalled());
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('says so when a concept cannot be created, without losing the question', async () => {
+    vi.mocked(createConcept).mockRejectedValue(new Error('nope'));
+    const user = userEvent.setup();
+    renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    await user.type(screen.getByLabelText('Question'), 'Who has force?');
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.type(screen.getByLabelText('New concept name'), 'Whatever');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.getByLabelText('Question')).toHaveValue('Who has force?');
+  });
+
+  it('SHOWS AN ARCHIVED CONCEPT the question still carries, marked as such', async () => {
+    // The list endpoint withholds archived concepts. Without merging the
+    // question's own tag in, a tagged question would render as Untagged and
+    // the next save would silently strip a real tag.
+    renderEditor({ initialConcept: concept(7, 'Old Idea', true) });
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    const select = screen.getByLabelText('Concept') as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('7'));
+    expect(screen.getByRole('option', { name: 'Old Idea (archived)' })).toBeInTheDocument();
+  });
+
+  it('keeps the tag through an edit that does not touch it', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({
+      initialConcept: concept(2, 'Run Fit'),
+      initialText: 'Original wording',
+      submitLabel: 'Save question',
+    });
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    await user.type(screen.getByLabelText('Question'), ' reworded');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toMatchObject({ concept_id: 2 });
+  });
+
+  it('lets a coach clear a tag back to Untagged', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor({
+      initialConcept: concept(2, 'Run Fit'),
+      initialText: 'Tagged already',
+      submitLabel: 'Save question',
+    });
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+
+    await user.selectOptions(screen.getByLabelText('Concept'), '');
+    await user.click(screen.getByRole('button', { name: 'Save question' }));
+
+    // null must be SENT, not omitted, or the server cannot tell "cleared"
+    // from "this edit was not about the concept".
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).toMatchObject({ concept_id: null });
+  });
+
+  it('still lets a question be saved when the concept list fails to load', async () => {
+    // A concept is optional. A question a coach cannot save because a label
+    // list did not load would be a far worse trade than an untagged one.
+    vi.mocked(listConcepts).mockRejectedValue(new Error('offline'));
+    const user = userEvent.setup();
+    const { onSave } = renderEditor();
+
+    await user.type(screen.getByLabelText('Question'), 'Who has force?');
+    await user.click(screen.getByRole('button', { name: 'Add question' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
   });
 });

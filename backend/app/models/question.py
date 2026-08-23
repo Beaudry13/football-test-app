@@ -195,7 +195,18 @@ class Question(db.Model):
 
             #: question snapshot instead - see services/question_snapshots.
 
-            "concept": ({"id": self.concept.id, "name": self.concept.name} if self.concept else None),
+            "concept": (
+                # is_archived travels too: the editor shows an archived tag on
+                # the question that still carries it, marked as archived, so a
+                # tagged question never renders as Untagged and gets stripped.
+                {
+                    "id": self.concept.id,
+                    "name": self.concept.name,
+                    "is_archived": self.concept.is_archived,
+                }
+                if self.concept
+                else None
+            ),
             "position": self.position,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must

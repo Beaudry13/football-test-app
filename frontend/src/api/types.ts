@@ -257,6 +257,10 @@ export interface QuestionImage {
 }
 
 export interface Question {
+  /** What this question is about. null = Untagged - an ordinary state, not a
+   *  missing value. May reference an ARCHIVED concept, which the editor still
+   *  shows so a tagged question never looks untagged. */
+  concept?: { id: number; name: string; is_archived: boolean } | null;
   id: number;
   quiz_id: number;
   question_text: string;

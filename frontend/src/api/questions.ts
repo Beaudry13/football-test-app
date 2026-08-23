@@ -7,6 +7,10 @@ export interface QuestionOptionInput {
 }
 
 export interface QuestionInput {
+  /** The concept this question is about. `null` is a real value meaning
+   *  Untagged, and is sent explicitly - the update route only changes the tag
+   *  when the key is present, so omitting it would make clearing impossible. */
+  concept_id?: number | null;
   question_text: string;
   question_type: QuestionType;
   options: QuestionOptionInput[];

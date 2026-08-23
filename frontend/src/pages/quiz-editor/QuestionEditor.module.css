@@ -219,3 +219,36 @@
   /* A control a coach hits with a thumb, outdoors, in a hurry. */
   min-height: 44px;
 }
+
+/* The concept row: one select and one small button, side by side.
+   The select takes the room and the button stays its own size, so at 375px
+   this is a full-width picker plus a compact "New" rather than two cramped
+   halves. Wraps rather than shrinking below a usable width. */
+.conceptRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.conceptRow > select {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.conceptCreate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.conceptCreate > input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.conceptCreateActions {
+  display: flex;
+  gap: var(--space-2);
+}

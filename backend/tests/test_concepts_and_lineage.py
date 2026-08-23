@@ -164,7 +164,11 @@ class TestConceptApi:
         )
 
         assert created.status_code == 201
-        assert created.get_json()["concept"] == {"id": concept["id"], "name": "Cover 3"}
+        assert created.get_json()["concept"] == {
+            "id": concept["id"],
+            "name": "Cover 3",
+            "is_archived": False,
+        }
 
     def test_A_CONCEPT_THIS_ORG_DOES_NOT_OWN_IS_REFUSED(self, client, coach_headers):
         """Ids from a client are never trusted - the same rule option ids
@@ -224,3 +228,115 @@ class TestConceptsSurviveAnOrganizationMerge:
         from app.services.organization_merge import ORG_OWNED_TABLES
 
         assert "concepts" in ORG_OWNED_TABLES
+
+
+class TestConceptSurvivesCopying:
+    """A duplicated question must arrive tagged.
+
+    The copy in duplicate_quiz names every field explicitly, so anything not
+    listed is silently dropped - which is how the explanation and the expected
+    answers were each lost once before. A fully untagged duplicate would be
+    worse than either: the coach sees a complete-looking copy and the counts it
+    should feed simply never happen.
+
+    The draft question carries its own concept; nothing here relies on the
+    attempt snapshot, which records what was DELIVERED rather than what a new
+    quiz is about.
+    """
+
+    def test_duplicating_a_quiz_keeps_every_concept(self, client, coach_headers):
+        quiz, tf, written, _ = build_ready_quiz(client, coach_headers)
+        concept = client.post(
+            "/api/concepts", json={"name": "Force / Contain"}, headers=coach_headers
+        ).get_json()
+        client.patch(
+            f"/api/quizzes/{quiz['id']}/questions/{tf['id']}",
+            json={"concept_id": concept["id"]},
+            headers=coach_headers,
+        )
+
+        copied = client.post(
+            f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers
+        ).get_json()
+
+        body = client.get(f"/api/quizzes/{copied['id']}", headers=coach_headers).get_json()
+        tagged = [q for q in body["questions"] if q["concept"] is not None]
+        assert len(tagged) == 1
+        assert tagged[0]["concept"]["name"] == "Force / Contain"
+        # The untagged one stays untagged rather than inheriting anything.
+        assert any(q["concept"] is None for q in body["questions"])
+
+    def test_the_copy_points_at_the_SAME_concept_not_a_new_one(self, client, coach_headers):
+        # Duplication stays inside one organization, so the existing concept is
+        # still valid for the copy - making a second row with the same name
+        # would split every future count between them.
+        quiz, tf, _, _ = build_ready_quiz(client, coach_headers)
+        concept = client.post(
+            "/api/concepts", json={"name": "Run Fit"}, headers=coach_headers
+        ).get_json()
+        client.patch(
+            f"/api/quizzes/{quiz['id']}/questions/{tf['id']}",
+            json={"concept_id": concept["id"]},
+            headers=coach_headers,
+        )
+
+        copied = client.post(
+            f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers
+        ).get_json()
+        body = client.get(f"/api/quizzes/{copied['id']}", headers=coach_headers).get_json()
+
+        tagged = [q for q in body["questions"] if q["concept"]][0]
+        assert tagged["concept"]["id"] == concept["id"]
+        assert Concept.query.filter_by(name="Run Fit").count() == 1
+
+
+class TestArchivedConcepts:
+    def test_an_archived_concept_leaves_the_picker(self, client, coach_headers):
+        made = client.post(
+            "/api/concepts", json={"name": "Old Idea"}, headers=coach_headers
+        ).get_json()
+        db.session.get(Concept, made["id"]).is_archived = True
+        db.session.commit()
+
+        offered = client.get("/api/concepts", headers=coach_headers).get_json()
+
+        assert made["id"] not in [c["id"] for c in offered]
+
+    def test_A_QUESTION_KEEPS_ITS_ARCHIVED_TAG_AND_SAYS_SO(self, client, coach_headers):
+        """It must not silently read as Untagged, or the next save would strip
+        a real tag. The question's own payload carries the concept - archived
+        flag included - so the editor can show it and mark it."""
+        quiz, tf, _, _ = build_ready_quiz(client, coach_headers)
+        made = client.post(
+            "/api/concepts", json={"name": "Old Idea"}, headers=coach_headers
+        ).get_json()
+        client.patch(
+            f"/api/quizzes/{quiz['id']}/questions/{tf['id']}",
+            json={"concept_id": made["id"]},
+            headers=coach_headers,
+        )
+        db.session.get(Concept, made["id"]).is_archived = True
+        db.session.commit()
+
+        body = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()
+        question = [q for q in body["questions"] if q["id"] == tf["id"]][0]
+
+        assert question["concept"]["name"] == "Old Idea"
+        assert question["concept"]["is_archived"] is True
+
+    def test_re_creating_an_archived_name_revives_it_rather_than_duplicating(
+        self, client, coach_headers
+    ):
+        made = client.post(
+            "/api/concepts", json={"name": "Old Idea"}, headers=coach_headers
+        ).get_json()
+        db.session.get(Concept, made["id"]).is_archived = True
+        db.session.commit()
+
+        again = client.post(
+            "/api/concepts", json={"name": "old idea"}, headers=coach_headers
+        )
+
+        assert again.status_code == 200
+        assert again.get_json()["id"] == made["id"]
+        assert Concept.query.filter_by(name="Old Idea").count() == 1

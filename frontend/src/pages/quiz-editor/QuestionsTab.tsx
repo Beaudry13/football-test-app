@@ -353,6 +353,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               }))}
               initialAllowsMultiple={question.allows_multiple_answers ?? false}
               initialExplanation={question.answer_explanation ?? null}
+              initialConcept={question.concept ?? null}
               hasBeenDelivered={question.has_been_delivered ?? false}
               submitLabel="Save question"
               onSave={(input) => handleUpdate(question.id, input)}
