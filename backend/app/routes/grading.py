@@ -28,6 +28,7 @@ from app.services.question_exclusions import (
     load_for_attempts,
     load_for_quizzes,
 )
+from app.services.concept_results import concept_breakdown
 from app.services.scoring import count_answers, pending_grading_count
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
@@ -288,6 +289,14 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
                 "question_number": number,
                 "question_text": question.question_text,
                 "question_type": question.question_type.value,
+                #: The question's CURRENT tag. Null reads as Untagged, which is
+                #: an ordinary state - see services/concept_results for why
+                #: this is the live tag rather than the delivered snapshot.
+                "concept": (
+                    {"id": question.concept.id, "name": question.concept.name}
+                    if question.concept
+                    else None
+                ),
                 "answered_count": len(answers),
                 "correct_count": counts.correct,
                 "incorrect_count": counts.incorrect,
@@ -307,6 +316,12 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         "response_rate": round(response_rate, 4) if response_rate is not None else None,
         "missing_players": missing_players,
         "question_breakdown": question_breakdown,
+        #: WEAKEST CONCEPT FIRST. Empty when nothing in this quiz is tagged,
+        #: which is the client's signal to render the ordinary Results view
+        #: rather than an empty weakness panel. Untagged questions are absent
+        #: from this list by design and remain fully visible in the
+        #: per-question breakdown above.
+        "concept_breakdown": concept_breakdown(quiz, responses),
     }
 
 

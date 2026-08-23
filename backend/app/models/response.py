@@ -176,6 +176,10 @@ class PlayerAttempt(db.Model):
             "display_name": self.display_name,
             "player_id": self.player_id,
             "status": self.status.value,
+            #: Their position WHEN THEY ANSWERED. Results reads this rather
+            #: than the roster's current value, so moving a player between
+            #: groups cannot re-attribute results they already produced.
+            "position_at_attempt": self.position_at_attempt,
             "started_at": self.started_at.isoformat(),
             "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
         }

@@ -572,6 +572,8 @@ export interface DeliveredQuestion {
 }
 
 export interface QuestionBreakdown {
+  /** The question's current tag. null reads as Untagged. */
+  concept?: { id: number; name: string } | null;
   question_id: number;
   /** The quiz's own 1-based numbering, computed server-side over the
    *  position-sorted questions - the same rule the CSV and detailed PDF use.
@@ -603,6 +605,41 @@ export interface QuizDashboard {
   response_rate: number | null;
   missing_players: string[];
   question_breakdown: QuestionBreakdown[];
+  /** Weakest tagged concept first. EMPTY when nothing in this quiz is tagged,
+   *  which is the signal to render the ordinary Results view rather than an
+   *  empty weakness panel. Untagged questions never appear here - there is no
+   *  "General" bucket - and remain fully visible in question_breakdown. */
+  concept_breakdown: ConceptBreakdown[];
+}
+
+export interface ConceptMissingPlayer {
+  player_name: string;
+  display_name: string;
+  /** Their position WHEN THEY ANSWERED. null where it was never recorded,
+   *  which is every attempt older than Phase A - shown as nothing, never
+   *  substituted with the roster's current value. */
+  position_at_attempt: string | null;
+}
+
+export interface ConceptBreakdown {
+  concept_id: number;
+  concept_name: string | null;
+  question_count: number;
+  correct_count: number;
+  incorrect_count: number;
+  ungraded_count: number;
+  /** correct + incorrect. Ungraded and unanswered are excluded, exactly as
+   *  every other Peira score is computed. */
+  graded_count: number;
+  /** null - never 0 - when nothing has been graded. Unmeasured, not perfect. */
+  miss_rate: number | null;
+  /** Whether this row is evidence or arithmetic. The threshold is decided
+   *  server-side so two surfaces cannot disagree about it. */
+  has_enough_responses: boolean;
+  players_missed: ConceptMissingPlayer[];
+  /** The wrong option most misses chose, or null when there were too few
+   *  misses to call it a pattern, or the question has no options at all. */
+  top_distractor: { option_text: string; count: number; of_misses: number } | null;
 }
 
 export interface PlayerHistoryEntry {

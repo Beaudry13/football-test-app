@@ -203,3 +203,15 @@
   font-size: 0.78rem;
   color: var(--peira-text-muted);
 }
+
+/* "3 answers need grading" - an action, so it sits above the grades rather
+   than inside the table. Shown only when true; a zero-state version would be
+   permanent furniture on every finished quiz. */
+.needsGrading {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--color-warning);
+  background: var(--peira-warning-bg);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: var(--peira-text-control);
+}

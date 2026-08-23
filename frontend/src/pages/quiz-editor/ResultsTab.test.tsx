@@ -54,6 +54,7 @@ const sampleDashboard: QuizDashboard = {
   response_rate: 0.5,
   missing_players: [],
   question_breakdown: [],
+  concept_breakdown: [],
 };
 
 function renderResultsTab(quiz: Quiz = sampleQuiz) {
@@ -270,6 +271,7 @@ describe('the stats row when the roster denominator is gone', () => {
       response_rate: null,
       missing_players: [],
       question_breakdown: [],
+  concept_breakdown: [],
     });
     renderResultsTab();
 
@@ -291,5 +293,118 @@ describe('the stats row when the roster denominator is gone', () => {
     expect(await screen.findByText('Roster size')).toBeInTheDocument();
     expect(screen.getByText('Response rate')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
+  });
+});
+
+describe('Results leads with what to teach next', () => {
+  const conceptRow = {
+    concept_id: 1,
+    concept_name: 'Force / Contain',
+    question_count: 2,
+    correct_count: 16,
+    incorrect_count: 6,
+    ungraded_count: 0,
+    graded_count: 22,
+    miss_rate: 27.3,
+    has_enough_responses: true,
+    players_missed: [
+      { player_name: 'Jordan Smith', display_name: 'Jordan Smith', position_at_attempt: 'CB' },
+    ],
+    top_distractor: { option_text: 'Safety', count: 5, of_misses: 6 },
+  };
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(gradingApi, 'listResponses').mockResolvedValue([]);
+  });
+
+  it('puts the weakest concept ABOVE the averages, and keeps the averages', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [conceptRow],
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText('Teach next')).toBeInTheDocument();
+    expect(screen.getByText('Force / Contain')).toBeInTheDocument();
+    // Demoted, NOT deleted - this is how a coach checks the claim above it.
+    expect(screen.getByText('Responses')).toBeInTheDocument();
+    expect(screen.getByText('Response rate')).toBeInTheDocument();
+  });
+
+  it('FALLS BACK to ordinary Results when nothing is tagged', async () => {
+    // Every quiz that predates concept tagging is in this state.
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [],
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText('Responses')).toBeInTheDocument();
+    expect(screen.queryByText('Teach next')).not.toBeInTheDocument();
+  });
+
+  it('surfaces ungraded answers as an ACTION, only when there are some', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [],
+      question_breakdown: [
+        {
+          question_id: 1,
+          question_number: 1,
+          question_text: 'Describe your assignment.',
+          question_type: 'written',
+          answered_count: 5,
+          correct_count: 2,
+          incorrect_count: 0,
+          ungraded_count: 3,
+          is_excluded: false,
+          exclusions: [],
+        },
+      ],
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText(/3 answers need grading/)).toBeInTheDocument();
+    // And it says what that means, rather than letting a coach assume wrong.
+    expect(screen.getByText(/not counted right or wrong/)).toBeInTheDocument();
+  });
+
+  it('says nothing about grading when there is nothing to grade', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [],
+    });
+    renderResultsTab();
+
+    await screen.findByText('Responses');
+    expect(screen.queryByText(/need(s)? grading/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the per-question detail reachable, including untagged questions', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [conceptRow],
+      question_breakdown: [
+        {
+          question_id: 1,
+          question_number: 1,
+          question_text: 'An untagged legacy question',
+          question_type: 'true_false',
+          answered_count: 4,
+          correct_count: 4,
+          incorrect_count: 0,
+          ungraded_count: 0,
+          is_excluded: false,
+          exclusions: [],
+          concept: null,
+        },
+      ],
+    });
+    renderResultsTab();
+
+    // Untagged questions do not RANK, but they must not disappear either.
+    expect(await screen.findByText('Per-question breakdown')).toBeInTheDocument();
+    expect(screen.getByText('An untagged legacy question')).toBeInTheDocument();
   });
 });

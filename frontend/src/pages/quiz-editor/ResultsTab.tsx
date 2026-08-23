@@ -22,6 +22,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
 import nb from '../../styles/notebook.module.css';
+import { WeakestConcepts } from './WeakestConcepts';
 import { hasResponseDenominator } from '../../utils/responseSummary';
 import styles from './ResultsTab.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -166,12 +167,46 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
     [quiz.id, quiz.title],
   );
 
+  /* Summed from the SAME per-question counts the table below renders, so the
+     headline and the table can never disagree about how much is outstanding.
+     count_answers is the server's counter; this only adds its output up. */
+  const ungradedTotal = (dashboard?.question_breakdown ?? []).reduce(
+    (total, q) => total + q.ungraded_count,
+    0,
+  );
+
   return (
     <div>
       <ErrorBanner message={error} />
 
       {dashboard && (
         <>
+          {/* WHAT SHOULD I TEACH NEXT, FIRST.
+              Results used to open with a team average - which answers "how did
+              they do", a thing a coach can already feel by Wednesday. The
+              average, the per-question table and the per-player responses are
+              all still here, in that order, below: demoted to drill-down
+              rather than removed, because they are how a coach checks the
+              claim this panel makes.
+
+              Renders nothing at all when no concept is tagged or nothing is
+              graded yet, so a quiz that predates tagging - which is every quiz
+              in Peira today - looks exactly as it did. */}
+          <WeakestConcepts concepts={dashboard.concept_breakdown} />
+
+          {/* GRADING IS AN ACTION, so it sits above the grades rather than
+              inside them. Only when there is something to do: an "0 answers
+              need grading" line is a permanent piece of furniture. */}
+          {ungradedTotal > 0 && (
+            <p className={styles.needsGrading} role="status">
+              <strong>
+                {ungradedTotal} answer{ungradedTotal === 1 ? '' : 's'} need
+                {ungradedTotal === 1 ? 's' : ''} grading
+              </strong>{' '}
+              &mdash; not counted right or wrong until you do.
+            </p>
+          )}
+
           <div className={styles.statsRow}>
             <div className={`${nb.card} ${styles.stat}`}>
               <div className={styles.statValue}>{dashboard.response_count}</div>

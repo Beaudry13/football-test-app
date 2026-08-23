@@ -1,0 +1,135 @@
+/*
+ * "Teach next", designed at 375px first.
+ *
+ * The whole panel is one column of stacked text - no table, no grid, nothing
+ * that can scroll sideways on a phone. A coach standing on a field should be
+ * able to read the concept, the count and the names without turning the device
+ * or pinching, which is why the numbers are prose rather than cells.
+ */
+.wrap {
+  margin-bottom: var(--space-5);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+/* Gold on the left edge, the same mark the "Annotate now" offer uses: this is
+   the one thing on the screen a coach is meant to act on. */
+.headline {
+  border-left: 3px solid var(--color-accent);
+}
+
+.conceptName {
+  font-family: var(--font-display, var(--font-body));
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.missLine {
+  margin: var(--space-2) 0 0;
+  font-size: var(--peira-text-control);
+}
+
+/* Never red. A thin sample is a caveat, not a failure, and colouring it like
+   an error would make a coach distrust the number rather than the size of it. */
+.thin {
+  color: var(--nb-text-muted);
+  font-weight: 400;
+}
+
+.distractor {
+  margin: var(--space-2) 0 0;
+  font-size: var(--peira-text-control);
+  color: var(--color-text-secondary);
+}
+
+.players {
+  margin-top: var(--space-4);
+}
+
+.playersLabel {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+/* Chips that WRAP. A twenty-name list has to stay inside 375px, and wrapping
+   is what keeps it there without a scroll container. */
+.playerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.player {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0.3em 0.7em;
+  border-radius: var(--radius-pill);
+  background: var(--peira-chip);
+  font-size: var(--peira-text-meta);
+  /* A long name shortens rather than pushing the row wide. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.position {
+  color: var(--nb-text-muted);
+  font-size: 0.85em;
+}
+
+.ungradedNote {
+  margin: var(--space-4) 0 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+/* The runners-up: one line each, no card, because they are context for the
+   headline rather than four more things to act on. */
+.others {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.otherRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.otherRow:last-child {
+  border-bottom: none;
+}
+
+.otherName {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.otherCount {
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+  white-space: nowrap;
+}

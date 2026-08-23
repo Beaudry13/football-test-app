@@ -14,6 +14,7 @@ const baseDashboard: QuizDashboard = {
   response_rate: 0.5,
   missing_players: [],
   question_breakdown: [],
+  concept_breakdown: [],
 };
 
 const baseEntry: ActiveQuizStatus = {
