@@ -1,11 +1,34 @@
+/* A FIXED FOOTPRINT, AND THIS IS A BUG FIX RATHER THAN A STYLE CHOICE.
+ *
+ * This was `max-height: 560px`, so the panel GREW as objects were added -
+ * 96px empty, one row taller per shape, up to 560. It is a flex item in
+ * AnnotationCanvas's column layout, sitting beside `.canvasWrap`, which is
+ * `flex-grow: 1`. Every pixel this claimed came straight out of the canvas,
+ * whose ResizeObserver then re-ran applyFit() against the smaller box and
+ * rewrote --fit-w/--fit-h. The measured result, on one 800x600 image:
+ *
+ *      shapes   canvas height   displayed image
+ *           0             579         772 x 579
+ *           1             545         727 x 545
+ *           6             375         500 x 375
+ *          14             115         153 x 115
+ *
+ * The coach's picture shrank as they drew on it, and stopped shrinking at 14
+ * shapes only because the panel hit its own cap - which is why it looked
+ * intermittent.
+ *
+ * `flex: 0 0 <basis>` fixes the height outright: it neither grows with the
+ * list nor shrinks under pressure, so the canvas area is the same whether
+ * there are zero layers or fifty, and the list scrolls inside it instead.
+ * Nothing here touches canvas_width, the Fabric backing store, the viewport
+ * or any saved coordinate - this was only ever a display-space bug. */
 .panel {
   width: 220px;
-  flex-shrink: 0;
+  flex: 0 0 11rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   padding: 0.75em;
-  max-height: 560px;
   overflow-y: auto;
 }
 
@@ -50,7 +73,9 @@
    its contents. */
 @media (max-width: 40rem) {
   .panel {
-    max-height: 22dvh;
+    /* Proportional on a phone, but still FIXED: the footprint must not depend
+       on how much the coach has drawn, at any width. */
+    flex: 0 0 22dvh;
     overflow-y: auto;
   }
 }
