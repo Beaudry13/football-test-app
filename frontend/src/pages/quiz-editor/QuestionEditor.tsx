@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import type { DocumentPage } from '../../api/documents';
 import { PlaybookPicker } from './PlaybookPicker';
@@ -96,6 +97,8 @@ export function QuestionEditor({
   const [isHiding, setIsHiding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const onPhone = useCoarsePointer();
   const questionRef = useRef<HTMLTextAreaElement>(null);
 
   /* THE FORM OPENS WITH THE CURSOR ALREADY IN IT.
@@ -601,6 +604,32 @@ export function QuestionEditor({
                coach's real workflow is Snipping Tool then Ctrl+V, so paste is
                named FIRST and the file picker last - the reverse of the
                control's technical prominence. */
+            onPhone ? (
+            /* THE PHONE VERSION, and it is a different thing rather than the
+               same thing restyled. A coach standing on a field has a camera in
+               their hand and no clipboard, no Ctrl+V and nothing to drag. The
+               desktop box named paste FIRST because that is that coach's real
+               workflow; naming it here would be naming something they cannot
+               do, at the exact moment the whole feature is supposed to be one
+               tap. So the camera is the primary button and the library is the
+               secondary one, and nothing else is said. */
+            <div className={styles.captureRow}>
+              <button
+                type="button"
+                className={nb.btnPrimary}
+                onClick={() => cameraInputRef.current?.click()}
+              >
+                Take photo
+              </button>
+              <button
+                type="button"
+                className={nb.btnSecondary}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Choose image
+              </button>
+            </div>
+            ) : (
             <div
               className={`${styles.dropZone} ${isDragging ? styles.dropZoneActive : ''}`}
               onDragOver={(event) => {
@@ -624,6 +653,7 @@ export function QuestionEditor({
               <span className={styles.dropZoneKeys}>Ctrl+V / Cmd+V</span>
               <span className={styles.dropZoneOr}>or drag &amp; drop, or choose a file</span>
             </div>
+            )
           )}
 
           {/* THE ONLY PERMANENT UI THIS FEATURE ADDS: one more line beside the
@@ -659,6 +689,27 @@ export function QuestionEditor({
             aria-label="Question image"
             onChange={(event) => acceptImage(event.target.files?.[0])}
           />
+
+          {/* A SECOND INPUT, not a toggled attribute on the first. `capture`
+              is a hint the browser reads when the picker opens, so a single
+              input would have to be re-rendered between the two buttons and
+              re-opened - and Safari has historically kept the first value.
+              Two inputs means each button always opens what it says.
+
+              Rendered only where it is real: a desktop browser given `capture`
+              may offer a webcam, which is not what "Take photo" means here. */}
+          {onPhone && (
+            <input
+              ref={cameraInputRef}
+              id="question_image_camera"
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES.join(',')}
+              capture="environment"
+              className={nb.srOnly}
+              aria-label="Take a photo for this question"
+              onChange={(event) => acceptImage(event.target.files?.[0])}
+            />
+          )}
         </div>
       )}
 

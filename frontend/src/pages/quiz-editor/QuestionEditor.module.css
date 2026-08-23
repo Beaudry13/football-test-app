@@ -202,3 +202,20 @@
 .playbookLink:hover {
   text-decoration: underline;
 }
+
+/* The phone's image entry: two buttons, camera first. No drop target, because
+   there is nothing to drop, and no keyboard hint, because there is no
+   keyboard. Wraps rather than shrinks - at 375px with a large text size these
+   two can exceed the width, and a "Take photo" button clipped mid-word is
+   worse than one on its own line. */
+.captureRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.captureRow > button {
+  flex: 1 1 auto;
+  /* A control a coach hits with a thumb, outdoors, in a hurry. */
+  min-height: 44px;
+}

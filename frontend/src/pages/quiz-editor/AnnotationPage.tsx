@@ -7,6 +7,7 @@ import type { Question } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from '../../components/annotation/AnnotationCanvas';
 import nb from '../../styles/notebook.module.css';
+import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import styles from './AnnotationPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { Icon } from '../../components/ui/Icon';
@@ -47,6 +48,7 @@ async function resizeImageForUpload(file: File): Promise<File> {
 
 export function AnnotationPage() {
   const { quizId, questionId } = useParams<{ quizId: string; questionId: string }>();
+  const onPhone = useCoarsePointer();
   const [question, setQuestion] = useState<Question | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -261,16 +263,46 @@ export function AnnotationPage() {
       ) : (
         <div className={styles.emptyStage}>
           <div className={`${nb.card} ${styles.uploadCard}`}>
-            <h2 className={nb.subheading}>Add a film still</h2>
-            <p>Draw routes, circle players, and add callouts on a screenshot.</p>
-            <p className={styles.pasteHint}>
-              Copy a screenshot (e.g. Windows Snipping Tool or Cmd+Shift+4), then paste it anywhere
-              on this page with <strong>Ctrl+V</strong> - or click below.
+            <h2 className={nb.subheading}>{onPhone ? 'Add a photo' : 'Add a film still'}</h2>
+            <p>
+              {onPhone
+                ? 'Draw routes, circle players, and add callouts on the photo.'
+                : 'Draw routes, circle players, and add callouts on a screenshot.'}
             </p>
+            {/* THE PRIMARY ACTION USED TO BE THE ONE A PHONE CANNOT DO. This
+                screen led with "Paste image" and explained the Windows
+                Snipping Tool and Cmd+Shift+4 - three desktop idioms, in the
+                largest button and the only paragraph, on the screen a coach
+                reaches from a field. The desktop copy is untouched; the phone
+                gets the camera instead, and no instructions it cannot follow. */}
+            {!onPhone && (
+              <p className={styles.pasteHint}>
+                Copy a screenshot (e.g. Windows Snipping Tool or Cmd+Shift+4), then paste it
+                anywhere on this page with <strong>Ctrl+V</strong> - or click below.
+              </p>
+            )}
             <div className={styles.uploadActions}>
-              <button className={nb.btnPrimary} onClick={handlePasteButtonClick} disabled={isUploading}>
-                {isUploading ? 'Uploading…' : 'Paste image'}
-              </button>
+              {onPhone ? (
+                <label className={nb.btnPrimary} style={{ cursor: 'pointer' }}>
+                  {isUploading ? 'Uploading…' : 'Take photo'}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    capture="environment"
+                    hidden
+                    onChange={handleFileInputChange}
+                    disabled={isUploading}
+                  />
+                </label>
+              ) : (
+                <button
+                  className={nb.btnPrimary}
+                  onClick={handlePasteButtonClick}
+                  disabled={isUploading}
+                >
+                  {isUploading ? 'Uploading…' : 'Paste image'}
+                </button>
+              )}
               <label className={nb.btnSecondary} style={{ cursor: 'pointer' }}>
                 Choose image
                 <input

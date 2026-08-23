@@ -1,6 +1,6 @@
 import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QuestionEditor } from './QuestionEditor';
 
 function renderEditor(props: Partial<React.ComponentProps<typeof QuestionEditor>> = {}) {
@@ -676,5 +676,61 @@ describe('opening the form ready to type', () => {
     render(<QuestionEditor submitLabel="Save" onSave={vi.fn()} onCancel={vi.fn()} />);
 
     expect(document.activeElement).not.toBe(screen.getByLabelText('Question'));
+  });
+});
+
+
+describe('image entry follows the pointer, not the screen width', () => {
+  /** jsdom implements no matchMedia at all, so each test states the device. */
+  function setPointer(coarse: boolean) {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('coarse') ? coarse : !coarse,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+      }),
+    });
+  }
+
+  afterEach(() => {
+    // @ts-expect-error - putting the environment back the way it was found
+    delete window.matchMedia;
+  });
+
+  it('offers the CAMERA first on a touch device, and says nothing about Ctrl+V', () => {
+    setPointer(true);
+    renderEditor({ allowImage: true });
+
+    expect(screen.getByRole('button', { name: 'Take photo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose image' })).toBeInTheDocument();
+    expect(screen.queryByText(/Ctrl\+V/)).toBeNull();
+    expect(screen.queryByText(/drag/i)).toBeNull();
+  });
+
+  it('gives the camera button an input the browser will open the camera for', () => {
+    setPointer(true);
+    renderEditor({ allowImage: true });
+
+    const camera = screen.getByLabelText('Take a photo for this question');
+    expect(camera).toHaveAttribute('capture', 'environment');
+    // A SEPARATE input from the library one, so neither button can open the
+    // other's picker - `capture` is read when the picker opens.
+    expect(screen.getByLabelText('Question image')).not.toHaveAttribute('capture');
+  });
+
+  it('leaves the DESKTOP paste-and-drop box exactly as it was', () => {
+    setPointer(false);
+    renderEditor({ allowImage: true });
+
+    expect(screen.getByText('Paste an image here')).toBeInTheDocument();
+    expect(screen.getByText('Ctrl+V / Cmd+V')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Take photo' })).toBeNull();
+    // No capture-hinted input on a machine whose "camera" is a webcam.
+    expect(screen.queryByLabelText('Take a photo for this question')).toBeNull();
   });
 });
