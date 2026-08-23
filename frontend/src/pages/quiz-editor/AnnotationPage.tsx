@@ -8,6 +8,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { AnnotationCanvas, type AnnotationCanvasHandle } from '../../components/annotation/AnnotationCanvas';
 import nb from '../../styles/notebook.module.css';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
+import { IMAGE_FILE_ACCEPT, describeUnsupportedImage } from '../../utils/imageFormat';
 import styles from './AnnotationPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { Icon } from '../../components/ui/Icon';
@@ -107,7 +108,19 @@ export function AnnotationPage() {
 
   function handleFileInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (file) uploadFile(file);
+    if (!file) return;
+    /* CHECKED HERE, not by the server. This screen used to upload whatever it
+       was handed and let the API answer - a round trip, on a phone, on a field,
+       ending in "Unsupported image type. Allowed: jpeg, jpg, png, webp". The
+       server still re-validates and still has the final say; this just means
+       the common case fails instantly and in a sentence. */
+    const unsupported = describeUnsupportedImage(file);
+    if (unsupported) {
+      setError(unsupported);
+      return;
+    }
+    setError(null);
+    uploadFile(file);
   }
 
   // Lets a coach paste a screenshot (e.g. Windows Snipping Tool, Cmd+Shift+4)
@@ -287,7 +300,7 @@ export function AnnotationPage() {
                   {isUploading ? 'Uploading…' : 'Take photo'}
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/webp"
+                    accept={IMAGE_FILE_ACCEPT}
                     capture="environment"
                     hidden
                     onChange={handleFileInputChange}
@@ -307,7 +320,7 @@ export function AnnotationPage() {
                 Choose image
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp"
+                  accept={IMAGE_FILE_ACCEPT}
                   hidden
                   onChange={handleFileInputChange}
                   disabled={isUploading}

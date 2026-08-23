@@ -233,12 +233,14 @@ describe('QuestionEditor image upload on create', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('only accepts image types at the picker', () => {
+  it('asks the picker for images BROADLY, and validates narrowly', () => {
+    /* Deliberately wider than what is accepted. Given a narrow list iOS greys
+       out most of the camera roll and converts HEIC inconsistently; given
+       image/* it converts far more reliably, so the wide filter yields MORE
+       usable files. Anything unusable is caught by the validator below, which
+       is the half that stayed strict. */
     renderEditor({ allowImage: true });
-    expect(screen.getByLabelText('Question image')).toHaveAttribute(
-      'accept',
-      'image/png,image/jpeg,image/webp',
-    );
+    expect(screen.getByLabelText('Question image')).toHaveAttribute('accept', 'image/*');
   });
 
   it('sends the coach explanation with a new question', async () => {
@@ -414,9 +416,9 @@ describe('QuestionEditor image upload on create', () => {
   });
 
   it('rejects a disallowed image type that arrives by drop', async () => {
-    // The file PICKER is already filtered by its accept attribute, so a bad
-    // type cannot reach the validator that way. Paste and drop bypass accept
-    // entirely - which is precisely where the check earns its place.
+    // accept is image/* now, so the picker no longer filters these out on its
+    // own - and paste and drop never respected accept anyway. The validator is
+    // what stands between a coach and an unusable file, on all three routes.
     renderEditor({ allowImage: true });
     const zone = screen.getByRole('button', { name: /Attach an image/ });
 
@@ -424,7 +426,7 @@ describe('QuestionEditor image upload on create', () => {
       dataTransfer: { files: [new File(['x'], 'evil.svg', { type: 'image/svg+xml' })] },
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/PNG, JPEG or WebP/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JPEG, PNG and WebP/);
     expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument();
   });
 
@@ -441,7 +443,7 @@ describe('QuestionEditor image upload on create', () => {
       ]),
     });
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/PNG, JPEG or WebP/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JPEG, PNG and WebP/);
     expect(screen.queryByAltText('Selected question image')).not.toBeInTheDocument();
   });
 

@@ -3,6 +3,7 @@ import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
+import { IMAGE_FILE_ACCEPT, describeUnsupportedImage } from '../../utils/imageFormat';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import type { DocumentPage } from '../../api/documents';
 import { PlaybookPicker } from './PlaybookPicker';
@@ -56,7 +57,6 @@ interface QuestionEditorProps {
  * Module-local: exporting it from a component file trips fast-refresh
  * linting, and nothing outside needs it - the point is that all three
  * entry points inside THIS form share one list. */
-const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 export function QuestionEditor({
   autoFocusQuestion = false,
@@ -184,10 +184,9 @@ export function QuestionEditor({
    * paste fails identically to an oversized pick, with the server's message. */
   function acceptImage(file: File | null | undefined): boolean {
     if (!file) return false;
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      setImageError(
-        `That file is a ${file.type || 'unknown type'}. Images must be PNG, JPEG or WebP.`,
-      );
+    const unsupported = describeUnsupportedImage(file);
+    if (unsupported) {
+      setImageError(unsupported);
       return false;
     }
     setImageError(null);
@@ -684,7 +683,7 @@ export function QuestionEditor({
             ref={fileInputRef}
             id="question_image"
             type="file"
-            accept={ACCEPTED_IMAGE_TYPES.join(',')}
+            accept={IMAGE_FILE_ACCEPT}
             className={nb.srOnly}
             aria-label="Question image"
             onChange={(event) => acceptImage(event.target.files?.[0])}
@@ -703,7 +702,7 @@ export function QuestionEditor({
               ref={cameraInputRef}
               id="question_image_camera"
               type="file"
-              accept={ACCEPTED_IMAGE_TYPES.join(',')}
+              accept={IMAGE_FILE_ACCEPT}
               capture="environment"
               className={nb.srOnly}
               aria-label="Take a photo for this question"
