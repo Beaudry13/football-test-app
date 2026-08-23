@@ -71,6 +71,16 @@ ORG_OWNED_TABLES = (
     # organization, so they follow without a rule of their own - which is the
     # whole reason the coverage test below is keyed on organization_id.
     "competition_sessions",
+    # Concepts move with the questions that reference them - a question
+    # arriving without its tag would silently become "General" and quietly
+    # change what the merged organization knows about itself.
+    #
+    # THE NAME COLLISION IS HANDLED SEPARATELY, just above the bulk move.
+    # Both organizations plausibly have a "Cover 3", and the case-insensitive
+    # unique index means the two cannot coexist - so the duplicates are folded
+    # into the destination's concept BEFORE this UPDATE runs, leaving nothing
+    # here to collide.
+    "concepts",
 )
 
 #: Counted for the preview but NOT re-pointed - unused invitations to a
@@ -485,6 +495,41 @@ def execute(
 
         # 3. Re-point the seven remaining organization-owned tables. Everything
         #    beneath them follows without a statement.
+        # 3a. FOLD DUPLICATE CONCEPTS FIRST.
+        #
+        # Concepts are unique per organization, case-insensitively, so two
+        # organizations that both tagged "Cover 3" cannot simply both arrive.
+        # The destination's concept wins and the source's questions are
+        # re-pointed at it; the emptied source concept is then deleted, so the
+        # bulk move below has nothing left to collide with.
+        #
+        # This is a MERGE of two names for one idea, which is the same
+        # judgement the unique index makes every day - keeping both would
+        # split every future count between them, which is the one outcome
+        # worth avoiding.
+        folded = db.session.execute(
+            sa.text(
+                """
+                WITH pairs AS (
+                    SELECT src.id AS src_id, dst.id AS dst_id
+                    FROM concepts src
+                    JOIN concepts dst
+                      ON lower(dst.name) = lower(src.name)
+                     AND dst.organization_id = :dst
+                    WHERE src.organization_id = :src
+                ),
+                repointed AS (
+                    UPDATE questions q SET concept_id = p.dst_id
+                    FROM pairs p WHERE q.concept_id = p.src_id
+                    RETURNING 1
+                )
+                DELETE FROM concepts c USING pairs p WHERE c.id = p.src_id
+                """
+            ),
+            {"dst": destination_id, "src": source_id},
+        ).rowcount
+        counts_moved["concepts_folded_into_existing"] = folded
+
         for table in ORG_OWNED_TABLES:
             moved = db.session.execute(
                 sa.text(

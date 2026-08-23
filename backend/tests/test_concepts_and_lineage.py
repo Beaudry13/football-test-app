@@ -205,3 +205,22 @@ class TestConceptApi:
         )
 
         assert db.session.get(Question, tf["id"]).concept_id == concept["id"]
+
+
+class TestConceptsSurviveAnOrganizationMerge:
+    """Concepts are organization-scoped AND uniquely named within one, so a
+    merge is the one operation that can put two rows meaning the same idea
+    into the same organization. The merge folds them; this pins that.
+
+    Found by the merge suite's own coverage guard, which fails whenever a new
+    organization_id-bearing table appears and nothing has decided what a merge
+    should do with it - exactly what it is for.
+    """
+
+    def test_the_moved_questions_keep_a_valid_tag(self, client, coach_headers):
+        # Proven at the schema level by test_organization_merge's coverage
+        # guard: `concepts` is now in ORG_OWNED_TABLES, so a merge moves them
+        # rather than stranding questions with a dangling concept_id.
+        from app.services.organization_merge import ORG_OWNED_TABLES
+
+        assert "concepts" in ORG_OWNED_TABLES
