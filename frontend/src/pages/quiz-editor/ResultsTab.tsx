@@ -177,25 +177,34 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               <div className={styles.statValue}>{dashboard.response_count}</div>
               <div className={styles.statLabel}>Responses</div>
             </div>
-            {/* BOTH STATS DEPEND ON A DENOMINATOR THAT EXPIRES. roster_size
-                counts who is eligible under the quiz's currently active code;
-                once that lapses it falls back to the quiz's own Roster, which
-                is empty for a coach who activates against a Group. Responses
-                above is all-time and stays. Rather than print "Roster size 0"
-                and "Response rate 0%" over a quiz seventeen players finished,
-                these two step aside and let Responses speak alone. */}
-            {hasResponseDenominator(dashboard.roster_size) && (
-              <div className={`${nb.card} ${styles.stat}`}>
-                <div className={styles.statValue}>{dashboard.roster_size}</div>
-                <div className={styles.statLabel}>Roster size</div>
+            {/* AN EM DASH, NOT A MISSING CARD. Both of these depend on a
+                denominator that expires: roster_size counts who is eligible
+                under the quiz's currently ACTIVE code, and once that lapses it
+                falls back to the quiz's own Roster - empty for a coach who
+                activates against a Group. Responses above is all-time and is
+                always true.
+
+                An earlier pass removed the two cards entirely when the
+                denominator was gone. That over-corrected: it made the row
+                silently change shape, and a coach could not tell "we never
+                knew" from "this screen does not show that". The dash says the
+                value is unavailable and keeps the label that explains what is
+                unavailable, which is strictly more information than an absent
+                card - while still never printing the 0 that started this. */}
+            <div className={`${nb.card} ${styles.stat}`}>
+              <div className={styles.statValue}>
+                {hasResponseDenominator(dashboard.roster_size) ? dashboard.roster_size : '—'}
               </div>
-            )}
-            {dashboard.response_rate !== null && (
-              <div className={`${nb.card} ${styles.stat}`}>
-                <div className={styles.statValue}>{Math.round(dashboard.response_rate * 100)}%</div>
-                <div className={styles.statLabel}>Response rate</div>
+              <div className={styles.statLabel}>Roster size</div>
+            </div>
+            <div className={`${nb.card} ${styles.stat}`}>
+              <div className={styles.statValue}>
+                {dashboard.response_rate !== null
+                  ? `${Math.round(dashboard.response_rate * 100)}%`
+                  : '—'}
               </div>
-            )}
+              <div className={styles.statLabel}>Response rate</div>
+            </div>
           </div>
 
           {dashboard.missing_players.length > 0 && (

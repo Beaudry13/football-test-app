@@ -273,11 +273,15 @@ describe('the stats row when the roster denominator is gone', () => {
     });
     renderResultsTab();
 
+    // The LABELS stay - a dash that says what is unavailable beats a card
+    // that silently vanishes. Only the fabricated numbers go.
     expect(await screen.findByText('Responses')).toBeInTheDocument();
     expect(screen.getByText('17')).toBeInTheDocument();
-    expect(screen.queryByText('Roster size')).toBeNull();
-    expect(screen.queryByText('Response rate')).toBeNull();
+    expect(screen.getByText('Roster size')).toBeInTheDocument();
+    expect(screen.getByText('Response rate')).toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(2);
     expect(screen.queryByText('0%')).toBeNull();
+    expect(screen.queryByText('0')).toBeNull();
   });
 
   it('keeps both stats whenever the roster is real', async () => {
