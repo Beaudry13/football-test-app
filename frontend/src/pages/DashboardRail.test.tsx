@@ -184,7 +184,7 @@ describe('the quiet note', () => {
   it('says nothing at all until the first poll has answered', () => {
     const { container } = render(
       <MemoryRouter>
-        <DashboardQuietNote entries={null} quizzes={[quiz({ average_score_percent: 76 })]} />
+        <DashboardQuietNote entries={null} />
       </MemoryRouter>,
     );
     expect(container).toBeEmptyDOMElement();
@@ -193,32 +193,23 @@ describe('the quiet note', () => {
   it('is silent while something is live, because the rail is speaking', () => {
     const { container } = render(
       <MemoryRouter>
-        <DashboardQuietNote entries={[liveEntry()]} quizzes={[]} />
+        <DashboardQuietNote entries={[liveEntry()]} />
       </MemoryRouter>,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('carries the last score in one sentence when the day is quiet', () => {
+  it('states the live fact and NOTHING about history', () => {
+    // It used to append "scored 76% from 18 of 24". Results carries that now,
+    // beside this line and with a link per quiz - and this was the loudest
+    // place the "of 0" bug surfaced, because it printed the raw counts.
     render(
       <MemoryRouter>
-        <DashboardQuietNote
-          entries={[]}
-          quizzes={[quiz({ title: 'Protection IDs', average_score_percent: 76, completed_count: 18, roster_size: 24 })]}
-        />
+        <DashboardQuietNote entries={[]} />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/Nothing is out with players right now/)).toBeInTheDocument();
-    expect(screen.getByText(/scored 76% from 18 of 24/)).toBeInTheDocument();
-  });
-
-  it('still says the quiet part when no quiz has a score yet', () => {
-    render(
-      <MemoryRouter>
-        <DashboardQuietNote entries={[]} quizzes={[quiz()]} />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText(/Nothing is out with players right now/)).toBeInTheDocument();
+    expect(screen.getByText('Nothing is out with players right now.')).toBeInTheDocument();
     expect(screen.queryByText(/scored/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/ of /)).not.toBeInTheDocument();
   });
 });

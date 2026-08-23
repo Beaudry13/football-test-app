@@ -109,3 +109,32 @@ def test_export_endpoints_404_for_another_coachs_quiz(client, register_coach):
 
     assert csv_response.status_code == 404
     assert pdf_response.status_code == 404
+
+
+def test_summary_pdf_builds_when_there_is_no_roster_denominator():
+    """The PDF must survive response_rate being None, and must not print 0%.
+
+    Before this, `_build_dashboard_data` returned 0.0 whenever roster_size was
+    zero, so the summary PDF cheerfully printed "Roster Size 0 / Responses 17 /
+    Response Rate 0%" for a quiz seventeen players had completed - roster_size
+    counts who is eligible under the CURRENTLY ACTIVE code and goes to zero
+    once it lapses. It is None now, and `None * 100` would raise, so this
+    covers both the falsehood and the crash it turned into.
+    """
+    from types import SimpleNamespace
+
+    from app.services.export import build_results_pdf
+
+    quiz = SimpleNamespace(id=1, title="Protection IDs", description=None, questions=[])
+    dashboard_data = {
+        "quiz_id": 1,
+        "roster_size": 0,
+        "response_count": 17,
+        "response_rate": None,
+        "missing_players": [],
+        "question_breakdown": [],
+    }
+
+    pdf = build_results_pdf(quiz, dashboard_data, [])
+
+    assert pdf[:4] == b"%PDF"

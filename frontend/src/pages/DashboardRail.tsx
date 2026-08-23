@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/ui/Icon';
 import type { ActiveQuizStatus, Quiz } from '../api/types';
 import { MAX_RESULTS, outstandingPlayers, readyToSend, recentActivity } from './dashboardRailData';
+import { responseSummary } from '../utils/responseSummary';
 import styles from './DashboardRail.module.css';
 
 export function DashboardRail({
@@ -140,10 +141,11 @@ export function DashboardRail({
                   <span className={styles.resultScore}>
                     {Math.round(quiz.average_score_percent as number)}%
                   </span>
-                  {quiz.completed_count !== undefined && quiz.roster_size !== undefined && (
-                    <span>
-                      {quiz.completed_count} of {quiz.roster_size}
-                    </span>
+                  {/* "18 of 24" while a code is live, "17 answered" once it
+                      has expired and the denominator with it - never "of 0".
+                      See utils/responseSummary. */}
+                  {responseSummary(quiz.completed_count, quiz.roster_size) && (
+                    <span>{responseSummary(quiz.completed_count, quiz.roster_size)}</span>
                   )}
                 </div>
               </li>
@@ -174,11 +176,17 @@ export function DashboardRail({
   );
 }
 
-/** The quiet day, in one sentence.
+/** The quiet day, in one sentence - and now ONLY the sentence.
  *
- * Rendered instead of the rail when nothing is out with players. It says the
- * thing the missing rail would have said and stops - no panels, no zeros, and
- * the quiz list keeps the full width behind it.
+ * It used to carry the last result too ("Protection IDs scored 97% from 17 of
+ * 0"), written back when the rail vanished on a quiet day and this line was
+ * the only thing left to say it. The rail no longer vanishes: Results sits
+ * beside this note carrying the same quizzes with more room and a link each.
+ * Repeating the score here made the page state it twice, and because it
+ * rendered the raw counts it was also the loudest place the "of 0" bug showed.
+ *
+ * So this states the fact the rail cannot - that nothing is out RIGHT NOW,
+ * which is live state, not history - and lets Results own the numbers.
  *
  * ONLY WHEN WE ACTUALLY KNOW. `entries` is null until the first poll succeeds,
  * and null is not "nothing is live" - it is "we have not been told". Claiming
@@ -186,31 +194,10 @@ export function DashboardRail({
  */
 export function DashboardQuietNote({
   entries,
-  quizzes,
 }: {
   entries: ActiveQuizStatus[] | null;
-  quizzes: Quiz[] | null;
 }) {
   if (entries === null || entries.length > 0) return null;
 
-  const lastScored = (quizzes ?? []).find((q) => q.average_score_percent !== undefined);
-
-  return (
-    <p className={styles.quietNote}>
-      Nothing is out with players right now.
-      {lastScored && (
-        <>
-          {' '}
-          <Link to={`/quizzes/${lastScored.id}?tab=results`} className={styles.quietLink}>
-            {lastScored.title}
-          </Link>{' '}
-          scored {Math.round(lastScored.average_score_percent as number)}%
-          {lastScored.completed_count !== undefined &&
-            lastScored.roster_size !== undefined &&
-            ` from ${lastScored.completed_count} of ${lastScored.roster_size}`}
-          .
-        </>
-      )}
-    </p>
-  );
+  return <p className={styles.quietNote}>Nothing is out with players right now.</p>;
 }

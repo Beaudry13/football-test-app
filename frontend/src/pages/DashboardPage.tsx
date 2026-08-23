@@ -214,7 +214,7 @@ export function DashboardPage() {
                 is active, so it costs a returning coach no space on an
                 ordinary day. */}
             <ActiveQuizStatusSection entries={activeEntries} />
-            <DashboardQuietNote entries={activeEntries} quizzes={quizzes} />
+            <DashboardQuietNote entries={activeEntries} />
 
         {/* Tour target. An attribute rather than a class, so restyling this
             header can never silently unhook the Dashboard Tour - see

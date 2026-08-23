@@ -592,7 +592,11 @@ export interface QuizDashboard {
   quiz_id: number;
   roster_size: number;
   response_count: number;
-  response_rate: number;
+  /** null when there is no denominator to divide by - roster_size is who is
+   *  eligible under the CURRENTLY ACTIVE code, and that goes to zero once the
+   *  code lapses, while response_count is every submission ever. Same rule as
+   *  average_score_percent: no fabricated 0. */
+  response_rate: number | null;
   missing_players: string[];
   question_breakdown: QuestionBreakdown[];
 }

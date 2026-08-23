@@ -327,3 +327,81 @@ def test_duplicate_quiz_copies_questions_and_options(client, coach_headers):
     assert copy["title"] == f"{quiz['title']} (Copy)"
     assert len(copy["questions"]) == 1
     assert len(copy["questions"][0]["options"]) == 2
+
+
+def test_roster_size_goes_to_zero_once_a_group_activation_expires(client, coach_headers):
+    """THE 'N of 0' DASHBOARD STATE, reproduced.
+
+    roster_size answers "who is eligible RIGHT NOW" - list_quizzes only looks
+    up codes that are still active, and effective_roster_names_for_quiz falls
+    back to the quiz's own Roster when there is none. completed_count answers
+    "how many ever submitted". Those are not two halves of a fraction.
+
+    A coach who activates against a GROUP never has to build a per-quiz Roster
+    (groups are linked to the access code, not the quiz), so once that code
+    lapses the fallback finds nothing and the denominator becomes 0 while the
+    submissions remain. This pins the backend behaviour that the frontend's
+    responseSummary() has to render truthfully; it is NOT a bug in this number,
+    which is correct for what it means.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app import db
+    from app.models.access_code import AccessCode
+
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(
+        client, coach_headers, quiz, ["Sam Rivera", "Casey Jones", "Riley Park"]
+    )
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    start_and_submit(
+        client, access_code["id"], "Sam Rivera",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+
+    live = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert live["completed_count"] == 1
+    assert live["roster_size"] == 3
+
+    # Drop the quiz's own roster so the fallback has nothing to find, then let
+    # the code lapse - which is simply what time does to every activation.
+    client.put(f"/api/quizzes/{quiz['id']}/roster", json={"players": []}, headers=coach_headers)
+    row = db.session.get(AccessCode, access_code["id"])
+    row.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.session.commit()
+
+    after = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
+    assert after["completed_count"] == 1
+    assert after["roster_size"] == 0
+
+
+def test_dashboard_response_rate_is_none_rather_than_a_fabricated_zero(client, coach_headers):
+    """A quiz players actually completed must never report a 0% response rate.
+
+    Same expiry as the test above, seen from the Results tab: dividing an
+    all-time numerator by a right-now denominator of zero used to yield 0.0,
+    which the tab rendered as "0%" and the PDF printed as "Response Rate 0%".
+    None is the same answer scoring already gives when nothing is gradeable.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app import db
+    from app.models.access_code import AccessCode
+
+    quiz, tf_question, _, _ = build_ready_quiz(client, coach_headers)
+    access_code = _activate_with_group(client, coach_headers, quiz, ["Sam Rivera", "Casey Jones"])
+    correct_option = next(o for o in tf_question["options"] if o["is_correct_answer"] is not False)
+    start_and_submit(
+        client, access_code["id"], "Sam Rivera",
+        [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
+    )
+
+    client.put(f"/api/quizzes/{quiz['id']}/roster", json={"players": []}, headers=coach_headers)
+    row = db.session.get(AccessCode, access_code["id"])
+    row.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.session.commit()
+
+    body = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
+    assert body["response_count"] == 1
+    assert body["roster_size"] == 0
+    assert body["response_rate"] is None, "0.0 here reads as '0% of players responded'"

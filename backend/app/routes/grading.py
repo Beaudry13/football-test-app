@@ -219,7 +219,22 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
     roster_names = effective_roster_names_for_quiz(quiz, active_code)
     roster_size = len(roster_names)
     response_count = len(responses)
-    response_rate = (response_count / roster_size) if roster_size else 0.0
+    # None, NOT 0.0, when there is no denominator - the same rule scoring
+    # already follows (`score_percent` returns None rather than inventing 0%
+    # when nothing is gradeable).
+    #
+    # THE BUG THIS FIXES: roster_size is who is eligible under the CURRENTLY
+    # ACTIVE code, and `effective_roster_names_for_quiz` is handed None once
+    # that code expires - at which point it falls back to the quiz's own
+    # Roster, which is legitimately EMPTY for a coach who activates against a
+    # Group (groups are linked to the access code, not the quiz). `responses`
+    # meanwhile is every submitted attempt the quiz ever received. So a quiz
+    # seventeen players completed reported a 0% response rate, on the Results
+    # tab and in the exported PDF, a week after its code lapsed.
+    #
+    # 0-of-2 is still a true 0.0 and still reported as one. Only "we have no
+    # denominator" becomes None.
+    response_rate = (response_count / roster_size) if roster_size else None
 
     # Same effective roster this function already uses for
     # roster_size/response_rate above - reflects whichever code is
@@ -289,7 +304,7 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         "quiz_id": quiz.id,
         "roster_size": roster_size,
         "response_count": response_count,
-        "response_rate": round(response_rate, 4),
+        "response_rate": round(response_rate, 4) if response_rate is not None else None,
         "missing_players": missing_players,
         "question_breakdown": question_breakdown,
     }

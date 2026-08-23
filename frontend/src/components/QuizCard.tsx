@@ -3,6 +3,7 @@ import type { Coach, Folder, Quiz } from '../api/types';
 import { MenuButton, MenuItem } from './ui/MenuButton';
 import { folderTreeOrder } from '../pages/folderTotals';
 import nb from '../styles/notebook.module.css';
+import { hasResponseDenominator, responseSummary } from '../utils/responseSummary';
 import styles from '../pages/DashboardPage.module.css';
 
 interface QuizCardProps {
@@ -59,11 +60,16 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
                 <b>{quiz.average_score_percent}%</b> avg. score
               </span>
             )}
+            {/* "17/0" was reachable here, and shipped. roster_size is who is
+                eligible under the CURRENTLY ACTIVE code; completed_count is
+                every submission ever. The denominator vanishes when the code
+                expires - see utils/responseSummary. */}
             <span className={styles.quizStat}>
-              <b>
-                {quiz.completed_count}/{quiz.roster_size}
-              </b>{' '}
-              completed
+              <b>{responseSummary(quiz.completed_count, quiz.roster_size)}</b>
+              {/* The trailing label belongs to the FRACTION only. "18 of 24"
+                  needs saying what of what; "17 answered" already says it, and
+                  "17 answered completed" would be nonsense. */}
+              {hasResponseDenominator(quiz.roster_size) && ' completed'}
             </span>
           </div>
         )}

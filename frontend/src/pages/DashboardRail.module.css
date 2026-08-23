@@ -190,16 +190,6 @@
   color: var(--nb-text-muted);
 }
 
-.quietLink {
-  font-weight: 600;
-  color: var(--nb-text);
-  text-decoration: none;
-}
-
-.quietLink:hover {
-  color: var(--peira-accent-text);
-}
-
 /* --- Ready to send ------------------------------------------------------
    Reuses the closing/result row shape rather than inventing a third one: the
    rail should read as one board, not three lists that happen to share a

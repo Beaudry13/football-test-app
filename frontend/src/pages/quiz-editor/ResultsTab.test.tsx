@@ -251,3 +251,41 @@ describe('ResultsTab exports', () => {
     expect(screen.queryByText(/Graded by/)).not.toBeInTheDocument();
   });
 });
+
+describe('the stats row when the roster denominator is gone', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(gradingApi, 'listResponses').mockResolvedValue([]);
+  });
+
+  it('reports the responses and DROPS the two stats that would lie', async () => {
+    /* roster_size is who is eligible under the quiz's currently active code,
+       so it falls to 0 once that code expires - while response_count keeps
+       every submission the quiz ever received. This tab used to print
+       "Roster size 0" and "Response rate 0%" over a quiz players finished. */
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      quiz_id: 1,
+      roster_size: 0,
+      response_count: 17,
+      response_rate: null,
+      missing_players: [],
+      question_breakdown: [],
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText('Responses')).toBeInTheDocument();
+    expect(screen.getByText('17')).toBeInTheDocument();
+    expect(screen.queryByText('Roster size')).toBeNull();
+    expect(screen.queryByText('Response rate')).toBeNull();
+    expect(screen.queryByText('0%')).toBeNull();
+  });
+
+  it('keeps both stats whenever the roster is real', async () => {
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(sampleDashboard);
+    renderResultsTab();
+
+    expect(await screen.findByText('Roster size')).toBeInTheDocument();
+    expect(screen.getByText('Response rate')).toBeInTheDocument();
+    expect(screen.getByText('50%')).toBeInTheDocument();
+  });
+});

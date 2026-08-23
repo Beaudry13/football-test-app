@@ -22,6 +22,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
 import nb from '../../styles/notebook.module.css';
+import { hasResponseDenominator } from '../../utils/responseSummary';
 import styles from './ResultsTab.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -176,14 +177,25 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               <div className={styles.statValue}>{dashboard.response_count}</div>
               <div className={styles.statLabel}>Responses</div>
             </div>
-            <div className={`${nb.card} ${styles.stat}`}>
-              <div className={styles.statValue}>{dashboard.roster_size}</div>
-              <div className={styles.statLabel}>Roster size</div>
-            </div>
-            <div className={`${nb.card} ${styles.stat}`}>
-              <div className={styles.statValue}>{Math.round(dashboard.response_rate * 100)}%</div>
-              <div className={styles.statLabel}>Response rate</div>
-            </div>
+            {/* BOTH STATS DEPEND ON A DENOMINATOR THAT EXPIRES. roster_size
+                counts who is eligible under the quiz's currently active code;
+                once that lapses it falls back to the quiz's own Roster, which
+                is empty for a coach who activates against a Group. Responses
+                above is all-time and stays. Rather than print "Roster size 0"
+                and "Response rate 0%" over a quiz seventeen players finished,
+                these two step aside and let Responses speak alone. */}
+            {hasResponseDenominator(dashboard.roster_size) && (
+              <div className={`${nb.card} ${styles.stat}`}>
+                <div className={styles.statValue}>{dashboard.roster_size}</div>
+                <div className={styles.statLabel}>Roster size</div>
+              </div>
+            )}
+            {dashboard.response_rate !== null && (
+              <div className={`${nb.card} ${styles.stat}`}>
+                <div className={styles.statValue}>{Math.round(dashboard.response_rate * 100)}%</div>
+                <div className={styles.statLabel}>Response rate</div>
+              </div>
+            )}
           </div>
 
           {dashboard.missing_players.length > 0 && (

@@ -81,12 +81,30 @@ describe('what a coach sees without asking for anything', () => {
 
     expect(screen.getByRole('heading', { name: /Week 3 Prep/ })).toBeInTheDocument();
     expect(screen.getByText(/95%/)).toBeInTheDocument();
-    expect(screen.getByText(/14\/15/)).toBeInTheDocument();
+    expect(screen.getByText(/14 of 15/)).toBeInTheDocument();
 
     // THE POINT OF THE PHASE: none of these is on the card any more.
     expect(screen.queryByRole('button', { name: 'Duplicate' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
     expect(screen.queryByLabelText(/to folder/)).toBeNull();
+  });
+
+  it('says how many ANSWERED when the roster denominator is gone', () => {
+    // roster_size is who is eligible under the currently active code, so it
+    // drops to 0 once that code expires while completed_count keeps every
+    // submission. The card used to render that as "17/0".
+    renderCard({ completed_count: 17, roster_size: 0, average_score_percent: 97 });
+
+    expect(screen.getByText(/17 answered/)).toBeInTheDocument();
+    expect(screen.queryByText(/17\/0/)).toBeNull();
+    expect(screen.queryByText(/17 of 0/)).toBeNull();
+    // "answered" already says what it is; "completed" would double up.
+    expect(screen.queryByText(/answered completed/)).toBeNull();
+  });
+
+  it('does not call an untouched quiz a failure', () => {
+    renderCard({ completed_count: 0, roster_size: 0 });
+    expect(screen.getByText(/No responses yet/)).toBeInTheDocument();
   });
 
   it('offers exactly ONE control', () => {

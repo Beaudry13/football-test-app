@@ -1159,9 +1159,19 @@ def build_results_pdf(
         _metric_block(
             theme,
             [
-                ("Roster Size", str(dashboard_data["roster_size"])),
+                # An em dash where a number would be a lie. roster_size is
+                # "eligible right now" and goes to zero when the access code
+                # lapses, while response_count is every submission ever - so
+                # this block could print "Roster Size 0 / Responses 17 /
+                # Response Rate 0%" on a PDF a coach hands to somebody.
+                ("Roster Size", str(dashboard_data["roster_size"] or "—")),
                 ("Responses", str(dashboard_data["response_count"])),
-                ("Response Rate", f"{round(dashboard_data['response_rate'] * 100)}%"),
+                (
+                    "Response Rate",
+                    f"{round(dashboard_data['response_rate'] * 100)}%"
+                    if dashboard_data["response_rate"] is not None
+                    else "—",
+                ),
             ],
         ),
         Spacer(1, theme["spacing"]["xl"]),
@@ -1541,7 +1551,7 @@ def build_detailed_results_pdf(
         _metric_block(
             theme,
             [
-                ("Total Assigned", str(dashboard_data["roster_size"])),
+                ("Total Assigned", str(dashboard_data["roster_size"] or "—")),
                 ("Total Submitted", str(dashboard_data["response_count"])),
                 ("Average Score", f"{org_average}%" if org_average is not None else "—"),
                 ("Fully Graded", str(fully_graded_count)),

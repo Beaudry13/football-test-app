@@ -119,10 +119,12 @@ describe('DashboardPage', () => {
        too now that the rail keeps speaking on a quiet day. An unscoped
        getByText would fail on the duplicate and, worse, would have passed for
        the wrong element the moment the two ever disagreed. */
-    const avg = await screen.findByText('avg. score');
-    expect(within(avg.closest('span') as HTMLElement).getByText('82%')).toBeInTheDocument();
-    expect(screen.getByText('4/4')).toBeInTheDocument();
-    expect(screen.getByText('completed')).toBeInTheDocument();
+    const stats = (await screen.findByText('avg. score')).parentElement!.parentElement!;
+    expect(within(stats).getByText('82%')).toBeInTheDocument();
+    expect(within(stats).getByText('4 of 4')).toBeInTheDocument();
+    // The label belongs to the fraction. It is deliberately absent from the
+    // "17 answered" form - see utils/responseSummary.
+    expect(within(stats).getByText(/completed/)).toBeInTheDocument();
   });
 
   it('omits the average-score stat until at least one answer has been graded', async () => {
@@ -130,7 +132,7 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([noScoreYet]);
     renderDashboard();
 
-    expect(await screen.findByText('0/4')).toBeInTheDocument();
+    expect(await screen.findByText('0 of 4')).toBeInTheDocument();
     expect(screen.queryByText('avg. score')).not.toBeInTheDocument();
   });
 
