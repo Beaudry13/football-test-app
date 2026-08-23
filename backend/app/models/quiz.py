@@ -24,6 +24,19 @@ class Quiz(TimestampMixin, db.Model):
     # unanswered - enforced server-side (see submit_quiz), not just by the
     # player-facing Submit button's own client-side check.
     require_all_answers = db.Column(db.Boolean, nullable=False, default=False)
+    #: THE QUIZ THIS ONE WAS BUILT TO RE-ASK, when it was.
+    #:
+    #: Lineage only - it changes nothing about how this quiz is delivered,
+    #: scored or shown. It exists so "did they do better after I retaught it?"
+    #: is answerable later without guessing from titles or timestamps, which
+    #: is the one thing that cannot be reconstructed after the fact.
+    #:
+    #: SET NULL: deleting the original must not delete the retest or block the
+    #: delete. The retest then honestly reads "a retest of something no longer
+    #: here" rather than pretending it was never one.
+    retest_of_quiz_id = db.Column(
+        db.Integer, db.ForeignKey("quizzes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     folder_id = db.Column(
         db.Integer, db.ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True
     )
