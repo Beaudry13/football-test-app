@@ -186,3 +186,55 @@
 .addRow {
   margin-bottom: var(--space-4);
 }
+
+/* --- "Annotate now" ------------------------------------------------------
+   Shown once, immediately after a question is saved WITH a photo, and gone as
+   soon as the coach does anything else. It sits above the list rather than in
+   it: it is about the moment, not about a row, and a coach on a field should
+   not have to find the question they just made in order to draw on it. */
+.annotateOffer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  /* The one place gold carries a whole edge: this is the single most useful
+     thing on screen for about ten seconds, and then it is gone. */
+  border-left: 3px solid var(--color-accent);
+}
+
+.annotateOfferText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.annotateOfferText span {
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.annotateOfferActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.annotateOfferActions > button {
+  min-height: 44px;
+}
+
+/* At 375 the two halves stack, and the buttons take the full width rather
+   than sitting as two small targets in a corner. */
+@media (max-width: 30rem) {
+  .annotateOffer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .annotateOfferActions > button {
+    flex: 1 1 auto;
+  }
+}

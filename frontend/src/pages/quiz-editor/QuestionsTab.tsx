@@ -10,7 +10,7 @@ import {
   type QuestionInput,
 } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
-import type { Quiz } from '../../api/types';
+import type { Question, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { QuestionEditor } from './QuestionEditor';
@@ -120,8 +120,14 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
      a flag that was already being cleared and the scroll silently did nothing
      every other time. Bumping a number always changes the effect's input. */
   const [addFormRequest, setAddFormRequest] = useState(0);
+  /** The question just created WITH a picture, until the coach moves on. */
+  const [justPhotographed, setJustPhotographed] = useState<Question | null>(null);
 
   function openAddForm() {
+    // Adding another question IS moving on - the offer is about the one just
+    // saved, and leaving it up over a fresh empty form would be pointing at
+    // something that is no longer on screen.
+    setJustPhotographed(null);
     setAddFormRequest((n) => n + 1);
     setIsAdding(true);
   }
@@ -170,9 +176,17 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
   async function handleCreate(input: QuestionInput, image?: File | null) {
     // One call. The question and its image are committed together server-side,
     // so a rejected image leaves no half-made question to clean up.
-    await createQuestion(quiz.id, input, image);
+    const created = await createQuestion(quiz.id, input, image);
     setIsAdding(false);
     await reload();
+    /* THE PHOTO IS NOT THE POINT - MARKING IT UP IS. Until now the route from
+       "I just photographed this play" to "let me circle the safety" ran back
+       through the question list, into a row's ... menu, and out again via Edit
+       image. On a field that is three taps and a hunt, for the thing the coach
+       took the photo IN ORDER to do.
+       Offered, never forced: a coach who wanted a plain picture carries on and
+       this disappears the moment they do anything else. */
+    if (created?.image) setJustPhotographed(created);
   }
 
   async function handleUpdate(questionId: number, input: QuestionInput) {
@@ -292,6 +306,33 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
           >
             + Add question
           </button>
+        </div>
+      )}
+
+      {justPhotographed && (
+        <div className={`${nb.card} ${styles.annotateOffer}`} role="status">
+          <div className={styles.annotateOfferText}>
+            <strong>Question added, with your photo.</strong>
+            <span>Draw on it now, or carry on and mark it up later.</span>
+          </div>
+          <div className={styles.annotateOfferActions}>
+            <button
+              type="button"
+              className={nb.btnPrimary}
+              onClick={() =>
+                navigate(`/quizzes/${quiz.id}/questions/${justPhotographed.id}/annotate`)
+              }
+            >
+              Annotate now
+            </button>
+            <button
+              type="button"
+              className={nb.btnSecondary}
+              onClick={() => setJustPhotographed(null)}
+            >
+              Not now
+            </button>
+          </div>
         </div>
       )}
 
