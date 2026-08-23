@@ -193,6 +193,46 @@ export function QuizStep({
   });
   const [isChecking, setIsChecking] = useState(false);
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+
+  /* HOW LONG THIS QUESTION HAS BEEN IN FRONT OF THE PLAYER.
+   *
+   * ONE QUESTION AT A TIME ONLY, and the omission elsewhere is the honest
+   * part. When a quiz puts every question on one page they are all on screen
+   * from the moment it loads, so a duration measured from then for question 7
+   * would quietly include reading and answering questions 1 to 6 - a
+   * different quantity under the same name. The column stays NULL there
+   * rather than carrying a number that means something else.
+   *
+   * performance.now(), not Date.now(): a monotonic clock cannot be dragged
+   * backwards by an NTP correction or a timezone change mid-quiz, which would
+   * otherwise produce a negative or absurd duration from a real answer.
+   *
+   * Only the FIRST commit for a question carries this, and the server keeps
+   * only the first value it is given, so a corrected answer minutes later
+   * cannot overwrite the measurement of the original one. */
+  const questionShownAt = useRef<Record<number, number>>({});
+  const timingSent = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (!quiz.one_question_at_a_time) return;
+    const question = questions[currentIndex];
+    if (!question) return;
+    // Re-arriving at a question already answered must not restart its clock -
+    // the measurement belongs to the first answer, and it has been sent.
+    if (questionShownAt.current[question.id] === undefined) {
+      questionShownAt.current[question.id] = performance.now();
+    }
+  }, [currentIndex, questions, quiz.one_question_at_a_time]);
+
+  /** Elapsed ms to report with this answer, or undefined when unmeasurable. */
+  function timeToAnswerFor(questionId: number): number | undefined {
+    if (!quiz.one_question_at_a_time) return undefined;
+    if (timingSent.current.has(questionId)) return undefined;
+    const shown = questionShownAt.current[questionId];
+    if (shown === undefined) return undefined;
+    timingSent.current.add(questionId);
+    return Math.max(0, Math.round(performance.now() - shown));
+  }
   /** The revision the server last confirmed, per question.
    *
    * A ref rather than state, and read at SEND time rather than at schedule
@@ -247,6 +287,7 @@ export function QuizStep({
       selected_option_id: answer.selected_option_id ?? null,
       selected_option_ids: answer.selected_option_ids ?? null,
       answer_text: answer.answer_text ?? null,
+      time_to_answer_ms: timeToAnswerFor(questionId),
     })
       .then(() => setSaveStatus('saved'))
       .catch(() => setSaveStatus('error'));

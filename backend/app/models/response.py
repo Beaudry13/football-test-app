@@ -80,6 +80,21 @@ class PlayerAttempt(db.Model):
     mode = db.Column(
         db.String(16), nullable=False, server_default=DEFAULT_MODE, default=DEFAULT_MODE
     )
+    #: THE PLAYER'S POSITION WHEN THIS ATTEMPT STARTED.
+    #:
+    #: players.position is live and editable. Move a player from CB to S in
+    #: October and every September result would silently re-attribute itself
+    #: to their new group - the exact failure the delivered-question snapshots
+    #: exist to prevent, one table over.
+    #:
+    #: Held on the ATTEMPT rather than on each answer because a position
+    #: cannot change part-way through a single attempt: per-answer copies
+    #: would cost a column on every row and preserve nothing extra.
+    #:
+    #: NULL when the attempt has no linked player (a legacy free-text name) or
+    #: that player has no position recorded. Historical analysis must read
+    #: THIS, never players.position.
+    position_at_attempt = db.Column(db.String(10), nullable=True)
     started_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=db.func.now())
     submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
@@ -192,6 +207,24 @@ class Answer(db.Model):
         db.Integer, db.ForeignKey("question_options.id", ondelete="SET NULL"), nullable=True
     )
     is_correct = db.Column(db.Boolean, nullable=True)
+    #: WHEN THEY FIRST ANSWERED - stamped once, never moved.
+    #:
+    #: Deliberately not "when this row last changed": the answer path is a
+    #: debounced upsert, so a retry, a corrected typo or a re-grade all rewrite
+    #: the row long after the player decided. Set only when it is still NULL.
+    #: NULL on every attempt that predates the column; there is no backfill,
+    #: because inventing a moment is worse than admitting it was not recorded.
+    answered_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: Milliseconds from the question appearing in front of the player to that
+    #: first commit, measured CLIENT-SIDE - the server cannot see when a
+    #: question reached a phone.
+    #:
+    #: ONLY MEANINGFUL ONE QUESTION AT A TIME, and therefore only recorded
+    #: then. When a quiz shows every question on one page they are all
+    #: available from page load, so this figure for question 7 would include
+    #: reading and answering questions 1-6 - a different quantity under the
+    #: same name. NULL there, on purpose.
+    time_to_answer_ms = db.Column(db.Integer, nullable=True)
     # PRACTICE ONLY. When the player pressed "Check Answer" and was shown the
     # verdict and the coach's explanation. Stamped explicitly rather than
     # inferred from "an answer row exists", because a Draw Response answer row

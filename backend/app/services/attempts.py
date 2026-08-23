@@ -7,7 +7,7 @@ computation, so it lives here once rather than being duplicated per route.
 import random
 from datetime import datetime, timezone
 
-from sqlalchemy import delete as sa_delete
+from sqlalchemy import delete as sa_delete, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.errors import ApiError
@@ -84,6 +84,7 @@ def upsert_answer(
     selected_option_id: int | None,
     answer_text: str | None,
     selected_option_ids: list[int] | None = None,
+    time_to_answer_ms: int | None = None,
 ) -> Answer:
     """Create or update the one Answer row for (attempt, question_id).
 
@@ -163,6 +164,8 @@ def upsert_answer(
         answer_text=answer_text,
         selected_option_id=selected_option_id,
         is_correct=is_correct,
+        answered_at=func.now(),
+        time_to_answer_ms=time_to_answer_ms,
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["attempt_id", "question_id"],
@@ -170,6 +173,22 @@ def upsert_answer(
             "answer_text": stmt.excluded.answer_text,
             "selected_option_id": stmt.excluded.selected_option_id,
             "is_correct": stmt.excluded.is_correct,
+            # BOTH OF THESE ARE FIRST-WRITE-WINS, and that is the whole point.
+            #
+            # This is a debounced upsert: a corrected typo, a browser retry and
+            # the final sync at submit all come back through here, minutes
+            # apart. COALESCE keeps whatever the first commit recorded, so
+            # `answered_at` stays "when they answered" rather than drifting
+            # into "when this row last changed", and a duration measured from
+            # the question appearing cannot be overwritten by a later edit that
+            # was timed from nothing.
+            #
+            # It also makes the columns safe on the submit path, which re-sends
+            # every answer: re-sending cannot restamp work done earlier.
+            "answered_at": func.coalesce(Answer.answered_at, stmt.excluded.answered_at),
+            "time_to_answer_ms": func.coalesce(
+                Answer.time_to_answer_ms, stmt.excluded.time_to_answer_ms
+            ),
         },
     ).returning(Answer.id)
     answer_id = db.session.execute(stmt).scalar_one()

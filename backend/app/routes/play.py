@@ -26,6 +26,7 @@ from app.models import (
     Answer,
     AnswerSelectedOption,
     AttemptStatus,
+    Player,
     PlayerAttempt,
     Question,
     QuestionType,
@@ -195,6 +196,21 @@ def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
             masked = f"/api/media/{token}"
         payload.append(to_player_payload(delivered, masked_image_url=masked))
     return payload
+
+
+def _position_now(player_id: int | None) -> str | None:
+    """The roster position to freeze onto a starting attempt.
+
+    NULL rather than a guess in both of the cases that legitimately have no
+    answer: an attempt joined under a free-text name (no linked Player at all)
+    and a player whose position was never filled in. "Not recorded" is a true
+    statement; a default like "UNKNOWN" would be a value analysis had to learn
+    to ignore.
+    """
+    if player_id is None:
+        return None
+    player = db.session.get(Player, player_id)
+    return player.position if player is not None else None
 
 
 def _drawings_by_answer_id(attempt: PlayerAttempt) -> dict:
@@ -450,6 +466,12 @@ def start_attempt():
         access_code_id=access_code.id,
         player_name=data["player_name"],
         player_id=player_id,
+        # THE POSITION AS IT IS RIGHT NOW, frozen for good. Read through the
+        # linked Player, so a legacy free-text name simply records NULL rather
+        # than a guess. Copied here for the same reason the delivered question
+        # is copied: what a coach later changes on the roster must not rewrite
+        # what was true when this player answered.
+        position_at_attempt=_position_now(player_id),
         # Copied from the code, never from the request. A player cannot ask
         # for an attempt to be practice, or for a practice attempt to count -
         # the assignment decides, and this freezes that decision so a later
@@ -542,6 +564,7 @@ def save_answer():
         data["selected_option_id"],
         data["answer_text"],
         data.get("selected_option_ids"),
+        data.get("time_to_answer_ms"),
     )
     db.session.commit()
     # Identical shape in both modes: correctness is revealed by /check, never

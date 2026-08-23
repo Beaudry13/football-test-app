@@ -53,6 +53,26 @@ class SaveAnswerSchema(Schema):
     #: replaces the stored selection with it rather than merging, so
     #: deselecting is expressible. Ignored on a single-choice question.
     selected_option_ids = fields.List(fields.Int(), required=False, allow_none=True, load_default=None)
+    #: How long the player had this question in front of them before answering.
+    #:
+    #: MEASURED BY THE CLIENT, because only the client knows when a question
+    #: reached the screen - the server sees a request, which is a different
+    #: moment. Sent only where it means something: one-question-at-a-time
+    #: delivery. Omitted (NULL) for an all-at-once quiz, where every question
+    #: is on screen from page load and this figure would silently include the
+    #: time spent on all the earlier ones.
+    #:
+    #: Bounded, and untrusted like every other client value. Negative is
+    #: impossible; the 6-hour ceiling rejects a clock that jumped rather than
+    #: recording a player who pondered one question overnight. Only the FIRST
+    #: write for an answer is kept (see upsert_answer), so a later correction
+    #: cannot overwrite a real measurement.
+    time_to_answer_ms = fields.Int(
+        required=False,
+        allow_none=True,
+        load_default=None,
+        validate=validate.Range(min=0, max=6 * 60 * 60 * 1000),
+    )
 
 
 class CheckAnswerSchema(Schema):

@@ -41,6 +41,9 @@ export function saveAnswer(input: {
   /** "Select all that apply" - the complete set, replacing whatever is stored. */
   selected_option_ids?: number[] | null;
   answer_text?: string | null;
+  /** Milliseconds the question was on screen before this first answer.
+   *  Omitted where it cannot be measured honestly - see QuizStep. */
+  time_to_answer_ms?: number;
 }): Promise<void> {
   return api.post<void>('/play/answers', input, { auth: false });
 }
