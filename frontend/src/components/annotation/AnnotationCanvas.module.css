@@ -33,7 +33,12 @@
   line-height: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  background: repeating-conic-gradient(#eee 0% 25%, #fafafa 0% 50%) 50% / 20px 20px;
+  /* The transparency checkerboard is DARK now, and it has to be. It sits
+     directly behind the film still in the one workspace where the image is
+     the hero - a #eee/#fafafa board on a near-black stage is the brightest
+     thing on screen and pulls the eye off the photograph it exists to frame.
+     Kept as two steps so it still reads as "nothing is here", not as a fill. */
+  background: repeating-conic-gradient(#1A1712 0% 25%, #201C16 0% 50%) 50% / 20px 20px;
   /* THE BUG THIS PREVENTS: drawing a route down the image and having the PAGE
      scroll instead. The browser claims a one-finger drag for scrolling unless
      told otherwise, and it makes that decision before any listener runs, so

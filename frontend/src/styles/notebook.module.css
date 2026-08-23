@@ -27,7 +27,23 @@
    light deliberately, for phone readability) - repainting them here would
    leak this dark theme there too. */
 
-.page {
+/* THE COACH TOKEN SCOPE, and why it is no longer private to .page.
+
+   Every name below is declared at CLASS specificity so that anything reading
+   var(--color-surface)/var(--radius-sm)/etc. directly resolves to the coach
+   value rather than index.css's PLAYER :root default.
+
+   It is shared with .coachTokens because .page stopped being the only coach
+   root. The annotation workspace deliberately sits OUTSIDE NotebookLayout -
+   it is a mode, not a page - so it has no .page ancestor and inherited none
+   of this. That was survivable while the coach theme was light: the player
+   defaults it fell through to were also light, so the mismatch never showed.
+   On this ground it showed at once - the uploader's empty state drew
+   --peira-text (near-white, from :root) on index.css's #fffdf8, at 1.1 : 1.
+
+   Any coach surface that is not a .page must carry .coachTokens. */
+.page,
+.coachTokens {
   /* --nb-* aliases, sourced from the --peira-* tokens (styles/tokens.css)
      that exist specifically to avoid colliding with index.css's same-
      named :root properties - see that file's NAMING NOTE. */
@@ -43,6 +59,7 @@
   --nb-accent-deep: var(--peira-accent-text);
   --nb-accent-hover: var(--color-accent-bright);
   --nb-card-border: var(--peira-border);
+  --nb-card-edge: var(--peira-card-edge);
   /* SEVEN BORDERS THAT NEVER RENDERED. --nb-border was referenced by seven
      rules and defined nowhere, and six of them had no fallback - so
      `border: 1px solid var(--nb-border)` was an invalid declaration and the
@@ -79,7 +96,11 @@
   --color-warning-bg: var(--peira-warning-bg);
   --radius-sm: var(--peira-radius-sm);
   --radius-md: var(--peira-radius-md);
+}
 
+/* .page is also a LAYOUT: full-height, and it paints the ground. .coachTokens
+   deliberately gets neither - a mode brings its own shell. */
+.page {
   position: relative;
   min-height: 100vh;
   font-family: var(--font-body);
@@ -134,12 +155,16 @@
 
 /* THE GROUND BEHIND THE GROUND.
    `body` is painted by index.css - the PLAYER theme - at #f3efe6, while a
-   coach page paints #FAF7F2. .page is min-height:100vh so it covers the
+   coach page paints #14120E. .page is min-height:100vh so it covers the
    viewport and the two never meet in normal use; they meet during overscroll
-   rubber-banding on a touch device, as a band of the wrong cream.
-   Scoped with :has() so it only applies on a page that actually renders
-   .page - index.css keeps owning the player pages, untouched. */
-:root:has(.page) body {
+   rubber-banding on a touch device. On the light theme that showed as a band
+   of the wrong cream; on this one it is a flash of cream on near-black, which
+   is far louder - so this matters more now, not less.
+   Scoped with :has() so it only applies where a coach root actually renders -
+   index.css keeps owning the player pages, untouched. .coachTokens is listed
+   because the annotation workspace is a coach root that is not a .page. */
+:root:has(.page) body,
+:root:has(.coachTokens) body {
   background-color: var(--peira-bg);
 }
 
@@ -608,7 +633,7 @@ textarea.input {
 .card {
   position: relative;
   border-radius: var(--radius-md);
-  border: 1px solid var(--nb-card-border);
+  border: 1px solid var(--nb-card-edge);
   background: var(--color-surface);
   color: var(--nb-text);
   overflow: hidden;
@@ -622,11 +647,13 @@ textarea.input {
 }
 
 .cardHoverable:hover {
-  border-color: var(--color-border-strong);
-  /* A wash, not a fill. This was #1b1c20 - near-black, the dark theme's
-     "slightly lighter than the page". On paper it turned every quiz card
-     black on hover, and a static contrast sweep cannot see a hover state. */
-  background: var(--peira-wash-hover);
+  /* HOVER LIFTS THE SURFACE, it does not thicken the outline.
+     If depth is carried by the step from ground to card, then the honest way
+     to say "this one is under your cursor" is to move it one step further up
+     - not to darken its border, which is the paper idiom for a thing that has
+     no elevation to give. The edge brightens only enough to follow it. */
+  border-color: var(--peira-border);
+  background: var(--peira-surface-raised);
 }
 
 /* Left accent stripe used on list-row cards (quiz/group cards). Parent

@@ -58,9 +58,20 @@ function parseBlock(css: string, opener: RegExp): Record<string, string> {
 
 const light = parseBlock(INDEX_CSS, /:root\s*\{/); // player theme, global :root
 const tokens = parseBlock(TOKENS_CSS, /:root\s*\{/); // canonical tokens, global
-const page = parseBlock(NOTEBOOK_CSS, /\.page\s*\{/); // coach aliases, scoped
+/* Matched on .coachTokens, NOT on .page, and the difference is the whole
+   point of this line. The coach aliases now live in a block selected by
+   `.page, .coachTokens` - shared so that a coach surface which is not a page
+   (the annotation workspace; the Modal backdrop, which portals out of .page)
+   can opt into the same tokens. An opener of /\.page\s*\{/ silently stops
+   matching that block and finds the later layout-only `.page {` rule instead,
+   which declares no custom properties at all: COACH becomes an empty table,
+   every coach var() resolves to null, and the suite reports a contrast
+   failure for a button measured at 7.8:1 in a real browser. Match the token
+   scope by its own name so the two cannot drift apart again. */
+const page = parseBlock(NOTEBOOK_CSS, /\.coachTokens\s*\{/); // coach aliases, scoped
 
-/** Inside `.page`: its aliases and local re-declarations win. */
+/** Inside the coach token scope (`.page` or `.coachTokens`): its aliases and
+ * local re-declarations win. */
 const COACH = [page, tokens, light];
 /** Portalled to document.body: `.page` is not an ancestor, so only the two
  * global :root blocks apply. This is the scope the bug lived in. */

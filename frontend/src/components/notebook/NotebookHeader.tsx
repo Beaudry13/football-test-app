@@ -49,7 +49,7 @@ export function NotebookHeader() {
           Register/Join render this same header), "/" is the marketing
           homepage itself, so there's nowhere else for it to point. */}
       <Link to={coach ? '/dashboard' : '/'} className={styles.brand} aria-label="Peira">
-        <PeiraLogo variant="light" size={30} />
+        <PeiraLogo variant="dark" size={30} />
       </Link>
       {/* Logged-out pages (Login/Register/Join) are themselves the way to
           get signed in, so there's nothing useful to put in the nav - just

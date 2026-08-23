@@ -210,8 +210,12 @@ export function AnnotationPage() {
     );
   }
 
+  // nb.coachTokens, because this route is deliberately OUTSIDE NotebookLayout
+  // and so has no .page ancestor to inherit the coach token scope from.
+  // Without it the uploader's empty state renders --peira-text on index.css's
+  // player surface, at 1.1 : 1 - see notebook.module.css.
   return (
-    <div className={styles.workspace}>
+    <div className={`${nb.coachTokens} ${styles.workspace}`}>
       {/* THE ONLY CHROME LEFT: how to get out, what you are drawing on, and
           how to finish. Everything else a coach can see is the image. */}
       <div className={styles.bar}>

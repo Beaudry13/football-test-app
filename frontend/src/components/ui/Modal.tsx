@@ -1,6 +1,7 @@
 import { forwardRef, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from './Icon';
+import nb from '../../styles/notebook.module.css';
 import styles from './Modal.module.css';
 
 interface ModalProps {
@@ -55,7 +56,22 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
     event.stopPropagation();
   }
 
-  const backdropClass = size === 'bare' ? `${styles.backdrop} ${styles.backdropBare}` : styles.backdrop;
+  /* THE BACKDROP CARRIES THE COACH TOKEN SCOPE, and a modal is broken without
+     it. createPortal moves this subtree to document.body, so it has no .page
+     ancestor - and every --nb-* name is declared on .page. Children that style
+     themselves with those names (HelpArticleModal uses Help.module.css and
+     nb.btnPrimary) therefore resolved NONE of them and fell through to the
+     hardcoded light-theme fallbacks baked into those rules.
+
+     Measured before this line existed, on the dark ground: the help article's
+     heading rendered #2A2416 on #1E1B15 at 1.11 : 1 and its Close button lost
+     its gold fill entirely and drew #14120E text at 1.09 : 1. Both invisible.
+
+     The bug predates the dark theme - the names never resolved here - but the
+     light fallbacks happened to sit on a light panel, so it never showed. */
+  const backdropClass = size === 'bare'
+    ? `${nb.coachTokens} ${styles.backdrop} ${styles.backdropBare}`
+    : `${nb.coachTokens} ${styles.backdrop}`;
   const panelClass =
     size === 'md' ? `${styles.panel} ${styles.panelMd}` : size === 'bare' ? `${styles.panel} ${styles.panelBare}` : styles.panel;
 

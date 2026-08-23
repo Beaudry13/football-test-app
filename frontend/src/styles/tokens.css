@@ -102,13 +102,40 @@
 }
 
 :root {
+  /* =====================================================================
+   * PEIRA, DARK - the design system, not a palette.
+   *
+   * This is not the old dark theme brought back. That one separated things by
+   * drawing a border around each of them, needed three tiers of muted grey to
+   * stay legible (one of which failed AA anyway), and used a neutral #121212
+   * that made the gold look stuck on rather than built in.
+   *
+   * THREE RULES HOLD THIS TOGETHER:
+   *
+   * 1. DEPTH COMES FROM THE SURFACE, NOT FROM A BORDER.
+   *    ground -> panel -> raised is a real, if quiet, step. A border is a
+   *    hairline used where a step is not available, never the default way to
+   *    say "this is a thing". Fewer boxes was the best lesson of the light
+   *    pass and it survives the change of ground.
+   *
+   * 2. EVERY NEUTRAL IS WARM.
+   *    A true grey beside #c9a24b reads blue by comparison. Each neutral here
+   *    carries a little of the gold's own warmth, which is why the interface
+   *    looks like one material instead of an accent applied to slate.
+   *
+   * 3. GOLD IS IDENTITY, NOT DECORATION.
+   *    It marks the live thing, the number that matters, the primary action,
+   *    the active state and progress. If gold appears somewhere that is none
+   *    of those, that is the bug - not a missing shade.
+   * ===================================================================== */
+
   /* --- Color: surfaces (collide with index.css - --peira-* prefixed) ------ */
-  --peira-bg: #FAF7F2;
-  --peira-surface: #FFFFFF;
-  --color-surface-input: #FFFFFF;
-  --color-border-subtle: #F0EAE0;
-  --peira-border: #E4DED3;
-  --color-border-strong: #C3BBAE;
+  --peira-bg: #14120E;
+  --peira-surface: #1E1B15;
+  --color-surface-input: #17150F;
+  --color-border-subtle: rgba(246, 242, 232, 0.06);
+  --peira-border: rgba(246, 242, 232, 0.10);
+  --color-border-strong: rgba(246, 242, 232, 0.18);
 
   /* --- Color: washes and fills ---------------------------------------------
    * NAMED FOR THEIR JOB, NOT THEIR OPACITY, and that is the point of this
@@ -133,20 +160,33 @@
    * its fallbacks were the live values - and the three disagreed with each
    * other (0.05, 0.06, 0.08). Each now names the wash it actually wanted.
    */
-  --peira-wash-hover: rgba(28, 26, 23, 0.03);
-  --peira-wash-control-hover: rgba(28, 26, 23, 0.05);
-  --peira-wash-control-hover-strong: rgba(28, 26, 23, 0.08);
-  --peira-surface-raised: #FFFFFF;
-  --peira-surface-raised-strong: #F7F2E9;
-  --peira-dropzone: #FBF8F3;
-  --peira-dropzone-focus: #F7F2E9;
-  --peira-dropzone-active: rgba(201, 162, 75, 0.14);
-  --peira-chip: #F3EDE1;
+  --peira-wash-hover: rgba(246, 242, 232, 0.04);
+  --peira-wash-control-hover: rgba(246, 242, 232, 0.07);
+  --peira-wash-control-hover-strong: rgba(246, 242, 232, 0.11);
+  --peira-surface-raised: #272319;
+  --peira-surface-raised-strong: #2E2A22;
+  --peira-dropzone: rgba(246, 242, 232, 0.03);
+  --peira-dropzone-focus: rgba(246, 242, 232, 0.06);
+  --peira-dropzone-active: rgba(201, 162, 75, 0.18);
+  --peira-chip: rgba(246, 242, 232, 0.08);
+
+  /* THE CARD EDGE IS NOT THE SEPARATOR HAIRLINE, and on this ground they stop
+     being the same value.
+
+     On paper they had to be. A white card on a warm-white page is invisible
+     without an outline, so --peira-border did both jobs and every card wore a
+     box. Here the ground is #14120E and a card is #1E1B15 - the STEP does the
+     separating, and repeating the outline on top of it draws 40 boxes on a
+     page that already reads as layered.
+
+     So: this edge only resolves the corner and catches the eye at the radius.
+     --peira-border stays where it belongs, dividing rows INSIDE a surface. */
+  --peira-card-edge: rgba(246, 242, 232, 0.055);
   /* A field a coach types into. Already a LIGHT fill on the dark theme - the
      one place the interface was light all along, which is why it needs the
      least thought when the rest of it follows. */
-  --peira-field: #FFFFFF;
-  --peira-field-soft: #FFFFFF;
+  --peira-field: #17150F;
+  --peira-field-soft: #17150F;
 
   /* --- Color: text (collide with index.css - --peira-* prefixed) ----------
      Every text token here clears WCAG AA (4.5:1 for small text) against all
@@ -160,38 +200,42 @@
      case) while still reading as clearly-muted next to --peira-text-muted.
      Accessibility wins over an exact brand hex - the same rule that will
      later constrain per-organization colors. */
-  --peira-text: #1C1A17;
-  --color-text-secondary: #3E3A34;
-  --peira-text-muted: #6B655C;
-  --color-text-muted-2: #6B655C;
-  --color-text-muted-3: #726B62;
+  --peira-text: #F6F2E8;
+  --color-text-secondary: #DCD5C6;
+  --peira-text-muted: #A79E8C;
+  --color-text-muted-2: #A79E8C;
+  --color-text-muted-3: #8E8676;
 
   /* --- Color: accent (gold, flat - never a gradient; no index.css equivalent) */
   --color-accent: #c9a24b;
-  --color-accent-bright: #B4903D;
-  --color-accent-contrast: #1C1A17;
+  --color-accent-bright: #E4C066;
+  --color-accent-contrast: #14120E;
   --color-accent-bg: rgba(201, 162, 75, 0.14);
 
-  /* GOLD AS INK, and the reason the brand colour did not have to change.
-     Measured: #c9a24b on the paper ground is 2.25:1 - it fails as text and
-     always would have. As a FILL with ink on it, the same gold is 7.24:1.
-     So gold splits by ROLE rather than by value: --color-accent keeps every
-     fill, rule, indicator and button, and this carries gold wherever it has
-     to be read as a word. 4.73:1 on paper, 5.05:1 on a card. */
-  --peira-accent-text: #8A6A1B;
+  /* GOLD IS ONE COLOUR AGAIN.
+     On the light ground #c9a24b measured 2.25:1 as text - it failed AA, and
+     the light theme had to invent a second, deeper gold and repoint 34 rules
+     to it. On this ground the same gold is 7.80:1 against the page and 7.16:1
+     against a card, so it reads as a fill, a rule, a number AND a word.
+
+     This alias stays rather than being unwound across those 34 sites: they
+     each mean "gold, as text", which is still true and still correct - and if
+     the ground ever changes again there is one value to move rather than
+     thirty-four rules to find. */
+  --peira-accent-text: #C9A24B;
 
   /* --- Color: status (collide with index.css - --peira-* prefixed) -------- */
-  /* #1A6B3D, not the #1F7A46 the palette started at: the success chip puts
-     this colour on a 10% tint of ITSELF, and at #1F7A46 that pairing
-     measured 4.38:1 on paper - a hair under AA, and only findable by
-     compositing the tint rather than reading the token. 5.29:1 now. */
-  --peira-success: #1A6B3D;
-  --peira-success-bg: rgba(31, 122, 70, 0.10);
-  --color-warning: #8A5A12;
-  --peira-warning-bg: rgba(138, 90, 18, 0.10);
-  --peira-danger: #A33232;
-  --peira-danger-bg: rgba(163, 50, 50, 0.07);
-  --color-danger-border: rgba(163, 50, 50, 0.30);
+  /* Status colours are LIGHT on this ground, and all four clear AA against
+     both the page and a card with room to spare - 9.2, 10.0 and 7.7. The
+     light theme had to hunt for a success green that survived being placed on
+     a tint of itself; on near-black that pressure disappears. */
+  --peira-success: #5FCB86;
+  --peira-success-bg: rgba(95, 203, 134, 0.14);
+  --color-warning: #E8B563;
+  --peira-warning-bg: rgba(232, 181, 99, 0.14);
+  --peira-danger: #F08A80;
+  --peira-danger-bg: rgba(240, 138, 128, 0.12);
+  --color-danger-border: rgba(240, 138, 128, 0.32);
 
   /* --- Typography (no index.css equivalent) -------------------------------- */
   /* 'Peira Plain Symbols' MUST come first - see the @font-face above. It
@@ -226,9 +270,9 @@
   --radius-pill: 999px;
 
   /* --- Shadow (flat design - used sparingly: floating nav, modals, hover lift) */
-  --shadow-sm: 0 1px 2px rgba(28, 26, 23, 0.06);
-  --shadow-md: 0 4px 14px rgba(28, 26, 23, 0.10);
-  --shadow-lg: 0 16px 40px rgba(28, 26, 23, 0.16);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.55);
 
   /* --- Spacing scale (4px base unit) ---------------------------------------- */
   --space-1: 4px;
