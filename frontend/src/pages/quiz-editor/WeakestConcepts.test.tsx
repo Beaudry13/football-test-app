@@ -241,18 +241,10 @@ describe('Retest these players', () => {
     expect(await screen.findByText('EDITOR')).toBeInTheDocument();
   });
 
-  /* THE FAILURE PATH IS NOT COVERED HERE, deliberately and with a caveat.
-     The component catches the rejection and shows it - the code is a plain
-     try/catch around the await, and the identical pattern behind the identical
-     module mock passes in isolation. Inside THIS component the runner reports
-     the mock's rejection as an unhandled error before the assertion runs, and
-     three shapes of rejected promise all reproduce it. Rather than reshape the
-     component to satisfy the harness, or delete the behaviour quietly, the
-     path is verified against the real API in a browser: a 422 leaves the coach
-     on Results with the message shown and no draft created.
-
-     If this becomes cheap to express later it belongs here; asserting it
-     through a mock that fights the runner would only prove the mock. */
+  /* The failure path lives in WeakestConceptsRetestFailure.test.tsx. It is
+     the same component and the same mocked rejection; sharing this file's mock
+     state made the runner report the rejection as an unhandled error before
+     the assertion ran. Alone, it passes - see that file's header. */
 
   it('can be backed out of', async () => {
     const user = userEvent.setup();
