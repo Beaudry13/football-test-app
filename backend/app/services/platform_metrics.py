@@ -35,7 +35,9 @@ from app.extensions import db
 from app.models import (
     AccessCode,
     Answer,
+    AttemptStatus,
     Coach,
+    Concept,
     Folder,
     GradeAuditLog,
     Group,
@@ -255,6 +257,25 @@ def _feature_organization_ids() -> dict[str, set[int]]:
             .select_from(Question)
             .join(Quiz, Quiz.id == Question.quiz_id)
             .where(Question.question_type == QuestionType.DRAW_RESPONSE)
+            .distinct()
+        ),
+        # THE RETEACH LOOP, in the only two states worth counting.
+        #
+        # Derived from rows the product already writes, not from click
+        # telemetry: Peira has no event table by design, and "a coach built a
+        # retest" and "players answered it" say far more about whether the loop
+        # is used than a button press would. A click measures curiosity; a sent
+        # retest measures use.
+        "concept_tagging": ids(select(Concept.organization_id).distinct()),
+        "retest_created": ids(
+            select(Quiz.organization_id).where(Quiz.retest_of_quiz_id.isnot(None)).distinct()
+        ),
+        "retest_answered": ids(
+            select(Quiz.organization_id)
+            .select_from(PlayerAttempt)
+            .join(Quiz, Quiz.id == PlayerAttempt.quiz_id)
+            .where(Quiz.retest_of_quiz_id.isnot(None))
+            .where(PlayerAttempt.status == AttemptStatus.SUBMITTED)
             .distinct()
         ),
         "groups": ids(select(Group.organization_id).distinct()),
