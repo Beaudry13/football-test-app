@@ -269,3 +269,105 @@ class TestWhoMissedIt:
 
         assert row["incorrect_count"] == 2
         assert len(row["players_missed"]) == 1
+
+
+class TestBinaryQuestionsSayNothingAboutDistractors:
+    """With one wrong option, "8 of the 8 misses chose False" is arithmetic.
+
+    Every miss chose it by necessity, not by thinking, so the line restates the
+    miss count in more words while reading like a finding. Suppressed by
+    counting WRONG OPTIONS rather than by naming a question type, so a
+    two-option multiple choice - exactly as hollow - is caught too.
+    """
+
+    def test_true_false_gets_no_distractor_line(self, client, coach_headers):
+        quiz, tf, _, code = build_ready_quiz(client, coach_headers)
+        concept = _concept(client, coach_headers, "Force / Contain")
+        _tag(client, coach_headers, quiz["id"], tf["id"], concept["id"])
+        _widen_roster(client, coach_headers, quiz["id"], ["A", "B", "C", "D"])
+        wrong = next(o for o in tf["options"] if o["is_correct_answer"] is False)
+        for name in ["A", "B", "C", "D"]:
+            start_and_submit(
+                client, code["id"], name,
+                [{"question_id": tf["id"], "selected_option_id": wrong["id"]}],
+            )
+
+        row = _dashboard(client, coach_headers, quiz["id"])["concept_breakdown"][0]
+
+        # Four misses clears the miss threshold; the option count is what
+        # withholds the line.
+        assert row["incorrect_count"] == 4
+        assert row["top_distractor"] is None
+
+    def test_a_TWO_OPTION_multiple_choice_is_equally_hollow(self, client, coach_headers):
+        quiz = client.post(
+            "/api/quizzes", json={"title": "Binary MC"}, headers=coach_headers
+        ).get_json()
+        question = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={
+                "question_text": "Force or spill?",
+                "question_type": "multiple_choice",
+                "options": [
+                    {"option_text": "Force", "is_correct_answer": True},
+                    {"option_text": "Spill", "is_correct_answer": False},
+                ],
+            },
+            headers=coach_headers,
+        ).get_json()
+        concept = _concept(client, coach_headers, "Force / Contain")
+        _tag(client, coach_headers, quiz["id"], question["id"], concept["id"])
+        _widen_roster(client, coach_headers, quiz["id"], ["A", "B", "C", "D"])
+        code = client.post(
+            f"/api/quizzes/{quiz['id']}/access-codes", headers=coach_headers
+        ).get_json()
+        wrong = next(o for o in question["options"] if o["is_correct_answer"] is False)
+        for name in ["A", "B", "C", "D"]:
+            start_and_submit(
+                client, code["id"], name,
+                [{"question_id": question["id"], "selected_option_id": wrong["id"]}],
+            )
+
+        row = _dashboard(client, coach_headers, quiz["id"])["concept_breakdown"][0]
+
+        assert row["incorrect_count"] == 4
+        assert row["top_distractor"] is None
+
+    def test_THREE_options_still_produce_a_distractor_line(self, client, coach_headers):
+        # The case where the line actually teaches something is untouched.
+        quiz = client.post(
+            "/api/quizzes", json={"title": "Coverage"}, headers=coach_headers
+        ).get_json()
+        question = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={
+                "question_text": "Who has the flat?",
+                "question_type": "multiple_choice",
+                "options": [
+                    {"option_text": "Corner", "is_correct_answer": True},
+                    {"option_text": "Safety", "is_correct_answer": False},
+                    {"option_text": "Linebacker", "is_correct_answer": False},
+                ],
+            },
+            headers=coach_headers,
+        ).get_json()
+        concept = _concept(client, coach_headers, "Coverage Responsibility")
+        _tag(client, coach_headers, quiz["id"], question["id"], concept["id"])
+        _widen_roster(client, coach_headers, quiz["id"], ["A", "B", "C", "D"])
+        code = client.post(
+            f"/api/quizzes/{quiz['id']}/access-codes", headers=coach_headers
+        ).get_json()
+        by_text = {o["option_text"]: o["id"] for o in question["options"]}
+        for name in ["A", "B", "C"]:
+            start_and_submit(
+                client, code["id"], name,
+                [{"question_id": question["id"], "selected_option_id": by_text["Safety"]}],
+            )
+        start_and_submit(
+            client, code["id"], "D",
+            [{"question_id": question["id"], "selected_option_id": by_text["Linebacker"]}],
+        )
+
+        row = _dashboard(client, coach_headers, quiz["id"])["concept_breakdown"][0]
+
+        assert row["top_distractor"] == {"option_text": "Safety", "count": 3, "of_misses": 4}

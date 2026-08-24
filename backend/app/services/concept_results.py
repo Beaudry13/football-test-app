@@ -61,6 +61,16 @@ MIN_RESPONSES_FOR_CONFIDENCE = 5
 #: count and say nothing about the pattern.
 MIN_MISSES_FOR_DISTRACTOR = 3
 
+#: A question needs at least this many WRONG options before naming one of them
+#: says anything.
+#:
+#: With a single wrong option every miss necessarily chose it, so "8 of the 8
+#: misses chose False" carries no information at all - it restates the miss
+#: count in more words while reading like a finding. True/False is the obvious
+#: case; a two-option multiple choice is exactly as hollow, which is why this
+#: counts WRONG OPTIONS rather than naming a question type.
+MIN_WRONG_OPTIONS_FOR_DISTRACTOR = 2
+
 
 @dataclass(frozen=True)
 class MissingPlayer:
@@ -87,10 +97,12 @@ class MissingPlayer:
 def _top_distractor(question, answers) -> dict | None:
     """The wrong option most misses chose, when there is one worth naming.
 
-    DISCRETE OPTIONS ONLY. A written answer has no options to count and a
-    drawing has no discrete answer at all, so neither can produce a
-    distribution - v1 does not try, and the caller renders nothing rather than
-    an empty chart.
+    DISCRETE OPTIONS ONLY, AND AT LEAST TWO WRONG ONES. A written answer has
+    no options to count and a drawing has no discrete answer at all, so neither
+    can produce a distribution. Nor can a question with one wrong option: every
+    miss chose it by arithmetic, not by thinking, so there is nothing to learn.
+    In all three cases the caller renders nothing rather than an empty chart or
+    a hollow sentence.
 
     Reads the SELECTION SET (`answer_selected_options`), which is the record
     that survives a coach deleting an option later; `selected_option_id` is
@@ -99,6 +111,14 @@ def _top_distractor(question, answers) -> dict | None:
     if question.question_type in OPTIONLESS_TYPES:
         return None
     if question.question_type not in (QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE):
+        return None
+
+    #: THE INFORMATION TEST, applied before any counting. One wrong option
+    #: means the distribution is a foregone conclusion, and a coach reading it
+    #: would be told something they already knew in a sentence that sounds like
+    #: analysis.
+    wrong_options = [o for o in question.options if not o.is_correct_answer]
+    if len(wrong_options) < MIN_WRONG_OPTIONS_FOR_DISTRACTOR:
         return None
 
     text_by_id = {o.id: o.option_text for o in question.options}
