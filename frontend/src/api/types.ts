@@ -613,6 +613,10 @@ export interface QuizDashboard {
 }
 
 export interface ConceptMissingPlayer {
+  /** Canonical identity where the attempt had one. null for a free-text join.
+   *  Retest targeting and future verification key on THIS, not the name - two
+   *  players can share a name, and a rename must not create a new person. */
+  player_id: number | null;
   player_name: string;
   display_name: string;
   /** Their position WHEN THEY ANSWERED. null where it was never recorded,

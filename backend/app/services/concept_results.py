@@ -76,6 +76,19 @@ MIN_WRONG_OPTIONS_FOR_DISTRACTOR = 2
 class MissingPlayer:
     """Who got a concept wrong, as they were at the time."""
 
+    #: THE CANONICAL IDENTITY, where the attempt had one.
+    #:
+    #: Load-bearing rather than decorative. A retest has to target the players
+    #: who missed, and a name is not an identity: two "Chris Smith"s on one
+    #: roster are indistinguishable by it, and a player who is renamed becomes
+    #: a different person to anything keyed on the string. Verification later
+    #: has the same problem in reverse - "did these six improve" is only
+    #: answerable if the six can be recognised across two quizzes.
+    #:
+    #: None for an attempt joined under a free-text name with no linked
+    #: Player, which is a real and supported state. Callers must handle both;
+    #: `player_name` remains the only thing guaranteed to be present.
+    player_id: int | None
     player_name: str
     display_name: str
     #: Their position WHEN THEY ANSWERED, from the attempt, never from the
@@ -88,6 +101,7 @@ class MissingPlayer:
 
     def to_dict(self) -> dict:
         return {
+            "player_id": self.player_id,
             "player_name": self.player_name,
             "display_name": self.display_name,
             "position_at_attempt": self.position_at_attempt,
@@ -206,6 +220,7 @@ def concept_breakdown(quiz, responses) -> list[dict]:
                 # Keyed by attempt so a player who missed three questions in
                 # one concept is one name, not three.
                 bucket["_missed"][attempt.id] = MissingPlayer(
+                    player_id=attempt.player_id,
                     player_name=attempt.player_name,
                     display_name=attempt.display_name,
                     position_at_attempt=attempt.position_at_attempt,
