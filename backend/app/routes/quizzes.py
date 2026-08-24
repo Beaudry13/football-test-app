@@ -21,7 +21,9 @@ from app.models import (
     AccessCode,
     Answer,
     AttemptStatus,
+    Concept,
     Group,
+    Player,
     PlayerAttempt,
     Question,
     QuestionImage,
@@ -29,9 +31,12 @@ from app.models import (
     QuestionRegion,
     Quiz,
     Roster,
+    RosterPlayer,
 )
+from app.schemas.retest import RetestCreateSchema
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
+from app.services.retests import eligible_players, questions_to_copy
 from app.services.file_storage import StorageError, get_file_storage
 from app.services.page_masking import attach_masked_media
 from app.services.question_exclusions import sql_not_excluded
@@ -380,6 +385,189 @@ def delete_quiz(quiz_id: int):
     return "", 204
 
 
+@quizzes_bp.post("/<int:quiz_id>/retests")
+@jwt_required()
+def create_retest(quiz_id: int):
+    """Assemble a targeted draft from the players who missed a concept.
+
+    PEIRA ASSEMBLES; THE COACH SENDS. This creates an ordinary draft quiz and
+    stops. It does not activate, does not generate a code, and does not notify
+    anyone - the coach lands in the normal editor, changes whatever they want,
+    and sends it themselves. There is no retest editor and no retest mode: a
+    retest is a quiz that happens to know which quiz it came from.
+
+    NOTHING THE CLIENT SENDS IS TRUSTED AS A SELECTION. The server recomputes
+    both the eligible players and the missed questions from the recorded
+    answers; the request can only NARROW those sets. A question the group did
+    not miss cannot be copied, and a player who missed nothing cannot be
+    targeted, however the request is shaped.
+    """
+    original = get_visible_quiz(quiz_id)
+    coach = current_coach()
+    data = load_json_body(RetestCreateSchema())
+
+    concept = db.session.get(Concept, data["concept_id"])
+    if concept is None or concept.organization_id != coach.organization_id:
+        raise ApiError("That concept does not exist", status_code=422)
+
+    # WHO ACTUALLY MISSED SOMETHING, recomputed here rather than believed.
+    eligible = {a.id: a for a in eligible_players(original, concept.id)}
+    by_player_id = {a.player_id: a for a in eligible.values() if a.player_id is not None}
+    by_name = {a.player_name.strip().casefold(): a for a in eligible.values()}
+
+    chosen: dict[int, object] = {}
+    for player_id in data["player_ids"]:
+        attempt = by_player_id.get(player_id)
+        if attempt is None:
+            # Covers both "not in this organization" and "did not miss
+            # anything" with one refusal, because the client is entitled to
+            # neither answer - and distinguishing them would tell an outsider
+            # whether a given player id exists at all.
+            raise ApiError(
+                "One or more selected players are not eligible for this retest",
+                status_code=422,
+                reason="player_not_eligible",
+            )
+        chosen[attempt.id] = attempt
+    for name in data["player_names"]:
+        attempt = by_name.get(name.strip().casefold())
+        if attempt is None:
+            raise ApiError(
+                "One or more selected players are not eligible for this retest",
+                status_code=422,
+                reason="player_not_eligible",
+            )
+        chosen[attempt.id] = attempt
+
+    if not chosen:
+        # Defaulting to "everyone who missed" would be a different, larger send
+        # than the coach asked for. Refuse rather than guess.
+        raise ApiError("Choose at least one player to retest", status_code=422)
+
+    copyable, skipped_retired = questions_to_copy(original, concept.id, set(chosen))
+    if data["question_ids"] is not None:
+        requested = set(data["question_ids"])
+        outside = requested - copyable
+        if outside:
+            raise ApiError(
+                "One or more selected questions are not part of this retest",
+                status_code=422,
+                reason="question_not_eligible",
+            )
+        copyable = requested
+    if not copyable:
+        raise ApiError(
+            "There are no questions to retest for this concept",
+            status_code=422,
+            reason="no_questions_to_retest",
+        )
+
+    storage = get_file_storage()
+    copied_keys: list[str] = []
+
+    retest = Quiz(
+        organization_id=coach.organization_id,
+        coach_id=coach.id,
+        title=data["title"] or f"{concept.name} - Retest",
+        one_question_at_a_time=original.one_question_at_a_time,
+        require_all_answers=original.require_all_answers,
+        folder_id=original.folder_id,
+        # THE IMMEDIATE PARENT, not the root. This records what actually
+        # happened - this quiz re-asked THAT one - and the root stays derivable
+        # by walking up. A root pointer would lose the round order, which
+        # nothing else records.
+        retest_of_quiz_id=original.id,
+    )
+    db.session.add(retest)
+    db.session.flush()
+
+    try:
+        _copy_questions_into(original, retest, storage, copied_keys, only_question_ids=copyable)
+        _seed_retest_roster(retest, list(chosen.values()), coach)
+        db.session.commit()
+    except StorageError as exc:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise ApiError(
+            "Could not copy this quiz's images, so the retest was not created. "
+            "Please try again.",
+            status_code=502,
+            reason="image_copy_failed",
+        ) from exc
+    except Exception:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise
+
+    body = retest.to_dict(include_questions=True, include_correct_answers=True)
+    # Named so the coach is TOLD rather than left to notice. A stopped question
+    # was stopped because it was broken; copying it would put an undeliverable
+    # question in the retest, and dropping it silently would leave a coach
+    # wondering why the question count does not match what they missed.
+    body["skipped_retired_questions"] = [
+        {"id": q.id, "question_text": q.question_text} for q in skipped_retired
+    ]
+    return jsonify(body), 201
+
+
+def _seed_retest_roster(retest, attempts, coach) -> None:
+    """Put exactly the retested players on the new quiz's own roster.
+
+    THIS IS THE TARGETING MECHANISM, and it needs no new schema. Eligibility
+    for an activation is "the linked groups, or else the quiz's own Roster"
+    (services/access_codes.effective_roster_names). A retest is a NEW quiz, so
+    its roster can say precisely who it is for, and activating it with no
+    groups then admits exactly those players and nobody else.
+
+    Deliberately NOT a temporary Group: a group is a squad a coach maintains,
+    and manufacturing "Force / Contain retest, Tuesday" into that list would
+    leave real clutter behind after a single send.
+
+    Canonical players are linked by player_id so verification can recognise
+    them across rounds. An attempt that joined under a free-text name has no
+    Player row and is carried as a legacy name - exactly how it joined the
+    first time.
+    """
+    if retest.roster is None:
+        retest.roster = Roster(quiz_id=retest.id)
+
+    position = 0
+    seen_ids: set[int] = set()
+    seen_names: set[str] = set()
+    for attempt in attempts:
+        if attempt.player_id is not None and attempt.player_id not in seen_ids:
+            player = db.session.get(Player, attempt.player_id)
+            # A player deleted from the master roster since they answered
+            # cannot be targeted canonically; their name still can.
+            if player is not None and player.organization_id == coach.organization_id:
+                seen_ids.add(attempt.player_id)
+                retest.roster.players.append(
+                    RosterPlayer(
+                        player_id=player.id,
+                        player_name=player.full_name,
+                        position=position,
+                    )
+                )
+                position += 1
+                continue
+        key = attempt.player_name.strip().casefold()
+        if key in seen_names:
+            continue
+        seen_names.add(key)
+        retest.roster.players.append(
+            RosterPlayer(player_name=attempt.player_name, position=position)
+        )
+        position += 1
+
+
 @quizzes_bp.post("/<int:quiz_id>/duplicate")
 @jwt_required()
 def duplicate_quiz(quiz_id: int):
@@ -441,13 +629,41 @@ def duplicate_quiz(quiz_id: int):
     return jsonify(copy_quiz.to_dict(include_questions=True, include_correct_answers=True)), 201
 
 
-def _copy_questions_into(original, copy_quiz, storage, copied_keys: list[str]) -> None:
-    """Copy every authored question onto `copy_quiz`. Does not commit.
+def _copy_questions_into(
+    original,
+    copy_quiz,
+    storage,
+    copied_keys: list[str],
+    only_question_ids: set[int] | None = None,
+) -> None:
+    """Copy authored questions onto `copy_quiz`. Does not commit.
 
     Split out of the route so the whole copy sits inside one try/except that
     can undo both halves - the DB session and the storage objects.
+
+    `only_question_ids` narrows the copy to a subset, which is how a retest
+    reuses this rather than growing a second implementation of it. None means
+    every question, which is what duplicate_quiz has always asked for.
+
+    THE FILTER IS THE ONLY DIFFERENCE, deliberately. Everything a duplicated
+    question carries - type, text, options and their correctness, expected
+    answers, matching mode, explanation, allows_multiple_answers, retirement
+    state, regions, the copied image with its annotations and canvas_width, and
+    the concept - a retested question must carry identically. Two copy paths
+    would mean the next field added to one of them silently missing from the
+    other, which is exactly how the explanation and the expected answers were
+    each lost once before.
+
+    Positions are copied VERBATIM, so a subset inherits gaps from the original
+    (copying questions 3 and 7 yields positions 3 and 7). That is already the
+    normal state of a quiz - deleting a question never renumbers the rest - and
+    every surface that shows a question number derives it by enumerating the
+    sorted list rather than reading position + 1. Renumbering here would be the
+    change, not the fix.
     """
     for question in original.questions:
+        if only_question_ids is not None and question.id not in only_question_ids:
+            continue
         copy_question = Question(
             quiz_id=copy_quiz.id,
             question_text=question.question_text,
