@@ -1,0 +1,126 @@
+/*
+ * "Since the last check", designed at 375px first.
+ *
+ * One column of sentences. The two rounds had different populations, so there
+ * is no table putting their numbers in adjacent cells where a reader would
+ * naturally compare them - the team figure gets its own line, labelled as the
+ * first check, and the retest outcome is a list below it.
+ */
+.wrap {
+  margin-bottom: var(--space-5);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-body);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.card {
+  border-left: 3px solid var(--color-accent);
+}
+
+/* Muted on purpose. This is the size of the original problem, not a
+   denominator for anything below - dimming it is half of what stops the two
+   populations being read as one fraction. */
+.context {
+  margin: 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.targeted {
+  margin: var(--space-2) 0 0;
+  font-size: var(--peira-text-control);
+}
+
+.outcomes {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.outcomes li {
+  font-size: var(--peira-text-control);
+}
+
+.improved {
+  color: var(--peira-success);
+}
+
+/* NOT red. "Still missed" is the thing the coach is about to work on, not an
+   error state, and colouring it like a failure would editorialise a count. */
+.remaining {
+  color: var(--nb-text);
+}
+
+.pending {
+  color: var(--nb-text-muted);
+}
+
+.incomplete {
+  margin: var(--space-4) 0 0;
+  font-size: var(--peira-text-meta);
+  color: var(--color-warning);
+}
+
+.caveat {
+  margin: var(--space-3) 0 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.missing {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.missingLabel {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+/* Chips that wrap, so a long list stays inside 375px without a scroller. */
+.playerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.player {
+  padding: 0.3em 0.7em;
+  border-radius: var(--radius-pill);
+  background: var(--peira-chip);
+  font-size: var(--peira-text-meta);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.actions > button {
+  flex: 1 1 auto;
+  min-height: 44px;
+}

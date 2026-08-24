@@ -22,6 +22,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
 import nb from '../../styles/notebook.module.css';
+import { RetestVerification } from './RetestVerification';
 import { WeakestConcepts } from './WeakestConcepts';
 import { hasResponseDenominator } from '../../utils/responseSummary';
 import styles from './ResultsTab.module.css';
@@ -181,6 +182,13 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
 
       {dashboard && (
         <>
+          {/* ON A RETEST, "WHAT CHANGED" COMES FIRST.
+              A coach opening a retest's Results has one question, and it is
+              not how the team scored - it is whether the players they sent it
+              to are any different. Renders nothing on an ordinary quiz, so
+              every other Results page is untouched. */}
+          <RetestVerification verification={dashboard.verification} />
+
           {/* WHAT SHOULD I TEACH NEXT, FIRST.
               Results used to open with a team average - which answers "how did
               they do", a thing a coach can already feel by Wednesday. The

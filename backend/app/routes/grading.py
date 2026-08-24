@@ -29,6 +29,7 @@ from app.services.question_exclusions import (
     load_for_quizzes,
 )
 from app.services.concept_results import concept_breakdown
+from app.services.retest_verification import verification_for
 from app.services.scoring import count_answers, pending_grading_count
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
@@ -322,6 +323,10 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         #: from this list by design and remain fully visible in the
         #: per-question breakdown above.
         "concept_breakdown": concept_breakdown(quiz, responses),
+        #: DID THE RESULT IMPROVE? Present only on a quiz that was built as a
+        #: retest; None everywhere else, which is the client's signal to render
+        #: nothing rather than an empty verification card.
+        "verification": verification_for(quiz),
     }
 
 

@@ -55,6 +55,7 @@ const sampleDashboard: QuizDashboard = {
   missing_players: [],
   question_breakdown: [],
   concept_breakdown: [],
+  verification: null,
 };
 
 function renderResultsTab(quiz: Quiz = sampleQuiz) {
@@ -272,6 +273,7 @@ describe('the stats row when the roster denominator is gone', () => {
       missing_players: [],
       question_breakdown: [],
   concept_breakdown: [],
+  verification: null,
     });
     renderResultsTab();
 
@@ -337,6 +339,7 @@ describe('Results leads with what to teach next', () => {
     vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
       ...sampleDashboard,
       concept_breakdown: [],
+  verification: null,
     });
     renderResultsTab();
 
@@ -348,6 +351,7 @@ describe('Results leads with what to teach next', () => {
     vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
       ...sampleDashboard,
       concept_breakdown: [],
+  verification: null,
       question_breakdown: [
         {
           question_id: 1,
@@ -374,6 +378,7 @@ describe('Results leads with what to teach next', () => {
     vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
       ...sampleDashboard,
       concept_breakdown: [],
+  verification: null,
     });
     renderResultsTab();
 

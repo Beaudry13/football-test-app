@@ -37,6 +37,17 @@ class Quiz(TimestampMixin, db.Model):
     retest_of_quiz_id = db.Column(
         db.Integer, db.ForeignKey("quizzes.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: The quiz this one re-asked, as an object. remote_side is required on a
+    #: self-referential many-to-one: without it SQLAlchemy cannot tell which
+    #: side of quizzes.id is the "one", and reads the pair backwards.
+    #:
+    #: Only the IMMEDIATE parent is modelled. A retest of a retest points at
+    #: the round before it, which is what "what changed since the last check?"
+    #: needs; the root stays reachable by walking up, and flattening to it here
+    #: would destroy the ordering nothing else records.
+    retest_of = db.relationship(
+        "Quiz", remote_side=[id], foreign_keys=[retest_of_quiz_id], uselist=False
+    )
     folder_id = db.Column(
         db.Integer, db.ForeignKey("folders.id", ondelete="SET NULL"), nullable=True, index=True
     )

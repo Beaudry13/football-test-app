@@ -109,6 +109,7 @@ function dashboardWith(exclusions: QuestionExclusion[]): QuizDashboard {
     response_rate: 1,
     missing_players: [],
   concept_breakdown: [],
+  verification: null,
     // Q11 / Q12 / Q13 so the numbering can be checked for gaps: Q12 is the one
     // that gets excluded, and Q13 must NOT slide up to take its place.
     question_breakdown: [

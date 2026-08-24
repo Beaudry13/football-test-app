@@ -594,6 +594,39 @@ export interface QuestionBreakdown {
   exclusions: QuestionExclusion[];
 }
 
+export interface RetestVerification {
+  parent_quiz_id: number;
+  parent_quiz_title: string;
+  /** "snapshot" = what these players were actually delivered. "live_fallback"
+   *  = the delivery predates concept tagging, so the question's current tag
+   *  stood in. Never presented to a coach as recorded history. */
+  concept_source: 'snapshot' | 'live_fallback';
+  concept_ids: number[];
+  /** CONTEXT ONLY. How big the original problem was, over the whole first
+   *  check - never a denominator for the retest counts below, which describe
+   *  a different population. */
+  parent_missed_total: number;
+  parent_response_total: number;
+  /** Who this retest was built for. The comparison is closed over these. */
+  targeted_total: number;
+  correct_count: number;
+  incorrect_count: number;
+  /** Neither of these is a miss. */
+  ungraded_count: number;
+  not_submitted_count: number;
+  /** False while any targeted player is ungraded or has not submitted. No
+   *  improvement statement may be made while this is false. */
+  is_complete: boolean;
+  players: {
+    player_id: number | null;
+    display_name: string;
+    identity: 'canonical' | 'legacy_name';
+    parent_outcome: string;
+    outcome: string;
+  }[];
+  still_missing: { player_id: number | null; display_name: string }[];
+}
+
 export interface QuizDashboard {
   quiz_id: number;
   roster_size: number;
@@ -610,6 +643,9 @@ export interface QuizDashboard {
    *  empty weakness panel. Untagged questions never appear here - there is no
    *  "General" bucket - and remain fully visible in question_breakdown. */
   concept_breakdown: ConceptBreakdown[];
+  /** Present only on a quiz built as a retest; null everywhere else, which is
+   *  the signal to render no verification card at all. */
+  verification: RetestVerification | null;
 }
 
 export interface ConceptMissingPlayer {

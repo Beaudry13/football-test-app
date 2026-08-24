@@ -15,6 +15,7 @@ const baseDashboard: QuizDashboard = {
   missing_players: [],
   question_breakdown: [],
   concept_breakdown: [],
+  verification: null,
 };
 
 const baseEntry: ActiveQuizStatus = {
