@@ -192,7 +192,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               Renders nothing at all when no concept is tagged or nothing is
               graded yet, so a quiz that predates tagging - which is every quiz
               in Peira today - looks exactly as it did. */}
-          <WeakestConcepts concepts={dashboard.concept_breakdown} />
+          <WeakestConcepts concepts={dashboard.concept_breakdown} quizId={quiz.id} />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than
               inside them. Only when there is something to do: an "0 answers

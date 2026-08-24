@@ -308,7 +308,7 @@ describe('Results leads with what to teach next', () => {
     miss_rate: 27.3,
     has_enough_responses: true,
     players_missed: [
-      { player_name: 'Jordan Smith', display_name: 'Jordan Smith', position_at_attempt: 'CB' },
+      { player_id: 1, player_name: 'Jordan Smith', display_name: 'Jordan Smith', position_at_attempt: 'CB' },
     ],
     top_distractor: { option_text: 'Safety', count: 5, of_misses: 6 },
   };

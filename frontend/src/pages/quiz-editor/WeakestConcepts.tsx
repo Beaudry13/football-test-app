@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { createRetest } from '../../api/retests';
+import { getErrorMessage } from '../../api/client';
 import type { ConceptBreakdown } from '../../api/types';
 import nb from '../../styles/notebook.module.css';
 import styles from './WeakestConcepts.module.css';
@@ -16,7 +20,17 @@ import styles from './WeakestConcepts.module.css';
  * this file owns only the wording, so a coach reading "60% missed this" is
  * never being told something the sample cannot support.
  */
-export function WeakestConcepts({ concepts }: { concepts: ConceptBreakdown[] }) {
+export function WeakestConcepts({
+  concepts,
+  quizId,
+}: {
+  concepts: ConceptBreakdown[];
+  quizId: number;
+}) {
+  const navigate = useNavigate();
+  const [confirming, setConfirming] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   /* Nothing tagged, or nothing graded yet: render nothing at all and let
      Results be what it was. An empty "Weakest concept" panel would be a
      permanent reminder of a feature rather than an answer - and every quiz
@@ -79,6 +93,84 @@ export function WeakestConcepts({ concepts }: { concepts: ConceptBreakdown[] }) 
             {weakest.ungraded_count === 1 ? 's' : ''} grading, and {weakest.ungraded_count === 1 ? 'is' : 'are'} not counted
             above.
           </p>
+        )}
+        {/* THE ACTION, on the one thing a coach is meant to do something
+            about. Phase D assembles a draft; it does not send anything. */}
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className={nb.btnPrimary}
+            onClick={() => {
+              setError(null);
+              setConfirming(true);
+            }}
+          >
+            Retest these {weakest.players_missed.length}
+          </button>
+        </div>
+
+        {confirming && (
+          /* A CONFIRMATION, NOT A WORKFLOW. It says what Peira is about to
+             assemble and stops - no options, no editing here. Everything a
+             coach might want to change is one screen away in the editor they
+             already know, and putting a second editor in front of it would be
+             the thing this whole feature avoids. */
+          <div className={styles.confirm} role="dialog" aria-label="Create retest">
+            <p className={styles.confirmLine}>
+              Peira will build a draft on <strong>{weakest.concept_name}</strong> for{' '}
+              <strong>{weakest.players_missed.length}</strong>{' '}
+              player{weakest.players_missed.length === 1 ? '' : 's'}, using the questions they
+              missed.
+            </p>
+            <p className={styles.confirmNote}>
+              Nothing is sent. It opens in the normal editor so you can change the questions,
+              the wording, and who gets it.
+            </p>
+            {error && (
+              <p className={styles.confirmError} role="alert">
+                {error}
+              </p>
+            )}
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className={nb.btnPrimary}
+                disabled={isCreating}
+                onClick={async () => {
+                  setIsCreating(true);
+                  setError(null);
+                  try {
+                    /* Canonical ids where they exist, names where they do not -
+                       a free-text join has no Player row, and dropping those
+                       players would quietly shrink the retest. */
+                    const draft = await createRetest(quizId, {
+                      concept_id: weakest.concept_id,
+                      player_ids: weakest.players_missed
+                        .map((p) => p.player_id)
+                        .filter((id): id is number => id !== null),
+                      player_names: weakest.players_missed
+                        .filter((p) => p.player_id === null)
+                        .map((p) => p.player_name),
+                    });
+                    navigate(`/quizzes/${draft.id}?tab=questions`);
+                  } catch (err) {
+                    setError(getErrorMessage(err));
+                    setIsCreating(false);
+                  }
+                }}
+              >
+                {isCreating ? 'Building…' : 'Create retest'}
+              </button>
+              <button
+                type="button"
+                className={nb.btnSecondary}
+                disabled={isCreating}
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

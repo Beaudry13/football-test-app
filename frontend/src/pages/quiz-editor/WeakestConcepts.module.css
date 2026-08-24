@@ -133,3 +133,45 @@
   color: var(--nb-text-muted);
   white-space: nowrap;
 }
+
+/* The action, and the confirmation it opens. Both stack at 375px rather than
+   sitting side by side, so a thumb gets full-width targets outdoors. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.actions > button {
+  flex: 1 1 auto;
+  min-height: 44px;
+}
+
+/* Inline, not a modal. It is a sentence confirming what Peira will assemble -
+   putting it behind an overlay would make a two-tap action feel like a
+   commitment, and a modal at 375px costs the context above it. */
+.confirm {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--peira-border);
+  border-radius: var(--radius-md);
+  background: var(--peira-surface-raised);
+}
+
+.confirmLine {
+  margin: 0;
+  font-size: var(--peira-text-control);
+}
+
+.confirmNote {
+  margin: var(--space-2) 0 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.confirmError {
+  margin: var(--space-3) 0 0;
+  font-size: var(--peira-text-meta);
+  color: var(--peira-danger);
+}
