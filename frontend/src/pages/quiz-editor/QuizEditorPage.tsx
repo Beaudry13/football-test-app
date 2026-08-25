@@ -29,6 +29,9 @@ export function QuizEditorPage() {
   const [error, setError] = useState<string | null>(null);
 
   const activeTab = (searchParams.get('tab') as TabKey) ?? 'questions';
+  /* Results is the one tab a coach READS rather than edits, and the only one
+     with an action of its own competing for the top of the screen. */
+  const readingResults = activeTab === 'results';
 
   const reload = useCallback(async () => {
     if (!quizId) return;
@@ -104,43 +107,69 @@ export function QuizEditorPage() {
           onChange={(e) => setQuiz({ ...quiz, title: e.target.value })}
           onBlur={(e) => handleFieldSave('title', e.target.value)}
         />
-        <Link
-          to={`/quizzes/${quiz.id}/preview`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={nb.btnSm}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          Preview as player
-        </Link>
-        {/* The entry point into Competition. Same tab, because the coach is
-            about to run the room from this screen - a background tab is the
-            last place a live join code should live. */}
-        <Link
-          to={`/quizzes/${quiz.id}/compete`}
-          className={nb.btnSm}
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          Start Competition
-        </Link>
+        {/* AUTHORING CONTROLS, HIDDEN WHILE READING RESULTS.
+            Not removed and not moved - one tap away on the tabs they belong
+            to. On a 375px phone this block plus the settings below it pushed
+            "Teach next" past the halfway mark of the screen and the action
+            below the fold entirely, so a coach opening Results had to scroll
+            before seeing the answer and again before acting on it. Nothing
+            here helps read a result. */}
+        {!readingResults && (
+          <>
+            <Link
+              to={`/quizzes/${quiz.id}/preview`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={nb.btnSm}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              Preview as player
+            </Link>
+            {/* The entry point into Competition. Same tab, because the coach is
+                about to run the room from this screen - a background tab is the
+                last place a live join code should live. */}
+            <Link
+              to={`/quizzes/${quiz.id}/compete`}
+              className={nb.btnSm}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              Start Competition
+            </Link>
+          </>
+        )}
       </div>
-      <textarea
-        className={styles.descriptionInput}
-        placeholder="Add a description (optional)"
-        value={quiz.description ?? ''}
-        onChange={(e) => setQuiz({ ...quiz, description: e.target.value })}
-        onBlur={(e) => handleFieldSave('description', e.target.value)}
-      />
+      {/* The description and the two delivery settings describe how this quiz
+          is WRITTEN and SENT. Both are editable from every other tab, and
+          neither is readable information once players have answered. */}
+      {!readingResults && (
+        <>
+          <textarea
+            className={styles.descriptionInput}
+            placeholder="Add a description (optional)"
+            value={quiz.description ?? ''}
+            onChange={(e) => setQuiz({ ...quiz, description: e.target.value })}
+            onBlur={(e) => handleFieldSave('description', e.target.value)}
+          />
 
-      <label className={styles.settingsRow}>
-        <input type="checkbox" checked={quiz.one_question_at_a_time} onChange={handleToggleOneAtATime} />
-        Show players one question at a time
-      </label>
+          <label className={styles.settingsRow}>
+            <input
+              type="checkbox"
+              checked={quiz.one_question_at_a_time}
+              onChange={handleToggleOneAtATime}
+            />
+            Show players one question at a time
+          </label>
 
-      <label className={styles.settingsRow}>
-        <input type="checkbox" checked={quiz.require_all_answers} onChange={handleToggleRequireAllAnswers} />
-        Require players to answer every question before submitting
-      </label>
+          <label className={styles.settingsRow}>
+            <input
+              type="checkbox"
+              checked={quiz.require_all_answers}
+              onChange={handleToggleRequireAllAnswers}
+            />
+            Require players to answer every question before submitting
+          </label>
+        </>
+      )}
 
       <div className={styles.tabs}>
         {TABS.map((tab) => (
