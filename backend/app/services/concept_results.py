@@ -46,19 +46,29 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.models.question import OPTIONLESS_TYPES, QuestionType
+from app.services.player_identity import PlayerKey, representative_attempts
 from app.services.scoring import count_answers
 
-#: Below this many GRADED answers, a concept's miss rate is arithmetic rather
-#: than evidence. Five is not a statistical threshold - it is the point below
-#: which a single player changes the number by twenty points or more, and a
-#: coach reading "60% missed this" deserves to know it means three of five.
-#: The flag travels with the row so the wording is decided once, here, rather
-#: than by whichever surface happens to render it.
-MIN_RESPONSES_FOR_CONFIDENCE = 5
+#: Below this many PLAYERS, a concept's miss rate is arithmetic rather than
+#: evidence. Five is not a statistical threshold - it is the point below which
+#: a single player changes the number by twenty points or more, and a coach
+#: reading "60% missed this" deserves to know it means three of five.
+#:
+#: COUNTED IN PLAYERS, because the headline this guards is stated in players.
+#: A threshold in answers would let a two-player concept with four questions
+#: read as confident, which is precisely the false confidence it exists to
+#: prevent. The flag travels with the row so the wording is decided once,
+#: here, rather than by whichever surface happens to render it.
+MIN_PLAYERS_FOR_CONFIDENCE = 5
 
-#: Below this many MISSES, "most of them chose X" is not a finding. With two
-#: misses the phrase describes a coincidence; the honest move is to show the
+#: Below this many WRONG ANSWERS, "most of them chose X" is not a finding.
+#: With two the phrase describes a coincidence; the honest move is to show the
 #: count and say nothing about the pattern.
+#:
+#: Counted in ANSWERS on purpose, and labelled that way by the client. This is
+#: the one number on the panel that is genuinely about answers rather than
+#: people - it describes a distribution across option choices - so it says
+#: "wrong answers" instead of borrowing the headline's unit.
 MIN_MISSES_FOR_DISTRACTOR = 3
 
 #: A question needs at least this many WRONG options before naming one of them
@@ -176,6 +186,18 @@ def concept_breakdown(quiz, responses) -> list[dict]:
     Returns [] when nothing is tagged, which is the caller's signal to fall
     back to the ordinary Results view rather than render an empty weakness.
     """
+    # ONE ATTEMPT PER PLAYER, BEFORE ANYTHING IS COUNTED.
+    #
+    # Attempt uniqueness is per ACCESS CODE, and a quiz can have several, so a
+    # player who took the same quiz through two codes otherwise appears twice
+    # in "Who missed it" AND contributes two answers to every count built here.
+    # Deduplicating at the top means the player list, the player rate and the
+    # answer-level counts all describe the same population - they cannot be
+    # made consistent further down. See services/player_identity.
+    responses = list(representative_attempts(responses).values())
+
+    keys: dict[int, PlayerKey] = {r.id: PlayerKey.of(r) for r in responses}
+
     answers_by_question: dict[int, list] = {}
     for response in responses:
         for answer in response.answers:
@@ -202,6 +224,17 @@ def concept_breakdown(quiz, responses) -> list[dict]:
                 "incorrect_count": 0,
                 "ungraded_count": 0,
                 "_missed": {},
+                #: The questions at least one player got wrong, split by
+                #: whether a retest could actually copy them. A coach must not
+                #: be offered an action that is going to fail, and must be told
+                #: when Peira is about to leave something out.
+                "_missed_questions": set(),
+                "_retired_missed": set(),
+                #: Everyone with at least one GRADED answer in this concept.
+                #: The denominator of the player-level headline: a player whose
+                #: only answer here is still ungraded has not been measured,
+                #: and counting them would understate the miss rate.
+                "_responders": set(),
                 "_distractors": [],
             },
         )
@@ -213,18 +246,27 @@ def concept_breakdown(quiz, responses) -> list[dict]:
         bucket["ungraded_count"] += counts.not_graded
 
         for answer in answers:
+            attempt = attempt_of.get(answer.id)
+            if attempt is None:
+                continue
+            key = keys[attempt.id]
+            if answer.is_correct is not None:
+                bucket["_responders"].add(key)
             if answer.is_correct is False:
-                attempt = attempt_of.get(answer.id)
-                if attempt is None:
-                    continue
-                # Keyed by attempt so a player who missed three questions in
-                # one concept is one name, not three.
-                bucket["_missed"][attempt.id] = MissingPlayer(
+                # KEYED BY PLAYER IDENTITY, so a player who missed three
+                # questions in one concept is one name - and a player who took
+                # the quiz through two access codes is also one name.
+                bucket["_missed"][key] = MissingPlayer(
                     player_id=attempt.player_id,
                     player_name=attempt.player_name,
                     display_name=attempt.display_name,
                     position_at_attempt=attempt.position_at_attempt,
                 )
+
+        if counts.incorrect > 0:
+            bucket["_missed_questions"].add(question.id)
+            if question.retired_at is not None:
+                bucket["_retired_missed"].add(question.id)
 
         distractor = _top_distractor(question, answers)
         if distractor is not None:
@@ -233,6 +275,9 @@ def concept_breakdown(quiz, responses) -> list[dict]:
     rows = []
     for bucket in grouped.values():
         graded = bucket["correct_count"] + bucket["incorrect_count"]
+        responders = bucket.pop("_responders")
+        missed_questions = bucket.pop("_missed_questions")
+        retired_missed = bucket.pop("_retired_missed")
         missed = sorted(bucket.pop("_missed").values(), key=lambda p: p.display_name.lower())
         distractors = bucket.pop("_distractors")
         # The single strongest signal across this concept's questions, not a
@@ -244,22 +289,58 @@ def concept_breakdown(quiz, responses) -> list[dict]:
             {
                 **bucket,
                 "graded_count": graded,
+                #: THE HEADLINE'S NUMBERS, IN PLAYERS.
+                #:
+                #: "12 of 20 missed" over a list of 6 names was the single most
+                #: confusing thing on this panel: the count was ANSWERS and the
+                #: list was PEOPLE, with nothing saying so. A coach asking what
+                #: to teach is asking who needs teaching, so the headline is
+                #: stated in the same unit as the names underneath it.
+                #:
+                #: The answer-level counts above are kept and still shown, in
+                #: the per-question breakdown where the unit is unambiguous.
+                #: How many of the missed questions a retest could copy, and
+                #: how many it would have to leave out because the coach has
+                #: stopped sending them. Retirement is deliberately carried
+                #: through duplication (see CLAUDE.md), so a retired question
+                #: is never copied - which used to happen silently, and could
+                #: leave nothing to copy at all while the action was still
+                #: offered.
+                "retestable_question_count": len(missed_questions - retired_missed),
+                "retired_missed_question_count": len(retired_missed),
+                "players_missed_count": len(missed),
+                "players_responded_count": len(responders),
                 # None, never 0.0, when nothing has been graded - the same rule
                 # score_percent follows, for the same reason: a fabricated zero
                 # reads as "they got everything wrong".
+                "player_miss_rate": (
+                    round(100 * len(missed) / len(responders), 1) if responders else None
+                ),
                 "miss_rate": round(100 * bucket["incorrect_count"] / graded, 1) if graded else None,
                 #: Whether this row is evidence or arithmetic. The wording that
                 #: depends on it lives in the client, but the THRESHOLD lives
-                #: here so two surfaces cannot disagree about it.
-                "has_enough_responses": graded >= MIN_RESPONSES_FOR_CONFIDENCE,
+                #: here so two surfaces cannot disagree about it. Counted in
+                #: players, matching the headline it qualifies.
+                "has_enough_responses": len(responders) >= MIN_PLAYERS_FOR_CONFIDENCE,
                 "players_missed": [p.to_dict() for p in missed],
                 "top_distractor": top,
             }
         )
 
-    # Weakest first. Ties broken by how much was answered, so a concept two
-    # players got wrong does not outrank one twenty players got wrong at the
-    # same rate. Rows with nothing graded sort last: they are not weak, they
-    # are unmeasured.
-    rows.sort(key=lambda r: (r["miss_rate"] is None, -(r["miss_rate"] or 0), -r["graded_count"]))
+    # Weakest first, RANKED ON THE NUMBER THE HEADLINE SHOWS. Ranking on the
+    # answer rate while displaying the player rate would let the top row show a
+    # lower percentage than the row beneath it - the same unit confusion this
+    # panel just removed, wearing a different hat.
+    #
+    # Ties broken by how many players were measured, so a concept two players
+    # got wrong does not outrank one twenty players got wrong at the same rate.
+    # Rows with nothing graded sort last: they are not weak, they are
+    # unmeasured.
+    rows.sort(
+        key=lambda r: (
+            r["player_miss_rate"] is None,
+            -(r["player_miss_rate"] or 0),
+            -r["players_responded_count"],
+        )
+    )
     return rows

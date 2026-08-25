@@ -8,7 +8,7 @@ from app import db
 from app.models import Answer
 from app.services.concept_results import (
     MIN_MISSES_FOR_DISTRACTOR,
-    MIN_RESPONSES_FOR_CONFIDENCE,
+    MIN_PLAYERS_FOR_CONFIDENCE,
 )
 from tests.test_play_and_grading import build_ready_quiz, start_and_submit
 
@@ -98,8 +98,10 @@ class TestSampleSize:
         row = _dashboard(client, coach_headers, quiz["id"])["concept_breakdown"][0]
 
         assert row["graded_count"] == 1
+        assert row["players_responded_count"] == 1
         assert row["has_enough_responses"] is False
-        assert MIN_RESPONSES_FOR_CONFIDENCE == 5
+        # Counted in PLAYERS now, matching the headline it qualifies.
+        assert MIN_PLAYERS_FOR_CONFIDENCE == 5
 
     def test_NO_FABRICATED_ZERO_when_nothing_is_graded(self, client, coach_headers):
         """A concept nobody has answered is UNMEASURED - not perfect, not
