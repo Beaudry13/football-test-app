@@ -60,6 +60,10 @@ export function DocumentPage() {
 
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [targetQuizId, setTargetQuizId] = useState<number | null>(null);
+  /** Set when Done was pressed with a question still unsaved. Not a modal -
+   *  the coach keeps the page, the draft and the form; this only adds the
+   *  sentence explaining why nothing closed. */
+  const [pendingExit, setPendingExit] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [textRuns, setTextRuns] = useState<TextRun[]>([]);
   const [draft, setDraft] = useState<{ rect: NormalisedRect; answer: string } | null>(null);
@@ -212,6 +216,37 @@ export function DocumentPage() {
     // The mask lands on the glyph boxes, pixel-perfect, and the answer comes
     // from the page itself. This is the whole speed win.
     setDraft({ rect: paddedRect(run), answer: run.text });
+  }
+
+  /** Leaving authoring - but NEVER at the cost of an unsaved question.
+   *
+   * "Done" used to clear the draft outright. A coach who typed a question and
+   * pressed Done instead of "Save question" watched the panel close, read that
+   * as success, and found nothing in the quiz: the question had never been
+   * sent anywhere. Nothing warned them, because from the page's point of view
+   * discarding a draft and finishing cleanly looked identical.
+   *
+   * So Done now REFUSES to finish while a draft is open, and says why. The
+   * coach stays exactly where they are with their text intact, and chooses:
+   * save it, or discard it deliberately.
+   */
+  function requestExit() {
+    if (draft) {
+      setPendingExit(true);
+      return;
+    }
+    exitAuthoring();
+  }
+
+  function exitAuthoring() {
+    // Leaving clears the target as well, so the next entry is a deliberate
+    // choice rather than a remembered one - the same reason the sessionStorage
+    // restore was removed.
+    setPendingExit(false);
+    setIsAuthoring(false);
+    setTargetQuizId(null);
+    setDraft(null);
+    setSelectedId(null);
   }
 
   async function createFromDraft(input: { question_text: string; expected_answers: string[] }) {
@@ -446,15 +481,7 @@ export function DocumentPage() {
             <button
               type="button"
               className={nb.btnSecondary}
-              onClick={() => {
-                // Leaving clears the target as well, so the next entry is a
-                // deliberate choice rather than a remembered one - the same
-                // reason the sessionStorage restore was removed.
-                setIsAuthoring(false);
-                setTargetQuizId(null);
-                setDraft(null);
-                setSelectedId(null);
-              }}
+              onClick={requestExit}
             >
               Done
             </button>
@@ -628,8 +655,39 @@ export function DocumentPage() {
               defaultPrompt={lastPrompt}
               defaultAnswer={draft.answer}
               onSave={createFromDraft}
-              onCancel={() => setDraft(null)}
+              onCancel={() => {
+                setPendingExit(false);
+                setDraft(null);
+              }}
             />
+          )}
+
+          {pendingExit && draft && (
+            /* WHY NOTHING CLOSED. The draft, the typed text and the page are
+               all still here - this is the sentence that used to be missing
+               while the question quietly disappeared instead. */
+            <div className={styles.pendingExit} role="alert">
+              <p className={styles.pendingExitLine}>
+                This question hasn&rsquo;t been saved yet, so it isn&rsquo;t in your quiz.
+                Save it first, or discard it.
+              </p>
+              <div className={styles.pendingExitActions}>
+                <button
+                  type="button"
+                  className={nb.btnSm}
+                  onClick={() => setPendingExit(false)}
+                >
+                  Keep editing
+                </button>
+                <button
+                  type="button"
+                  className={nb.btnSm}
+                  onClick={exitAuthoring}
+                >
+                  Discard it and finish
+                </button>
+              </div>
+            </div>
           )}
 
           {selectedId !== null && !draft && (
