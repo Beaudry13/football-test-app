@@ -602,6 +602,10 @@ export interface RetestVerification {
    *  stood in. Never presented to a coach as recorded history. */
   concept_source: 'snapshot' | 'live_fallback';
   concept_ids: number[];
+  /** Parallel to concept_ids. What another round would be ABOUT - the card
+   *  offers one, and its confirmation has to name the concept rather than the
+   *  quiz it came from. */
+  concept_names: string[];
   /** CONTEXT ONLY. How big the original problem was, over the whole first
    *  check - never a denominator for the retest counts below, which describe
    *  a different population. */
@@ -619,12 +623,18 @@ export interface RetestVerification {
   is_complete: boolean;
   players: {
     player_id: number | null;
+    player_name: string;
     display_name: string;
     identity: 'canonical' | 'legacy_name';
     parent_outcome: string;
     outcome: string;
   }[];
-  still_missing: { player_id: number | null; display_name: string }[];
+  /** THE TARGETING IDENTITY, carried explicitly. "Retest again" posts
+   *  player_ids for canonical players and player_names for free-text ones;
+   *  relying on display_name to stand in for player_name worked only because
+   *  the two coincide for a legacy entry, which is a coincidence rather than
+   *  a contract. */
+  still_missing: RetestTarget[];
 }
 
 export interface QuizDashboard {
@@ -661,6 +671,14 @@ export interface ConceptMissingPlayer {
   position_at_attempt: string | null;
 }
 
+/** Who a retest round can be aimed at. The same shape the create-retest
+ *  endpoint consumes, so "Retest these N" needs no second derivation. */
+export interface RetestTarget {
+  player_id: number | null;
+  player_name: string;
+  display_name: string;
+}
+
 export interface ConceptBreakdown {
   concept_id: number;
   concept_name: string | null;
@@ -671,10 +689,23 @@ export interface ConceptBreakdown {
   /** correct + incorrect. Ungraded and unanswered are excluded, exactly as
    *  every other Peira score is computed. */
   graded_count: number;
-  /** null - never 0 - when nothing has been graded. Unmeasured, not perfect. */
+  /** ANSWER-level rate. null - never 0 - when nothing has been graded.
+   *  Kept for the per-question detail; NOT what the headline shows. */
   miss_rate: number | null;
-  /** Whether this row is evidence or arithmetic. The threshold is decided
-   *  server-side so two surfaces cannot disagree about it. */
+  /** PLAYER-level, and what the headline states. "12 of 20 missed" over a list
+   *  of 6 names was answers counted against people with nothing saying so; a
+   *  coach asking what to teach is asking who needs teaching. */
+  players_missed_count: number;
+  players_responded_count: number;
+  player_miss_rate: number | null;
+  /** How many of the missed questions a retest could actually copy, and how
+   *  many it would leave out as retired. Zero retestable means the action must
+   *  not be offered - it would 422. */
+  retestable_question_count: number;
+  retired_missed_question_count: number;
+  /** Whether this row is evidence or arithmetic. Counted in PLAYERS, matching
+   *  the headline it qualifies. The threshold is decided server-side so two
+   *  surfaces cannot disagree about it. */
   has_enough_responses: boolean;
   players_missed: ConceptMissingPlayer[];
   /** The wrong option most misses chose, or null when there were too few

@@ -1,5 +1,6 @@
 import type { RetestVerification as Verification } from '../../api/types';
 import nb from '../../styles/notebook.module.css';
+import { RetestAction } from './RetestAction';
 import styles from './RetestVerification.module.css';
 
 /** Did the result improve?
@@ -19,10 +20,13 @@ import styles from './RetestVerification.module.css';
  */
 export function RetestVerification({
   verification,
-  onRetestRemaining,
+  quizId,
 }: {
   verification: Verification | null;
-  onRetestRemaining?: (players: { player_id: number | null; display_name: string }[]) => void;
+  /** THIS retest's id. Another round is built FROM the round that exposed the
+   *  players still missing, so the lineage keeps describing what was actually
+   *  compared: round 3 against round 2, never against the original. */
+  quizId?: number;
 }) {
   if (!verification) return null;
   const v = verification;
@@ -37,8 +41,11 @@ export function RetestVerification({
         {/* CONTEXT, ON ITS OWN LINE. How big the original problem was - not a
             denominator for anything below it. */}
         <p className={styles.context}>
+          {/* PLAYERS, AND IT SAYS SO - the same unit as every count below, so
+              the only thing separating the two populations is the label
+              "First check" rather than a silent change of denominator. */}
           First check &mdash; <strong>{v.parent_missed_total}</strong> of{' '}
-          <strong>{v.parent_response_total}</strong> missed this
+          <strong>{v.parent_response_total}</strong> players missed this
         </p>
         <p className={styles.targeted}>
           This retest went to the <strong>{v.targeted_total}</strong>{' '}
@@ -48,12 +55,14 @@ export function RetestVerification({
         <ul className={styles.outcomes}>
           {v.correct_count > 0 && (
             <li className={styles.improved}>
-              <strong>{v.correct_count}</strong> answered correctly this time
+              <strong>{v.correct_count}</strong> player{v.correct_count === 1 ? '' : 's'}{' '}
+              answered correctly this time
             </li>
           )}
           {v.incorrect_count > 0 && (
             <li className={styles.remaining}>
-              <strong>{v.incorrect_count}</strong> still missed
+              <strong>{v.incorrect_count}</strong> player{v.incorrect_count === 1 ? '' : 's'}{' '}
+              still missed
             </li>
           )}
           {/* NEITHER OF THESE IS A MISS, and both are named rather than folded
@@ -61,14 +70,17 @@ export function RetestVerification({
               has not sat it has not failed it. */}
           {v.ungraded_count > 0 && (
             <li className={styles.pending}>
-              <strong>{v.ungraded_count}</strong> answer{v.ungraded_count === 1 ? '' : 's'} still
-              need{v.ungraded_count === 1 ? 's' : ''} grading
+              {/* PLAYERS. This said "N answers still need grading" while
+                  counting PLAYERS whose round is ungraded - a unit error in the
+                  one card whose whole purpose is keeping populations straight. */}
+              <strong>{v.ungraded_count}</strong> player{v.ungraded_count === 1 ? '' : 's'}{' '}
+              {v.ungraded_count === 1 ? 'is' : 'are'} waiting on grading
             </li>
           )}
           {v.not_submitted_count > 0 && (
             <li className={styles.pending}>
-              <strong>{v.not_submitted_count}</strong> ha
-              {v.not_submitted_count === 1 ? 's' : 've'} not submitted yet
+              <strong>{v.not_submitted_count}</strong> player
+              {v.not_submitted_count === 1 ? ' has' : 's have'} not submitted yet
             </li>
           )}
         </ul>
@@ -101,17 +113,23 @@ export function RetestVerification({
                 </li>
               ))}
             </ul>
-            {onRetestRemaining && (
-              <div className={styles.actions}>
-                <button
-                  type="button"
-                  className={nb.btnSecondary}
-                  onClick={() => onRetestRemaining(v.still_missing)}
-                >
-                  Retest these {v.still_missing.length}
-                </button>
-              </div>
-            )}
+            {/* ANOTHER ROUND, FROM THE CARD THAT FOUND THE PROBLEM.
+                This used to be guarded on a callback that production never
+                passed, so the button existed in the bundle and rendered
+                nowhere; the only working path was the duplicate weakness panel
+                below it. Offered only when the round tested exactly one
+                concept - "retest this concept" has no single answer otherwise,
+                and guessing one would build the wrong quiz. */}
+            {quizId !== undefined &&
+              v.concept_ids.length === 1 &&
+              v.concept_names.length === 1 && (
+                <RetestAction
+                  quizId={quizId}
+                  conceptId={v.concept_ids[0]}
+                  conceptName={v.concept_names[0]}
+                  targets={v.still_missing}
+                />
+              )}
           </div>
         )}
       </div>

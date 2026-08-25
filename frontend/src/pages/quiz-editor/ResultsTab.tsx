@@ -171,6 +171,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
   /* Summed from the SAME per-question counts the table below renders, so the
      headline and the table can never disagree about how much is outstanding.
      count_answers is the server's counter; this only adds its output up. */
+  /* The concepts the verification card is already reporting on. Filtered by
+     id rather than by name: a coach can retag between rounds, and two concepts
+     can be renamed to match, but an id is the thing the card actually
+     compared. */
+  const verifiedConceptIds = new Set(dashboard?.verification?.concept_ids ?? []);
+  const teachNextConcepts = (dashboard?.concept_breakdown ?? []).filter(
+    (c) => !verifiedConceptIds.has(c.concept_id),
+  );
+
   const ungradedTotal = (dashboard?.question_breakdown ?? []).reduce(
     (total, q) => total + q.ungraded_count,
     0,
@@ -187,7 +196,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               not how the team scored - it is whether the players they sent it
               to are any different. Renders nothing on an ordinary quiz, so
               every other Results page is untouched. */}
-          <RetestVerification verification={dashboard.verification} />
+          <RetestVerification verification={dashboard.verification} quizId={quiz.id} />
 
           {/* WHAT SHOULD I TEACH NEXT, FIRST.
               Results used to open with a team average - which answers "how did
@@ -199,8 +208,16 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
 
               Renders nothing at all when no concept is tagged or nothing is
               graded yet, so a quiz that predates tagging - which is every quiz
-              in Peira today - looks exactly as it did. */}
-          <WeakestConcepts concepts={dashboard.concept_breakdown} quizId={quiz.id} />
+              in Peira today - looks exactly as it did.
+
+              ON A RETEST, THE VERIFIED CONCEPT IS ALREADY ANSWERED ABOVE.
+              Leaving it here printed the same decision twice in a row - the
+              same concept, the same remaining player, the same action - with
+              the card and the panel disagreeing only in wording. The verified
+              concept is dropped; ANY OTHER concept is kept, because a retest
+              that exposes a second weakness is telling the coach something new
+              and suppressing that would be worse than repeating the first. */}
+          <WeakestConcepts concepts={teachNextConcepts} quizId={quiz.id} />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than
               inside them. Only when there is something to do: an "0 answers

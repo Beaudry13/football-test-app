@@ -12,6 +12,8 @@ const c: ConceptBreakdown = {
   concept_id: 1, concept_name: 'Force / Contain', question_count: 2,
   correct_count: 16, incorrect_count: 6, ungraded_count: 0, graded_count: 22,
   miss_rate: 27.3, has_enough_responses: true,
+  players_missed_count: 1, players_responded_count: 10, player_miss_rate: 10,
+  retestable_question_count: 2, retired_missed_question_count: 0,
   players_missed: [{ player_id: 3, player_name: 'A', display_name: 'A', position_at_attempt: null }],
   top_distractor: null,
 };
@@ -46,7 +48,7 @@ describe('when Peira cannot build the retest', () => {
         </Routes>
       </MemoryRouter>,
     );
-    await user.click(screen.getByRole('button', { name: 'Retest these 1' }));
+    await user.click(screen.getByRole('button', { name: 'Retest this player' }));
     await user.click(screen.getByRole('button', { name: 'Create retest' }));
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.queryByText('EDITOR')).not.toBeInTheDocument();

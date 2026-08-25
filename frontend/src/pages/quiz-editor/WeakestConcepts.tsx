@@ -1,8 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createRetest } from '../../api/retests';
-import { getErrorMessage } from '../../api/client';
 import type { ConceptBreakdown } from '../../api/types';
+import { RetestAction } from './RetestAction';
 import nb from '../../styles/notebook.module.css';
 import styles from './WeakestConcepts.module.css';
 
@@ -27,15 +24,11 @@ export function WeakestConcepts({
   concepts: ConceptBreakdown[];
   quizId: number;
 }) {
-  const navigate = useNavigate();
-  const [confirming, setConfirming] = useState(false);
-  const [isCreating, setIsCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   /* Nothing tagged, or nothing graded yet: render nothing at all and let
      Results be what it was. An empty "Weakest concept" panel would be a
      permanent reminder of a feature rather than an answer - and every quiz
      that predates tagging is in exactly this state. */
-  const ranked = concepts.filter((c) => c.miss_rate !== null);
+  const ranked = concepts.filter((c) => c.player_miss_rate !== null);
   if (ranked.length === 0) return null;
 
   const [weakest, ...rest] = ranked;
@@ -49,11 +42,20 @@ export function WeakestConcepts({
       <div className={`${nb.card} ${styles.headline}`}>
         <div className={styles.conceptName}>{weakest.concept_name}</div>
         <p className={styles.missLine}>
-          {/* The COUNT leads, not the percentage. "6 of 22 missed" is a fact a
-              coach can act on; "27.3%" is the same fact needing arithmetic
-              first, and reads far more confident than a small sample deserves. */}
+          {/* PLAYERS, AND IT SAYS SO. This line used to read "12 of 20 missed"
+              directly above a list of six names, because the count was answers
+              and the list was people. A coach asking what to teach is asking
+              who needs teaching, so the headline is stated in the same unit as
+              the names underneath it and names that unit out loud. The
+              answer-level figures are still on the page, in the per-question
+              breakdown where the unit cannot be mistaken.
+
+              The COUNT leads, not the percentage. "6 of 10 players" is a fact a
+              coach can act on; "60%" is the same fact needing arithmetic first,
+              and reads far more confident than a small sample deserves. */}
           <strong>
-            {weakest.incorrect_count} of {weakest.graded_count} missed
+            {weakest.players_missed_count} of {weakest.players_responded_count} player
+            {weakest.players_responded_count === 1 ? '' : 's'} missed this
           </strong>
           {!weakest.has_enough_responses && (
             <span className={styles.thin}> &mdash; too few answers to be sure yet</span>
@@ -63,8 +65,26 @@ export function WeakestConcepts({
         {weakest.top_distractor && (
           <p className={styles.distractor}>
             {/* Deliberately "chose", not "believe" or "have a misconception".
-                The data says what they picked; it does not say why. */}
-            {weakest.top_distractor.count} of the {weakest.top_distractor.of_misses} misses chose{' '}
+                The data says what they picked; it does not say why.
+
+                "WRONG ANSWERS", not "misses" - this is the one figure on the
+                panel that is genuinely about answers rather than people, since
+                it describes a distribution across options, so it names its own
+                unit instead of borrowing the headline's.
+
+                "All 6" rather than "6 of the 6": when every wrong answer chose
+                the same option, "6 of the 6" reads like a ratio while carrying
+                none of the information one. */}
+            {weakest.top_distractor.count === weakest.top_distractor.of_misses ? (
+              <>
+                All {weakest.top_distractor.of_misses} wrong answers chose{' '}
+              </>
+            ) : (
+              <>
+                {weakest.top_distractor.count} of {weakest.top_distractor.of_misses} wrong
+                answers chose{' '}
+              </>
+            )}
             <strong>{weakest.top_distractor.option_text}</strong>
           </p>
         )}
@@ -95,82 +115,25 @@ export function WeakestConcepts({
           </p>
         )}
         {/* THE ACTION, on the one thing a coach is meant to do something
-            about. Phase D assembles a draft; it does not send anything. */}
-        <div className={styles.actions}>
-          <button
-            type="button"
-            className={nb.btnPrimary}
-            onClick={() => {
-              setError(null);
-              setConfirming(true);
-            }}
-          >
-            Retest these {weakest.players_missed.length}
-          </button>
-        </div>
+            about. Peira assembles a draft; it does not send anything.
 
-        {confirming && (
-          /* A CONFIRMATION, NOT A WORKFLOW. It says what Peira is about to
-             assemble and stops - no options, no editing here. Everything a
-             coach might want to change is one screen away in the editor they
-             already know, and putting a second editor in front of it would be
-             the thing this whole feature avoids. */
-          <div className={styles.confirm} role="dialog" aria-label="Create retest">
-            <p className={styles.confirmLine}>
-              Peira will build a draft on <strong>{weakest.concept_name}</strong> for{' '}
-              <strong>{weakest.players_missed.length}</strong>{' '}
-              player{weakest.players_missed.length === 1 ? '' : 's'}, using the questions they
-              missed.
-            </p>
-            <p className={styles.confirmNote}>
-              Nothing is sent. It opens in the normal editor so you can change the questions,
-              the wording, and who gets it.
-            </p>
-            {error && (
-              <p className={styles.confirmError} role="alert">
-                {error}
-              </p>
-            )}
-            <div className={styles.actions}>
-              <button
-                type="button"
-                className={nb.btnPrimary}
-                disabled={isCreating}
-                onClick={async () => {
-                  setIsCreating(true);
-                  setError(null);
-                  try {
-                    /* Canonical ids where they exist, names where they do not -
-                       a free-text join has no Player row, and dropping those
-                       players would quietly shrink the retest. */
-                    const draft = await createRetest(quizId, {
-                      concept_id: weakest.concept_id,
-                      player_ids: weakest.players_missed
-                        .map((p) => p.player_id)
-                        .filter((id): id is number => id !== null),
-                      player_names: weakest.players_missed
-                        .filter((p) => p.player_id === null)
-                        .map((p) => p.player_name),
-                    });
-                    navigate(`/quizzes/${draft.id}?tab=questions`);
-                  } catch (err) {
-                    setError(getErrorMessage(err));
-                    setIsCreating(false);
-                  }
-                }}
-              >
-                {isCreating ? 'Building…' : 'Create retest'}
-              </button>
-              <button
-                type="button"
-                className={nb.btnSecondary}
-                disabled={isCreating}
-                onClick={() => setConfirming(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
+            OFFERED ONLY WHEN IT CAN SUCCEED. Every question these players
+            missed may since have been stopped, and retirement is deliberately
+            carried through copying - so the action would have returned a
+            predictable 422 on a button Peira had put in front of the coach
+            itself. Saying why is more useful than a disabled control. */}
+        {weakest.retestable_question_count > 0 ? (
+          <RetestAction
+            quizId={quizId}
+            conceptId={weakest.concept_id}
+            conceptName={weakest.concept_name}
+            targets={weakest.players_missed}
+            retiredCount={weakest.retired_missed_question_count}
+          />
+        ) : (
+          <p className={styles.ungradedNote}>
+            Every question they missed here has been stopped, so there is nothing to retest.
+          </p>
         )}
       </div>
 
@@ -180,7 +143,10 @@ export function WeakestConcepts({
             <li key={concept.concept_id} className={styles.otherRow}>
               <span className={styles.otherName}>{concept.concept_name}</span>
               <span className={styles.otherCount}>
-                {concept.incorrect_count} of {concept.graded_count} missed
+                {/* Same unit as the headline above. A list where the first row
+                    counts players and the rest count answers would be the
+                    original confusion, merely spread out. */}
+                {concept.players_missed_count} of {concept.players_responded_count} players
                 {!concept.has_enough_responses && <span className={styles.thin}> (thin)</span>}
               </span>
             </li>

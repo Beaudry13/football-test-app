@@ -18,6 +18,11 @@ const concept = (over: Partial<ConceptBreakdown> = {}): ConceptBreakdown => ({
   ungraded_count: 0,
   graded_count: 22,
   miss_rate: 27.3,
+  players_missed_count: 6,
+  players_responded_count: 10,
+  player_miss_rate: 60,
+  retestable_question_count: 2,
+  retired_missed_question_count: 0,
   has_enough_responses: true,
   players_missed: [],
   top_distractor: null,
@@ -38,14 +43,20 @@ function renderPanel(ui: React.ReactElement) {
 }
 
 describe('the "Teach next" panel', () => {
-  it('leads with the COUNT, not the percentage', () => {
-    // "6 of 22 missed" is a fact a coach can act on. "27.3%" is the same fact
+  it('leads with the COUNT, not the percentage, AND COUNTS PLAYERS', () => {
+    // "6 of 10 players" is a fact a coach can act on. "60%" is the same fact
     // needing arithmetic first, and reads far more confident than a small
     // sample usually deserves.
+    //
+    // REGRESSION: this line used to read "6 of 22 missed" - answers - directly
+    // above a list of six NAMES, with nothing saying the two numbers were
+    // counting different things.
     renderPanel(<WeakestConcepts concepts={[concept()]} quizId={9} />);
 
     expect(screen.getByText('Force / Contain')).toBeInTheDocument();
-    expect(screen.getByText(/6 of 22 missed/)).toBeInTheDocument();
+    expect(screen.getByText(/6 of 10 players missed this/)).toBeInTheDocument();
+    // The answer-level count belongs to the per-question breakdown, not here.
+    expect(screen.queryByText(/of 22/)).not.toBeInTheDocument();
   });
 
   it('puts the WEAKEST concept in the headline and the rest below', () => {
@@ -93,7 +104,7 @@ describe('the "Teach next" panel', () => {
       />,
     );
 
-    expect(screen.getByText(/5 of the 6 misses chose/)).toBeInTheDocument();
+    expect(screen.getByText(/5 of 6 wrong answers chose/)).toBeInTheDocument();
     expect(screen.getByText('Safety')).toBeInTheDocument();
     // The data says what they PICKED; it does not say why.
     expect(screen.queryByText(/misconception/i)).not.toBeInTheDocument();
@@ -103,7 +114,7 @@ describe('the "Teach next" panel', () => {
   it('says nothing about patterns when the server withheld one', () => {
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ top_distractor: null })]} />);
 
-    expect(screen.queryByText(/misses chose/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/wrong answers chose/)).not.toBeInTheDocument();
   });
 
   it('names who missed it, with their position AT THE TIME', () => {
@@ -151,7 +162,18 @@ describe('the "Teach next" panel', () => {
     // must look exactly as it did. An empty weakness panel would be a
     // permanent reminder of a feature rather than an answer.
     const { container } = renderPanel(
-      <WeakestConcepts quizId={9} concepts={[concept({ miss_rate: null, graded_count: 0 })]} />,
+      <WeakestConcepts
+        quizId={9}
+        concepts={[
+          concept({
+            miss_rate: null,
+            player_miss_rate: null,
+            graded_count: 0,
+            players_responded_count: 0,
+            players_missed_count: 0,
+          }),
+        ]}
+      />,
     );
 
     expect(container).toBeEmptyDOMElement();
@@ -175,7 +197,15 @@ describe('the "Teach next" panel', () => {
       <WeakestConcepts
         quizId={9}
         concepts={[
-          concept({ miss_rate: null, graded_count: 0, incorrect_count: 0, correct_count: 0 }),
+          concept({
+            miss_rate: null,
+            player_miss_rate: null,
+            graded_count: 0,
+            incorrect_count: 0,
+            correct_count: 0,
+            players_responded_count: 0,
+            players_missed_count: 0,
+          }),
           concept({ concept_id: 2, concept_name: 'Run Fit' }),
         ]}
       />,
@@ -255,5 +285,122 @@ describe('Retest these players', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(createRetest).not.toHaveBeenCalled();
+  });
+
+  it('DOES NOT OFFER A RETEST IT CANNOT BUILD', () => {
+    /* REGRESSION. Every question these players missed has since been stopped,
+       and retirement is carried through copying - so the offer used to lead
+       straight to a predictable 422 on a button Peira had put there itself. */
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[concept({ retestable_question_count: 0, retired_missed_question_count: 2 })]}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Retest th(is|ese)/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/nothing to retest/i)).toBeInTheDocument();
+  });
+
+  it('says what a retest will LEAVE OUT, before the coach commits', async () => {
+    /* The server has always reported the questions it skipped; the client
+       simply never rendered them, so a coach got a quietly shorter retest. */
+    const user = userEvent.setup();
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[
+          concept({
+            retestable_question_count: 1,
+            retired_missed_question_count: 1,
+            players_missed: [
+              { player_id: 3, player_name: 'A', display_name: 'A', position_at_attempt: null },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Retest th(is|ese)/ }));
+
+    expect(screen.getByText(/1 stopped question isn't included/)).toBeInTheDocument();
+  });
+
+  it('pluralises the stopped-question note', async () => {
+    const user = userEvent.setup();
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[
+          concept({
+            retired_missed_question_count: 2,
+            players_missed: [
+              { player_id: 3, player_name: 'A', display_name: 'A', position_at_attempt: null },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Retest th(is|ese)/ }));
+
+    expect(screen.getByText(/2 stopped questions aren't included/)).toBeInTheDocument();
+  });
+
+  it('says nothing about stopped questions when none were left out', async () => {
+    const user = userEvent.setup();
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[
+          concept({
+            retired_missed_question_count: 0,
+            players_missed: [
+              { player_id: 3, player_name: 'A', display_name: 'A', position_at_attempt: null },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Retest th(is|ese)/ }));
+
+    expect(screen.queryByText(/stopped question/)).not.toBeInTheDocument();
+  });
+
+  it('states the RUNNER-UP rows in players too', () => {
+    // A list whose first row counts players and whose rest count answers is
+    // the original confusion, merely spread out.
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[
+          concept({ concept_id: 1, player_miss_rate: 60 }),
+          concept({
+            concept_id: 2,
+            concept_name: 'Run Fit',
+            player_miss_rate: 10,
+            players_missed_count: 1,
+            players_responded_count: 10,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/1 of 10 players/)).toBeInTheDocument();
+  });
+
+  it('says "All N" rather than "N of the N" when every wrong answer agreed', () => {
+    // "6 of the 6" reads like a ratio while carrying none of the information
+    // of one.
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[concept({ top_distractor: { option_text: 'Safety', count: 6, of_misses: 6 } })]}
+      />,
+    );
+
+    expect(screen.getByText(/All 6 wrong answers chose/)).toBeInTheDocument();
+    expect(screen.queryByText(/6 of 6/)).not.toBeInTheDocument();
   });
 });

@@ -308,6 +308,11 @@ describe('Results leads with what to teach next', () => {
     ungraded_count: 0,
     graded_count: 22,
     miss_rate: 27.3,
+    players_missed_count: 6,
+    players_responded_count: 10,
+    player_miss_rate: 60,
+    retestable_question_count: 2,
+    retired_missed_question_count: 0,
     has_enough_responses: true,
     players_missed: [
       { player_id: 1, player_name: 'Jordan Smith', display_name: 'Jordan Smith', position_at_attempt: 'CB' },
@@ -411,5 +416,71 @@ describe('Results leads with what to teach next', () => {
     // Untagged questions do not RANK, but they must not disappear either.
     expect(await screen.findByText('Per-question breakdown')).toBeInTheDocument();
     expect(screen.getByText('An untagged legacy question')).toBeInTheDocument();
+  });
+
+  it('DOES NOT PRINT THE SAME DECISION TWICE on a retest', async () => {
+    /* REGRESSION. The verification card reported "1 still missed - Marcus" and
+       the weakness panel immediately below it reported the same concept, the
+       same player and the same action, differing only in wording. */
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [conceptRow],
+      verification: {
+        parent_quiz_id: 1,
+        parent_quiz_title: 'Install Week 2',
+        concept_source: 'snapshot',
+        concept_ids: [conceptRow.concept_id],
+        concept_names: [conceptRow.concept_name],
+        parent_missed_total: 6,
+        parent_response_total: 10,
+        targeted_total: 6,
+        correct_count: 5,
+        incorrect_count: 1,
+        ungraded_count: 0,
+        not_submitted_count: 0,
+        is_complete: true,
+        players: [],
+        still_missing: [{ player_id: 1, player_name: 'Jordan Smith', display_name: 'Jordan Smith' }],
+      },
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText('Since the last check')).toBeInTheDocument();
+    // The verified concept is answered above; the panel repeating it is gone.
+    expect(screen.queryByText('Teach next')).not.toBeInTheDocument();
+  });
+
+  it('STILL TEACHES a different weakness the retest exposed', async () => {
+    /* Suppressing the repeat must not suppress news. A retest that surfaces a
+       second concept is telling the coach something they did not know. */
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [
+        conceptRow,
+        { ...conceptRow, concept_id: 99, concept_name: 'Zone Drop Depth' },
+      ],
+      verification: {
+        parent_quiz_id: 1,
+        parent_quiz_title: 'Install Week 2',
+        concept_source: 'snapshot',
+        concept_ids: [conceptRow.concept_id],
+        concept_names: [conceptRow.concept_name],
+        parent_missed_total: 6,
+        parent_response_total: 10,
+        targeted_total: 6,
+        correct_count: 6,
+        incorrect_count: 0,
+        ungraded_count: 0,
+        not_submitted_count: 0,
+        is_complete: true,
+        players: [],
+        still_missing: [],
+      },
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText('Teach next')).toBeInTheDocument();
+    expect(screen.getByText('Zone Drop Depth')).toBeInTheDocument();
+    expect(screen.queryByText('Force / Contain')).not.toBeInTheDocument();
   });
 });
