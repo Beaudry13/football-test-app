@@ -295,6 +295,14 @@ FEATURE_LABELS = {
     "draw_response": "Draw Response",
     "groups": "Groups",
     "nested_folders": "Nested Folders",
+    # THE RETEACH LOOP. These three were computed above and then dropped on the
+    # floor for an entire release: `feature_adoption` iterates this dict, so a
+    # predicate without a label is calculated, discarded, and invisible - the
+    # quietest possible failure. `test_every_computed_feature_has_a_label` now
+    # fails if that happens again.
+    "concept_tagging": "Concept Tagging",
+    "retest_created": "Retest Created",
+    "retest_answered": "Retest Answered",
 }
 
 

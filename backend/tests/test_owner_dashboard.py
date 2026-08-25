@@ -574,17 +574,24 @@ class TestMetrics:
         assert by_key["nested_folders"]["organizations"] == 0
 
     def test_every_feature_key_is_reported_even_at_zero(self, client, owner):
+        """A feature with no adopters still reports, as zero.
+
+        PINNED TO THE LABELS, NOT TO A HAND-WRITTEN LIST. This used to spell
+        the five keys out, so ADDING a feature failed here - which reads as a
+        regression when the addition was the point. The invariant that actually
+        matters is "everything labelled is reported", and that is what the
+        dashboard promises; `TestNoMetricIsSilentlyDropped` guards the other
+        direction, that everything computed is labelled.
+        """
+        from app.services.platform_metrics import FEATURE_LABELS
+
         adoption = client.get(
             "/api/owner/overview", headers=headers(owner["access_token"])
         ).get_json()["feature_adoption"]
 
-        assert {row["key"] for row in adoption} == {
-            "practice_mode",
-            "playbook_quiz",
-            "draw_response",
-            "groups",
-            "nested_folders",
-        }
+        assert {row["key"] for row in adoption} == set(FEATURE_LABELS)
+        # And the reteach loop is in there by name, so removing a label fails.
+        assert {"concept_tagging", "retest_created", "retest_answered"} <= set(FEATURE_LABELS)
 
 
 # ---------------------------------------------------------------------------
@@ -632,3 +639,50 @@ class TestOwnerCli:
         migration - ownership is only ever conferred deliberately."""
         with app.app_context():
             assert Coach.query.filter_by(is_platform_owner=True).count() == 0
+
+
+class TestNoMetricIsSilentlyDropped:
+    """A predicate without a label is computed and then thrown away.
+
+    `feature_adoption` iterates FEATURE_LABELS, so a key present in
+    `_feature_organization_ids` but missing from the labels never reaches the
+    dashboard - no error, no empty row, nothing. That is exactly what happened
+    to the three reteach-loop metrics: they were computed for a full release
+    and were invisible the whole time, which is the failure mode that makes a
+    measurement period measure nothing.
+    """
+
+    def test_every_computed_feature_has_a_label(self, app):
+        from app.services.platform_metrics import (
+            FEATURE_LABELS,
+            _feature_organization_ids,
+        )
+
+        with app.app_context():
+            computed = set(_feature_organization_ids())
+
+        unlabelled = computed - set(FEATURE_LABELS)
+        assert not unlabelled, (
+            "These features are computed but have no FEATURE_LABELS entry, so "
+            f"feature_adoption() silently drops them: {sorted(unlabelled)}"
+        )
+
+    def test_every_label_has_a_predicate(self, app):
+        """The other direction: a label with no predicate would KeyError."""
+        from app.services.platform_metrics import (
+            FEATURE_LABELS,
+            _feature_organization_ids,
+        )
+
+        with app.app_context():
+            computed = set(_feature_organization_ids())
+
+        assert not set(FEATURE_LABELS) - computed
+
+    def test_the_reteach_loop_reaches_the_dashboard(self, client, owner):
+        """Named explicitly, so deleting a label fails here too."""
+        body = client.get(
+            "/api/owner/overview", headers=headers(owner["access_token"])
+        ).get_json()
+        keys = {row["key"] for row in body["feature_adoption"]}
+        assert {"concept_tagging", "retest_created", "retest_answered"} <= keys
