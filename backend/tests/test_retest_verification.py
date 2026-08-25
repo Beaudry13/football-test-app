@@ -347,3 +347,77 @@ class TestChaining:
         )
         assert again.status_code == 201
         assert db.session.get(Quiz, again.get_json()["id"]).retest_of_quiz_id == retest["id"]
+
+
+def _verified_round(client, headers):
+    """A completed retest where exactly one targeted player still missed it.
+
+    Returns the verification with the retest's own id attached, so a caller can
+    aim the next round at it.
+    """
+    quiz, _tf, concept, _ = _parent_with_misses(client, headers, missed=("A", "B"))
+    retest = _make_retest(client, headers, quiz["id"], concept["id"], ["A", "B"])
+    code = _activate(client, headers, retest["id"])
+    copied = retest["questions"][0]
+    right = next(o for o in copied["options"] if o["is_correct_answer"] is not False)
+    wrong = next(o for o in copied["options"] if o["is_correct_answer"] is False)
+    _answer_round(client, code["id"], "A", copied["id"], right["id"])
+    _answer_round(client, code["id"], "B", copied["id"], wrong["id"])
+
+    verification = _verify(retest["id"])
+    return {**verification, "_retest_id": retest["id"]}
+
+
+class TestStillMissingCarriesItsOwnIdentity:
+    """"Retest again" posts player_ids for canonical players and player_names
+    for free-text ones. Those fields used to be recoverable only because
+    display_name happens to equal player_name for a legacy entry - a
+    coincidence, not a contract, and one that would break the moment a
+    canonical player was renamed."""
+
+    def test_every_still_missing_row_carries_the_targeting_fields(
+        self, client, coach_headers
+    ):
+        verification = _verified_round(client, coach_headers)
+
+        assert verification["still_missing"]
+        for row in verification["still_missing"]:
+            assert set(row) == {"player_id", "player_name", "display_name"}
+            assert row["player_name"]
+
+    def test_the_targets_are_accepted_by_the_retest_endpoint_unchanged(
+        self, client, coach_headers
+    ):
+        """The shape round-trips: what verification hands back is what the
+        create endpoint takes, with no second derivation in between."""
+        verification = _verified_round(client, coach_headers)
+        still = verification["still_missing"]
+
+        again = client.post(
+            f"/api/quizzes/{verification['_retest_id']}/retests",
+            json={
+                "concept_id": verification["concept_ids"][0],
+                "player_ids": [p["player_id"] for p in still if p["player_id"] is not None],
+                "player_names": [p["player_name"] for p in still if p["player_id"] is None],
+            },
+            headers=coach_headers,
+        )
+
+        assert again.status_code == 201
+
+
+class TestConceptNamesTravelWithTheIds:
+    """The card offers another round, and its confirmation has to say what that
+    round is ABOUT. It used to have only ids and fell back to the parent quiz's
+    title, which named the quiz rather than the football idea."""
+
+    def test_the_names_are_parallel_to_the_ids(self, client, coach_headers):
+        verification = _verified_round(client, coach_headers)
+
+        assert verification["concept_names"] == ["Force / Contain"]
+        assert len(verification["concept_names"]) == len(verification["concept_ids"])
+
+    def test_the_name_is_the_concept_not_the_quiz_title(self, client, coach_headers):
+        verification = _verified_round(client, coach_headers)
+
+        assert verification["parent_quiz_title"] not in verification["concept_names"]

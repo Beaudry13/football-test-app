@@ -13,12 +13,20 @@ to anticipate than the problem it solves.
 """
 from __future__ import annotations
 
-from app.models import Answer, AttemptStatus, PlayerAttempt, Question
+from app.models import AttemptStatus, PlayerAttempt, Question
 from app.services.attempt_scope import official_only
+from app.services.player_identity import PlayerKey, representative_attempts
 
 
-def missed_by_player(quiz, concept_id: int) -> dict[int, set[int]]:
-    """`{attempt player key: {question_id, ...}}` for one concept.
+def missed_by_player(quiz, concept_id: int) -> dict[PlayerKey, set[int]]:
+    """`{PlayerKey: {question_id, ...}}` for one concept.
+
+    KEYED BY PLAYER IDENTITY, NOT BY ATTEMPT. A quiz can hold several access
+    codes and attempt uniqueness is scoped to one of them, so keying on
+    `attempt.id` counted a player who took the quiz twice as two people. Each
+    player is represented by their MOST RECENT official submission - see
+    services/player_identity for why the latest attempt speaks for them rather
+    than the union of everything they ever got wrong.
 
     WHAT COUNTS AS A MISS, and every exclusion here is a rule Peira already
     follows somewhere else:
@@ -32,9 +40,9 @@ def missed_by_player(quiz, concept_id: int) -> dict[int, set[int]]:
     * UNANSWERED is absent by construction: no answer row, nothing to classify.
       Absence is not wrongness.
 
-    Keyed by player_id where the attempt had one, and by a name-derived key
-    where it did not, so a free-text join is still countable without being
-    confused with a canonical player who happens to share a name.
+    A canonical player is keyed by player_id and a free-text join by their
+    casefolded name, kept structurally separate so the two can never merge on
+    a matching string.
     """
     attempts = (
         official_only(PlayerAttempt.query)
@@ -45,32 +53,38 @@ def missed_by_player(quiz, concept_id: int) -> dict[int, set[int]]:
     if not concept_question_ids:
         return {}
 
-    missed: dict[int, set[int]] = {}
-    for attempt in attempts:
+    missed: dict[PlayerKey, set[int]] = {}
+    for key, attempt in representative_attempts(attempts).items():
         for answer in attempt.answers:
             if answer.question_id not in concept_question_ids:
                 continue
             if answer.is_correct is not False:
                 continue
-            missed.setdefault(attempt.id, set()).add(answer.question_id)
+            missed.setdefault(key, set()).add(answer.question_id)
     return missed
 
 
-def eligible_players(quiz, concept_id: int) -> list[PlayerAttempt]:
-    """The attempts that missed at least one question in this concept."""
+def eligible_players(quiz, concept_id: int) -> dict[PlayerKey, PlayerAttempt]:
+    """`{PlayerKey: representative attempt}` for everyone who missed something.
+
+    Returns a mapping rather than a list so a caller targeting players by id or
+    name never has to re-derive identity - which is where a second, subtly
+    different rule would otherwise appear.
+    """
     missed = missed_by_player(quiz, concept_id)
-    attempts = {a.id: a for a in quiz.attempts} if hasattr(quiz, "attempts") else {}
-    if not attempts:
-        attempts = {
-            a.id: a
-            for a in official_only(PlayerAttempt.query)
-            .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
-            .all()
-        }
-    return [attempts[aid] for aid in missed if aid in attempts]
+    if not missed:
+        return {}
+    attempts = representative_attempts(
+        official_only(PlayerAttempt.query)
+        .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
+        .all()
+    )
+    return {key: attempts[key] for key in missed if key in attempts}
 
 
-def questions_to_copy(quiz, concept_id: int, attempt_ids: set[int]) -> tuple[set[int], list[Question]]:
+def questions_to_copy(
+    quiz, concept_id: int, player_keys: set[PlayerKey]
+) -> tuple[set[int], list[Question]]:
     """`(copyable question ids, retired questions that were skipped)`.
 
     THE RULE: every question tagged with this concept that at least one of the
@@ -89,8 +103,8 @@ def questions_to_copy(quiz, concept_id: int, attempt_ids: set[int]) -> tuple[set
     """
     missed = missed_by_player(quiz, concept_id)
     wanted: set[int] = set()
-    for attempt_id, question_ids in missed.items():
-        if attempt_id in attempt_ids:
+    for key, question_ids in missed.items():
+        if key in player_keys:
             wanted |= question_ids
 
     by_id = {q.id: q for q in quiz.questions}

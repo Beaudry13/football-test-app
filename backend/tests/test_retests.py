@@ -425,3 +425,90 @@ class TestPhaseECanBeReconstructed:
             f"/api/quizzes/{created['id']}/roster", headers=coach_headers
         ).get_json()
         assert roster["players"][0]["player"]["id"] == player["id"]
+
+
+class TestWhatTheCoachIsToldBeforeCommitting:
+    """A retest that quietly contains fewer questions than the coach expects is
+    worse than one that says what it left out."""
+
+    def test_the_breakdown_reports_what_a_retest_could_copy(self, client, coach_headers):
+        quiz, tf, _, concept, _ = _missed_setup(client, coach_headers)
+
+        row = client.get(
+            f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers
+        ).get_json()["concept_breakdown"][0]
+
+        assert row["retestable_question_count"] == 1
+        assert row["retired_missed_question_count"] == 0
+
+    def test_a_STOPPED_question_is_counted_as_left_out(self, client, coach_headers):
+        quiz, tf, _, concept, _ = _missed_setup(client, coach_headers)
+        client.post(
+            f"/api/quizzes/{quiz['id']}/questions/{tf['id']}/retire", headers=coach_headers
+        )
+
+        row = client.get(
+            f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers
+        ).get_json()["concept_breakdown"][0]
+
+        # Nothing left to copy, and the client must not offer the action.
+        assert row["retestable_question_count"] == 0
+        assert row["retired_missed_question_count"] == 1
+
+    def test_the_endpoint_still_refuses_when_nothing_is_copyable(self, client, coach_headers):
+        """Belt and braces: the client no longer offers it, and the server
+        would still refuse if something else asked."""
+        quiz, tf, _, concept, _ = _missed_setup(client, coach_headers)
+        client.post(
+            f"/api/quizzes/{quiz['id']}/questions/{tf['id']}/retire", headers=coach_headers
+        )
+
+        refused = _retest(client, coach_headers, quiz["id"],
+                          concept_id=concept["id"], player_names=["A"])
+
+        assert refused.status_code == 422
+        assert refused.get_json()["reason"] == "no_questions_to_retest"
+
+
+class TestRetestTitles:
+    """Two rounds on one concept used to produce two identically named quizzes,
+    indistinguishable in the coach's quiz list."""
+
+    def test_the_first_round_is_named_for_the_concept(self, client, coach_headers):
+        quiz, _, _, concept, _ = _missed_setup(client, coach_headers)
+
+        created = _retest(client, coach_headers, quiz["id"],
+                          concept_id=concept["id"], player_names=["A"]).get_json()
+
+        assert created["title"] == "Force / Contain - Retest"
+
+    def test_a_retest_of_a_retest_is_NUMBERED(self, client, coach_headers):
+        quiz, tf, _, concept, _ = _missed_setup(client, coach_headers)
+        first = _retest(client, coach_headers, quiz["id"],
+                        concept_id=concept["id"], player_names=["A", "B"]).get_json()
+
+        code = client.post(
+            f"/api/quizzes/{first['id']}/access-codes", headers=coach_headers
+        ).get_json()
+        copied = client.get(
+            f"/api/quizzes/{first['id']}", headers=coach_headers
+        ).get_json()["questions"][0]
+        wrong = next(o for o in copied["options"] if o["is_correct_answer"] is False)
+        start_and_submit(
+            client, code["id"], "A",
+            [{"question_id": copied["id"], "selected_option_id": wrong["id"]}],
+        )
+
+        second = _retest(client, coach_headers, first["id"],
+                         concept_id=concept["id"], player_names=["A"]).get_json()
+
+        assert second["title"] == "Force / Contain - Retest 2"
+        assert second["title"] != first["title"]
+
+    def test_a_title_the_coach_supplied_is_never_overwritten(self, client, coach_headers):
+        quiz, _, _, concept, _ = _missed_setup(client, coach_headers)
+
+        created = _retest(client, coach_headers, quiz["id"], concept_id=concept["id"],
+                          player_names=["A"], title="Tuesday walkthrough").get_json()
+
+        assert created["title"] == "Tuesday walkthrough"

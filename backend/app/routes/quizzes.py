@@ -36,6 +36,7 @@ from app.models import (
 from app.schemas.retest import RetestCreateSchema
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
 from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
+from app.services.player_identity import PlayerKey
 from app.services.retests import eligible_players, questions_to_copy
 from app.services.file_storage import StorageError, get_file_storage
 from app.services.page_masking import attach_masked_media
@@ -411,13 +412,15 @@ def create_retest(quiz_id: int):
         raise ApiError("That concept does not exist", status_code=422)
 
     # WHO ACTUALLY MISSED SOMETHING, recomputed here rather than believed.
-    eligible = {a.id: a for a in eligible_players(original, concept.id)}
-    by_player_id = {a.player_id: a for a in eligible.values() if a.player_id is not None}
-    by_name = {a.player_name.strip().casefold(): a for a in eligible.values()}
+    # Keyed by player identity, so a player who took the original through two
+    # access codes is one target rather than two.
+    eligible = eligible_players(original, concept.id)
 
-    chosen: dict[int, object] = {}
+    chosen: dict[PlayerKey, object] = {}
     for player_id in data["player_ids"]:
-        attempt = by_player_id.get(player_id)
+        # A CANONICAL PLAYER IS ONLY REACHABLE BY ID. Their name is not a key,
+        # so a request cannot target them by typing it.
+        attempt = eligible.get(PlayerKey(player_id=player_id, legacy_name=None))
         if attempt is None:
             # Covers both "not in this organization" and "did not miss
             # anything" with one refusal, because the client is entitled to
@@ -428,16 +431,20 @@ def create_retest(quiz_id: int):
                 status_code=422,
                 reason="player_not_eligible",
             )
-        chosen[attempt.id] = attempt
+        chosen[PlayerKey(player_id=player_id, legacy_name=None)] = attempt
     for name in data["player_names"]:
-        attempt = by_name.get(name.strip().casefold())
+        # And a free-text participant is only reachable by name, because that
+        # is the only identity they have. The two namespaces never meet.
+        attempt = eligible.get(
+            PlayerKey(player_id=None, legacy_name=name.strip().casefold())
+        )
         if attempt is None:
             raise ApiError(
                 "One or more selected players are not eligible for this retest",
                 status_code=422,
                 reason="player_not_eligible",
             )
-        chosen[attempt.id] = attempt
+        chosen[PlayerKey(player_id=None, legacy_name=name.strip().casefold())] = attempt
 
     if not chosen:
         # Defaulting to "everyone who missed" would be a different, larger send
@@ -468,7 +475,7 @@ def create_retest(quiz_id: int):
     retest = Quiz(
         organization_id=coach.organization_id,
         coach_id=coach.id,
-        title=data["title"] or f"{concept.name} - Retest",
+        title=data["title"] or _retest_title(concept, original),
         one_question_at_a_time=original.one_question_at_a_time,
         require_all_answers=original.require_all_answers,
         folder_id=original.folder_id,
@@ -518,6 +525,30 @@ def create_retest(quiz_id: int):
     return jsonify(body), 201
 
 
+def _retest_title(concept, original) -> str:
+    """"Force / Contain - Retest", then "- Retest 2", "- Retest 3".
+
+    Retesting the same concept twice used to produce two quizzes with the same
+    title, indistinguishable in the quiz list. The round is counted by walking
+    the lineage rather than by counting a coach's quizzes, so a title always
+    describes this chain: a retest of a retest is round 2 even if the coach
+    built ten unrelated ones in between.
+    """
+    round_number = 1
+    ancestor = original
+    seen: set[int] = set()
+    while ancestor is not None and ancestor.retest_of_quiz_id is not None:
+        # Defensive: lineage is a chain by construction, but a cycle here would
+        # hang the request rather than mislabel a quiz.
+        if ancestor.id in seen:
+            break
+        seen.add(ancestor.id)
+        round_number += 1
+        ancestor = ancestor.retest_of
+    suffix = "" if round_number == 1 else f" {round_number}"
+    return f"{concept.name} - Retest{suffix}"
+
+
 def _seed_retest_roster(retest, attempts, coach) -> None:
     """Put exactly the retested players on the new quiz's own roster.
 
@@ -540,15 +571,22 @@ def _seed_retest_roster(retest, attempts, coach) -> None:
         retest.roster = Roster(quiz_id=retest.id)
 
     position = 0
-    seen_ids: set[int] = set()
-    seen_names: set[str] = set()
+    seen: set[PlayerKey] = set()
     for attempt in attempts:
-        if attempt.player_id is not None and attempt.player_id not in seen_ids:
-            player = db.session.get(Player, attempt.player_id)
+        # ONE ROW PER IDENTITY. Deduplicating on the key rather than on
+        # player_id-or-name separately: the previous shape let a second attempt
+        # by an already-added canonical player fall through to the name branch
+        # and be appended a second time as a free-text row.
+        key = PlayerKey.of(attempt)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        if key.is_canonical:
+            player = db.session.get(Player, key.player_id)
             # A player deleted from the master roster since they answered
             # cannot be targeted canonically; their name still can.
             if player is not None and player.organization_id == coach.organization_id:
-                seen_ids.add(attempt.player_id)
                 retest.roster.players.append(
                     RosterPlayer(
                         player_id=player.id,
@@ -558,10 +596,7 @@ def _seed_retest_roster(retest, attempts, coach) -> None:
                 )
                 position += 1
                 continue
-        key = attempt.player_name.strip().casefold()
-        if key in seen_names:
-            continue
-        seen_names.add(key)
+
         retest.roster.players.append(
             RosterPlayer(player_name=attempt.player_name, position=position)
         )

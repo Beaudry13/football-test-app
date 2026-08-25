@@ -36,10 +36,9 @@ caller can tell a historical fact from a fallback rather than guessing.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from app.models import AttemptQuestionSnapshot, AttemptStatus, PlayerAttempt
+from app.models import AttemptStatus, PlayerAttempt
 from app.services.attempt_scope import official_only
+from app.services.player_identity import PlayerKey, representative_attempts
 
 #: What happened to one targeted player on the retest. Deliberately four
 #: states, never three: an ungraded answer is not a miss, and a player who did
@@ -50,43 +49,6 @@ CORRECT = "correct"
 INCORRECT = "incorrect"
 UNGRADED = "ungraded"
 NOT_SUBMITTED = "not_submitted"
-
-
-@dataclass(frozen=True)
-class PlayerKey:
-    """How one participant is recognised across two rounds.
-
-    CANONICAL IDENTITY IS PREFERRED AND NAMES ARE NEVER USED TO MATCH ONE.
-    A canonical player is matched by player_id, so renaming them between rounds
-    changes nothing, and two players who share a display name stay distinct.
-
-    A free-text participant has no Player row, so a name is all there is. That
-    path is kept explicitly separate - a legacy key can never equal a canonical
-    one, even when the strings match, because "Jalen Reed typed into a phone"
-    and "the Player row called Jalen Reed" are not known to be the same person.
-    Merging them on a string is exactly the guess this refuses to make.
-    """
-
-    player_id: int | None
-    #: Only meaningful when player_id is None. Casefolded for comparison.
-    legacy_name: str | None
-
-    @classmethod
-    def of(cls, attempt: PlayerAttempt) -> PlayerKey:
-        if attempt.player_id is not None:
-            return cls(player_id=attempt.player_id, legacy_name=None)
-        return cls(player_id=None, legacy_name=attempt.player_name.strip().casefold())
-
-    @property
-    def is_canonical(self) -> bool:
-        return self.player_id is not None
-
-
-def _concept_of_delivered(snapshot_rows, question_id: int) -> dict | None:
-    row = snapshot_rows.get(question_id)
-    if row is None:
-        return None
-    return (row.snapshot or {}).get("concept")
 
 
 def _rounds_concept_ids(quiz, attempts) -> tuple[set[int], str]:
@@ -167,6 +129,17 @@ def verification_for(retest) -> dict | None:
     if not concept_ids:
         return None
 
+    # NAMES ALONGSIDE THE IDS, because the card offers another round and the
+    # confirmation has to say what that round is ABOUT. Resolved from the live
+    # questions rather than the snapshot: this is a label for a NEW quiz the
+    # coach is about to build, not a statement about what was delivered.
+    # Unnamed ids are skipped rather than rendered as a number.
+    names_by_id = {
+        q.concept_id: q.concept.name
+        for q in retest.questions
+        if q.concept_id in concept_ids and q.concept is not None
+    }
+
     retest_qs = {q.id for q in retest.questions if q.concept_id in concept_ids}
     # The parent is matched on the SAME concept, not on question identity. A
     # copied question may have been reworded before sending, and v1 measures
@@ -174,12 +147,13 @@ def verification_for(retest) -> dict | None:
     # an identical item - see the module docstring in retests.py.
     parent_qs = {q.id for q in parent.questions if q.concept_id in concept_ids}
 
-    parent_by_key = {}
-    for attempt in parent_attempts:
-        parent_by_key.setdefault(PlayerKey.of(attempt), attempt)
-    retest_by_key = {}
-    for attempt in retest_attempts:
-        retest_by_key.setdefault(PlayerKey.of(attempt), attempt)
+    # DETERMINISTIC, and that is a correctness requirement rather than tidiness.
+    # These used to be built with setdefault over an unordered query, so when a
+    # player held two official attempts - one quiz, two access codes - which
+    # one represented them varied between page loads, and the card could report
+    # a different outcome for the same player on a refresh.
+    parent_by_key = representative_attempts(parent_attempts)
+    retest_by_key = representative_attempts(retest_attempts)
 
     # WHO THIS RETEST WAS BUILT FOR: its own roster, which Phase D set to
     # exactly the players who missed. Reading the roster rather than the
@@ -187,16 +161,19 @@ def verification_for(retest) -> dict | None:
     # and reported as not submitted, instead of vanishing from the comparison.
     targeted: list[dict] = []
     for entry in retest.roster.players if retest.roster else []:
-        key = (
-            PlayerKey(player_id=entry.player_id, legacy_name=None)
-            if entry.player_id is not None
-            else PlayerKey(player_id=None, legacy_name=entry.player_name.strip().casefold())
-        )
+        key = PlayerKey.of_roster_entry(entry)
         retest_attempt = retest_by_key.get(key)
         parent_attempt = parent_by_key.get(key)
         targeted.append(
             {
                 "player_id": entry.player_id,
+                #: THE TARGETING IDENTITY, carried explicitly rather than left
+                #: to coincide with display_name. "Retest again" posts
+                #: player_ids for canonical players and player_names for
+                #: free-text ones; those two fields used to be recoverable only
+                #: because display_name happens to equal player_name for a
+                #: legacy entry. An undocumented coincidence is not an API.
+                "player_name": entry.player_name,
                 "display_name": (
                     entry.player.full_name if entry.player is not None else entry.player_name
                 ),
@@ -228,6 +205,8 @@ def verification_for(retest) -> dict | None:
         #: question's current tag stood in. Never presented as history.
         "concept_source": concept_source,
         "concept_ids": sorted(concept_ids),
+        #: Parallel to concept_ids, for the "retest again" confirmation.
+        "concept_names": [names_by_id[cid] for cid in sorted(concept_ids) if cid in names_by_id],
         "parent_missed_total": parent_missed_total,
         "parent_response_total": len(
             [a for a in parent_attempts if a.status == AttemptStatus.SUBMITTED]
@@ -246,7 +225,11 @@ def verification_for(retest) -> dict | None:
         #: Still graded-incorrect, in the shape Phase D's retest endpoint
         #: takes, so "Retest these 2" needs no second derivation.
         "still_missing": [
-            {"player_id": r["player_id"], "display_name": r["display_name"]}
+            {
+                "player_id": r["player_id"],
+                "player_name": r["player_name"],
+                "display_name": r["display_name"],
+            }
             for r in targeted
             if r["outcome"] == INCORRECT
         ],
