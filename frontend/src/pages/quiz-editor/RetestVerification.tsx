@@ -94,21 +94,18 @@ export function RetestVerification({
           {/* NEITHER OF THESE IS A MISS, and both are named rather than folded
               into one. An ungraded answer is the coach's backlog; a player who
               has not sat it has not failed it. */}
-          {v.ungraded_count > 0 && (
-            <li className={styles.pending}>
-              {/* PLAYERS. This said "N answers still need grading" while
-                  counting PLAYERS whose round is ungraded - a unit error in the
-                  one card whose whole purpose is keeping populations straight. */}
-              <strong>{v.ungraded_count}</strong> player{v.ungraded_count === 1 ? '' : 's'}{' '}
-              {v.ungraded_count === 1 ? 'is' : 'are'} waiting on grading
-            </li>
-          )}
-          {v.not_submitted_count > 0 && (
-            <li className={styles.pending}>
-              <strong>{v.not_submitted_count}</strong> player
-              {v.not_submitted_count === 1 ? ' has' : 's have'} not submitted yet
-            </li>
-          )}
+          {/* NEITHER PENDING STATE IS LISTED HERE, and both are still named.
+              They live in the "what is still missing" line below, which states
+              them WITH the denominator - "5 of 6 haven't answered yet". Listing
+              them here as well printed the same fact twice in consecutive
+              lines. All four states remain distinct and separately counted;
+              what changed is that the two outcomes appear beside each other and
+              the two kinds of outstanding work appear together. Nothing is ever
+              folded into the missed count.
+
+              Safe by construction: is_complete is false whenever either count
+              is non-zero, so the line below always renders when there is
+              something to say. */}
         </ul>
 
         {!v.is_complete && (

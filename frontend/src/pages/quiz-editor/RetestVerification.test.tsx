@@ -98,9 +98,12 @@ describe('the verification card', () => {
 
     // Both counted in PLAYERS, and both named separately: an ungraded round is
     // the coach's own backlog and an absent player has not failed anything.
+    // Both are named, together, in the "what is still missing" line - with the
+    // denominator, and never folded into the missed count.
     const text = () => document.body.textContent ?? '';
-    expect(text()).toMatch(/1 player is waiting on grading/);
-    expect(text()).toMatch(/1 player has not submitted yet/);
+    expect(text()).toMatch(/1 of 6 haven.t answered yet/);
+    expect(text()).toMatch(/1 is waiting on grading/);
+    expect(text()).toMatch(/1 player still missed/);
   });
 
   it('WITHHOLDS ANY VERDICT while the evidence is incomplete', () => {
@@ -178,7 +181,15 @@ describe('the verification card', () => {
        keeping two populations apart. */
     renderCard(
       <RetestVerification
-        verification={verification({ correct_count: 3, incorrect_count: 1, ungraded_count: 1 })}
+        /* is_complete is derived server-side as "no ungraded AND no
+           unsubmitted", so an ungraded count with is_complete true is not a
+           state the API can produce. */
+        verification={verification({
+          correct_count: 3,
+          incorrect_count: 1,
+          ungraded_count: 1,
+          is_complete: false,
+        })}
         quizId={9}
       />,
     );
@@ -188,7 +199,7 @@ describe('the verification card', () => {
     expect(text).toMatch(/Last check/);
     expect(text).toMatch(/3 players answered correctly this time/);
     expect(text).toMatch(/1 player still missed/);
-    expect(text).toMatch(/1 player is waiting on grading/);
+    expect(text).toMatch(/1 is waiting on grading/);
     expect(text).not.toMatch(/answers? still need/);
   });
 
