@@ -215,3 +215,18 @@
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: var(--peira-text-control);
 }
+
+/* "10 of 12 turned it in" - one sentence where three cards used to be.
+ *
+ * Plain text rather than a card: it is context for the decision above it, not
+ * a result in its own right, and giving it a card back would be reintroducing
+ * the furniture this replaced. */
+.turnedIn {
+  margin: 0 0 var(--space-4);
+  font-size: var(--peira-text-control);
+}
+
+.turnedInNote {
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta);
+}

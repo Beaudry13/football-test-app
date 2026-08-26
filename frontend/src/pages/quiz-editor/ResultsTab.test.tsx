@@ -277,24 +277,57 @@ describe('the stats row when the roster denominator is gone', () => {
     });
     renderResultsTab();
 
-    // The LABELS stay - a dash that says what is unavailable beats a card
-    // that silently vanishes. Only the fabricated numbers go.
-    expect(await screen.findByText('Responses')).toBeInTheDocument();
+    // THE RULE SURVIVES THE RESHAPE. The count that is always true is stated;
+    // the denominator that expired is NAMED as unavailable rather than
+    // silently dropped, so a coach can still tell "we never knew" from "this
+    // screen does not show it" - and no fabricated 0 is printed.
+    expect(await screen.findByText(/turned it in/)).toBeInTheDocument();
     expect(screen.getByText('17')).toBeInTheDocument();
-    expect(screen.getByText('Roster size')).toBeInTheDocument();
-    expect(screen.getByText('Response rate')).toBeInTheDocument();
-    expect(screen.getAllByText('—')).toHaveLength(2);
+    expect(screen.getByText(/no longer recorded/)).toBeInTheDocument();
     expect(screen.queryByText('0%')).toBeNull();
     expect(screen.queryByText('0')).toBeNull();
   });
 
-  it('keeps both stats whenever the roster is real', async () => {
+  it('states both numbers as one sentence whenever the roster is real', async () => {
     vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue(sampleDashboard);
     renderResultsTab();
 
-    expect(await screen.findByText('Roster size')).toBeInTheDocument();
-    expect(screen.getByText('Response rate')).toBeInTheDocument();
-    expect(screen.getByText('50%')).toBeInTheDocument();
+    const line = await screen.findByText(/turned it in/);
+    expect(line).toHaveTextContent('1');
+    expect(line).toHaveTextContent('2');
+    // The rate was the other two divided; it is no longer a third element.
+    expect(screen.queryByText('50%')).toBeNull();
+    expect(screen.queryByText('Roster size')).toBeNull();
+  });
+
+  it('SAYS NOTHING on a retest, where the card above already said it', async () => {
+    /* "3 Responses / 3 Roster size / 100%" on a retest restates the structure
+       of the feature: the roster IS the targeted group, so the rate is always
+       100% once everyone answers. */
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      verification: {
+        parent_quiz_id: 1,
+        parent_quiz_title: 'Install Week 2',
+        concept_source: 'snapshot',
+        concept_ids: [1],
+        concept_names: ['Force / Contain'],
+        parent_missed_total: 3,
+        parent_response_total: 10,
+        targeted_total: 3,
+        correct_count: 3,
+        incorrect_count: 0,
+        ungraded_count: 0,
+        not_submitted_count: 0,
+        is_complete: true,
+        players: [],
+        still_missing: [],
+      },
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText('Since the last check')).toBeInTheDocument();
+    expect(screen.queryByText(/turned it in/)).toBeNull();
   });
 });
 
@@ -335,8 +368,7 @@ describe('Results leads with what to teach next', () => {
     expect(await screen.findByText('Teach next')).toBeInTheDocument();
     expect(screen.getByText('Force / Contain')).toBeInTheDocument();
     // Demoted, NOT deleted - this is how a coach checks the claim above it.
-    expect(screen.getByText('Responses')).toBeInTheDocument();
-    expect(screen.getByText('Response rate')).toBeInTheDocument();
+    expect(screen.getByText(/turned it in/)).toBeInTheDocument();
   });
 
   it('FALLS BACK to ordinary Results when nothing is tagged', async () => {
@@ -348,7 +380,7 @@ describe('Results leads with what to teach next', () => {
     });
     renderResultsTab();
 
-    expect(await screen.findByText('Responses')).toBeInTheDocument();
+    expect(await screen.findByText(/turned it in/)).toBeInTheDocument();
     expect(screen.queryByText('Teach next')).not.toBeInTheDocument();
   });
 
@@ -387,7 +419,7 @@ describe('Results leads with what to teach next', () => {
     });
     renderResultsTab();
 
-    await screen.findByText('Responses');
+    await screen.findByText(/turned it in/);
     expect(screen.queryByText(/need(s)? grading/)).not.toBeInTheDocument();
   });
 

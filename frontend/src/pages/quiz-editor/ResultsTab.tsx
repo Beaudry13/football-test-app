@@ -175,6 +175,8 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
      id rather than by name: a coach can retag between rounds, and two concepts
      can be renamed to match, but an id is the thing the card actually
      compared. */
+  /* A retest's own stats restate what the verification card already said. */
+  const isRetest = dashboard?.verification != null;
   const verifiedConceptIds = new Set(dashboard?.verification?.concept_ids ?? []);
   const teachNextConcepts = (dashboard?.concept_breakdown ?? []).filter(
     (c) => !verifiedConceptIds.has(c.concept_id),
@@ -232,40 +234,44 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             </p>
           )}
 
-          <div className={styles.statsRow}>
-            <div className={`${nb.card} ${styles.stat}`}>
-              <div className={styles.statValue}>{dashboard.response_count}</div>
-              <div className={styles.statLabel}>Responses</div>
-            </div>
-            {/* AN EM DASH, NOT A MISSING CARD. Both of these depend on a
-                denominator that expires: roster_size counts who is eligible
-                under the quiz's currently ACTIVE code, and once that lapses it
-                falls back to the quiz's own Roster - empty for a coach who
-                activates against a Group. Responses above is all-time and is
-                always true.
+          {/* WHO TURNED IT IN, IN ONE SENTENCE.
+              This was three cards - Responses, Roster size, Response rate -
+              for what is really two facts, the third being the first two
+              divided. Three tiles of analytics furniture sat between the
+              coaching decision and the evidence that supports it, and
+              "Roster size" is a database noun a coach would never say.
 
-                An earlier pass removed the two cards entirely when the
-                denominator was gone. That over-corrected: it made the row
-                silently change shape, and a coach could not tell "we never
-                knew" from "this screen does not show that". The dash says the
-                value is unavailable and keeps the label that explains what is
-                unavailable, which is strictly more information than an absent
-                card - while still never printing the 0 that started this. */}
-            <div className={`${nb.card} ${styles.stat}`}>
-              <div className={styles.statValue}>
-                {hasResponseDenominator(dashboard.roster_size) ? dashboard.roster_size : '—'}
-              </div>
-              <div className={styles.statLabel}>Roster size</div>
-            </div>
-            <div className={`${nb.card} ${styles.stat}`}>
-              <div className={styles.statValue}>
-                {dashboard.response_rate !== null
-                  ? `${Math.round(dashboard.response_rate * 100)}%`
-                  : '—'}
-              </div>
-              <div className={styles.statLabel}>Response rate</div>
-            </div>
-          </div>
+              ON A RETEST IT IS SUPPRESSED ENTIRELY. The verification card
+              directly above has already said "This retest went to the 6
+              players who missed it", and its roster IS the targeted group -
+              so "6 Responses / 6 Roster size / 100%" restates the structure
+              of the feature rather than telling anyone anything.
+
+              AN EM DASH, NOT A MISSING NUMBER, when the denominator expired.
+              roster_size counts who is eligible under the currently ACTIVE
+              code; once that lapses it falls back to the quiz's own Roster,
+              which is empty for a coach who activates against a Group.
+              response_count is all-time and always true. Saying "10 turned it
+              in" and naming what is unavailable keeps a coach able to tell "we
+              never knew" from "this screen does not show it" - while still
+              never printing the fabricated 0 that started all this. */}
+          {!isRetest && (
+            <p className={styles.turnedIn}>
+              {hasResponseDenominator(dashboard.roster_size) ? (
+                <>
+                  <strong>{dashboard.response_count}</strong> of{' '}
+                  <strong>{dashboard.roster_size}</strong> turned it in
+                </>
+              ) : (
+                <>
+                  <strong>{dashboard.response_count}</strong> turned it in{' '}
+                  <span className={styles.turnedInNote}>
+                    &mdash; out of how many is no longer recorded
+                  </span>
+                </>
+              )}
+            </p>
+          )}
 
           {dashboard.missing_players.length > 0 && (
             <div className={`${nb.card} ${styles.missingCard}`}>
