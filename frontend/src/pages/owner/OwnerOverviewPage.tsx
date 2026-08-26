@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getPlatformOverview } from '../../api/owner';
+import { getPlatformOverview, listAccessRequests } from '../../api/owner';
 import { getErrorMessage } from '../../api/client';
-import type { PlatformOverview } from '../../api/types';
+import type { AccessRequestRow, PlatformOverview } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { LoadingState } from '../../components/ui/LoadingState';
-import { count } from './ownerFormat';
+import { count, shortDate, UNKNOWN } from './ownerFormat';
 import styles from './Owner.module.css';
 
 const TOTALS: { key: keyof PlatformOverview['totals']; label: string }[] = [
@@ -38,11 +38,22 @@ const WINDOW_ROWS: { key: keyof PlatformOverview['windows'][string]; label: stri
 export function OwnerOverviewPage() {
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* LOADED SEPARATELY, AND ALLOWED TO FAIL SEPARATELY. The metrics above are
+     this page's reason to exist; a request list that 500s must not replace
+     them with an error banner. Its own error stays inside its own section. */
+  const [requests, setRequests] = useState<AccessRequestRow[] | null>(null);
+  const [requestsError, setRequestsError] = useState<string | null>(null);
 
   useEffect(() => {
     getPlatformOverview()
       .then(setOverview)
       .catch((err) => setError(getErrorMessage(err)));
+  }, []);
+
+  useEffect(() => {
+    listAccessRequests()
+      .then((body) => setRequests(body.access_requests))
+      .catch((err) => setRequestsError(getErrorMessage(err)));
   }, []);
 
   if (error) return <ErrorBanner message={error} />;
@@ -99,6 +110,49 @@ export function OwnerOverviewPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* WHO HAS ASKED TO BE LET IN.
+          Peira accepts these from the public site at /request-access and
+          stored them correctly all along - but the only way to read one was a
+          Flask CLI command, so a form linked from the front page could only be
+          answered by somebody with a server shell.
+
+          READ-ONLY, deliberately. No approve, deny, delete, status or note:
+          the reply to one of these is a person writing an email, and nothing
+          in Peira issues an invitation from this list. */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionHeading}>Access requests</h2>
+        <p className={styles.sectionNote}>
+          People who asked for early access from the public site, newest first. Nothing here
+          grants anything &mdash; invitations are still sent by hand.
+        </p>
+        {requestsError ? (
+          <ErrorBanner message={requestsError} />
+        ) : requests === null ? (
+          <LoadingState />
+        ) : requests.length === 0 ? (
+          <p className={styles.sectionNote}>No access requests yet.</p>
+        ) : (
+          <ul className={styles.requestList}>
+            {requests.map((row) => (
+              <li key={row.id} className={styles.requestRow}>
+                <div className={styles.requestWho}>
+                  <strong>{row.name}</strong>
+                  <a href={`mailto:${row.email}`} className={styles.requestEmail}>
+                    {row.email}
+                  </a>
+                </div>
+                <div className={styles.requestMeta}>
+                  {/* An em dash, not an empty cell: the team is optional on
+                      the form, so its absence is a fact rather than a gap. */}
+                  <span className={styles.requestTeam}>{row.team ?? UNKNOWN}</span>
+                  <span className={styles.requestDate}>{shortDate(row.requested_at)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

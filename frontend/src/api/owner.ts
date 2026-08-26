@@ -1,5 +1,6 @@
 import { api } from './client';
 import type {
+  AccessRequestRow,
   MergePreview,
   MergeResult,
   OwnerCoachRow,
@@ -16,7 +17,10 @@ import type {
  * failure here as "forbidden" and show a permissions message that confirms
  * the area exists.
  *
- * Read-only by design. There is deliberately no mutating call in this file. */
+ * Read-only by design, with the single deliberate exception of the two merge
+ * calls below. Access requests in particular are list-only: no approve, deny,
+ * delete or invite call exists, because deciding is a person writing an
+ * email. */
 
 export function getPlatformOverview(): Promise<PlatformOverview> {
   return api.get<PlatformOverview>('/owner/overview');
@@ -70,6 +74,12 @@ export interface MergeRequest {
 }
 
 /** Writes nothing. A POST only because it carries a body. */
+/** People who asked for access, newest first. Read-only: there is no
+ *  corresponding approve, deny or delete call, by design. */
+export function listAccessRequests(): Promise<{ access_requests: AccessRequestRow[] }> {
+  return api.get<{ access_requests: AccessRequestRow[] }>('/owner/access-requests');
+}
+
 export function previewMerge(body: MergeRequest): Promise<MergePreview> {
   return api.post<MergePreview>('/owner/merges/preview', body);
 }

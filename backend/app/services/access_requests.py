@@ -1,7 +1,7 @@
-"""Recording somebody who has asked to be let into the beta.
+"""Recording somebody who has asked to be let into the beta, and reading them back.
 
-THE WHOLE SURFACE IS ONE FUNCTION, AND IT CANNOT FAIL VISIBLY
--------------------------------------------------------------
+`record` IS SILENT; `recent` IS NOT, AND THE AUDIENCE IS THE DIFFERENCE
+-----------------------------------------------------------------------
 `record` returns nothing. That is deliberate: there is no outcome the caller
 is allowed to tell the person apart by. First request and hundredth request,
 brand-new address and one that already has an account - all the same calm
@@ -12,6 +12,11 @@ form that answers "is this address known to Peira" for anybody who types one
 in. The same is true of "that email already has an account". A request form is
 open to the whole internet by design, so it must not become a way to test
 whether a particular coach uses this product.
+
+`recent` is the other side of that, and it is not a contradiction: the
+silence protects a form open to the whole internet, while `recent` answers an
+authenticated platform owner reading their own inbox. Nothing it returns is
+reachable without passing the owner blueprint's gate.
 
 THE INSERT IS ON CONFLICT DO NOTHING, NOT CHECK-THEN-INSERT
 ------------------------------------------------------------
@@ -69,3 +74,22 @@ def record(name: str, email: str, team: str | None = None) -> None:
         .on_conflict_do_nothing(index_elements=["email"])
     )
     db.session.commit()
+
+
+def recent(limit: int = 100) -> list[AccessRequest]:
+    """Who has asked, newest first.
+
+    NEWEST FIRST because the useful question is "who is waiting", and the top
+    of the list is where somebody looks. `requested_at` is the FIRST time this
+    address asked - a repeat submission is discarded by the insert above, so a
+    request does not jump the queue by being sent twice.
+
+    READ-ONLY, and there is deliberately no approve, deny or delete here.
+    Deciding is a person writing an email; nothing in Peira issues an invite
+    from this table.
+    """
+    return (
+        AccessRequest.query.order_by(AccessRequest.requested_at.desc())
+        .limit(limit)
+        .all()
+    )

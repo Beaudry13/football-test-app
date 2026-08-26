@@ -36,7 +36,7 @@ from app.schemas.owner import MergeExecuteSchema, MergePreviewSchema
 from app.utils.validation import load_json_body
 from app.extensions import db
 from app.models import Organization
-from app.services import organization_merge, platform_metrics
+from app.services import access_requests, organization_merge, platform_metrics
 from app.utils.auth import require_platform_owner
 
 owner_bp = Blueprint("owner", __name__)
@@ -150,6 +150,30 @@ def coaches():
 # a preview that writes nothing, then an execution that re-verifies the
 # preview still describes reality. See services/organization_merge.py.
 # ---------------------------------------------------------------------------
+
+
+@owner_bp.get("/access-requests")
+def access_request_list():
+    """People who have asked to be let into Peira, newest first.
+
+    WHY THIS IS AN OWNER ROUTE AND NOT A COACH ONE. An access request belongs
+    to nobody's organization - the person has no account and no program yet,
+    which is the whole reason they are asking. There is no tenant to scope it
+    to, so it sits at the platform level with the rest of Peira-the-product.
+
+    IDENTITY IS THE POINT, as it is on /coaches. A name and an email are what a
+    request IS; returning counts would answer nothing. That is not the customer
+    content the privacy guard is about - no quiz, question, answer or player
+    name is reachable from here, and this person is not yet a customer at all.
+
+    STRICTLY READ-ONLY. No approve, deny, delete, status, note, invite or
+    account creation - deciding is a person writing an email, and this route
+    exists so the owner can see who to write to. Peira accepted these from the
+    public site and could previously only show them through a server shell.
+    """
+    return jsonify(
+        {"access_requests": [row.to_dict() for row in access_requests.recent()]}
+    )
 
 
 @owner_bp.post("/merges/preview")

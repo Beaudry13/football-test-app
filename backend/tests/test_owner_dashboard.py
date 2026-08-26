@@ -109,6 +109,10 @@ OWNER_ROUTES = [
     "/api/owner/organizations",
     "/api/owner/organizations/1",
     "/api/owner/coaches",
+    # Access requests join the same matrix rather than growing a parallel one:
+    # anonymous 401, member 404, org admin 404, and the CORS preflight, all
+    # from this single entry.
+    "/api/owner/access-requests",
 ]
 
 
@@ -686,3 +690,108 @@ class TestNoMetricIsSilentlyDropped:
         ).get_json()
         keys = {row["key"] for row in body["feature_adoption"]}
         assert {"concept_tagging", "retest_created", "retest_answered"} <= keys
+
+
+class TestAccessRequests:
+    """People who asked to be let into Peira, where the owner can see them.
+
+    A PROACTIVE OPERATIONS IMPROVEMENT, not a repair. The public form at
+    /request-access has always stored submissions correctly and still does -
+    tests/test_access_requests.py pins that end of it. What was missing was
+    anywhere inside Peira to READ them: the only viewer was a Flask CLI
+    command, so a form linked from the front page could only be answered by
+    someone with a server shell.
+
+    STRICTLY READ-ONLY. No approve, deny, delete, status, note, invite or
+    account creation exists here, and the mutating-route allow-list above
+    fails if one appears.
+    """
+
+    def _submit(self, client, name, email, team=None):
+        body = {"name": name, "email": email}
+        if team is not None:
+            body["team"] = team
+        response = client.post("/api/auth/request-access", json=body)
+        assert response.status_code == 202
+        return response
+
+    def _list(self, client, owner):
+        response = client.get(
+            "/api/owner/access-requests", headers=headers(owner["access_token"])
+        )
+        assert response.status_code == 200
+        return response.get_json()["access_requests"]
+
+    def test_the_platform_owner_can_list_them(self, client, owner):
+        self._submit(client, "Dana Reyes", "dana@northside.test", "Northside HS")
+
+        rows = self._list(client, owner)
+
+        assert len(rows) == 1
+        assert rows[0]["name"] == "Dana Reyes"
+        assert rows[0]["email"] == "dana@northside.test"
+        assert rows[0]["team"] == "Northside HS"
+        assert rows[0]["requested_at"]
+
+    def test_newest_first(self, client, owner, app):
+        """Who is waiting is the question, and the top of the list is where
+        somebody looks."""
+        from datetime import datetime, timedelta, timezone
+
+        from app.extensions import db
+        from app.models import AccessRequest
+
+        self._submit(client, "First Asked", "first@a.test")
+        self._submit(client, "Second Asked", "second@b.test")
+        self._submit(client, "Third Asked", "third@c.test")
+
+        # The three land in the same transaction, so their timestamps can tie.
+        # Spread them deliberately rather than trusting insert order.
+        with app.app_context():
+            base = datetime(2026, 8, 1, tzinfo=timezone.utc)
+            for offset, email in enumerate(["first@a.test", "second@b.test", "third@c.test"]):
+                row = AccessRequest.query.filter_by(email=email).one()
+                row.requested_at = base + timedelta(days=offset)
+            db.session.commit()
+
+        rows = self._list(client, owner)
+
+        assert [row["name"] for row in rows] == ["Third Asked", "Second Asked", "First Asked"]
+
+    def test_an_empty_list_when_nobody_has_asked(self, client, owner):
+        assert self._list(client, owner) == []
+
+    def test_a_missing_team_comes_back_as_null(self, client, owner):
+        """Optional, and genuinely optional - the client renders the absence
+        rather than being handed an empty string to guess about."""
+        self._submit(client, "No Team Yet", "solo@coach.test")
+
+        rows = self._list(client, owner)
+
+        assert rows[0]["team"] is None
+
+    def test_a_blank_team_is_also_null(self, client, owner):
+        self._submit(client, "Blank Team", "blank@coach.test", team="   ")
+
+        rows = self._list(client, owner)
+
+        assert rows[0]["team"] is None
+
+    def test_a_repeat_request_is_still_ONE_row_here(self, client, owner):
+        """The duplicate-email behaviour is unchanged by this read surface:
+        the first request survives, keeping how long they have waited."""
+        self._submit(client, "Asked Twice", "twice@coach.test", "Original Team")
+        self._submit(client, "Asked Twice Again", "TWICE@coach.test", "Changed Team")
+
+        rows = self._list(client, owner)
+
+        assert len(rows) == 1
+        assert rows[0]["name"] == "Asked Twice"
+        assert rows[0]["team"] == "Original Team"
+
+    def test_it_exposes_no_way_to_act_on_a_request(self, app):
+        """Read-only in the url_map, not just in intent."""
+        with app.app_context():
+            for rule in app.url_map.iter_rules():
+                if rule.rule.startswith("/api/owner/access-requests"):
+                    assert rule.methods & {"POST", "PUT", "PATCH", "DELETE"} == set()

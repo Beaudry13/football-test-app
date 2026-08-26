@@ -25,10 +25,14 @@ import styles from './AuthPages.module.css';
  * "is this address known to Peira" for anybody who typed one in. The page
  * cannot tell the difference either, because the server does not say.
  *
- * NOT LINKED FROM ANYWHERE YET, on purpose: public registration is still
- * open, and a "Request access" link next to a working "Sign up" button is two
- * front doors and a confused coach. The link belongs with the decision to
- * close signup, not with building this.
+ * LINKED FROM THE FRONT DOOR: the homepage nav and hero both point here, and
+ * so does /register. (This comment used to say the page was not linked
+ * anywhere yet - that stopped being true once the marketing homepage shipped.)
+ *
+ * Which is why the owner dashboard now lists what arrives here. Submissions
+ * have always been stored correctly; until recently the only way to READ one
+ * was a Flask CLI command, so a form on the front page could only be answered
+ * from a server shell.
  */
 export function RequestAccessPage() {
   const [form, setForm] = useState({ name: '', email: '', team: '' });

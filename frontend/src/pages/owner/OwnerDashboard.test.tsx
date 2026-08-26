@@ -150,6 +150,9 @@ describe('Owner overview', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(ownerApi, 'getPlatformOverview').mockResolvedValue(overview);
+    // The access-request list loads independently of the metrics, so every
+    // overview test needs it defined - empty unless the test says otherwise.
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: [] });
   });
 
   it('shows the platform totals', async () => {
@@ -429,5 +432,115 @@ describe('OwnerLayout access', () => {
     // the URL.
     expect(screen.getByText('coach dashboard')).toBeInTheDocument();
     expect(screen.queryByText(/Owner Dashboard/)).not.toBeInTheDocument();
+  });
+});
+
+
+describe('Access requests on the owner overview', () => {
+  /** WHY THIS SECTION EXISTS.
+   *
+   * Peira accepts access requests from the public site and has always stored
+   * them correctly. What was missing was anywhere inside Peira to read them:
+   * the only viewer was a Flask CLI command, so a form linked from the front
+   * page could only be answered by somebody with a server shell. This is an
+   * operations improvement, not a repair - nothing was ever lost.
+   *
+   * Read-only throughout: no approve, deny, delete, status or note exists.
+   */
+  const requests = [
+    {
+      id: 3,
+      name: 'Dana Reyes',
+      email: 'dana@northside.test',
+      team: 'Northside HS',
+      requested_at: '2026-08-20T12:00:00Z',
+    },
+    {
+      id: 1,
+      name: 'Sam Okafor',
+      email: 'sam@example.test',
+      team: null,
+      requested_at: '2026-08-18T09:00:00Z',
+    },
+  ];
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(ownerApi, 'getPlatformOverview').mockResolvedValue(overview);
+  });
+
+  it('lists who has asked, with name, email, team and date', async () => {
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: requests });
+    renderAt('/owner');
+
+    expect(await screen.findByText('Access requests')).toBeInTheDocument();
+    expect(screen.getByText('Dana Reyes')).toBeInTheDocument();
+    expect(screen.getByText('dana@northside.test')).toBeInTheDocument();
+    expect(screen.getByText('Northside HS')).toBeInTheDocument();
+    expect(screen.getByText(shortDate('2026-08-20T12:00:00Z'))).toBeInTheDocument();
+  });
+
+  it('renders a missing team as unknown rather than blank', async () => {
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: requests });
+    renderAt('/owner');
+
+    await screen.findByText('Sam Okafor');
+    const row = screen.getByText('Sam Okafor').closest('li') as HTMLElement;
+    expect(within(row).getByText(UNKNOWN)).toBeInTheDocument();
+  });
+
+  it('keeps the order the server sent, newest first', async () => {
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: requests });
+    renderAt('/owner');
+
+    await screen.findByText('Dana Reyes');
+    const names = screen.getAllByRole('listitem').map((li) => li.textContent ?? '');
+    const dana = names.findIndex((t) => t.includes('Dana Reyes'));
+    const sam = names.findIndex((t) => t.includes('Sam Okafor'));
+    expect(dana).toBeLessThan(sam);
+  });
+
+  it('says so plainly when nobody has asked', async () => {
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: [] });
+    renderAt('/owner');
+
+    expect(await screen.findByText('No access requests yet.')).toBeInTheDocument();
+  });
+
+  it('OFFERS NO WAY TO ACT ON A REQUEST', async () => {
+    // Read-only is the whole scope. Replying is a person writing an email.
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: requests });
+    renderAt('/owner');
+
+    await screen.findByText('Dana Reyes');
+    for (const label of [/approve/i, /deny/i, /reject/i, /delete/i, /invite/i]) {
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+    }
+  });
+
+  it('A FAILURE HERE DOES NOT TAKE DOWN THE DASHBOARD', async () => {
+    /* The metrics are the page's reason to exist. A request list that errors
+       must not replace them with a banner. */
+    vi.spyOn(ownerApi, 'listAccessRequests').mockRejectedValue(new Error('boom'));
+    renderAt('/owner');
+
+    // The platform totals still render...
+    expect(await screen.findByText('12')).toBeInTheDocument();
+    expect(screen.getByText('Practice attempts')).toBeInTheDocument();
+    expect(screen.getByText('Feature adoption')).toBeInTheDocument();
+    // ...and the failure is reported inside its own section.
+    expect(screen.getByText('Access requests')).toBeInTheDocument();
+  });
+
+  it('a metrics failure does not hide the requests section either', async () => {
+    vi.spyOn(ownerApi, 'getPlatformOverview').mockRejectedValue(new Error('nope'));
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: requests });
+    renderAt('/owner');
+
+    // Documents the CURRENT behaviour: the page short-circuits on a metrics
+    // error, so the section is not reachable. Asserted so that if the page is
+    // ever made resilient, this is a deliberate change rather than a surprise.
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('Dana Reyes')).not.toBeInTheDocument();
   });
 });

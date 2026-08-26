@@ -945,3 +945,17 @@ export interface MergeResult {
   counts_moved: Record<string, number>;
   invitations_revoked: number;
 }
+
+/** Somebody who asked to be let into Peira from the public request form.
+ *
+ * A platform-owner record with no organization: the person has no account and
+ * no program yet, which is the whole reason they are asking. Read-only - Peira
+ * has no approve, deny or invite action built on this. */
+export interface AccessRequestRow {
+  id: number;
+  name: string;
+  email: string;
+  /** Optional on the form, so genuinely absent rather than an empty string. */
+  team: string | null;
+  requested_at: string | null;
+}
