@@ -59,8 +59,23 @@ export function RetestVerification({
           </span>
         </p>
         <p className={styles.targeted}>
-          This retest went to the <strong>{v.targeted_total}</strong>{' '}
-          player{v.targeted_total === 1 ? '' : 's'} who missed it.
+          {/* RECONCILES THE TWO FIGURES when they differ. A coach can retest a
+              SUBSET of the players who missed - "14 of 14 players missed this"
+              above "went to the 6 players who missed it" read like an
+              arithmetic error, when in fact the coach chose six. Saying "6 of
+              those 14" accounts for the other eight instead of leaving them
+              hanging. */}
+          {v.targeted_total < v.parent_missed_total ? (
+            <>
+              This retest went to <strong>{v.targeted_total}</strong> of those{' '}
+              <strong>{v.parent_missed_total}</strong>.
+            </>
+          ) : (
+            <>
+              This retest went to the <strong>{v.targeted_total}</strong>{' '}
+              player{v.targeted_total === 1 ? '' : 's'} who missed it.
+            </>
+          )}
         </p>
 
         <ul className={styles.outcomes}>
@@ -99,9 +114,30 @@ export function RetestVerification({
         {!v.is_complete && (
           /* NO IMPROVEMENT STATEMENT WHILE THE EVIDENCE IS INCOMPLETE. A
              number that moves once grading finishes was never a finding, and
-             saying so now would be a claim the data cannot yet support. */
+             saying so now would be a claim the data cannot yet support.
+
+             AND IT NAMES WHAT IS MISSING. "This is not the full picture yet"
+             was true but vague: it told a coach the data was incomplete
+             without saying what would complete it, or whether that was their
+             job. "5 of 6 haven't answered yet" is the same length and says who
+             to chase; "1 is waiting on grading" says the remaining work is the
+             coach's own. Both are named when both are true, and neither is
+             ever folded into the missed count. */
           <p className={styles.incomplete}>
-            Still waiting on some answers &mdash; this is not the full picture yet.
+            {v.not_submitted_count > 0 && (
+              <>
+                <strong>{v.not_submitted_count}</strong> of{' '}
+                <strong>{v.targeted_total}</strong> haven&rsquo;t answered yet
+              </>
+            )}
+            {v.not_submitted_count > 0 && v.ungraded_count > 0 && <>, and </>}
+            {v.ungraded_count > 0 && (
+              <>
+                <strong>{v.ungraded_count}</strong>{' '}
+                {v.ungraded_count === 1 ? 'is' : 'are'} waiting on grading
+              </>
+            )}
+            .
           </p>
         )}
 

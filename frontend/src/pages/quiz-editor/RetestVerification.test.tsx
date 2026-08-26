@@ -111,13 +111,15 @@ describe('the verification card', () => {
       />,
     );
 
-    expect(screen.getByText(/not the full picture yet/i)).toBeInTheDocument();
+    // This fixture has nobody outstanding, only grading - so it names that.
+    // Whole-body match: the numbers sit in <strong>, splitting the sentence.
+    expect(document.body.textContent ?? '').toMatch(/2 are waiting on grading/i);
   });
 
   it('says nothing about incompleteness when everything is graded', () => {
     renderCard(<RetestVerification verification={verification({ is_complete: true })} />);
 
-    expect(screen.queryByText(/not the full picture/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/haven.t answered yet|waiting on grading/i)).not.toBeInTheDocument();
   });
 
   it('admits when the concept had to be matched on the CURRENT tag', () => {
@@ -279,5 +281,101 @@ describe('the verification card', () => {
     expect(text).toMatch(/Force \/ Contain - Retest 2/);
     expect(text).toMatch(/1 of 3 players missed this/);
     expect(text).not.toMatch(/First check|original|Install Week/i);
+  });
+
+  it('NAMES WHAT IS MISSING instead of saying the picture is incomplete', () => {
+    /* "This is not the full picture yet" was true but vague - it never said
+       what would complete it, or whose job that was. */
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          targeted_total: 6,
+          correct_count: 1,
+          incorrect_count: 0,
+          ungraded_count: 0,
+          not_submitted_count: 5,
+          is_complete: false,
+        })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/5 of 6 haven.t answered yet/);
+    expect(text).not.toMatch(/not the full picture/);
+    // Still no improvement claim while the round is unfinished.
+    expect(text).not.toMatch(/improved|better|progress/i);
+  });
+
+  it('names BOTH kinds of outstanding work when both exist', () => {
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          targeted_total: 6,
+          correct_count: 2,
+          incorrect_count: 1,
+          ungraded_count: 1,
+          not_submitted_count: 2,
+          is_complete: false,
+        })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/2 of 6 haven.t answered yet/);
+    expect(text).toMatch(/1 is waiting on grading/);
+    // And neither has been folded into the missed count.
+    expect(text).toMatch(/1 player still missed/);
+  });
+
+  it('says only the grading half when everyone has answered', () => {
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          targeted_total: 6,
+          correct_count: 4,
+          incorrect_count: 0,
+          ungraded_count: 2,
+          not_submitted_count: 0,
+          is_complete: false,
+        })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/2 are waiting on grading/);
+    expect(text).not.toMatch(/haven.t answered yet/);
+  });
+
+  it('RECONCILES a retest sent to only some of the players who missed', () => {
+    /* "14 of 14 players missed this" over "went to the 6 players who missed
+       it" read like an arithmetic error. The coach chose six. */
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          parent_missed_total: 14,
+          parent_response_total: 14,
+          targeted_total: 6,
+        })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/14 of 14 players missed this/);
+    expect(text).toMatch(/went to 6 of those 14/);
+  });
+
+  it('keeps the plain wording when everyone who missed was retested', () => {
+    renderCard(
+      <RetestVerification
+        verification={verification({ parent_missed_total: 6, targeted_total: 6 })}
+        quizId={9}
+      />,
+    );
+
+    expect(document.body.textContent ?? '').toMatch(/went to the 6 players who missed it/);
   });
 });
