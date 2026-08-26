@@ -48,7 +48,7 @@ describe('the verification card', () => {
     // outcome is never shown as a fraction of the team.
     renderCard(<RetestVerification verification={verification()} />);
 
-    expect(screen.getByText(/First check/)).toBeInTheDocument();
+    expect(screen.getByText(/Last check/)).toBeInTheDocument();
     expect(screen.getByText(/This retest went to the/)).toBeInTheDocument();
     expect(screen.getByText(/answered correctly this time/)).toBeInTheDocument();
     // No percentage anywhere - a percentage invites exactly the comparison
@@ -183,6 +183,7 @@ describe('the verification card', () => {
 
     const text = document.body.textContent ?? '';
     expect(text).toMatch(/6 of 22 players missed this/);
+    expect(text).toMatch(/Last check/);
     expect(text).toMatch(/3 players answered correctly this time/);
     expect(text).toMatch(/1 player still missed/);
     expect(text).toMatch(/1 player is waiting on grading/);
@@ -213,13 +214,70 @@ describe('the verification card', () => {
 
     await user.click(screen.getByRole('button', { name: 'Retest these 2' }));
 
-    expect(screen.getByText(/build a draft on/)).toHaveTextContent('Force / Contain');
-    expect(screen.queryByText(/Install Week 2/)).not.toBeInTheDocument();
+    // Scoped to the CONFIRMATION. The parent quiz title legitimately appears
+    // above, in the "Last check" line that names the round being compared -
+    // what must not happen is the confirmation naming the quiz where it means
+    // the concept.
+    const confirmation = screen.getByRole('dialog', { name: 'Create retest' });
+    expect(confirmation).toHaveTextContent('Force / Contain');
+    expect(confirmation).not.toHaveTextContent('Install Week 2');
   });
 
   it('offers no round when the concept has no name to confirm with', () => {
     renderCard(<RetestVerification verification={verification({ concept_names: [] })} quizId={9} />);
 
     expect(screen.queryByRole('button', { name: /Retest th(is|ese)/ })).not.toBeInTheDocument();
+  });
+
+  it('NAMES THE ROUND IT IS COMPARED AGAINST', () => {
+    /* REGRESSION. This said "First check". The backend has always compared
+       against the IMMEDIATE PARENT, so on a retest of a retest the card
+       reported round 2's figures under the original round's name. */
+    renderCard(
+      <RetestVerification
+        verification={verification({ parent_quiz_title: 'Force / Contain - Retest' })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/Last check/);
+    expect(text).toMatch(/Force \/ Contain - Retest/);
+    expect(text).not.toMatch(/First check/);
+  });
+
+  it('reads naturally on a FIRST retest, where the parent IS the original', () => {
+    renderCard(
+      <RetestVerification
+        verification={verification({ parent_quiz_title: 'Install Week 2' })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/Last check/);
+    expect(text).toMatch(/Install Week 2/);
+    expect(text).toMatch(/6 of 22 players missed this/);
+  });
+
+  it('never implies the parent is the original quiz on a LATER round', () => {
+    // Round 3: the parent is itself a retest. Nothing may call it the first
+    // check, and nothing may claim to reach past it to the original.
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          parent_quiz_id: 77,
+          parent_quiz_title: 'Force / Contain - Retest 2',
+          parent_missed_total: 1,
+          parent_response_total: 3,
+        })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/Force \/ Contain - Retest 2/);
+    expect(text).toMatch(/1 of 3 players missed this/);
+    expect(text).not.toMatch(/First check|original|Install Week/i);
   });
 });

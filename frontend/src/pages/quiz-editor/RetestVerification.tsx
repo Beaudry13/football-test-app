@@ -41,11 +41,22 @@ export function RetestVerification({
         {/* CONTEXT, ON ITS OWN LINE. How big the original problem was - not a
             denominator for anything below it. */}
         <p className={styles.context}>
-          {/* PLAYERS, AND IT SAYS SO - the same unit as every count below, so
-              the only thing separating the two populations is the label
-              "First check" rather than a silent change of denominator. */}
-          First check &mdash; <strong>{v.parent_missed_total}</strong> of{' '}
-          <strong>{v.parent_response_total}</strong> players missed this
+          {/* WHICH CHECK THIS IS ACTUALLY COMPARED AGAINST.
+              This said "First check", and on a retest of a retest that was
+              simply false: the comparison has always been against the
+              IMMEDIATE PARENT, so round 3 was reporting round 2's figures
+              under the original round's name. Naming the parent quiz makes
+              the claim checkable - a coach can open it - and stays true however
+              many rounds deep the chain goes.
+
+              PLAYERS, AND IT SAYS SO - the same unit as every count below, so
+              the only thing separating the two populations is this label
+              rather than a silent change of denominator. */}
+          <span className={styles.contextLabel}>Last check</span>
+          <span className={styles.contextDetail}>
+            {v.parent_quiz_title} &mdash; <strong>{v.parent_missed_total}</strong> of{' '}
+            <strong>{v.parent_response_total}</strong> players missed this
+          </span>
         </p>
         <p className={styles.targeted}>
           This retest went to the <strong>{v.targeted_total}</strong>{' '}

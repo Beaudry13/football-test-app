@@ -124,3 +124,20 @@
   flex: 1 1 auto;
   min-height: 44px;
 }
+
+/* "Last check" over the round it names. Two lines rather than one long
+   sentence: the label is the thing a coach scans for, and a parent quiz
+   title can be long enough to wrap on a phone without dragging the label
+   with it. */
+.contextLabel {
+  display: block;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.contextDetail {
+  display: block;
+}

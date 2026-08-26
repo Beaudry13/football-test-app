@@ -324,6 +324,11 @@ class TestChaining:
 
         assert v["parent_quiz_id"] == first["id"]
         assert v["parent_quiz_id"] != quiz["id"]
+        # THE TITLE THE CARD RENDERS. It labels the comparison "Last check"
+        # and names this round, so a round-3 card must carry the RETEST's
+        # title - never the original's, which it no longer compares against.
+        assert v["parent_quiz_title"] == first["title"]
+        assert v["parent_quiz_title"] != quiz["title"]
 
     def test_players_still_missing_feed_the_next_retest_directly(self, client, coach_headers):
         quiz, _tf, concept, _ = _parent_with_misses(client, coach_headers, missed=("A", "B"))
