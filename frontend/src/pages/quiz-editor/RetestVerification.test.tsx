@@ -101,7 +101,7 @@ describe('the verification card', () => {
     // Both are named, together, in the "what is still missing" line - with the
     // denominator, and never folded into the missed count.
     const text = () => document.body.textContent ?? '';
-    expect(text()).toMatch(/1 of 6 haven.t answered yet/);
+    expect(text()).toMatch(/1 of 6 hasn.t answered yet/);
     expect(text()).toMatch(/1 is waiting on grading/);
     expect(text()).toMatch(/1 player still missed/);
   });
@@ -388,5 +388,27 @@ describe('the verification card', () => {
     );
 
     expect(document.body.textContent ?? '').toMatch(/went to the 6 players who missed it/);
+  });
+
+  it('uses the SINGULAR verb when a single player is outstanding', () => {
+    // One player left is the state a coach comes back to most, and the
+    // sentence beside it already counts its verb ("is"/"are" waiting).
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          targeted_total: 6,
+          correct_count: 5,
+          incorrect_count: 0,
+          ungraded_count: 0,
+          not_submitted_count: 1,
+          is_complete: false,
+        })}
+        quizId={9}
+      />,
+    );
+
+    const text = document.body.textContent ?? '';
+    expect(text).toMatch(/1 of 6 hasn.t answered yet/);
+    expect(text).not.toMatch(/haven.t answered/);
   });
 });

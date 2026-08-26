@@ -124,7 +124,8 @@ export function RetestVerification({
             {v.not_submitted_count > 0 && (
               <>
                 <strong>{v.not_submitted_count}</strong> of{' '}
-                <strong>{v.targeted_total}</strong> haven&rsquo;t answered yet
+                <strong>{v.targeted_total}</strong>{' '}
+                {v.not_submitted_count === 1 ? 'hasn' : 'haven'}&rsquo;t answered yet
               </>
             )}
             {v.not_submitted_count > 0 && v.ungraded_count > 0 && <>, and </>}
