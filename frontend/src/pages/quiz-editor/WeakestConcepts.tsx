@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ConceptBreakdown } from '../../api/types';
 import { RetestAction } from './RetestAction';
 import nb from '../../styles/notebook.module.css';
@@ -24,6 +25,7 @@ export function WeakestConcepts({
   concepts: ConceptBreakdown[];
   quizId: number;
 }) {
+  const [showAllPlayers, setShowAllPlayers] = useState(false);
   /* Nothing tagged, or nothing graded yet: render nothing at all and let
      Results be what it was. An empty "Weakest concept" panel would be a
      permanent reminder of a feature rather than an answer - and every quiz
@@ -32,6 +34,28 @@ export function WeakestConcepts({
   if (ranked.length === 0) return null;
 
   const [weakest, ...rest] = ranked;
+
+  /* A WHOLE UNIT MISSING SOMETHING IS THE CASE THIS PANEL EXISTS FOR, and it
+     was the case that broke it: measured at 375px, fourteen name chips take
+     287px and pushed "Retest these 14" to y=827 - past the fold, and past the
+     fixed bottom nav at 764. The coach was told what to teach and then had to
+     go looking for the button.
+
+     THIS IS A DISPLAY CAP AND NOTHING ELSE. The retest is built from
+     weakest.players_missed in full, never from what is on screen, so a
+     collapsed list still targets everyone who missed it. Tests assert the
+     count in the button and the players in the request against the FULL list
+     while the display is truncated - because a truncation that quietly became
+     a selection would send a smaller retest than the coach asked for. */
+  const PLAYERS_BEFORE_FOLD = 8;
+  const shownPlayers = showAllPlayers
+    ? weakest.players_missed
+    : weakest.players_missed.slice(0, PLAYERS_BEFORE_FOLD);
+  const hiddenCount = weakest.players_missed.length - shownPlayers.length;
+  /* Guarded on the FULL list, not on hiddenCount: once expanded nothing is
+     hidden, and keying the toggle off that made it disappear at exactly the
+     moment the coach needed it to collapse again. */
+  const canToggle = weakest.players_missed.length > PLAYERS_BEFORE_FOLD;
 
   return (
     <section className={styles.wrap} aria-labelledby="teach-next">
@@ -93,7 +117,7 @@ export function WeakestConcepts({
           <div className={styles.players}>
             <div className={styles.playersLabel}>Who missed it</div>
             <ul className={styles.playerList}>
-              {weakest.players_missed.map((player) => (
+              {shownPlayers.map((player) => (
                 <li key={player.player_name} className={styles.player}>
                   {player.display_name}
                   {/* Their position WHEN THEY ANSWERED. Absent rather than
@@ -103,6 +127,21 @@ export function WeakestConcepts({
                   )}
                 </li>
               ))}
+              {/* INSIDE the chip list, not below it. As its own block the
+                  toggle cost a full 44px row plus margin and pushed the action
+                  to y=783 - behind the fixed bottom nav that starts at 764. As
+                  a list item it wraps into the row the chips already occupy. */}
+              {canToggle && (
+                <li className={styles.moreItem}>
+                  <button
+                    type="button"
+                    className={styles.moreToggle}
+                    onClick={() => setShowAllPlayers((open) => !open)}
+                  >
+                    {showAllPlayers ? 'Show fewer' : `and ${hiddenCount} more`}
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
         )}

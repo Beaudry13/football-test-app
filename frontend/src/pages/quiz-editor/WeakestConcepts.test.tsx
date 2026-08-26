@@ -404,3 +404,91 @@ describe('Retest these players', () => {
     expect(screen.queryByText(/6 of 6/)).not.toBeInTheDocument();
   });
 });
+
+describe('a long list of missed players', () => {
+  // Own reset: this block is a sibling of the one above, so its beforeEach
+  // does not reach here and createRetest's calls would accumulate across both.
+  beforeEach(() => {
+    vi.mocked(createRetest).mockReset();
+  });
+
+  const fourteen = Array.from({ length: 14 }, (_, i) => ({
+    player_id: i + 1,
+    player_name: `Player ${i + 1}`,
+    display_name: `Player ${i + 1}`,
+    position_at_attempt: null,
+  }));
+
+  const bigConcept = () =>
+    concept({
+      players_missed: fourteen,
+      players_missed_count: 14,
+      players_responded_count: 14,
+      player_miss_rate: 100,
+    });
+
+  it('shows the first eight and offers the rest', () => {
+    /* Measured at 375px: fourteen chips take 287px and pushed the action to
+       y=827, past the fold AND past the fixed bottom nav at 764. */
+    renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
+
+    expect(screen.getByText('Player 1')).toBeInTheDocument();
+    expect(screen.getByText('Player 8')).toBeInTheDocument();
+    expect(screen.queryByText('Player 9')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'and 6 more' })).toBeInTheDocument();
+  });
+
+  it('expands and collapses in place', async () => {
+    const user = userEvent.setup();
+    renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
+
+    await user.click(screen.getByRole('button', { name: 'and 6 more' }));
+    expect(screen.getByText('Player 14')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Show fewer' }));
+    expect(screen.queryByText('Player 14')).not.toBeInTheDocument();
+    expect(screen.getByText('Player 1')).toBeInTheDocument();
+  });
+
+  it('TRUNCATION NEVER CHANGES TARGETING - the button still says 14', () => {
+    // The invariant. A display cap that quietly became a selection would send
+    // a smaller retest than the coach asked for.
+    renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
+
+    expect(screen.getByRole('button', { name: 'Retest these 14' })).toBeInTheDocument();
+  });
+
+  it('TRUNCATION NEVER CHANGES TARGETING - the request carries all 14', async () => {
+    const user = userEvent.setup();
+    vi.mocked(createRetest).mockResolvedValue({ id: 77 } as never);
+    renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
+
+    // Only eight are on screen at this point.
+    expect(screen.queryByText('Player 9')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retest these 14' }));
+    await user.click(screen.getByRole('button', { name: 'Create retest' }));
+
+    await waitFor(() => expect(createRetest).toHaveBeenCalled());
+    const [, body] = vi.mocked(createRetest).mock.calls[0];
+    expect(body.player_ids).toHaveLength(14);
+    expect(body.player_ids).toEqual(fourteen.map((p) => p.player_id));
+  });
+
+  it('does not offer a toggle when everyone already fits', () => {
+    renderPanel(
+      <WeakestConcepts
+        quizId={9}
+        concepts={[
+          concept({
+            players_missed: fourteen.slice(0, 8),
+            players_missed_count: 8,
+            players_responded_count: 10,
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Player 8')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /more/ })).not.toBeInTheDocument();
+  });
+});

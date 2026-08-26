@@ -175,3 +175,27 @@
   font-size: var(--peira-text-meta);
   color: var(--peira-danger);
 }
+
+/* "and 6 more" - a link, not a button-looking control.
+ *
+ * Expanding the list is a reading choice, not an action on the team, so it
+ * must not compete with the one primary button on this panel. It still gets a
+ * 44px target because it sits among name chips a thumb is already near. */
+.moreItem {
+  display: inline-flex;
+  align-items: center;
+}
+
+.moreToggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3em 0.4em;
+  min-height: 44px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--peira-text-meta);
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
