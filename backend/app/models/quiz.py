@@ -99,6 +99,39 @@ class Quiz(TimestampMixin, db.Model):
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+        #: WHY THIS DRAFT EXISTS, for the ordinary editor a retest opens in.
+        #:
+        #: Present only on a retest; absent entirely on every other quiz, which
+        #: is the client's signal to render nothing. Every value is read from
+        #: THIS quiz's own rows - its parent link, the concept its copied
+        #: questions carry, the roster Peira seeded - so none of it is a guess
+        #: reconstructed about the past.
+        #:
+        #: `stopped_in_parent` is deliberately a PRESENT-TENSE fact: how many
+        #: questions in this concept are stopped in the parent right now, and
+        #: therefore are not here. It is NOT a record of what was skipped at
+        #: creation - that number was never stored, and inventing it from
+        #: today's retired_at would be a claim about history this cannot
+        #: support. Said in the present tense it is simply true whenever read.
+        if self.retest_of_quiz_id is not None:
+            parent = self.retest_of
+            concepts = {q.concept for q in self.questions if q.concept is not None}
+            concept = next(iter(concepts)) if len(concepts) == 1 else None
+            stopped = 0
+            if parent is not None and concept is not None:
+                stopped = sum(
+                    1
+                    for q in parent.questions
+                    if q.concept_id == concept.id and q.retired_at is not None
+                )
+            data["retest_of"] = {
+                "id": self.retest_of_quiz_id,
+                "title": parent.title if parent is not None else None,
+                "concept_name": concept.name if concept is not None else None,
+                "player_count": len(self.roster.players) if self.roster is not None else 0,
+                "stopped_in_parent": stopped,
+            }
+
         if include_questions:
             data["questions"] = [
                 q.to_dict(include_correct_answers=include_correct_answers) for q in self.questions

@@ -142,3 +142,16 @@
   color: var(--nb-text);
   border-bottom-color: var(--nb-accent);
 }
+
+/* "Retest of Install Week 2 · Force / Contain · 6 players"
+ *
+ * A caption under the title, not a banner: it is context the coach reads once
+ * on arrival, not a warning. Gold on the left edge marks it as Peira
+ * explaining itself, the same mark the weakness panel uses. */
+.retestContext {
+  margin: calc(var(--space-2) * -1) 0 var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  font-size: var(--peira-text-meta);
+  color: var(--color-text-secondary);
+}

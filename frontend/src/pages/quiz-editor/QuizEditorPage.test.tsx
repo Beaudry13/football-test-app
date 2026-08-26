@@ -122,3 +122,77 @@ describe('the chrome above the tabs', () => {
     expect(screen.getByRole('button', { name: 'Questions' })).toBeInTheDocument();
   });
 });
+
+
+describe('the retest context line', () => {
+  /** Peira drops the coach into the ordinary editor, which is deliberate - but
+   *  the draft used to arrive looking like any other quiz, with its purpose
+   *  carried only by the title and its targets a tab away. */
+  function renderQuiz(q: Quiz) {
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(q);
+    return render(
+      <MemoryRouter initialEntries={['/quizzes/1?tab=questions']}>
+        <Routes>
+          <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  const retest = (over = {}): Quiz => ({
+    ...quiz,
+    title: 'Force / Contain - Retest',
+    retest_of: {
+      id: 5,
+      title: 'Install Week 2',
+      concept_name: 'Force / Contain',
+      player_count: 6,
+      stopped_in_parent: 0,
+      ...over,
+    },
+  });
+
+  it('says what the draft is, who it is for, and where it came from', async () => {
+    renderQuiz(retest());
+
+    const line = await screen.findByText(/Retest of/);
+    expect(line).toHaveTextContent('Install Week 2');
+    expect(line).toHaveTextContent('Force / Contain');
+    expect(line).toHaveTextContent('6 players');
+  });
+
+  it('names the IMMEDIATE parent on a later round, not the original', async () => {
+    renderQuiz(retest({ title: 'Force / Contain - Retest', player_count: 1 }));
+
+    const line = await screen.findByText(/Retest of/);
+    expect(line).toHaveTextContent('Force / Contain - Retest');
+    expect(line).toHaveTextContent('1 player');
+    expect(line).not.toHaveTextContent('1 players');
+  });
+
+  it('mentions stopped questions when the concept has some', async () => {
+    renderQuiz(retest({ stopped_in_parent: 1 }));
+
+    expect(await screen.findByText(/1 stopped question isn't included/)).toBeInTheDocument();
+  });
+
+  it('pluralises stopped questions', async () => {
+    renderQuiz(retest({ stopped_in_parent: 3 }));
+
+    expect(await screen.findByText(/3 stopped questions aren't included/)).toBeInTheDocument();
+  });
+
+  it('says nothing about stopped questions when there are none', async () => {
+    renderQuiz(retest({ stopped_in_parent: 0 }));
+
+    await screen.findByText(/Retest of/);
+    expect(screen.queryByText(/stopped question/)).not.toBeInTheDocument();
+  });
+
+  it('RENDERS NOTHING on an ordinary quiz', async () => {
+    renderQuiz(quiz);
+
+    await screen.findByLabelText('Quiz title');
+    expect(screen.queryByText(/Retest of/)).not.toBeInTheDocument();
+  });
+});

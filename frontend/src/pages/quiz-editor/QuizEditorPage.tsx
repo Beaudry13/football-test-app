@@ -107,7 +107,35 @@ export function QuizEditorPage() {
           onChange={(e) => setQuiz({ ...quiz, title: e.target.value })}
           onBlur={(e) => handleFieldSave('title', e.target.value)}
         />
-        {/* AUTHORING CONTROLS, HIDDEN WHILE READING RESULTS.
+        {/* WHY THIS DRAFT EXISTS.
+          Peira builds a retest and drops the coach into the ordinary editor,
+          which is deliberate - a second editor would be the thing this feature
+          avoids - but the draft arrived looking like any other quiz. The only
+          hint was the title, and who it was for lived one tab away on the
+          roster.
+
+          One line, three facts, and nothing on an ordinary quiz. */}
+      {quiz.retest_of && (
+        <p className={styles.retestContext}>
+          Retest of <strong>{quiz.retest_of.title}</strong>
+          {quiz.retest_of.concept_name && (
+            <> &middot; {quiz.retest_of.concept_name}</>
+          )}
+          {' '}&middot; {quiz.retest_of.player_count}{' '}
+          player{quiz.retest_of.player_count === 1 ? '' : 's'}
+          {quiz.retest_of.stopped_in_parent > 0 && (
+            /* Present tense, because that is what is actually knowable: these
+               questions are stopped NOW. What was skipped on the day it was
+               built was never recorded. */
+            <>
+              {' '}&middot; {quiz.retest_of.stopped_in_parent} stopped question
+              {quiz.retest_of.stopped_in_parent === 1 ? " isn't" : "s aren't"} included
+            </>
+          )}
+        </p>
+      )}
+
+      {/* AUTHORING CONTROLS, HIDDEN WHILE READING RESULTS.
             Not removed and not moved - one tap away on the tabs they belong
             to. On a 375px phone this block plus the settings below it pushed
             "Teach next" past the halfway mark of the screen and the action

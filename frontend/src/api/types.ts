@@ -180,8 +180,24 @@ export interface OrganizationInvite {
   code?: string;
 }
 
+/** Why a retest draft exists, for the ordinary editor it opens in. Present
+ *  only on a retest; absent on every other quiz, which is the signal to render
+ *  nothing at all. */
+export interface RetestContext {
+  id: number;
+  title: string | null;
+  concept_name: string | null;
+  player_count: number;
+  /** PRESENT TENSE: how many questions in this concept are stopped in the
+   *  parent right now, and so are not in this draft. Not a record of what was
+   *  skipped at creation - that was never stored, and inventing it from
+   *  today's retired_at would be a claim about history. */
+  stopped_in_parent: number;
+}
+
 export interface Quiz {
   id: number;
+  retest_of?: RetestContext;
   organization_id: number;
   /** Creator. Null if that coach has since been removed from the org. */
   coach_id: number | null;

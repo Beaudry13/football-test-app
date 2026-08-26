@@ -512,3 +512,62 @@ class TestRetestTitles:
                           player_names=["A"], title="Tuesday walkthrough").get_json()
 
         assert created["title"] == "Tuesday walkthrough"
+
+
+class TestTheDraftSaysWhyItExists:
+    """The retest opens in the ordinary editor - deliberately - so the editor
+    needs the three facts that make an otherwise-normal quiz legible."""
+
+    def test_an_ordinary_quiz_carries_no_retest_context(self, client, coach_headers):
+        quiz, _, _, _, _ = _missed_setup(client, coach_headers)
+
+        body = client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()
+
+        assert "retest_of" not in body
+
+    def test_a_retest_names_its_parent_concept_and_players(self, client, coach_headers):
+        quiz, _, _, concept, _ = _missed_setup(client, coach_headers)
+        created = _retest(client, coach_headers, quiz["id"],
+                          concept_id=concept["id"], player_names=["A", "B"]).get_json()
+
+        body = client.get(f"/api/quizzes/{created['id']}", headers=coach_headers).get_json()
+
+        assert body["retest_of"]["id"] == quiz["id"]
+        assert body["retest_of"]["title"] == quiz["title"]
+        assert body["retest_of"]["concept_name"] == "Force / Contain"
+        assert body["retest_of"]["player_count"] == 2
+
+    def test_stopped_questions_in_the_concept_are_reported(self, client, coach_headers):
+        """PRESENT TENSE. Not what was skipped at creation - that was never
+        stored - but what is stopped in the parent now and therefore absent."""
+        quiz, tf, written, concept, code = _missed_setup(client, coach_headers)
+        # A second tagged question everyone missed, so the retest has something
+        # to copy even after the first is stopped.
+        second = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={
+                "question_text": "Second force question",
+                "question_type": "true_false",
+                "options": [
+                    {"option_text": "True", "is_correct_answer": True},
+                    {"option_text": "False", "is_correct_answer": False},
+                ],
+            },
+            headers=coach_headers,
+        ).get_json()
+        _tag(client, coach_headers, quiz["id"], second["id"], concept["id"])
+        wrong = next(o for o in second["options"] if o["is_correct_answer"] is False)
+        for name in ("A", "B"):
+            client.post("/api/play/answer", json={
+                "access_code_id": code["id"], "player_name": name,
+                "question_id": second["id"], "selected_option_id": wrong["id"]})
+
+        created = _retest(client, coach_headers, quiz["id"],
+                          concept_id=concept["id"], player_names=["A"]).get_json()
+        client.post(
+            f"/api/quizzes/{quiz['id']}/questions/{tf['id']}/retire", headers=coach_headers
+        )
+
+        body = client.get(f"/api/quizzes/{created['id']}", headers=coach_headers).get_json()
+
+        assert body["retest_of"]["stopped_in_parent"] == 1
