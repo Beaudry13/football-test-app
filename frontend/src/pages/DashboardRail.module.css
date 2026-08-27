@@ -133,6 +133,18 @@
 
 .closingName,
 .resultName {
+  /* BLOCK, AND THIS IS THE OVERFLOW FIX.
+     These carry ellipsis truncation below, but an INLINE box ignores
+     overflow/text-overflow/white-space for its own width - so a long generated
+     retest title rendered at its natural 460px inside a 298px list item,
+     overflowed the 340px rail and pushed the whole page to 1289px against a
+     1265px viewport. That was the measured horizontal-overflow bug.
+
+     The flex-grow below shows the rule was written expecting a flex item; the
+     Results panel's parent is a list-item, so it never became one. Block makes
+     the truncation apply in both parents - a block child of a flex container
+     is still a flex item. */
+  display: block;
   flex-grow: 1;
   min-width: 0;
   font-size: var(--peira-text-control);
