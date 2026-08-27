@@ -1,6 +1,8 @@
 import { api } from './client';
 import type {
   AccessRequestRow,
+  CoachInvite,
+  CoachInviteCreated,
   MergePreview,
   MergeResult,
   OwnerCoachRow,
@@ -78,6 +80,25 @@ export interface MergeRequest {
  *  corresponding approve, deny or delete call, by design. */
 export function listAccessRequests(): Promise<{ access_requests: AccessRequestRow[] }> {
   return api.get<{ access_requests: AccessRequestRow[] }>('/owner/access-requests');
+}
+
+/** Invitations to create a Peira account, newest first. No token is returned
+ *  here - see CoachInvite. */
+export function listCoachInvites(): Promise<{ coach_invites: CoachInvite[] }> {
+  return api.get<{ coach_invites: CoachInvite[] }>('/owner/coach-invites');
+}
+
+/** Issue one. THE ONLY MOMENT the token exists - the caller must show it
+ *  immediately, because no later request can return it. */
+export function createCoachInvite(input: {
+  label?: string | null;
+  expires_in_days?: number;
+}): Promise<CoachInviteCreated> {
+  return api.post<CoachInviteCreated>('/owner/coach-invites', input);
+}
+
+export function revokeCoachInvite(id: number): Promise<CoachInvite> {
+  return api.post<CoachInvite>(`/owner/coach-invites/${id}/revoke`, {});
 }
 
 export function previewMerge(body: MergeRequest): Promise<MergePreview> {

@@ -959,3 +959,30 @@ export interface AccessRequestRow {
   team: string | null;
   requested_at: string | null;
 }
+
+/** An invitation to create a Peira account and the organization behind it.
+ *
+ * A COACH INVITE IS NOT A QUIZ ACCESS CODE. A player's access code unlocks one
+ * quiz for a day; this creates an account. Separate concepts, separate words.
+ *
+ * Carries NO token: only the SHA-256 is stored server-side, so the plaintext
+ * exists exactly once, in the response that creates it. `token_prefix` tells
+ * two invites apart in a list and cannot redeem either. */
+export interface CoachInvite {
+  id: number;
+  token_prefix: string;
+  label: string | null;
+  created_at: string | null;
+  expires_at: string | null;
+  redeemed_at: string | null;
+  redeemed_by_coach_id: number | null;
+  revoked_at: string | null;
+  is_usable: boolean;
+  /** Decided server-side so the dashboard and the CLI cannot disagree. */
+  status: 'pending' | 'redeemed' | 'expired' | 'revoked';
+}
+
+/** The create response: an invite plus the one and only sight of its token. */
+export interface CoachInviteCreated extends CoachInvite {
+  token: string;
+}

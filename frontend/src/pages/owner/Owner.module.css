@@ -445,3 +445,156 @@
 .requestDate {
   white-space: nowrap;
 }
+
+/* Coach invites: issue, see the state, copy, revoke. Operational, not a CRM. */
+.inviteCreate {
+  padding: 0.55em 1.1em;
+  min-height: 44px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-accent);
+  color: var(--peira-on-accent, #1a1a1a);
+  font-family: inherit;
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inviteCancel {
+  padding: 0.55em 1.1em;
+  min-height: 44px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--peira-text-control);
+  cursor: pointer;
+}
+
+.inviteForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 26rem;
+  margin-top: var(--space-3);
+}
+
+.inviteFieldLabel {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.inviteInput {
+  padding: 0.55em 0.7em;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--peira-surface-raised);
+  color: inherit;
+  font-family: inherit;
+  font-size: var(--peira-text-control);
+}
+
+.inviteFormActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* The one and only sight of a token. Marked out so it is not mistaken for a
+   row in the list below, which can never show a full code. */
+.inviteCreated {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--peira-surface-raised);
+}
+
+.inviteCreatedLabel {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.inviteToken {
+  display: block;
+  margin: var(--space-2) 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+  word-break: break-all;
+}
+
+.inviteCreatedNote {
+  margin: 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.inviteList {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+}
+
+.inviteRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.inviteRow:last-child {
+  border-bottom: none;
+}
+
+.inviteWho {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.invitePrefix {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.inviteMeta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  font-size: var(--peira-text-meta);
+}
+
+.inviteDate {
+  color: var(--nb-text-muted);
+  white-space: nowrap;
+}
+
+.status_pending { color: var(--color-accent); font-weight: 600; }
+.status_redeemed { color: var(--nb-text-muted); }
+.status_expired { color: var(--nb-text-muted); }
+.status_revoked { color: var(--nb-text-muted); text-decoration: line-through; }
+
+.inviteRevoke {
+  border: none;
+  background: none;
+  padding: 0.3em 0;
+  font-family: inherit;
+  font-size: var(--peira-text-meta);
+  color: var(--peira-danger);
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -4,6 +4,7 @@ import { getErrorMessage } from '../../api/client';
 import type { AccessRequestRow, PlatformOverview } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { CoachInvites } from './CoachInvites';
 import { count, shortDate, UNKNOWN } from './ownerFormat';
 import styles from './Owner.module.css';
 
@@ -111,6 +112,12 @@ export function OwnerOverviewPage() {
           ))}
         </div>
       </section>
+
+      {/* HOW A COACH GETS IN, the two paths side by side: an invite the owner
+          sends directly, and a request somebody submitted from the public
+          site. Deliberately separate concepts - an invite can be issued to
+          somebody who has never touched Peira, and a request grants nothing. */}
+      <CoachInvites />
 
       {/* WHO HAS ASKED TO BE LET IN.
           Peira accepts these from the public site at /request-access and

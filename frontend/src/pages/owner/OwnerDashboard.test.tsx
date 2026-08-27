@@ -11,6 +11,7 @@ import { OwnerOrganizationDetailPage } from './OwnerOrganizationDetailPage';
 import { OwnerCoachesPage } from './OwnerCoachesPage';
 import { relativeDay, shortDate, UNKNOWN } from './ownerFormat';
 import type {
+  CoachInvite,
   OwnerCoachRow,
   OwnerOrganizationDetail,
   OwnerOrganizationRow,
@@ -153,6 +154,7 @@ describe('Owner overview', () => {
     // The access-request list loads independently of the metrics, so every
     // overview test needs it defined - empty unless the test says otherwise.
     vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: [] });
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [] });
   });
 
   it('shows the platform totals', async () => {
@@ -467,6 +469,7 @@ describe('Access requests on the owner overview', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(ownerApi, 'getPlatformOverview').mockResolvedValue(overview);
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [] });
   });
 
   it('lists who has asked, with name, email, team and date', async () => {
@@ -512,9 +515,13 @@ describe('Access requests on the owner overview', () => {
     vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: requests });
     renderAt('/owner');
 
-    await screen.findByText('Dana Reyes');
+    /* Scoped to the access-requests SECTION. The page now also has a "Create
+       invite" button under Coach invites, which is a different concept - an
+       invite is issued to anybody, and is not an approval of this request. */
+    const row = (await screen.findByText('Dana Reyes')).closest('li') as HTMLElement;
+    const section = row.closest('section') as HTMLElement;
     for (const label of [/approve/i, /deny/i, /reject/i, /delete/i, /invite/i]) {
-      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
+      expect(within(section).queryByRole('button', { name: label })).not.toBeInTheDocument();
     }
   });
 
@@ -542,5 +549,169 @@ describe('Access requests on the owner overview', () => {
     // ever made resilient, this is a deliberate change rather than a surprise.
     expect(await screen.findByRole('alert')).toBeInTheDocument();
     expect(screen.queryByText('Dana Reyes')).not.toBeInTheDocument();
+  });
+});
+
+
+describe('Coach invites on the owner overview', () => {
+  /** A COACH INVITE IS NOT A QUIZ ACCESS CODE. A player's access code unlocks
+   *  one quiz for a day; this creates an account and the organization behind
+   *  it. The machinery already existed and was reachable only from a Flask CLI
+   *  command - this section is what lets the owner use it. */
+  const invite = (over: Partial<CoachInvite> = {}): CoachInvite => ({
+    id: 1,
+    token_prefix: 'K7M4',
+    label: 'Coach Smith - Madeira',
+    created_at: '2026-08-26T12:00:00Z',
+    expires_at: '2026-09-02T12:00:00Z',
+    redeemed_at: null,
+    redeemed_by_coach_id: null,
+    revoked_at: null,
+    is_usable: true,
+    status: 'pending',
+    ...over,
+  });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(ownerApi, 'getPlatformOverview').mockResolvedValue(overview);
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: [] });
+  });
+
+  it('shows each invite with its label, prefix and state', async () => {
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [invite()] });
+    renderAt('/owner');
+
+    expect(await screen.findByText('Coach invites')).toBeInTheDocument();
+    // The list loads separately from the heading, so await the row itself.
+    expect(await screen.findByText('Coach Smith - Madeira')).toBeInTheDocument();
+    expect(screen.getByText(/PEIRA-K7M4/)).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(
+      screen.getByText('Expires ' + shortDate('2026-09-02T12:00:00Z')),
+    ).toBeInTheDocument();
+  });
+
+  it('NEVER shows a full code in the list', async () => {
+    /* Only the SHA-256 is stored, so the plaintext cannot be re-read. A list
+       that showed one would mean a leaked backup was a set of live
+       account-creation grants. */
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [invite()] });
+    renderAt('/owner');
+
+    await screen.findByText('Coach Smith - Madeira');
+    expect(screen.getByText(/PEIRA-K7M4\u2026/)).toBeInTheDocument();
+  });
+
+  it('shows the code ONCE when it is created, and says it will not return', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [] });
+    vi.spyOn(ownerApi, 'createCoachInvite').mockResolvedValue({
+      ...invite(),
+      token: 'PEIRA-K7M4-QX92-BD3F',
+    });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'Create invite' }));
+    await user.type(screen.getByLabelText('Who is this for?'), 'Coach Smith');
+    await user.click(screen.getByRole('button', { name: 'Create invite' }));
+
+    expect(await screen.findByText('PEIRA-K7M4-QX92-BD3F')).toBeInTheDocument();
+    expect(screen.getByText(/cannot be shown again/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
+  });
+
+  it('sends the label and the chosen expiry', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [] });
+    const create = vi.spyOn(ownerApi, 'createCoachInvite').mockResolvedValue({
+      ...invite(),
+      token: 'PEIRA-AAAA-BBBB-CCCC',
+    });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'Create invite' }));
+    await user.type(screen.getByLabelText('Who is this for?'), 'Coach Jones');
+    await user.selectOptions(screen.getByLabelText('Expires'), '14');
+    await user.click(screen.getByRole('button', { name: 'Create invite' }));
+
+    await waitFor(() =>
+      expect(create).toHaveBeenCalledWith({ label: 'Coach Jones', expires_in_days: 14 }),
+    );
+  });
+
+  it('copies the code to the clipboard', async () => {
+    const user = userEvent.setup();
+    // navigator.clipboard is getter-only in jsdom, and userEvent.setup()
+    // installs its own stub - so spy on that rather than replacing it.
+    const writeText = vi
+      .spyOn(navigator.clipboard, 'writeText')
+      .mockResolvedValue(undefined);
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [] });
+    vi.spyOn(ownerApi, 'createCoachInvite').mockResolvedValue({
+      ...invite(),
+      token: 'PEIRA-K7M4-QX92-BD3F',
+    });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'Create invite' }));
+    await user.type(screen.getByLabelText('Who is this for?'), 'Coach Smith');
+    await user.click(screen.getByRole('button', { name: 'Create invite' }));
+    await user.click(await screen.findByRole('button', { name: 'Copy code' }));
+
+    expect(writeText).toHaveBeenCalledWith('PEIRA-K7M4-QX92-BD3F');
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+  });
+
+  it('renders redeemed, expired and revoked states distinctly', async () => {
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({
+      coach_invites: [
+        // Labels deliberately share no word with any status, so an
+        // assertion about the status cannot match the label instead.
+        invite({
+          id: 1, label: 'Alpha', status: 'redeemed', is_usable: false,
+          redeemed_at: '2026-08-28T12:00:00Z',
+        }),
+        invite({ id: 2, label: 'Bravo', status: 'expired', is_usable: false }),
+        invite({ id: 3, label: 'Charlie', status: 'revoked', is_usable: false }),
+      ],
+    });
+    renderAt('/owner');
+
+    const rowFor = async (label: string) =>
+      ((await screen.findByText(label)).closest('li') as HTMLElement);
+
+    expect(within(await rowFor('Alpha')).getByText(/^Redeemed/)).toBeInTheDocument();
+    expect(within(await rowFor('Bravo')).getByText('Expired')).toBeInTheDocument();
+    expect(within(await rowFor('Charlie')).getByText('Revoked')).toBeInTheDocument();
+  });
+
+  it('offers Revoke only on an invite that is still usable', async () => {
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({
+      coach_invites: [
+        invite({ id: 1, label: 'Still open', is_usable: true }),
+        invite({ id: 2, label: 'Already used', status: 'redeemed', is_usable: false }),
+      ],
+    });
+    renderAt('/owner');
+
+    await screen.findByText('Still open');
+    expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(1);
+  });
+
+  it('says so plainly when none have been issued', async () => {
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [] });
+    renderAt('/owner');
+
+    expect(await screen.findByText('No coach invites yet.')).toBeInTheDocument();
+  });
+
+  it('A FAILURE HERE DOES NOT TAKE DOWN THE DASHBOARD', async () => {
+    vi.spyOn(ownerApi, 'listCoachInvites').mockRejectedValue(new Error('boom'));
+    renderAt('/owner');
+
+    expect(await screen.findByText('12')).toBeInTheDocument();
+    expect(screen.getByText('Feature adoption')).toBeInTheDocument();
+    expect(screen.getByText('Coach invites')).toBeInTheDocument();
   });
 });
