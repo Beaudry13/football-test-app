@@ -34,7 +34,10 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
   const folderOptions = folderTreeOrder(folders ?? []);
 
   return (
-    <div className={`${nb.card} ${nb.cardHoverable} ${styles.quizCard}`}>
+    /* A ROW, NOT A CARD. Sixteen quizzes produced sixteen bordered, filled
+       panels - a gallery to browse rather than a list to work. The divider
+       does the separating now; the stretched-link model below is unchanged. */
+    <div className={styles.quizCard}>
       {/* THE WHOLE CARD OPENS THE QUIZ. The link stretches over the card via
           CSS rather than by wrapping it, so there is still exactly ONE link
           and one tab stop - wrapping would have put a button inside an
@@ -50,35 +53,38 @@ export function QuizCard({ quiz, coach, folders, onMoveToFolder, onDuplicate, on
             <span className={`${nb.badge} ${nb.badgeSuccess} ${styles.activeBadge}`}>Active</span>
           )}
         </h2>
-        {/* RESULTS FIRST, AUTHORING DETAIL SECOND. "How did my players do" is
-            the reason a coach opens a quiz; the question count and the date
-            are how they recognise which one it is. */}
-        {quiz.completed_count !== undefined && (
-          <div className={styles.quizStats}>
-            {quiz.average_score_percent !== undefined && (
-              <span className={styles.quizStat}>
-                <b>{quiz.average_score_percent}%</b> avg. score
-              </span>
-            )}
+        {/* ONE MUTED LINE OF RECOGNITION DETAIL.
+            The question count, the date and the average were three separate
+            emphases on every row - gold, at that - so sixteen quizzes shouted
+            forty-eight statistics at a coach scanning for one. Nothing is
+            deleted: the same numbers, one line, one weight, below the title.
+            The count a coach actually scans for - how many have turned it in -
+            moves to the right of the row where the eye can run down it. */}
+        <div className={styles.quizMeta}>
+          {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'}
+          {quiz.average_score_percent !== undefined && (
+            <> &middot; {quiz.average_score_percent}% avg. score</>
+          )}
+          {' '}&middot; updated {new Date(quiz.updated_at).toLocaleDateString()}
+          {isTeammates && <> &middot; by {quiz.created_by_username ?? 'a former coach'}</>}
+        </div>
+      </Link>
+
+      {quiz.completed_count !== undefined && (
+        <div className={styles.quizState}>
             {/* "17/0" was reachable here, and shipped. roster_size is who is
                 eligible under the CURRENTLY ACTIVE code; completed_count is
                 every submission ever. The denominator vanishes when the code
                 expires - see utils/responseSummary. */}
-            <span className={styles.quizStat}>
-              <b>{responseSummary(quiz.completed_count, quiz.roster_size)}</b>
-              {/* The trailing label belongs to the FRACTION only. "18 of 24"
-                  needs saying what of what; "17 answered" already says it, and
-                  "17 answered completed" would be nonsense. */}
-              {hasResponseDenominator(quiz.roster_size) && ' completed'}
-            </span>
-          </div>
-        )}
-        <div className={styles.quizMeta}>
-          {quiz.question_count} question{quiz.question_count === 1 ? '' : 's'} · updated{' '}
-          {new Date(quiz.updated_at).toLocaleDateString()}
-          {isTeammates && <> · by {quiz.created_by_username ?? 'a former coach'}</>}
+          <span className={styles.quizStat}>
+            <b>{responseSummary(quiz.completed_count, quiz.roster_size)}</b>
+            {/* The trailing label belongs to the FRACTION only. "18 of 24"
+                needs saying what of what; "17 answered" already says it, and
+                "17 answered completed" would be nonsense. */}
+            {hasResponseDenominator(quiz.roster_size) && ' completed'}
+          </span>
         </div>
-      </Link>
+      )}
 
       {/* Everything a coach does OCCASIONALLY. Three permanent controls per
           card - a folder dropdown, Duplicate and a red Delete - became one

@@ -33,28 +33,44 @@
    overlay is measured against. */
 .quizCard {
   position: relative;
-  display: flex;
+  display: grid;
+  /* Title takes the slack; state and menu take exactly what they need, so a
+     long title shortens instead of pushing the row wide. */
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 1em;
-  padding: 20px 24px;
+  gap: var(--space-4);
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.quizCard:last-child {
+  border-bottom: none;
 }
 
 .quizInfo {
-  padding-left: 14px;
+  min-width: 0;
   text-decoration: none;
   color: inherit;
 }
 
 /* Sized like a card title, not like a page-level h2 - the heading LEVEL is
    chosen for document structure (see QuizCard.tsx), the size for layout. */
+/* THE MEASURED OVERFLOW BUG LIVED HERE.
+   A 63-character generated retest title rendered at its natural width and
+   pushed the page to 1289px against a 1265px viewport. The title now
+   truncates: the row owns its width, and the full text stays available as the
+   element's title attribute and on the quiz's own page. */
 .quizInfo h2 {
-  font-family: var(--font-heading);
-  font-size: 17px;
+  font-family: var(--font-body);
+  font-size: var(--peira-text-title);
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0;
   color: var(--nb-text);
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .activeBadge {
@@ -64,23 +80,25 @@
 
 .quizMeta {
   color: var(--nb-text-faint);
-  font-size: 13px;
-  margin-top: 4px;
+  font-size: var(--peira-text-meta);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.quizStats {
-  display: flex;
-  gap: 18px;
-  margin-top: 10px;
-}
-
-.quizStat {
-  color: var(--peira-accent-text);
-  font-size: 12.5px;
+/* The one number a coach scans down the list for, on the right of the row.
+   NOT gold any more: gold on this page means "New quiz", and sixteen gold
+   statistics made the one action impossible to find. */
+.quizState {
+  white-space: nowrap;
+  font-size: var(--peira-text-meta);
+  color: var(--color-text-secondary);
 }
 
 .quizStat b {
-  color: var(--peira-accent-text);
+  color: var(--nb-text);
+  font-weight: 600;
 }
 
 .actions {
@@ -248,10 +266,16 @@ button.actionDelete:hover:not(:disabled) {
    above wrap too, so nothing needs horizontal scrolling on a phone.
    QuizCard is shared with FolderPage, so this fixes both surfaces. */
 @media (max-width: 40rem) {
+  /* Title and its meta keep the full width; state and menu sit together on a
+     second line rather than stacking into a metadata wall. */
   .quizCard {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.75em;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2) var(--space-3);
+    padding: 13px 2px;
+  }
+
+  .quizInfo {
+    grid-column: 1 / -1;
   }
 
   .actions {
@@ -416,4 +440,34 @@ button.actionDelete:hover:not(:disabled) {
   .layout:has(> aside) {
     grid-template-columns: minmax(0, 1fr) 340px;
   }
+}
+
+/* THE WORKLIST'S TWO GROUPS.
+ *
+ * A rule and a label, not a container: the group is a heading over a run of
+ * rows, so the page reads as one list with sections rather than as panels
+ * stacked on panels. */
+.group + .group {
+  margin-top: var(--space-7);
+}
+
+.groupHeading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--peira-border);
+  font-family: var(--font-body);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.groupCount {
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--nb-text-faint);
 }

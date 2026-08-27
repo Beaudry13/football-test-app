@@ -113,17 +113,23 @@ describe('DashboardPage', () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([withStats]);
     renderDashboard();
 
-    /* Scoped to the QUIZ CARD's stats line, because 82% is now legitimately on
-       this page twice: the card states it, and the rail's Results panel does
-       too now that the rail keeps speaking on a quiet day. An unscoped
-       getByText would fail on the duplicate and, worse, would have passed for
-       the wrong element the moment the two ever disagreed. */
-    const stats = (await screen.findByText('avg. score')).parentElement!.parentElement!;
-    expect(within(stats).getByText('82%')).toBeInTheDocument();
-    expect(within(stats).getByText('4 of 4')).toBeInTheDocument();
+    /* Scoped to the QUIZ ROW, because 82% is legitimately on this page twice:
+       the row states it, and the rail's Results panel does too now that the
+       rail keeps speaking on a quiet day. An unscoped getByText would fail on
+       the duplicate and, worse, would have passed for the wrong element the
+       moment the two ever disagreed.
+
+       The row now carries the average in its recognition line rather than in
+       a stats element of its own, so this reads the row's TEXT. Same three
+       user-visible facts, same scoping guarantee. */
+    const row = (await screen.findByRole('heading', { name: 'Week 1 Prep' }))
+      .closest('a')!.parentElement!;
+    expect(row.textContent).toContain('82%');
+    expect(row.textContent).toContain('avg. score');
+    expect(within(row).getByText('4 of 4')).toBeInTheDocument();
     // The label belongs to the fraction. It is deliberately absent from the
     // "17 answered" form - see utils/responseSummary.
-    expect(within(stats).getByText(/completed/)).toBeInTheDocument();
+    expect(within(row).getByText(/completed/)).toBeInTheDocument();
   });
 
   it('omits the average-score stat until at least one answer has been graded', async () => {
