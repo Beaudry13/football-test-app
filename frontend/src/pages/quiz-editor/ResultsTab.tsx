@@ -274,8 +274,8 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           )}
 
           {dashboard.missing_players.length > 0 && (
-            <div className={`${nb.card} ${styles.missingCard}`}>
-              <h2 className={nb.subheading}>
+            <section className={styles.evidence}>
+              <h2 className={styles.evidenceHeading}>
                 Haven't submitted yet ({dashboard.missing_players.length})
               </h2>
               <div className={styles.missingList}>
@@ -285,12 +285,12 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                   </span>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
           {dashboard.question_breakdown.length > 0 && (
-            <div className={`${nb.card} ${styles.breakdownCard}`}>
-              <h2 className={nb.subheading}>Per-question breakdown</h2>
+            <section className={styles.evidence}>
+              <h2 className={styles.evidenceHeading}>Per-question breakdown</h2>
               <table className={nb.table}>
                 <thead>
                   <tr>
@@ -346,7 +346,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </section>
           )}
 
           {/* EXPORTS COME AFTER THE ANSWER, NOT BEFORE IT.
@@ -372,7 +372,13 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             <span className={styles.exportLabel}>Export Results:</span>
             <button
               type="button"
-              className={nb.btnPrimary}
+              /* NOT GOLD ANY MORE. Gold on this screen means "the thing to do
+                 about what you just read", and that is Retest. An export is
+                 something a coach does occasionally and deliberately; giving
+                 it the same treatment as the coaching action made the page
+                 offer two equal answers to "what now?". Still the first and
+                 most prominent of the three exports - just not competing. */
+              className={nb.btnSm}
               onClick={() => handleExport('detailed-pdf')}
               disabled={exporting !== null}
               title="Every submitted Player, every question, every answer, and grading state - grouped by Player."
@@ -400,7 +406,11 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
         </>
       )}
 
-      <h2 className={nb.subheading}>Player responses</h2>
+      {/* The deepest evidence, and the last thing on the page: one row per
+          player, opened when a coach wants to see an individual's answers.
+          Same treatment as the other evidence so the three read as one band
+          rather than three competing panels. */}
+      <h2 className={`${styles.evidenceHeading} ${styles.responsesHeading}`}>Player responses</h2>
       {responses === null ? (
         <LoadingState />
       ) : responses.length === 0 ? (

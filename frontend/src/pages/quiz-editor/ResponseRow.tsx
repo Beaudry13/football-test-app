@@ -291,7 +291,12 @@ export function ResponseRow({
   }
 
   return (
-    <div className={nb.card}>
+    /* A ROW, NOT A CARD. Ten players produced ten bordered, filled panels
+       stacked down the page - the single biggest source of "everything is a
+       card" on Results. A divider separates one player from the next; the
+       expanded answers still sit inside the row, and every control in them is
+       unchanged. */
+    <div className={styles.playerRow}>
       {dialog}
       {/* role=button rather than a real <button>: this header contains a
           <Link> to the player's history, and nesting an <a> inside a

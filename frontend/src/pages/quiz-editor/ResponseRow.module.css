@@ -1,0 +1,15 @@
+
+/* One player, as a row.
+ *
+ * Replaces the notebook card: the border and fill made ten players read as
+ * ten separate objects competing with the answer above them, when they are a
+ * list of one kind of thing. The divider does the separating; the row keeps
+ * its own padding so the expanded answers still have room. */
+.playerRow {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.playerRow:last-child {
+  border-bottom: none;
+}

@@ -48,10 +48,11 @@
   gap: 8px;
 }
 
+/* No gap: the rows carry their own dividers now, and a gap on top of a rule
+   reads as a seam rather than a list. */
 .responseList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .responseHeader {
@@ -229,4 +230,45 @@
 .turnedInNote {
   color: var(--nb-text-muted);
   font-size: var(--peira-text-meta);
+}
+
+/* EVIDENCE IS A SECTION, NOT A CARD.
+ *
+ * The per-question table and the outstanding-player list were each wrapped in
+ * a bordered, filled card - part of a stack of fourteen surfaces on this
+ * screen that all shared one fill and one radius, so nothing could be
+ * foreground because nothing was background.
+ *
+ * A rule and space separate them now. They are the SAME information, in the
+ * same order, fully visible and fully interactive - the exclusion controls
+ * inside the table are untouched. Only the enclosure is gone.
+ *
+ * NOT collapsed behind a disclosure, which is where this deliberately departs
+ * from the prototype: the per-question table carries the "Don't count this"
+ * control, and hiding a control a coach uses in order to make the page look
+ * calmer would be trading real function for appearance. */
+.evidence {
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* Quieter than the answer above by design: this is the material a coach opens
+   to check a claim, not the claim itself. */
+.evidenceHeading {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--peira-text-body);
+  letter-spacing: 0.02em;
+  color: var(--peira-text-muted);
+}
+
+/* The responses list is not wrapped in .evidence because it sits outside the
+   dashboard block in the markup; it takes the same heading and its own rule
+   so the band reads continuously. */
+.responsesHeading {
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
 }
