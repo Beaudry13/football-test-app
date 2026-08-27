@@ -76,6 +76,18 @@ class BetaInvite(db.Model):
         db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True
     )
 
+    #: THE SAME TOKEN, ENCRYPTED, so the owner can reopen a pending invitation
+    #: and reshare the code they already sent. NEVER used to decide validity -
+    #: redemption still hashes the candidate and matches `token_hash`, so a
+    #: missing, corrupt or undecryptable ciphertext costs the owner a
+    #: convenience and costs the invitation nothing.
+    #:
+    #: NULL means "not recoverable", and that is a normal state: every invite
+    #: issued before this column existed, and every invite issued while no
+    #: INVITE_TOKEN_KEY is configured. Cleared the moment an invite stops being
+    #: pending, so decryptable secrets exist only for live invitations.
+    token_ciphertext = db.Column(db.Text, nullable=True)
+
     #: When this stops working on its own. NULL means it never does, which is
     #: what every invite issued before expiry existed still means - see
     #: migration d4c1e8b7a903. New invites get a deadline so an unsent or
@@ -116,7 +128,13 @@ class BetaInvite(db.Model):
         )
 
     def to_dict(self) -> dict:
-        """Owner-facing. Deliberately carries NO token - not even the hash."""
+        """Owner-facing. Deliberately carries NO token, NO hash and NO ciphertext.
+
+        The full code is served only by the single reveal route, which is
+        owner-only and refuses anything that is not pending. A list endpoint
+        that sprayed secrets for every row would put a page-load's worth of
+        live account-creation grants into browser caches and proxy logs.
+        """
         return {
             "id": self.id,
             "token_prefix": self.token_prefix,
@@ -127,6 +145,11 @@ class BetaInvite(db.Model):
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
             "is_usable": self.is_usable(),
+            #: Whether the owner could reopen this one. NOT the secret, and not
+            #: the ciphertext - just whether asking is worth offering, so the
+            #: list can show "View" only where it will work and say something
+            #: honest where it will not.
+            "is_recoverable": self.token_ciphertext is not None and self.is_usable(),
             #: One word for the owner's list, decided here so the dashboard and
             #: the CLI cannot disagree about what "expired" means.
             "status": self.status(),

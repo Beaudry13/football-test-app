@@ -20,3 +20,7 @@ pypdf==6.14.2
 # Apache-2.0/BSD - deliberately not PyMuPDF, whose AGPL is a hazard for a
 # hosted product. See docs/DESIGN-playbook-quiz.md §3.
 pypdfium2==5.12.1
+# Authenticated encryption (Fernet) for the ONE reversible secret in Peira: a
+# pending coach invitation's token, so the owner can reshare the same code
+# later. Redemption still matches a SHA-256; see services/invite_secrets.py.
+cryptography==43.0.3

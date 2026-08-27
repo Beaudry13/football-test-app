@@ -50,6 +50,18 @@ class BaseConfig:
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", DEV_JWT_SECRET_KEY_DEFAULT)
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=12)
 
+    #: Encrypts a PENDING coach invitation's token so the owner can reopen and
+    #: reshare the same code. Deliberately its own secret rather than a reuse
+    #: of SECRET_KEY: one key, one purpose, and a rotation of either must not
+    #: silently affect the other.
+    #:
+    #: NO DEV DEFAULT, on purpose. The other two default so a new machine runs
+    #: at all; this one degrades to today's hash-only behaviour when absent,
+    #: which is a correct and fully working state - a default would only hide
+    #: from an operator that production is missing it. Any high-entropy string
+    #: works; the key is derived (see services/invite_secrets).
+    INVITE_TOKEN_KEY = os.environ.get("INVITE_TOKEN_KEY")
+
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 

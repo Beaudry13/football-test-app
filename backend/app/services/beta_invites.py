@@ -33,6 +33,7 @@ from sqlalchemy import update as sa_update
 
 from app.extensions import db
 from app.models.beta_invite import BetaInvite
+from app.services import invite_secrets
 
 #: No I, L, O, U, 0 or 1 - the characters that get misheard or miswritten.
 ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
@@ -110,6 +111,10 @@ def issue(
         token_prefix=raw[:GROUP_LENGTH],
         label=(label or "").strip() or None,
         created_by_coach_id=created_by_coach_id,
+        # ENCRYPTED SO THE OWNER CAN RESHARE THE SAME CODE. None whenever no
+        # key is configured, which leaves the invite fully working and simply
+        # not re-readable - see services/invite_secrets.
+        token_ciphertext=invite_secrets.encrypt(format_token(raw)),
         expires_at=(
             BetaInvite.now() + timedelta(days=expires_in_days)
             if expires_in_days is not None
@@ -119,6 +124,55 @@ def issue(
     db.session.add(invite)
     db.session.commit()
     return invite, format_token(raw)
+
+
+def reveal(invite: BetaInvite) -> str | None:
+    """The original code for a PENDING invite, or None if it cannot be read.
+
+    None covers every honest failure: an invite issued before ciphertext
+    existed, a deployment with no key, a key that has been rotated, and a
+    corrupt value. The caller must tell the owner the code cannot be recovered
+    and offer to replace it - never guess, and never imply the original could
+    be reconstructed.
+
+    REFUSES ANYTHING NOT PENDING. A redeemed or revoked invite has had its
+    ciphertext cleared already, and an expired one is not a live grant - so
+    there is nothing worth handing back and no reason to.
+    """
+    if not invite.is_usable():
+        return None
+    return invite_secrets.decrypt(invite.token_ciphertext)
+
+
+def replace_token(invite: BetaInvite) -> str | None:
+    """Give a PENDING invite a brand new code, keeping the row.
+
+    FOR AN INVITE WHOSE CODE CANNOT BE RECOVERED - one issued before this
+    existed, or under a key that is gone. The alternative was revoke-and-create,
+    which loses the label, the created date and the record of who issued it;
+    keeping the row keeps the audit trail and the owner's own note about who it
+    was for.
+
+    THE PREVIOUS CODE STOPS WORKING, immediately and by construction: its hash
+    is overwritten, so nothing can match it any more. That is acceptable here
+    precisely because this is only offered where the previous code is already
+    lost to the owner - it is not a way to rotate a code somebody is holding.
+
+    Conditional on the invite still being open, so replacing one that was
+    redeemed a moment ago fails rather than resurrecting it.
+    """
+    raw = "".join(secrets.choice(ALPHABET) for _ in range(GROUPS * GROUP_LENGTH))
+    token = format_token(raw)
+    result = db.session.execute(
+        sa_update(BetaInvite)
+        .where(*_still_open(invite.id))
+        .values(
+            token_hash=_digest(raw),
+            token_prefix=raw[:GROUP_LENGTH],
+            token_ciphertext=invite_secrets.encrypt(token),
+        )
+    )
+    return token if result.rowcount == 1 else None
 
 
 def find_usable(candidate: str) -> BetaInvite | None:
@@ -169,7 +223,15 @@ def redeem(invite: BetaInvite, coach_id: int) -> bool:
     result = db.session.execute(
         sa_update(BetaInvite)
         .where(*_still_open(invite.id))
-        .values(redeemed_at=BetaInvite.now(), redeemed_by_coach_id=coach_id)
+        # CLEARED IN THE SAME STATEMENT that spends it. Doing it as a separate
+        # write would leave a window where a redeemed invitation still had a
+        # recoverable code, and a failure between the two would leave that
+        # window open permanently.
+        .values(
+            redeemed_at=BetaInvite.now(),
+            redeemed_by_coach_id=coach_id,
+            token_ciphertext=None,
+        )
     )
     return result.rowcount == 1
 
@@ -187,6 +249,8 @@ def revoke(invite: BetaInvite) -> bool:
         # revoking a redeemed one does: it is already over, and recording a
         # decision to end something that ended on its own would misstate why.
         .where(*_still_open(invite.id))
-        .values(revoked_at=BetaInvite.now())
+        # Same statement, same reason as redeem: an invitation the owner has
+        # called off must not keep a readable code.
+        .values(revoked_at=BetaInvite.now(), token_ciphertext=None)
     )
     return result.rowcount == 1
