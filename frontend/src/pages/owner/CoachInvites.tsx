@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
-import { createCoachInvite, listCoachInvites, revokeCoachInvite } from '../../api/owner';
+import { QRCodeSVG } from 'qrcode.react';
+import {
+  createCoachInvite,
+  listCoachInvites,
+  replaceCoachInvite,
+  revealCoachInvite,
+  revokeCoachInvite,
+} from '../../api/owner';
 import { getErrorMessage } from '../../api/client';
-import type { CoachInvite, CoachInviteCreated } from '../../api/types';
+import type { CoachInvite, CoachInviteCreated, CoachInviteRevealed } from '../../api/types';
+import { inviteLink } from './inviteUrl';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { shortDate } from './ownerFormat';
@@ -36,6 +44,24 @@ export function CoachInvites() {
   /** The one and only sight of a token. Held until dismissed. */
   const [justCreated, setJustCreated] = useState<CoachInviteCreated | null>(null);
   const [copied, setCopied] = useState(false);
+  /** The invite currently opened for resharing, and its code if it could
+   *  be recovered. One at a time: two open panels would put two live codes
+   *  on screen with nothing saying which belongs to whom. */
+  const [opened, setOpened] = useState<CoachInviteRevealed | null>(null);
+  const [openingId, setOpeningId] = useState<number | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<'code' | 'link' | null>(null);
+
+  async function copy(value: string, field: 'code' | 'link') {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+    } catch {
+      // Clipboard can be refused; the value is on screen either way, so
+      // this must not read as though the invite failed.
+      setCopiedField(null);
+    }
+  }
 
   function reload() {
     listCoachInvites()
@@ -211,6 +237,35 @@ export function CoachInvites() {
                           ? `Expires ${shortDate(invite.expires_at)}`
                           : 'No expiry'}
                     </span>
+                    {/* VIEW ONLY WHERE THERE IS SOMETHING TO SEE. A redeemed,
+                        revoked or expired invite has no code to reshare, so it
+                        offers nothing rather than a button that apologises. */}
+                    {invite.is_usable && (
+                      <button
+                        type="button"
+                        className={styles.inviteView}
+                        disabled={openingId === invite.id}
+                        onClick={async () => {
+                          if (opened?.id === invite.id) {
+                            setOpened(null);
+                            return;
+                          }
+                          setOpeningId(invite.id);
+                          setOpenError(null);
+                          setCopiedField(null);
+                          try {
+                            setOpened(await revealCoachInvite(invite.id));
+                          } catch (err) {
+                            setOpened(null);
+                            setOpenError(getErrorMessage(err));
+                          } finally {
+                            setOpeningId(null);
+                          }
+                        }}
+                      >
+                        {opened?.id === invite.id ? 'Hide' : 'View'}
+                      </button>
+                    )}
                     {invite.is_usable && (
                       <button
                         type="button"
@@ -218,6 +273,7 @@ export function CoachInvites() {
                         onClick={async () => {
                           try {
                             await revokeCoachInvite(invite.id);
+                            setOpened(null);
                             reload();
                           } catch (err) {
                             setError(getErrorMessage(err));
@@ -228,6 +284,84 @@ export function CoachInvites() {
                       </button>
                     )}
                   </div>
+
+                  {openError && opened?.id !== invite.id && openingId !== invite.id && (
+                    <ErrorBanner message={openError} />
+                  )}
+
+                  {opened?.id === invite.id && (
+                    <div className={styles.inviteDetail}>
+                      {opened.token ? (
+                        <>
+                          <div className={styles.inviteDetailLabel}>Invite code</div>
+                          <code className={styles.inviteToken}>{opened.token}</code>
+                          <button
+                            type="button"
+                            className={styles.inviteCancel}
+                            onClick={() => copy(opened.token as string, 'code')}
+                          >
+                            {copiedField === 'code' ? 'Copied' : 'Copy code'}
+                          </button>
+
+                          <div className={styles.inviteDetailLabel}>Invite link</div>
+                          <code className={styles.inviteLinkText}>
+                            {inviteLink(opened.token)}
+                          </code>
+                          <button
+                            type="button"
+                            className={styles.inviteCancel}
+                            onClick={() => copy(inviteLink(opened.token as string), 'link')}
+                          >
+                            {copiedField === 'link' ? 'Copied' : 'Copy link'}
+                          </button>
+
+                          {/* The SAME renderer the quiz share sheet and the
+                              competition lobby use, and the same value the
+                              Copy link button produces - so a scanned code and
+                              a pasted link cannot diverge. */}
+                          <div className={styles.inviteDetailLabel}>QR code</div>
+                          <div className={styles.inviteQr}>
+                            <QRCodeSVG value={inviteLink(opened.token)} size={512} level="M" marginSize={4} />
+                          </div>
+                          <p className={styles.inviteCreatedNote}>
+                            Scan to create your Peira coach account.
+                          </p>
+                        </>
+                      ) : (
+                        /* HONEST, NOT APOLOGETIC. The original code is gone -
+                           only a hash of it was ever stored - so nothing can
+                           reconstruct it and the offer is a replacement. */
+                        <>
+                          <p className={styles.inviteCreatedNote}>
+                            Full code unavailable &mdash; this invite was created before
+                            reusable invite codes were stored securely. It still works if the
+                            coach already has it.
+                          </p>
+                          <button
+                            type="button"
+                            className={styles.inviteCreate}
+                            onClick={async () => {
+                              setOpenError(null);
+                              try {
+                                const fresh = await replaceCoachInvite(invite.id);
+                                setJustCreated(fresh);
+                                setOpened(null);
+                                reload();
+                              } catch (err) {
+                                setOpenError(getErrorMessage(err));
+                              }
+                            }}
+                          >
+                            Replace invite
+                          </button>
+                          <p className={styles.inviteCreatedNote}>
+                            Replacing issues a new code on this same invite. Any code you sent
+                            earlier stops working.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

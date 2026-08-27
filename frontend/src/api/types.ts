@@ -980,6 +980,17 @@ export interface CoachInvite {
   is_usable: boolean;
   /** Decided server-side so the dashboard and the CLI cannot disagree. */
   status: 'pending' | 'redeemed' | 'expired' | 'revoked';
+  /** Whether the owner could reopen this one and get its code back. False for
+   *  an invite issued before codes were recoverable, for a deployment with no
+   *  encryption key, and for anything no longer pending. Not the secret - just
+   *  whether asking is worth offering. */
+  is_recoverable: boolean;
+}
+
+/** One invite WITH its code. Served only by the reveal route, for a pending
+ *  invite whose code could be decrypted; `token` is absent otherwise. */
+export interface CoachInviteRevealed extends CoachInvite {
+  token?: string;
 }
 
 /** The create response: an invite plus the one and only sight of its token. */

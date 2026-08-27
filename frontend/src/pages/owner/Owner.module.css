@@ -598,3 +598,63 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* The reopened invite: code, link and QR for resharing.
+ *
+ * Inline under its own row rather than a modal - the owner is comparing it
+ * against the label above it, and a dialog would cover the list they opened
+ * it from. */
+.inviteView {
+  border: none;
+  background: none;
+  padding: 0.3em 0;
+  font-family: inherit;
+  font-size: var(--peira-text-meta);
+  color: var(--color-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.inviteDetail {
+  margin: var(--space-3) 0 var(--space-2);
+  padding: var(--space-4);
+  border-left: 3px solid var(--color-accent);
+  background: var(--peira-surface-raised);
+  border-radius: var(--radius-md);
+}
+
+.inviteDetailLabel {
+  margin-top: var(--space-3);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.inviteDetailLabel:first-child {
+  margin-top: 0;
+}
+
+.inviteLinkText {
+  display: block;
+  margin: var(--space-2) 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--peira-text-meta);
+  word-break: break-all;
+}
+
+/* Capped so a 512px QR does not dominate the dashboard; the SVG scales. */
+.inviteQr {
+  max-width: 15rem;
+  margin: var(--space-2) 0;
+  padding: var(--space-3);
+  background: #ffffff;
+  border-radius: var(--radius-md);
+}
+
+.inviteQr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}

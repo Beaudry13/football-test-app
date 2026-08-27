@@ -3,6 +3,7 @@ import type {
   AccessRequestRow,
   CoachInvite,
   CoachInviteCreated,
+  CoachInviteRevealed,
   MergePreview,
   MergeResult,
   OwnerCoachRow,
@@ -95,6 +96,19 @@ export function createCoachInvite(input: {
   expires_in_days?: number;
 }): Promise<CoachInviteCreated> {
   return api.post<CoachInviteCreated>('/owner/coach-invites', input);
+}
+
+/** One pending invite WITH its code, so the owner can reshare what they
+ *  already sent. `token` is absent when it cannot be recovered - a legacy
+ *  invite, a missing key, or anything no longer pending. */
+export function revealCoachInvite(id: number): Promise<CoachInviteRevealed> {
+  return api.get<CoachInviteRevealed>(`/owner/coach-invites/${id}`);
+}
+
+/** Give an invite whose code is unrecoverable a working one, keeping the row.
+ *  THE PREVIOUS CODE STOPS WORKING - the caller must say so first. */
+export function replaceCoachInvite(id: number): Promise<CoachInviteCreated> {
+  return api.post<CoachInviteCreated>(`/owner/coach-invites/${id}/replace`, {});
 }
 
 export function revokeCoachInvite(id: number): Promise<CoachInvite> {

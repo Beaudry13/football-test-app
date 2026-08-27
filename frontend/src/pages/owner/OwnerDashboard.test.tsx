@@ -569,6 +569,7 @@ describe('Coach invites on the owner overview', () => {
     revoked_at: null,
     is_usable: true,
     status: 'pending',
+    is_recoverable: true,
     ...over,
   });
 
@@ -713,5 +714,147 @@ describe('Coach invites on the owner overview', () => {
     expect(await screen.findByText('12')).toBeInTheDocument();
     expect(screen.getByText('Feature adoption')).toBeInTheDocument();
     expect(screen.getByText('Coach invites')).toBeInTheDocument();
+  });
+});
+
+
+describe('Reopening a pending coach invite', () => {
+  /** THE POINT OF THE FEATURE: an invite issued on Monday is the invite shown
+   *  on Tuesday. Reopening must never quietly hand back a different code, or
+   *  whatever the owner already sent stops working. */
+  const pending = (over: Partial<CoachInvite> = {}): CoachInvite => ({
+    id: 1,
+    token_prefix: 'K7M4',
+    label: 'Coach Benedict',
+    created_at: '2026-08-26T12:00:00Z',
+    expires_at: '2026-09-02T12:00:00Z',
+    redeemed_at: null,
+    redeemed_by_coach_id: null,
+    revoked_at: null,
+    is_usable: true,
+    status: 'pending',
+    is_recoverable: true,
+    ...over,
+  });
+
+  const TOKEN = 'PEIRA-K7M4-QX92-BD3F';
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(ownerApi, 'getPlatformOverview').mockResolvedValue(overview);
+    vi.spyOn(ownerApi, 'listAccessRequests').mockResolvedValue({ access_requests: [] });
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({ coach_invites: [pending()] });
+  });
+
+  it('shows the SAME code, its link and a QR of that link', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'revealCoachInvite').mockResolvedValue({ ...pending(), token: TOKEN });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+
+    expect(await screen.findByText(TOKEN)).toBeInTheDocument();
+    const expected = `${window.location.origin}/invite/${TOKEN}`;
+    expect(screen.getByText(expected)).toBeInTheDocument();
+    // The QR encodes the SAME url the Copy link button produces, so a scan and
+    // a paste cannot diverge.
+    const qr = document.querySelector('svg[data-qr], .inviteQr svg') ?? document.querySelector('svg');
+    expect(qr).toBeTruthy();
+    expect(screen.getByText('Scan to create your Peira coach account.')).toBeInTheDocument();
+  });
+
+  it('copies the exact code and the exact link', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    vi.spyOn(ownerApi, 'revealCoachInvite').mockResolvedValue({ ...pending(), token: TOKEN });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+    await user.click(await screen.findByRole('button', { name: 'Copy code' }));
+    expect(writeText).toHaveBeenLastCalledWith(TOKEN);
+
+    await user.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/invite/${TOKEN}`);
+  });
+
+  it('asks the server rather than trusting the list', async () => {
+    // The list deliberately carries no secret, so View must fetch.
+    const user = userEvent.setup();
+    const reveal = vi
+      .spyOn(ownerApi, 'revealCoachInvite')
+      .mockResolvedValue({ ...pending(), token: TOKEN });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+
+    expect(reveal).toHaveBeenCalledWith(1);
+  });
+
+  it('closes again without leaving the code on screen', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'revealCoachInvite').mockResolvedValue({ ...pending(), token: TOKEN });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+    await screen.findByText(TOKEN);
+    await user.click(screen.getByRole('button', { name: 'Hide' }));
+
+    expect(screen.queryByText(TOKEN)).not.toBeInTheDocument();
+  });
+
+  it('is NOT offered on a redeemed, expired or revoked invite', async () => {
+    vi.spyOn(ownerApi, 'listCoachInvites').mockResolvedValue({
+      coach_invites: [
+        pending({ id: 1, label: 'Alpha', status: 'redeemed', is_usable: false, is_recoverable: false }),
+        pending({ id: 2, label: 'Bravo', status: 'expired', is_usable: false, is_recoverable: false }),
+        pending({ id: 3, label: 'Charlie', status: 'revoked', is_usable: false, is_recoverable: false }),
+      ],
+    });
+    renderAt('/owner');
+
+    await screen.findByText('Alpha');
+    expect(screen.queryByRole('button', { name: 'View' })).not.toBeInTheDocument();
+  });
+
+  it('tells the truth about a legacy invite instead of guessing', async () => {
+    /* Only a hash of the original was ever stored, so nothing can reconstruct
+       it. The honest offer is a replacement. */
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'revealCoachInvite').mockResolvedValue({ ...pending(), token: undefined });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+
+    expect(await screen.findByText(/Full code unavailable/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Replace invite' })).toBeInTheDocument();
+    expect(screen.getByText(/Any code you sent earlier stops working/)).toBeInTheDocument();
+  });
+
+  it('replacing shows the new code once', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'revealCoachInvite').mockResolvedValue({ ...pending(), token: undefined });
+    vi.spyOn(ownerApi, 'replaceCoachInvite').mockResolvedValue({
+      ...pending(),
+      token: 'PEIRA-NEW1-NEW2-NEW3',
+    });
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+    await user.click(await screen.findByRole('button', { name: 'Replace invite' }));
+
+    expect(await screen.findByText('PEIRA-NEW1-NEW2-NEW3')).toBeInTheDocument();
+    expect(screen.getByText(/cannot be shown again/)).toBeInTheDocument();
+  });
+
+  it('a reveal failure does not take down the dashboard', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(ownerApi, 'revealCoachInvite').mockRejectedValue(new Error('boom'));
+    renderAt('/owner');
+
+    await user.click(await screen.findByRole('button', { name: 'View' }));
+
+    expect(await screen.findByText('12')).toBeInTheDocument();
+    expect(screen.getByText('Coach invites')).toBeInTheDocument();
+    expect(screen.getByText('Coach Benedict')).toBeInTheDocument();
   });
 });
