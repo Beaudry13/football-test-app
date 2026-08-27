@@ -113,6 +113,9 @@ OWNER_ROUTES = [
     # anonymous 401, member 404, org admin 404, and the CORS preflight, all
     # from this single entry.
     "/api/owner/access-requests",
+    # Coach invites join the same matrix: anonymous 401, member 404, org admin
+    # 404, CORS preflight - all from this one entry.
+    "/api/owner/coach-invites",
 ]
 
 
@@ -209,7 +212,14 @@ class TestPermissionMatrix:
     #: because it carries a body and writes nothing, execute is the one
     #: destructive owner operation. Pinned here so a THIRD mutating route
     #: cannot appear without someone changing this list on purpose.
-    MUTATING_ALLOWLIST = {"/api/owner/merges/preview", "/api/owner/merges/execute"}
+    MUTATING_ALLOWLIST = {
+        "/api/owner/merges/preview",
+        "/api/owner/merges/execute",
+        # Issuing an invitation creates a row; revoking one ends it. Both are
+        # owner-only and neither touches customer content.
+        "/api/owner/coach-invites",
+        "/api/owner/coach-invites/<int:invite_id>/revoke",
+    }
 
     def test_no_unexpected_mutating_owner_route_exists(self, app):
         with app.app_context():
@@ -795,3 +805,148 @@ class TestAccessRequests:
             for rule in app.url_map.iter_rules():
                 if rule.rule.startswith("/api/owner/access-requests"):
                     assert rule.methods & {"POST", "PUT", "PATCH", "DELETE"} == set()
+
+
+class TestCoachInvites:
+    """Issuing account invitations from the dashboard.
+
+    A COACH INVITE IS NOT A QUIZ ACCESS CODE. A player's access code unlocks
+    one quiz for a day; this creates an ACCOUNT and an ORGANIZATION. Separate
+    models, separate tables, separate words.
+
+    The machinery already existed and was reachable only from a Flask CLI
+    command - these routes are what let the owner use it from the dashboard.
+    """
+
+    def _create(self, client, owner, **body):
+        return client.post(
+            "/api/owner/coach-invites",
+            json={"label": "Coach Smith - Madeira", **body},
+            headers=headers(owner["access_token"]),
+        )
+
+    def _list(self, client, owner):
+        response = client.get(
+            "/api/owner/coach-invites", headers=headers(owner["access_token"])
+        )
+        assert response.status_code == 200
+        return response.get_json()["coach_invites"]
+
+    def test_the_owner_can_issue_one_and_sees_the_token_once(self, client, owner):
+        response = self._create(client, owner)
+
+        assert response.status_code == 201
+        body = response.get_json()
+        assert body["token"].startswith("PEIRA-")
+        assert body["label"] == "Coach Smith - Madeira"
+        assert body["status"] == "pending"
+        assert body["expires_at"]
+
+    def test_the_token_is_NEVER_returned_again(self, client, owner):
+        """Only the SHA-256 is stored, so the plaintext genuinely cannot be
+        re-read. A list that could show it would mean a leaked backup was a
+        set of live account-creation grants."""
+        issued = self._create(client, owner).get_json()
+
+        rows = self._list(client, owner)
+
+        assert len(rows) == 1
+        assert "token" not in rows[0]
+        assert issued["token"] not in json.dumps(rows)
+        # The prefix is enough to tell invites apart and useless for redeeming.
+        assert rows[0]["token_prefix"]
+
+    def test_every_issued_token_is_different(self, client, owner):
+        tokens = {self._create(client, owner).get_json()["token"] for _ in range(10)}
+
+        assert len(tokens) == 10
+
+    def test_it_defaults_to_a_seven_day_expiry(self, client, owner):
+        from datetime import datetime, timedelta, timezone
+
+        body = self._create(client, owner).get_json()
+        expires = datetime.fromisoformat(body["expires_at"])
+
+        remaining = expires - datetime.now(timezone.utc)
+        assert timedelta(days=6) < remaining <= timedelta(days=7)
+
+    def test_the_owner_can_ask_for_a_different_window(self, client, owner):
+        from datetime import datetime, timedelta, timezone
+
+        body = self._create(client, owner, expires_in_days=1).get_json()
+        expires = datetime.fromisoformat(body["expires_at"])
+
+        assert expires - datetime.now(timezone.utc) <= timedelta(days=1)
+
+    def test_newest_first(self, client, owner):
+        self._create(client, owner, label="First")
+        self._create(client, owner, label="Second")
+
+        rows = self._list(client, owner)
+
+        assert [row["label"] for row in rows] == ["Second", "First"]
+
+    def test_an_empty_list_before_any_are_issued(self, client, owner):
+        assert self._list(client, owner) == []
+
+    def test_the_owner_can_revoke_one(self, client, owner):
+        invite_id = self._create(client, owner).get_json()["id"]
+
+        response = client.post(
+            f"/api/owner/coach-invites/{invite_id}/revoke",
+            headers=headers(owner["access_token"]),
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["status"] == "revoked"
+
+    def test_revoking_twice_is_refused_rather_than_silently_repeated(
+        self, client, owner
+    ):
+        invite_id = self._create(client, owner).get_json()["id"]
+        client.post(
+            f"/api/owner/coach-invites/{invite_id}/revoke",
+            headers=headers(owner["access_token"]),
+        )
+
+        again = client.post(
+            f"/api/owner/coach-invites/{invite_id}/revoke",
+            headers=headers(owner["access_token"]),
+        )
+
+        assert again.status_code == 409
+        assert again.get_json()["reason"] == "invite_not_open"
+
+    def test_revoking_an_invite_that_does_not_exist_is_a_404(self, client, owner):
+        response = client.post(
+            "/api/owner/coach-invites/999999/revoke",
+            headers=headers(owner["access_token"]),
+        )
+
+        assert response.status_code == 404
+
+    def test_an_ordinary_coach_cannot_issue_one(self, client, customer):
+        """The blueprint gate covers the GET via OWNER_ROUTES; the POST is
+        asserted here because issuing is the dangerous half."""
+        response = client.post(
+            "/api/owner/coach-invites",
+            json={"label": "sneaky"},
+            headers=headers(customer["access_token"]),
+        )
+
+        assert response.status_code == 404
+
+    def test_an_anonymous_caller_cannot_issue_one(self, client):
+        response = client.post("/api/owner/coach-invites", json={"label": "sneaky"})
+
+        assert response.status_code == 401
+
+    def test_an_ordinary_coach_cannot_revoke_one(self, client, owner, customer):
+        invite_id = self._create(client, owner).get_json()["id"]
+
+        response = client.post(
+            f"/api/owner/coach-invites/{invite_id}/revoke",
+            headers=headers(customer["access_token"]),
+        )
+
+        assert response.status_code == 404
