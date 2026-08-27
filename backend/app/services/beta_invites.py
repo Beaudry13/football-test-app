@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from datetime import timedelta
 
 from sqlalchemy import update as sa_update
 
@@ -38,6 +39,13 @@ ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
 GROUPS = 3
 GROUP_LENGTH = 4
 PREFIX = "PEIRA"
+
+#: How long a new invite stays spendable. An invitation is a live grant to
+#: create an account, so one that is mislaid or forwarded should stop working
+#: without the owner having to remember to revoke it. A week is long enough for
+#: a coach to get to it and short enough that a stale link is not a standing
+#: hole; the owner can always issue another.
+DEFAULT_EXPIRY_DAYS = 7
 
 #: What a coach is told when a token does not work, whatever the reason.
 #: ONE MESSAGE FOR EVERY FAILURE - unknown, revoked and already-redeemed are
@@ -81,12 +89,20 @@ def _canonical_variants(cleaned: str) -> list[str]:
     return [cleaned] if swapped == cleaned else [cleaned, swapped]
 
 
-def issue(label: str | None = None, created_by_coach_id: int | None = None) -> tuple[BetaInvite, str]:
+def issue(
+    label: str | None = None,
+    created_by_coach_id: int | None = None,
+    expires_in_days: int | None = DEFAULT_EXPIRY_DAYS,
+) -> tuple[BetaInvite, str]:
     """Create an invite and return it WITH its plaintext token.
 
     The token is returned exactly once, here. Nothing stores it, so this
     return value is the only chance to show it to the person who will send it
     on - which is why the caller gets a tuple rather than just the row.
+
+    `expires_in_days=None` issues one that never expires. Not offered in the
+    owner UI, but kept so the CLI can still cut a long-lived invite
+    deliberately rather than by forgetting.
     """
     raw = "".join(secrets.choice(ALPHABET) for _ in range(GROUPS * GROUP_LENGTH))
     invite = BetaInvite(
@@ -94,6 +110,11 @@ def issue(label: str | None = None, created_by_coach_id: int | None = None) -> t
         token_prefix=raw[:GROUP_LENGTH],
         label=(label or "").strip() or None,
         created_by_coach_id=created_by_coach_id,
+        expires_at=(
+            BetaInvite.now() + timedelta(days=expires_in_days)
+            if expires_in_days is not None
+            else None
+        ),
     )
     db.session.add(invite)
     db.session.commit()
@@ -116,6 +137,22 @@ def find_usable(candidate: str) -> BetaInvite | None:
     return None
 
 
+def _still_open(invite_id: int):
+    """The WHERE clause shared by redeem and revoke.
+
+    Spelled once because the two must agree about what "still open" means: an
+    invite that expired between the lookup and the write must not be claimable
+    by either, and letting the two drift would mean one of them could act on an
+    invite the other considers dead.
+    """
+    return (
+        BetaInvite.id == invite_id,
+        BetaInvite.redeemed_at.is_(None),
+        BetaInvite.revoked_at.is_(None),
+        db.or_(BetaInvite.expires_at.is_(None), BetaInvite.expires_at > BetaInvite.now()),
+    )
+
+
 def redeem(invite: BetaInvite, coach_id: int) -> bool:
     """Claim this invite for `coach_id`. True if this call is the one that won.
 
@@ -131,11 +168,7 @@ def redeem(invite: BetaInvite, coach_id: int) -> bool:
     """
     result = db.session.execute(
         sa_update(BetaInvite)
-        .where(
-            BetaInvite.id == invite.id,
-            BetaInvite.redeemed_at.is_(None),
-            BetaInvite.revoked_at.is_(None),
-        )
+        .where(*_still_open(invite.id))
         .values(redeemed_at=BetaInvite.now(), redeemed_by_coach_id=coach_id)
     )
     return result.rowcount == 1
@@ -150,11 +183,10 @@ def revoke(invite: BetaInvite) -> bool:
     """
     result = db.session.execute(
         sa_update(BetaInvite)
-        .where(
-            BetaInvite.id == invite.id,
-            BetaInvite.redeemed_at.is_(None),
-            BetaInvite.revoked_at.is_(None),
-        )
+        # Revoking an EXPIRED invite is allowed to fail for the same reason
+        # revoking a redeemed one does: it is already over, and recording a
+        # decision to end something that ended on its own would misstate why.
+        .where(*_still_open(invite.id))
         .values(revoked_at=BetaInvite.now())
     )
     return result.rowcount == 1

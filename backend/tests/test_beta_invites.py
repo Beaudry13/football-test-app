@@ -30,6 +30,8 @@ has exactly that race. Reported rather than fixed here; it is live behaviour
 and deserves its own change.
 """
 
+import json
+
 import pytest
 from sqlalchemy import update as sa_update
 
@@ -360,3 +362,108 @@ class TestNothingElseChanged:
 
         assert OrganizationInvite.__tablename__ == "organization_invites"
         assert BetaInvite.__tablename__ == "beta_invites"
+
+
+class TestExpiry:
+    """Invites stop being spendable on their own.
+
+    The model used to state that expiry was deliberately absent, on the
+    argument that an invite handed to a named coach should not die on a timer.
+    That was reversed by owner decision (Aug 2026): an invitation is a live
+    grant to create an account, and a mislaid or forwarded one should stop
+    working without the owner having to remember it exists.
+    """
+
+    def test_a_new_invite_expires_in_a_week_by_default(self, app):
+        from datetime import timedelta
+
+        with app.app_context():
+            invite, _token = beta_invites.issue(label="Coach Smith")
+
+            assert invite.expires_at is not None
+            remaining = invite.expires_at - BetaInvite.now()
+            assert timedelta(days=6) < remaining <= timedelta(days=7)
+            assert invite.is_usable()
+            assert invite.status() == "pending"
+
+    def test_an_expired_invite_is_not_usable(self, app):
+        from datetime import timedelta
+
+        with app.app_context():
+            invite, _token = beta_invites.issue()
+            invite.expires_at = BetaInvite.now() - timedelta(seconds=1)
+            db.session.commit()
+
+            assert invite.is_expired()
+            assert not invite.is_usable()
+            assert invite.status() == "expired"
+
+    def test_an_expired_token_cannot_be_found(self, app):
+        """The lookup refuses it, so registration cannot spend it."""
+        from datetime import timedelta
+
+        with app.app_context():
+            invite, token = beta_invites.issue()
+            invite.expires_at = BetaInvite.now() - timedelta(seconds=1)
+            db.session.commit()
+
+            assert beta_invites.find_usable(token) is None
+
+    def test_an_expired_invite_cannot_be_redeemed_even_if_held(self, app):
+        """Belt and braces: the conditional UPDATE refuses it too, so an
+        invite that expires between lookup and write cannot still be spent."""
+        from datetime import timedelta
+
+        with app.app_context():
+            invite, _token = beta_invites.issue()
+            invite.expires_at = BetaInvite.now() - timedelta(seconds=1)
+            db.session.commit()
+
+            assert beta_invites.redeem(invite, coach_id=1) is False
+
+    def test_an_invite_issued_before_expiry_existed_still_works(self, app):
+        """NULL keeps its old meaning. Back-filling a deadline onto invitations
+        already sent to real coaches is the surprise this avoids."""
+        with app.app_context():
+            invite, token = beta_invites.issue(expires_in_days=None)
+
+            assert invite.expires_at is None
+            assert invite.is_expired() is False
+            assert invite.is_usable()
+            assert beta_invites.find_usable(token) is invite
+
+    def test_redeemed_outranks_expired_in_the_status(self, app, coach_id):
+        """It was used. Reporting it as expired would lose the fact that a
+        coach is on the platform because of it."""
+        from datetime import timedelta
+
+        with app.app_context():
+            invite, _token = beta_invites.issue()
+            assert beta_invites.redeem(invite, coach_id) is True
+            db.session.refresh(invite)
+            invite.expires_at = BetaInvite.now() - timedelta(days=1)
+            db.session.commit()
+
+            assert invite.status() == "redeemed"
+
+    def test_revoked_outranks_expired_in_the_status(self, app):
+        from datetime import timedelta
+
+        with app.app_context():
+            invite, _token = beta_invites.issue()
+            assert beta_invites.revoke(invite) is True
+            db.session.refresh(invite)
+            invite.expires_at = BetaInvite.now() - timedelta(days=1)
+            db.session.commit()
+
+            assert invite.status() == "revoked"
+
+    def test_the_expiry_travels_to_the_owner_payload(self, app):
+        with app.app_context():
+            invite, _token = beta_invites.issue(label="Coach Smith")
+            body = invite.to_dict()
+
+            assert body["expires_at"]
+            assert body["status"] == "pending"
+            # Still no token, not even the hash.
+            assert "token" not in json.dumps(body).replace("token_prefix", "")

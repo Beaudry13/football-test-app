@@ -76,6 +76,12 @@ class BetaInvite(db.Model):
         db.Integer, db.ForeignKey("coaches.id", ondelete="SET NULL"), nullable=True
     )
 
+    #: When this stops working on its own. NULL means it never does, which is
+    #: what every invite issued before expiry existed still means - see
+    #: migration d4c1e8b7a903. New invites get a deadline so an unsent or
+    #: forgotten invitation does not stay live indefinitely.
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
     #: Cancelling one issued by mistake. A timestamp rather than a boolean
     #: because "when did we stop trusting this" is worth more than "is it
     #: off", and costs the same.
@@ -84,15 +90,30 @@ class BetaInvite(db.Model):
     created_by = db.relationship("Coach", foreign_keys=[created_by_coach_id])
     redeemed_by = db.relationship("Coach", foreign_keys=[redeemed_by_coach_id])
 
-    def is_usable(self) -> bool:
-        """Not revoked, not already redeemed.
+    def is_expired(self) -> bool:
+        """Past its deadline. NULL expires_at never expires.
 
-        THERE IS DELIBERATELY NO EXPIRY. An invite handed to a named coach
-        should not quietly die on a timer and greet them with "invalid" when
-        the only thing wrong is that a fortnight passed. Revocation is the
-        deliberate way to end one, and it leaves a record of the decision.
+        This entry used to read "THERE IS DELIBERATELY NO EXPIRY", on the
+        argument that an invite handed to a named coach should not quietly die
+        on a timer. That was reversed deliberately (owner decision, Aug 2026):
+        an invitation is a live grant to create an account, and one that is
+        mislaid or forwarded should stop being spendable without the owner
+        having to remember to revoke it. Revocation remains the way to end one
+        EARLY, and still leaves a record of the decision.
+
+        Invites issued before the deadline existed keep NULL and keep the old
+        behaviour, because retroactively killing invitations already sent to
+        real coaches would be the exact surprise this is meant to avoid.
         """
-        return self.revoked_at is None and self.redeemed_at is None
+        return self.expires_at is not None and self.expires_at <= self.now()
+
+    def is_usable(self) -> bool:
+        """Not revoked, not already redeemed, not past its deadline."""
+        return (
+            self.revoked_at is None
+            and self.redeemed_at is None
+            and not self.is_expired()
+        )
 
     def to_dict(self) -> dict:
         """Owner-facing. Deliberately carries NO token - not even the hash."""
@@ -103,9 +124,30 @@ class BetaInvite(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "redeemed_at": self.redeemed_at.isoformat() if self.redeemed_at else None,
             "redeemed_by_coach_id": self.redeemed_by_coach_id,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "revoked_at": self.revoked_at.isoformat() if self.revoked_at else None,
             "is_usable": self.is_usable(),
+            #: One word for the owner's list, decided here so the dashboard and
+            #: the CLI cannot disagree about what "expired" means.
+            "status": self.status(),
         }
+
+    def status(self) -> str:
+        """Redeemed / Revoked / Expired / Pending, in that order of precedence.
+
+        REDEEMED WINS OVER EXPIRED. An invite that was used and then sat past
+        its deadline was still used, and reporting it as expired would lose the
+        fact that a coach is on the platform because of it. Revoked likewise
+        outranks expired: the owner ended it, and that decision is the more
+        informative one.
+        """
+        if self.redeemed_at is not None:
+            return "redeemed"
+        if self.revoked_at is not None:
+            return "revoked"
+        if self.is_expired():
+            return "expired"
+        return "pending"
 
     @staticmethod
     def now() -> datetime:
