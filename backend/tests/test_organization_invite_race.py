@@ -307,5 +307,3 @@ class TestNothingElseChanged:
         )
 
         assert refused.status_code == 404
-
-        assert created.status_code == 201

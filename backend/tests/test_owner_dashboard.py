@@ -830,7 +830,30 @@ class TestCoachInvites:
             headers=headers(owner["access_token"]),
         )
 
+    #: Invites the TEST HARNESS spent to create its own coaches.
+    #:
+    #: Peira is invite-only, so conftest.register_via_invite issues one for
+    #: every fixture coach - including the `owner` these tests sign in as. Those
+    #: rows are real and correctly listed; they are simply not what these
+    #: assertions are about, so they are filtered out by the label the fixture
+    #: stamps on them. Filtering here rather than asserting a magic offset
+    #: keeps the tests readable when a fixture is added later.
+    FIXTURE_LABEL = "test fixture: "
+
     def _list(self, client, owner):
+        response = client.get(
+            "/api/owner/coach-invites", headers=headers(owner["access_token"])
+        )
+        assert response.status_code == 200
+        return [
+            row
+            for row in response.get_json()["coach_invites"]
+            if not (row["label"] or "").startswith(self.FIXTURE_LABEL)
+        ]
+
+    def _list_all(self, client, owner):
+        """Unfiltered, for the assertion that no token is ever returned - that
+        one must hold for every row, fixture-created or not."""
         response = client.get(
             "/api/owner/coach-invites", headers=headers(owner["access_token"])
         )
@@ -853,13 +876,16 @@ class TestCoachInvites:
         set of live account-creation grants."""
         issued = self._create(client, owner).get_json()
 
-        rows = self._list(client, owner)
+        # UNFILTERED on purpose: no row may carry a token, including the ones
+        # the fixtures created.
+        rows = self._list_all(client, owner)
 
-        assert len(rows) == 1
-        assert "token" not in rows[0]
+        assert rows
+        for row in rows:
+            assert "token" not in row
         assert issued["token"] not in json.dumps(rows)
         # The prefix is enough to tell invites apart and useless for redeeming.
-        assert rows[0]["token_prefix"]
+        assert all(row["token_prefix"] for row in rows)
 
     def test_every_issued_token_is_different(self, client, owner):
         tokens = {self._create(client, owner).get_json()["token"] for _ in range(10)}
