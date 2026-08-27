@@ -26,16 +26,39 @@
   border-left: 3px solid var(--color-accent);
 }
 
+/* THE ANSWER, AND THE LARGEST THING ON THE PAGE.
+ *
+ * This was 21.6px - smaller than the tab bar above it. A coach opening
+ * Results is asking one question, and the concept is the answer to it, so it
+ * now carries the weight that implies.
+ *
+ * CLAMPED RATHER THAN FIXED, because concept names are typed by coaches and
+ * the real range is wide: "Run Fits" is 9 characters and "Backside Cutback
+ * Responsibility Against Wide Zone Motion" - a real row in the database - is
+ * 56. A flat 46px, as the prototype drew it, sets the long one over four
+ * lines on a phone and pushes the action off the screen. clamp() gives the
+ * short name its presence and lets the long one stay readable: ~28px at
+ * 375px, ~44px by 1280px.
+ *
+ * The heading face, matching the rest of Peira's headings - the previous
+ * --font-display does not exist as a token, so this silently rendered in the
+ * body face.
+ */
 .conceptName {
-  font-family: var(--font-display, var(--font-body));
-  font-size: 1.35rem;
+  font-family: var(--font-heading);
+  font-size: clamp(1.75rem, 1.1rem + 2.2vw, 2.75rem);
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  /* A 56-character name has no spaces to break on in its longest run; this
+     keeps it inside the column instead of widening the page. */
+  overflow-wrap: break-word;
 }
 
 .missLine {
-  margin: var(--space-2) 0 0;
-  font-size: var(--peira-text-control);
+  margin: var(--space-3) 0 0;
+  font-size: var(--peira-text-body);
+  color: var(--color-text-secondary);
 }
 
 /* Never red. A thin sample is a caveat, not a failure, and colouring it like
