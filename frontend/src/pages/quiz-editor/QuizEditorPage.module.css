@@ -125,14 +125,27 @@
   margin-bottom: 1.5em;
 }
 
+/* NAVIGATION RECEDES.
+ *
+ * These were 20px/700 in the display serif - measured LOUDER than the answer
+ * on Results, where the weakness rendered at 21.6px and the label above it at
+ * 13px. A tab bar that competes with the conclusion is the single clearest
+ * hierarchy fault on that screen.
+ *
+ * Now the body face at --peira-text-control, the token that already means
+ * "a control". Deliberately NOT the 13px the prototype drew: these are tap
+ * targets on a phone, and the 44px minimum plus legibility at 375px is worth
+ * more than the last pixel of recession. The padding keeps the target height.
+ */
 .tab {
-  padding: 0.5em 0.1em;
+  padding: 0.7em 0.1em;
   border: none;
   background: none;
   cursor: pointer;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 20px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--peira-text-control);
+  letter-spacing: 0.01em;
   color: var(--nb-text-muted);
   border-bottom: 3px solid transparent;
   margin-bottom: -2px;
