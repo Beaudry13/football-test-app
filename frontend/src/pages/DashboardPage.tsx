@@ -181,6 +181,54 @@ export function DashboardPage() {
     );
   }
 
+  /* THE WORKLIST'S ONLY GROUPING, and it is deliberately the shallowest one
+     that helps: a quiz is either out with players right now or it is not.
+     `is_active` is data this page already receives and already rendered as an
+     "Active" badge, so no new state, no new request and no new rule.
+
+     WHAT THIS DELIBERATELY DOES NOT DO: there is no "Needs you" group.
+     Nothing in the quiz list says whether a quiz needs the coach - the list's
+     own payload carries no grading or attention signal - and manufacturing
+     one would mean borrowing DashboardRail's data and re-implementing its
+     "Needs attention" rule beside it. Two surfaces answering "what needs me"
+     from two rules is how they start disagreeing. The rail owns that
+     question; this list answers "what am I running, and what else do I have".
+     See the note above DashboardRail's panels. */
+  function splitByLive(list: Quiz[]) {
+    return {
+      live: list.filter((q) => q.is_active),
+      rest: list.filter((q) => !q.is_active),
+    };
+  }
+
+  function renderWorklist(list: Quiz[]) {
+    const { live, rest } = splitByLive(list);
+    return (
+      <>
+        {live.length > 0 && (
+          <section className={styles.group}>
+            <h2 className={styles.groupHeading}>
+              Out with players <span className={styles.groupCount}>{live.length}</span>
+            </h2>
+            <div className={styles.list}>{live.map(renderQuizCard)}</div>
+          </section>
+        )}
+        {rest.length > 0 && (
+          <section className={styles.group}>
+            {/* Only worth naming when something sits above it. With nothing
+                live, this IS the list and a heading would label the obvious. */}
+            {live.length > 0 && (
+              <h2 className={styles.groupHeading}>
+                Everything else <span className={styles.groupCount}>{rest.length}</span>
+              </h2>
+            )}
+            <div className={styles.list}>{rest.map(renderQuizCard)}</div>
+          </section>
+        )}
+      </>
+    );
+  }
+
   // Only ROOT folders appear here. A subfolder is reached by opening its
   // parent, which is what keeps this screen the same size whether a coach has
   // three folders or a five-deep season structure.
@@ -304,7 +352,7 @@ export function DashboardPage() {
         ) : quizzes.length === 0 && !hasFolders ? (
           <EmptyState message="No Quizzes yet. Create your first one above." />
         ) : !hasFolders ? (
-          <div className={styles.list}>{quizzes.map(renderQuizCard)}</div>
+          renderWorklist(quizzes)
         ) : (
           <div className={styles.folderSections}>
             {/* FOLDERS ARE PLACES TO GO, NOT THINGS TO UNFOLD. They used to
@@ -347,7 +395,7 @@ export function DashboardPage() {
                     Uncategorized <span className={styles.folderCount}>({uncategorized.length})</span>
                   </span>
                 </div>
-                <div className={styles.list}>{uncategorized.map(renderQuizCard)}</div>
+                {renderWorklist(uncategorized)}
               </div>
             )}
           </div>
