@@ -27,6 +27,26 @@ services:
         generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
+      # Encrypts a PENDING coach invitation's token so the owner can reopen it
+      # and reshare the same code. Its own secret, deliberately: one key, one
+      # purpose, so rotating this cannot disturb sessions and rotating those
+      # cannot disturb invitations.
+      #
+      # An arbitrary generated string is CORRECT here. Fernet wants 32 bytes of
+      # url-safe base64, which generateValue does not produce - so
+      # services/invite_secrets derives the key with HKDF-SHA256 from whatever
+      # this holds. Deterministic, so the same value always reopens yesterday's
+      # ciphertext.
+      #
+      # OPERATIONAL CAVEAT. A normal deploy keeps this value, so pending invites
+      # stay recoverable. Recreating the service, or rotating this secret, makes
+      # existing ciphertext undecryptable - the INVITES THEMSELVES STILL WORK
+      # (redemption matches token_hash, which is untouched); only the owner's
+      # ability to re-read a code is lost, and the dashboard then offers
+      # Replace. Absent entirely, invites issue and redeem exactly as before and
+      # simply cannot be reopened.
+      - key: INVITE_TOKEN_KEY
+        generateValue: true
       - key: DATABASE_URL
         fromDatabase:
           name: football-quiz-db
