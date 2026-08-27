@@ -106,19 +106,54 @@ def _clean_database(app):
         _db.session.commit()
 
 
+def register_via_invite(
+    client,
+    *,
+    username="coach1",
+    email="coach1@example.com",
+    password="password123",
+    organization="Wildcats",
+):
+    """Create a coach and their organization the only way production allows.
+
+    PEIRA IS INVITE-ONLY, so there is no longer an open registration endpoint
+    for tests to lean on. Every test that needs a coach issues itself an invite
+    and spends it, which means the suite exercises the real path rather than a
+    door that no longer exists - the failure this prevents is a green suite
+    against a registration route production does not serve.
+
+    The invite is issued through the service rather than the owner API to keep
+    this usable by tests that have no owner yet: bootstrapping an owner would
+    itself need a coach, and that is a circle.
+    """
+    from app.services import beta_invites
+
+    with client.application.app_context():
+        _invite, token = beta_invites.issue(label=f"test fixture: {username}")
+
+    return client.post(
+        "/api/auth/register-with-beta-invite",
+        json={
+            "username": username,
+            "email": email,
+            "password": password,
+            "organization": organization,
+            "invite_code": token,
+        },
+    )
+
+
 @pytest.fixture
 def register_coach(client):
     """Registers a coach through the real API and returns (coach, token, auth_headers)."""
 
     def _register(username="coach1", email="coach1@example.com", password="password123", organization="Wildcats"):
-        response = client.post(
-            "/api/auth/register",
-            json={
-                "username": username,
-                "email": email,
-                "password": password,
-                "organization": organization,
-            },
+        response = register_via_invite(
+            client,
+            username=username,
+            email=email,
+            password=password,
+            organization=organization,
         )
         assert response.status_code == 201, response.get_json()
         body = response.get_json()

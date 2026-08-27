@@ -1,15 +1,38 @@
-"""Coach registration and login."""
+"""Coach registration and login.
+
+PEIRA IS INVITE-ONLY. There is no open registration endpoint, so every test
+here creates a coach by spending an invitation - the same path production
+serves. `test_open_registration_is_gone` pins the absence directly, because a
+suite that simply stopped calling the old route would pass just as happily if
+the route were still there.
+"""
+from tests.conftest import register_via_invite
+
+
+def test_open_registration_is_gone(client):
+    """The only way in is an invitation.
+
+    Asserted directly rather than left implicit: a suite that merely stopped
+    calling the open route would be equally green if the route still existed,
+    which is exactly the hole this closes.
+    """
+    refused = client.post(
+        "/api/auth/register",
+        json={
+            "username": "walkup",
+            "email": "walkup@example.com",
+            "password": "password123",
+            "organization": "Walk Up Program",
+        },
+    )
+
+    assert refused.status_code == 404
 
 
 def test_register_creates_coach_and_returns_token(client):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "username": "coach1",
-            "email": "coach1@example.com",
-            "password": "password123",
-            "organization": "Wildcats",
-        },
+    response = register_via_invite(
+        client, username="coach1", email="coach1@example.com",
+        password="password123", organization="Wildcats",
     )
 
     assert response.status_code == 201
@@ -23,28 +46,18 @@ def test_register_creates_coach_and_returns_token(client):
 def test_register_rejects_duplicate_email(client, register_coach):
     register_coach(username="coach1", email="dup@example.com")
 
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "username": "coach2",
-            "email": "dup@example.com",
-            "password": "password123",
-            "organization": "Wildcats",
-        },
+    response = register_via_invite(
+        client, username="coach2", email="dup@example.com",
+        password="password123", organization="Wildcats",
     )
 
     assert response.status_code == 409
 
 
 def test_register_rejects_short_password(client):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "username": "coach1",
-            "email": "coach1@example.com",
-            "password": "short",
-            "organization": "Wildcats",
-        },
+    response = register_via_invite(
+        client, username="coach1", email="coach1@example.com",
+        password="short", organization="Wildcats",
     )
 
     assert response.status_code == 422

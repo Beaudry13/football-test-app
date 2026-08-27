@@ -20,6 +20,7 @@ from app.extensions import db
 from app.models import Coach, CoachRole, Organization
 from app.models.organization_merge import OrganizationMerge
 from app.services import organization_merge as merge
+from tests.conftest import register_via_invite
 
 SERVICE_PATH = Path(__file__).resolve().parent.parent / "app" / "services" / "organization_merge.py"
 
@@ -30,14 +31,18 @@ SERVICE_PATH = Path(__file__).resolve().parent.parent / "app" / "services" / "or
 
 
 def register(client, *, username, email, organization):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "username": username,
-            "email": email,
-            "password": "Passw0rd!23",
-            "organization": organization,
-        },
+    """Peira is invite-only, so a coach is created by spending an invite.
+
+    See tests/conftest.register_via_invite - there is no open registration
+    endpoint any more, and a test that used one would be green against a door
+    production does not serve.
+    """
+    response = register_via_invite(
+        client,
+        username=username,
+        email=email,
+        password="Passw0rd!23",
+        organization=organization,
     )
     assert response.status_code == 201, response.get_json()
     return response.get_json()

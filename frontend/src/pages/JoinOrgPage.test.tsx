@@ -21,7 +21,6 @@ function mockUnauthenticated(registerWithInvite = vi.fn()) {
     coach: null,
     isLoading: false,
     login: vi.fn(),
-    register: vi.fn(),
     registerWithInvite,
     registerWithBetaInvite: vi.fn(),
     logout: vi.fn(),

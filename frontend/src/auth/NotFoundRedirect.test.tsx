@@ -21,7 +21,6 @@ function mockAuth(coach: Coach | null) {
     coach,
     isLoading: false,
     login: vi.fn(),
-    register: vi.fn(),
     registerWithInvite: vi.fn(),
     registerWithBetaInvite: vi.fn(),
     logout: vi.fn(),

@@ -30,6 +30,7 @@ from app.extensions import db
 from app.models import Coach, CoachRole, Organization
 from app.models.beta_invite import BetaInvite
 from app.services import beta_invites
+from tests.conftest import register_via_invite
 
 
 @pytest.fixture
@@ -299,10 +300,16 @@ class TestTheTwoInviteTypesStayApart:
 
 
 class TestNothingElseChanged:
-    def test_public_registration_is_still_open(self, client):
-        """DELIBERATE, and pinned. Closing public signup is a product decision,
-        not a side effect of building the invited path."""
-        created = client.post(
+    def test_public_registration_is_CLOSED(self, client):
+        """REVERSED DELIBERATELY (owner decision, Aug 2026).
+
+        This used to assert the opposite, with a docstring explaining that
+        closing public signup was a separate product decision and not a side
+        effect of building the invited path. That decision has now been taken:
+        Peira is invite-only, so the open endpoint is gone and the only way to
+        create a coach is to spend an invitation.
+        """
+        refused = client.post(
             "/api/auth/register",
             json={
                 "username": "walkup",
@@ -312,19 +319,19 @@ class TestNothingElseChanged:
             },
         )
 
-        assert created.status_code == 201
+        assert refused.status_code == 404
 
-    def test_open_registration_still_makes_an_admin_of_a_new_org(self, app, client):
-        """Both signup paths now build the account through one helper, so this
-        is what catches the two drifting apart."""
-        client.post(
-            "/api/auth/register",
-            json={
-                "username": "walkup",
-                "email": "walkup@example.com",
-                "password": "password123",
-                "organization": "Walk Up Program",
-            },
+    def test_an_invited_signup_makes_an_ADMIN_of_a_new_org(self, app, client):
+        """The account shape an invitation produces.
+
+        This used to assert the same thing about OPEN registration, as a guard
+        against the two signup paths drifting. There is only one path now, so
+        it guards that one - the property that matters is unchanged: a beta
+        invite creates an organization and makes its redeemer the admin.
+        """
+        register_via_invite(
+            client, username="walkup", email="walkup@example.com",
+            password="password123", organization="Walk Up Program",
         )
 
         with app.app_context():

@@ -6,14 +6,11 @@ export interface AuthResponse {
   access_token: string;
 }
 
-export function register(input: {
-  username: string;
-  email: string;
-  password: string;
-  organization: string;
-}): Promise<AuthResponse> {
-  return api.post<AuthResponse>('/auth/register', input, { auth: false });
-}
+/* OPEN REGISTRATION IS GONE. `POST /auth/register` was removed when Peira went
+ * invite-only - a coach is created either by spending a platform invitation
+ * (registerWithBetaInvite) or by accepting one into an existing organization
+ * (registerWithInvite). Nothing here should call a route the server no longer
+ * serves. */
 
 /** Joins an existing organization. The org comes from the invite, so there's
  * no organization name to supply. */

@@ -13,6 +13,7 @@ import pytest
 from app import create_app
 from app.config import TestingConfig
 from app.extensions import limiter
+from tests.conftest import register_via_invite
 
 
 @pytest.fixture(autouse=True)
@@ -63,14 +64,10 @@ def test_a_realistic_team_size_sharing_one_ip_is_not_rate_limited(monkeypatch):
     client, so one shared "IP" (REMOTE_ADDR), same as this whole scenario."""
     client = make_rate_limited_client(monkeypatch)
 
-    coach = client.post(
-        "/api/auth/register",
-        json={
-            "username": "team_coach",
-            "email": "team_coach@example.com",
-            "password": "correct horse battery staple",
-            "organization": "Rate Limit Test Org",
-        },
+    coach = register_via_invite(
+        client, username="team_coach", email="team_coach@example.com",
+        password="correct horse battery staple",
+        organization="Rate Limit Test Org",
     ).get_json()
     headers = {"Authorization": f"Bearer {coach['access_token']}"}
 
@@ -158,14 +155,10 @@ def test_invite_creation_is_rate_limited(monkeypatch):
     already behind admin-only auth), but still worth a real limit."""
     client = make_rate_limited_client(monkeypatch)
 
-    coach = client.post(
-        "/api/auth/register",
-        json={
-            "username": "invite_admin",
-            "email": "invite_admin@example.com",
-            "password": "correct horse battery staple",
-            "organization": "Rate Limit Test Org",
-        },
+    coach = register_via_invite(
+        client, username="invite_admin", email="invite_admin@example.com",
+        password="correct horse battery staple",
+        organization="Rate Limit Test Org",
     ).get_json()
     headers = {"Authorization": f"Bearer {coach['access_token']}"}
 

@@ -287,15 +287,25 @@ class TestNothingElseChanged:
         assert OrganizationInvite.__tablename__ == "organization_invites"
         assert BetaInvite.__tablename__ == "beta_invites"
 
-    def test_public_registration_still_works(self, client):
-        created = client.post(
+    def test_public_registration_is_CLOSED(self, client):
+        """REVERSED DELIBERATELY (owner decision, Aug 2026).
+
+        This used to assert the opposite, with a docstring explaining that
+        closing public signup was a separate product decision and not a side
+        effect of building the invited path. That decision has now been taken:
+        Peira is invite-only, so the open endpoint is gone and the only way to
+        create a coach is to spend an invitation.
+        """
+        refused = client.post(
             "/api/auth/register",
             json={
-                "username": "solo",
-                "email": "solo@example.com",
+                "username": "walkup",
+                "email": "walkup@example.com",
                 "password": "password123",
-                "organization": "Solo Program",
+                "organization": "Walk Up Program",
             },
         )
+
+        assert refused.status_code == 404
 
         assert created.status_code == 201

@@ -16,7 +16,6 @@ from app.extensions import db, limiter
 from app.models import Coach, CoachRole, Organization
 from app.schemas.auth import (
     LoginSchema,
-    RegisterSchema,
     RegisterWithBetaInviteSchema,
     RegisterWithInviteSchema,
     RequestAccessSchema,
@@ -63,17 +62,25 @@ def _start_a_program(data: dict) -> Coach:
     return coach
 
 
-@auth_bp.post("/register")
-@limiter.limit("10 per hour")
-def register():
-    data = load_json_body(RegisterSchema())
-    _reject_taken_identity(data["username"], data["email"])
-
-    coach = _start_a_program(data)
-    db.session.commit()
-
-    token = create_access_token(identity=str(coach.id))
-    return jsonify({"coach": coach.to_dict(), "access_token": token}), 201
+# OPEN REGISTRATION IS GONE (owner decision, Aug 2026).
+#
+# `POST /auth/register` used to create a coach and an organization for anybody
+# who filled in the form. Peira is invite-only, so the only ways to become a
+# coach are now:
+#
+#   * /register-with-beta-invite - spend an invitation from the platform owner,
+#     creating your own organization and becoming its admin;
+#   * /register-with-invite      - accept an invitation from a coach into an
+#     organization that already exists, as a member.
+#
+# The endpoint is REMOVED rather than gated behind a flag: a flag is a thing
+# that can be switched on by accident, and the public front door of a product
+# should not be one configuration mistake away from open. /request-access is
+# what a stranger uses instead, and it grants nothing.
+#
+# tests/test_auth.test_open_registration_is_gone pins the absence directly,
+# because a suite that merely stopped calling it would pass just as happily if
+# it were still there.
 
 
 @auth_bp.post("/register-with-invite")

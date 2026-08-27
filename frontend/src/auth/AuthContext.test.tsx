@@ -86,23 +86,10 @@ describe('AuthProvider', () => {
     expect(getToken()).toBe('new-token');
   });
 
-  it('register() stores the token and sets the coach', async () => {
-    vi.spyOn(authApi, 'register').mockResolvedValue({ coach: mockCoach, access_token: 'reg-token' });
-    const { result } = renderAuth();
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    await act(async () => {
-      await result.current.register({
-        username: 'coach_smith',
-        email: 'coach@example.com',
-        password: 'password123',
-        organization: 'Wildcats',
-      });
-    });
-
-    expect(result.current.coach).toEqual(mockCoach);
-    expect(getToken()).toBe('reg-token');
-  });
+  /* The test for `register()` was removed with the method. Peira is
+     invite-only, so the open endpoint no longer exists and the context no
+     longer wraps it; `registerWithBetaInvite` below is the equivalent path and
+     is covered. */
 
   it('logout() clears the token and the coach', async () => {
     vi.spyOn(authApi, 'login').mockResolvedValue({ coach: mockCoach, access_token: 'a-token' });

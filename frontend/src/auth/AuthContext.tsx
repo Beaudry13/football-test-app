@@ -1,7 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import {
   login as apiLogin,
-  register as apiRegister,
   registerWithInvite as apiRegisterWithInvite,
   registerWithBetaInvite as apiRegisterWithBetaInvite,
   me as apiMe,
@@ -13,12 +12,6 @@ interface AuthContextValue {
   coach: Coach | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (input: {
-    username: string;
-    email: string;
-    password: string;
-    organization: string;
-  }) => Promise<void>;
   registerWithInvite: (input: {
     username: string;
     email: string;
@@ -67,15 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCoach(result.coach);
   }, []);
 
-  const register = useCallback(
-    async (input: { username: string; email: string; password: string; organization: string }) => {
-      const result = await apiRegister(input);
-      setToken(result.access_token);
-      setCoach(result.coach);
-    },
-    [],
-  );
-
   const registerWithInvite = useCallback(
     async (input: { username: string; email: string; password: string; invite_code: string }) => {
       const result = await apiRegisterWithInvite(input);
@@ -111,7 +95,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         coach,
         isLoading,
         login,
-        register,
         registerWithInvite,
         registerWithBetaInvite,
         logout,

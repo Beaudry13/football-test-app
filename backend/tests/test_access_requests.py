@@ -272,11 +272,16 @@ class TestBadInput:
 
 
 class TestNothingElseChanged:
-    def test_public_registration_is_still_open(self, client):
-        """DELIBERATE, and pinned. Request Access lands BEFORE the decision to
-        close public signup, so the new front door exists before the old one
-        is shut. Closing it is a separate, explicit change."""
-        created = client.post(
+    def test_public_registration_is_CLOSED(self, client):
+        """REVERSED DELIBERATELY (owner decision, Aug 2026).
+
+        This used to assert the opposite, with a docstring explaining that
+        closing public signup was a separate product decision and not a side
+        effect of building the invited path. That decision has now been taken:
+        Peira is invite-only, so the open endpoint is gone and the only way to
+        create a coach is to spend an invitation.
+        """
+        refused = client.post(
             "/api/auth/register",
             json={
                 "username": "walkup",
@@ -286,7 +291,7 @@ class TestNothingElseChanged:
             },
         )
 
-        assert created.status_code == 201
+        assert refused.status_code == 404
 
     def test_it_is_a_separate_concept_from_both_invite_types(self, app):
         from app.models import OrganizationInvite
