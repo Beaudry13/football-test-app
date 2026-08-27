@@ -121,6 +121,9 @@ OWNER_ROUTES = [
     # Coach invites join the same matrix: anonymous 401, member 404, org admin
     # 404, CORS preflight - all from this one entry.
     "/api/owner/coach-invites",
+    # Revealing one code joins the same matrix. The id does not have to
+    # exist: a non-owner must be refused before anything is looked up.
+    "/api/owner/coach-invites/1",
 ]
 
 
@@ -224,6 +227,7 @@ class TestPermissionMatrix:
         # owner-only and neither touches customer content.
         "/api/owner/coach-invites",
         "/api/owner/coach-invites/<int:invite_id>/revoke",
+        "/api/owner/coach-invites/<int:invite_id>/replace",
     }
 
     def test_no_unexpected_mutating_owner_route_exists(self, app):
@@ -981,3 +985,249 @@ class TestCoachInvites:
         )
 
         assert response.status_code == 404
+
+
+class TestRevealingAPendingInvite:
+    """An owner who issued an invite on Monday sends the SAME code on Tuesday.
+
+    The list still carries no secret; this one route serves it, for pending
+    invites only, and says no for everything else.
+    """
+
+    def _key(self, app):
+        app.config["INVITE_TOKEN_KEY"] = "a-high-entropy-test-secret-value-0123456789"
+
+    def _create(self, client, owner, **body):
+        return client.post(
+            "/api/owner/coach-invites",
+            json={"label": "Coach Benedict", **body},
+            headers=headers(owner["access_token"]),
+        ).get_json()
+
+    def _reveal(self, client, owner, invite_id):
+        return client.get(
+            f"/api/owner/coach-invites/{invite_id}",
+            headers=headers(owner["access_token"]),
+        )
+
+    def test_the_owner_gets_back_the_SAME_code(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+
+        revealed = self._reveal(client, owner, created["id"]).get_json()
+
+        assert revealed["token"] == created["token"]
+
+    def test_the_response_is_not_stored_by_any_cache(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+
+        response = self._reveal(client, owner, created["id"])
+
+        assert response.headers["Cache-Control"] == "no-store"
+
+    def test_it_carries_no_hash_and_no_ciphertext(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+
+        body = self._reveal(client, owner, created["id"]).get_json()
+
+        assert "token_hash" not in body
+        assert "token_ciphertext" not in body
+
+    def test_the_LIST_still_carries_no_secret(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+
+        listing = client.get(
+            "/api/owner/coach-invites", headers=headers(owner["access_token"])
+        ).get_data(as_text=True)
+
+        assert created["token"] not in listing
+        assert "token_ciphertext" not in listing
+
+    def test_several_pending_invites_each_reveal_their_own(self, app, client, owner):
+        self._key(app)
+        first = self._create(client, owner, label="First")
+        second = self._create(client, owner, label="Second")
+
+        assert self._reveal(client, owner, first["id"]).get_json()["token"] == first["token"]
+        assert self._reveal(client, owner, second["id"]).get_json()["token"] == second["token"]
+
+    def test_a_redeemed_invite_reveals_nothing(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+        client.post(
+            "/api/auth/register-with-beta-invite",
+            json={
+                "username": "benedict", "email": "benedict@example.test",
+                "password": "Passw0rd!23", "organization": "Benedict HS",
+                "invite_code": created["token"],
+            },
+        )
+
+        body = self._reveal(client, owner, created["id"]).get_json()
+
+        assert "token" not in body
+        assert body["status"] == "redeemed"
+        assert body["is_recoverable"] is False
+
+    def test_a_revoked_invite_reveals_nothing(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+        client.post(
+            f"/api/owner/coach-invites/{created['id']}/revoke",
+            headers=headers(owner["access_token"]),
+        )
+
+        body = self._reveal(client, owner, created["id"]).get_json()
+
+        assert "token" not in body
+        assert body["status"] == "revoked"
+
+    def test_an_expired_invite_reveals_nothing(self, app, client, owner):
+        from datetime import timedelta
+
+        from app.models.beta_invite import BetaInvite
+
+        self._key(app)
+        created = self._create(client, owner)
+        with app.app_context():
+            invite = db.session.get(BetaInvite, created["id"])
+            invite.expires_at = BetaInvite.now() - timedelta(days=1)
+            db.session.commit()
+
+        body = self._reveal(client, owner, created["id"]).get_json()
+
+        assert "token" not in body
+        assert body["status"] == "expired"
+
+    def test_a_legacy_invite_says_so_rather_than_guessing(self, app, client, owner):
+        """Exactly the state of every invite issued before this shipped."""
+        from app.models.beta_invite import BetaInvite
+
+        self._key(app)
+        created = self._create(client, owner)
+        with app.app_context():
+            invite = db.session.get(BetaInvite, created["id"])
+            invite.token_ciphertext = None
+            db.session.commit()
+
+        body = self._reveal(client, owner, created["id"]).get_json()
+
+        assert "token" not in body
+        assert body["status"] == "pending"
+        assert body["is_recoverable"] is False
+
+    def test_an_unknown_invite_is_a_404(self, app, client, owner):
+        self._key(app)
+        assert self._reveal(client, owner, 999999).status_code == 404
+
+    def test_an_ordinary_coach_cannot_reveal(self, app, client, owner, customer):
+        self._key(app)
+        created = self._create(client, owner)
+
+        refused = client.get(
+            f"/api/owner/coach-invites/{created['id']}",
+            headers=headers(customer["access_token"]),
+        )
+
+        assert refused.status_code == 404
+        assert created["token"] not in refused.get_data(as_text=True)
+
+    def test_an_anonymous_caller_cannot_reveal(self, app, client, owner):
+        self._key(app)
+        created = self._create(client, owner)
+
+        refused = client.get(f"/api/owner/coach-invites/{created['id']}")
+
+        assert refused.status_code == 401
+        assert created["token"] not in refused.get_data(as_text=True)
+
+
+class TestReplacingAnUnrecoverableInvite:
+    def _create(self, client, owner, **body):
+        return client.post(
+            "/api/owner/coach-invites",
+            json={"label": "Coach Benedict", **body},
+            headers=headers(owner["access_token"]),
+        ).get_json()
+
+    def test_it_issues_a_new_code_and_keeps_the_row(self, app, client, owner):
+        app.config["INVITE_TOKEN_KEY"] = "a-high-entropy-test-secret-value-0123456789"
+        created = self._create(client, owner)
+
+        replaced = client.post(
+            f"/api/owner/coach-invites/{created['id']}/replace",
+            headers=headers(owner["access_token"]),
+        )
+
+        assert replaced.status_code == 200
+        body = replaced.get_json()
+        assert body["id"] == created["id"]
+        assert body["label"] == created["label"]
+        assert body["token"] != created["token"]
+        assert replaced.headers["Cache-Control"] == "no-store"
+
+    def test_the_previous_code_stops_working(self, app, client, owner):
+        app.config["INVITE_TOKEN_KEY"] = "a-high-entropy-test-secret-value-0123456789"
+        created = self._create(client, owner)
+        client.post(
+            f"/api/owner/coach-invites/{created['id']}/replace",
+            headers=headers(owner["access_token"]),
+        )
+
+        refused = client.post(
+            "/api/auth/register-with-beta-invite",
+            json={
+                "username": "nope", "email": "nope@example.test",
+                "password": "Passw0rd!23", "organization": "Nope",
+                "invite_code": created["token"],
+            },
+        )
+
+        assert refused.status_code == 404
+
+    def test_the_new_code_registers(self, app, client, owner):
+        app.config["INVITE_TOKEN_KEY"] = "a-high-entropy-test-secret-value-0123456789"
+        created = self._create(client, owner)
+        replacement = client.post(
+            f"/api/owner/coach-invites/{created['id']}/replace",
+            headers=headers(owner["access_token"]),
+        ).get_json()["token"]
+
+        accepted = client.post(
+            "/api/auth/register-with-beta-invite",
+            json={
+                "username": "benedict", "email": "benedict@example.test",
+                "password": "Passw0rd!23", "organization": "Benedict HS",
+                "invite_code": replacement,
+            },
+        )
+
+        assert accepted.status_code == 201
+
+    def test_it_refuses_an_invite_that_is_no_longer_open(self, app, client, owner):
+        created = self._create(client, owner)
+        client.post(
+            f"/api/owner/coach-invites/{created['id']}/revoke",
+            headers=headers(owner["access_token"]),
+        )
+
+        refused = client.post(
+            f"/api/owner/coach-invites/{created['id']}/replace",
+            headers=headers(owner["access_token"]),
+        )
+
+        assert refused.status_code == 409
+        assert refused.get_json()["reason"] == "invite_not_open"
+
+    def test_an_ordinary_coach_cannot_replace(self, client, owner, customer):
+        created = self._create(client, owner)
+
+        refused = client.post(
+            f"/api/owner/coach-invites/{created['id']}/replace",
+            headers=headers(customer["access_token"]),
+        )
+
+        assert refused.status_code == 404

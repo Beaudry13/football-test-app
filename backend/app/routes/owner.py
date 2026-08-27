@@ -218,6 +218,73 @@ def coach_invite_create():
     return jsonify({**invite.to_dict(), "token": token}), 201
 
 
+@owner_bp.get("/coach-invites/<int:invite_id>")
+def coach_invite_reveal(invite_id: int):
+    """One PENDING invite, WITH its code, so the owner can reshare it.
+
+    A GET, DELIBERATELY, and the reasoning is worth recording because the
+    instinct is to reach for POST when a response carries a secret.
+
+    The danger a URL poses is that it is written down everywhere - browser
+    history, access logs, Referer headers, a pasted link in a group chat. This
+    URL contains an integer id and nothing else; the secret is in the RESPONSE
+    BODY, which none of those places record. POST would move nothing sensitive
+    out of harm's way, and would cost the consistency of GET
+    /owner/organizations/<id> plus an entry in the mutating-route allow-list
+    that exists to keep the owner area read-only.
+
+    `Cache-Control: no-store` is the part that actually matters: it keeps the
+    body out of the browser's disk cache and any intermediary.
+
+    PENDING ONLY. Redeemed and revoked invites have had their ciphertext
+    cleared; an expired one is not a live grant. All three refuse, and so does
+    an invite whose code simply cannot be decrypted - the caller is told to
+    replace it rather than handed a guess.
+    """
+    invite = db.session.get(BetaInvite, invite_id)
+    if invite is None:
+        raise ApiError("That invite does not exist", status_code=404)
+
+    body = invite.to_dict()
+    token = beta_invites.reveal(invite)
+    if token is not None:
+        body["token"] = token
+
+    response = jsonify(body)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@owner_bp.post("/coach-invites/<int:invite_id>/replace")
+def coach_invite_replace(invite_id: int):
+    """Give an invite whose code cannot be recovered a working one.
+
+    FOR THE LEGACY CASE, and for a key that has gone. The row is kept - label,
+    created date, who issued it - because the alternative, revoke-and-create,
+    throws away the record of an invitation that genuinely happened.
+
+    THE PREVIOUS CODE STOPS WORKING. That is the honest trade and the client
+    says so before the coach presses it: it is offered where the old code is
+    already lost to the owner, never as a way to rotate one somebody holds.
+    """
+    invite = db.session.get(BetaInvite, invite_id)
+    if invite is None:
+        raise ApiError("That invite does not exist", status_code=404)
+
+    token = beta_invites.replace_token(invite)
+    if token is None:
+        raise ApiError(
+            "That invite is already redeemed, revoked or expired",
+            status_code=409,
+            reason="invite_not_open",
+        )
+    db.session.commit()
+
+    response = jsonify({**invite.to_dict(), "token": token})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @owner_bp.post("/coach-invites/<int:invite_id>/revoke")
 def coach_invite_revoke(invite_id: int):
     """Stop one working before it is used.
