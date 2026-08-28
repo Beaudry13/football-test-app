@@ -166,6 +166,33 @@ describe('DashboardPage', () => {
     expect(screen.queryByText('Active')).not.toBeInTheDocument();
   });
 
+  it('separates the quizzes that are out with players from the rest of the library', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([
+      { ...sampleQuiz, id: 1, title: 'Week 1 Prep', is_active: true },
+      { ...sampleQuiz, id: 2, title: 'Week 2 Prep', is_active: false },
+      { ...sampleQuiz, id: 3, title: 'Week 3 Prep', is_active: false },
+    ]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.getByRole('heading', { name: /Out with players/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Everything else/ })).toBeInTheDocument();
+  });
+
+  it('does not name a group when nothing is out with players', async () => {
+    // With no live quiz this IS the list, so a heading would label the obvious.
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([
+      { ...sampleQuiz, id: 1, title: 'Week 1 Prep', is_active: false },
+      { ...sampleQuiz, id: 2, title: 'Week 2 Prep', is_active: false },
+    ]);
+    renderDashboard();
+
+    await screen.findByText('Week 1 Prep');
+    expect(screen.queryByRole('heading', { name: /Out with players/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Everything else/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Week 2 Prep')).toBeInTheDocument();
+  });
+
   it('disables New Quiz until a title is entered, then creates and refreshes the list', async () => {
     const user = userEvent.setup();
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
