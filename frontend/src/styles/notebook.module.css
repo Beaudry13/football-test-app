@@ -403,6 +403,19 @@
   padding: var(--space-7) var(--space-6) var(--space-8);
 }
 
+/* THE PLAYBOOK WORKSPACE OPTS OUT OF THE READING COLUMN.
+   1080px is the right measure for pages made of text and controls. The
+   playbook is neither: it is a photograph of a sheet of paper a coach has to
+   READ, and the column was costing it more than half the screen - a 1275px
+   page rendered at 572px, which puts the coaching points at 9px.
+
+   Keyed off the workspace's own data attribute rather than the route, so the
+   layout keeps knowing nothing about which page it is wrapping. Still capped,
+   because a page stretched across a 2560px monitor is not more readable. */
+.content:has(> [data-workspace='playbook']) {
+  max-width: 1600px;
+}
+
 /* Narrower variant for single-form pages (Login/Register/Join). */
 .contentNarrow {
   position: relative;

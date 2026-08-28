@@ -11,9 +11,18 @@
 
 .layout {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr) 280px;
-  gap: 20px;
+  /* Two columns, not three. The side column used to be declared here
+     unconditionally while the <aside> that fills it only renders while
+     AUTHORING - so simply reading a playbook reserved 300px for nothing and
+     paid for it out of the page. */
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 16px;
   align-items: start;
+}
+
+/* Authoring is the only state that has a third column to put anything in. */
+.layoutAuthoring {
+  grid-template-columns: 132px minmax(0, 1fr) 300px;
 }
 
 .quizPicker {
@@ -140,8 +149,10 @@
 @media (max-width: 60rem) {
   /* Authoring is a desktop workflow (design doc §12), but simply viewing a
      playbook on a phone should not be broken. */
-  .layout {
+  .layout,
+  .layoutAuthoring {
     grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 
   .side {

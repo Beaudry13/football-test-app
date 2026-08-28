@@ -467,7 +467,10 @@ export function DocumentPage() {
   const canAuthor = isAuthoring && targetQuizId !== null;
 
   return (
-    <div>
+    /* THE PLAYBOOK IS THE WIDEST THING IN THE APP. The attribute is what the
+       shared shell keys its wider measure off (notebook.module.css), so the
+       layout stays ignorant of which page it is wrapping. */
+    <div data-workspace="playbook">
       <div className={styles.header}>
         <div>
           <h1 className={nb.heading}>{document_.title}</h1>
@@ -563,7 +566,7 @@ export function DocumentPage() {
         </div>
       )}
 
-      <div className={styles.layout}>
+      <div className={`${styles.layout} ${isAuthoring ? styles.layoutAuthoring : ''}`}>
         <nav className={styles.strip} aria-label="Pages">
           {document_.pages.map((page) => (
             <button
