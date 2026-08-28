@@ -1,0 +1,42 @@
+/* Page-specific styles only - shared notebook design system lives in
+   frontend/src/styles/notebook.module.css. */
+
+/* A panel that genuinely sits ABOVE the playbook page, so it gets the one
+   shadow on this screen. Everywhere else in Peira a shadow would be
+   decoration; here it is the only thing saying "this is on top of the paper,
+   not part of it".
+
+   Width is fixed rather than fluid because the placement maths needs a width
+   it can trust before the first paint, and because a form that changes width
+   as the coach types would move itself out from under the cursor. */
+.panel {
+  z-index: 3;
+  width: 300px;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+@media (max-width: 60rem) {
+  /* A PHONE GETS A BOTTOM SHEET, NOT A SHRUNKEN DESKTOP PANEL. At 375px there
+     is no "beside" - any panel wide enough to type into covers the region it
+     is anchored to, which is the one thing the placement rules exist to
+     prevent. So stop pretending: pin it to the bottom of the viewport, where
+     it covers the least useful part of a portrait page and stays put while
+     the coach scrolls the page to see their mask. */
+  .panel {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    width: auto;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    /* Clear of the phone's bottom navigation and the home indicator. */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    max-height: 62vh;
+    overflow-y: auto;
+  }
+}

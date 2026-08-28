@@ -145,6 +145,10 @@
 
 .viewer {
   min-height: 240px;
+  /* The frame the anchored form is positioned in. It wraps the page image at
+     exactly the image's size, which is what makes a normalised region and a
+     floating panel share one coordinate frame. */
+  position: relative;
 }
 
 .pageImage {

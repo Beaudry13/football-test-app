@@ -14,6 +14,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { RegionDraw, type NormalisedRect } from './RegionDraw';
 import { RegionQuestionForm } from './RegionQuestionForm';
+import { RegionAnchoredPanel } from './RegionAnchoredPanel';
 import { hitTest, paddedRect } from './textHitTest';
 import { useRegionHistory } from './useRegionHistory';
 import nb from '../../styles/notebook.module.css';
@@ -647,24 +648,32 @@ export function DocumentPage() {
               />
             </RegionDraw>
           )}
+
+          {/* THE FORM SITS ON THE PAGE, BESIDE THE MASK IT DESCRIBES.
+              It used to live in a fixed column on the far right, which put the
+              whole width of the playbook between the rectangle the coach had
+              just drawn and the box they typed the answer into. Absolutely
+              positioned as a SIBLING of the drawing surface, so it takes no
+              part in the layout RegionDraw measures its gestures against. */}
+          {draft && (
+            <RegionAnchoredPanel region={draft.rect} label="New question from this region">
+              <RegionQuestionForm
+                key={`${draft.rect.x}-${draft.rect.y}`}
+                saving={saving}
+                defaultPrompt={lastPrompt}
+                defaultAnswer={draft.answer}
+                onSave={createFromDraft}
+                onCancel={() => {
+                  setPendingExit(false);
+                  setDraft(null);
+                }}
+              />
+            </RegionAnchoredPanel>
+          )}
         </div>
 
         {isAuthoring && (
         <aside className={styles.side}>
-          {draft && (
-            <RegionQuestionForm
-              key={`${draft.rect.x}-${draft.rect.y}`}
-              saving={saving}
-              defaultPrompt={lastPrompt}
-              defaultAnswer={draft.answer}
-              onSave={createFromDraft}
-              onCancel={() => {
-                setPendingExit(false);
-                setDraft(null);
-              }}
-            />
-          )}
-
           {pendingExit && draft && (
             /* WHY NOTHING CLOSED. The draft, the typed text and the page are
                all still here - this is the sentence that used to be missing
