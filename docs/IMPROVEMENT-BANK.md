@@ -571,3 +571,25 @@ Recorded during the Playbook audit so the later project does not re-derive it.
   needing either of its own.
 - Whatever the delivered-visual work records is what a historical selectable
   answer must be resolved against, so that lands first regardless.
+
+---
+
+## Dashboard follow-ups deferred out of the Coaching Desk redesign
+
+Found while implementing the quiz-list worklist (Aug 2026), reviewed, and
+**deliberately not fixed in that block** so the redesign stayed a presentation
+change. Recorded here rather than fixed on the spot.
+
+- **`DashboardRail` sits roughly six screens below the top at 375px** once a
+  coach has ~33 quizzes - measured at y=4984 with the rail present and
+  correct, not missing. It is a product question about what the rail is FOR on
+  a phone, not a styling bug, and answering it by hoisting rail logic into the
+  quiz list would duplicate the frozen grading rules the rail owns. Any fix
+  starts by deciding what a coach opens the dashboard to do on a phone.
+- **The quiz-row menu target is 40x40**, below the 44px touch minimum. It
+  predates the redesign and is a mobile accessibility cleanup, not a
+  regression.
+- **The onboarding "Add players" action is the second gold control** on the
+  dashboard. Redesigning the "Get set up" checklist was out of scope; the gold
+  discipline the redesign established holds everywhere except that one
+  surface, which should be revisited when onboarding is next touched.
