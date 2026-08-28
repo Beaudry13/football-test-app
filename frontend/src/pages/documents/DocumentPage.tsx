@@ -199,6 +199,13 @@ export function DocumentPage() {
     [pageQuestions],
   );
 
+  /** The rect of the currently selected mask, so its actions can sit beside
+   *  it rather than across the page from it. */
+  const selectedRegion = useMemo(
+    () => regions.find((region) => region.id === selectedId)?.rect ?? null,
+    [regions, selectedId],
+  );
+
   function flash(message: string) {
     setStatus(message);
     window.setTimeout(() => setStatus((current) => (current === message ? null : current)), 2200);
@@ -567,7 +574,7 @@ export function DocumentPage() {
         </div>
       )}
 
-      <div className={`${styles.layout} ${isAuthoring ? styles.layoutAuthoring : ''}`}>
+      <div className={styles.layout}>
         <nav className={styles.strip} aria-label="Pages">
           {document_.pages.map((page) => (
             <button
@@ -668,85 +675,95 @@ export function DocumentPage() {
                   setDraft(null);
                 }}
               />
+
+              {pendingExit && (
+                /* WHY NOTHING CLOSED. The draft, the typed text and the page
+                   are all still here - this is the sentence that used to be
+                   missing while the question quietly disappeared instead. It
+                   travels with the form so the explanation and the unsaved
+                   work are never in two different places. */
+                <div className={styles.pendingExit} role="alert">
+                  <p className={styles.pendingExitLine}>
+                    This question hasn&rsquo;t been saved yet, so it isn&rsquo;t in your quiz.
+                    Save it first, or discard it.
+                  </p>
+                  <div className={styles.pendingExitActions}>
+                    <button
+                      type="button"
+                      className={nb.btnSm}
+                      onClick={() => setPendingExit(false)}
+                    >
+                      Keep editing
+                    </button>
+                    <button type="button" className={nb.btnSm} onClick={exitAuthoring}>
+                      Discard it and finish
+                    </button>
+                  </div>
+                </div>
+              )}
+            </RegionAnchoredPanel>
+          )}
+
+          {/* The actions for a selected mask belong next to that mask. They
+              were across the page from it, which meant confirming WHICH mask
+              was about to be deleted took a glance in each direction. */}
+          {selectedRegion && !draft && (
+            <RegionAnchoredPanel region={selectedRegion} label="Selected mask">
+              <div className={styles.selectedPanel}>
+                <div className={styles.selectedTitle}>Selected mask</div>
+                <p className={styles.selectedHint}>Drag to move, corners to resize.</p>
+                <div className={styles.selectedActions}>
+                  <button
+                    type="button"
+                    className={nb.btnSm}
+                    onClick={() => void duplicateSelected()}
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    className={`${nb.btnSm} ${nb.btnDanger}`}
+                    onClick={() => void removeSelected()}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </RegionAnchoredPanel>
           )}
         </div>
 
-        {isAuthoring && (
-        <aside className={styles.side}>
-          {pendingExit && draft && (
-            /* WHY NOTHING CLOSED. The draft, the typed text and the page are
-               all still here - this is the sentence that used to be missing
-               while the question quietly disappeared instead. */
-            <div className={styles.pendingExit} role="alert">
-              <p className={styles.pendingExitLine}>
-                This question hasn&rsquo;t been saved yet, so it isn&rsquo;t in your quiz.
-                Save it first, or discard it.
-              </p>
-              <div className={styles.pendingExitActions}>
-                <button
-                  type="button"
-                  className={nb.btnSm}
-                  onClick={() => setPendingExit(false)}
-                >
-                  Keep editing
-                </button>
-                <button
-                  type="button"
-                  className={nb.btnSm}
-                  onClick={exitAuthoring}
-                >
-                  Discard it and finish
-                </button>
-              </div>
-            </div>
-          )}
-
-          {selectedId !== null && !draft && (
-            <div className={styles.selectedPanel}>
-              <div className={styles.selectedTitle}>Selected mask</div>
-              <p className={styles.selectedHint}>
-                Drag to move, corners to resize.
-              </p>
-              <div className={styles.selectedActions}>
-                <button type="button" className={nb.btnSm} onClick={() => void duplicateSelected()}>
-                  Duplicate
-                </button>
-                <button
-                  type="button"
-                  className={`${nb.btnSm} ${nb.btnDanger}`}
-                  onClick={() => void removeSelected()}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          )}
-
-          {canAuthor && pageQuestions.length > 0 && (
-            <div className={styles.created}>
-              <div className={styles.createdTitle}>{pageQuestions.length} on this page</div>
-              <ol className={styles.createdList}>
-                {pageQuestions.map((question) => (
-                  <li key={question.id}>
-                    <button
-                      type="button"
-                      className={styles.createdItem}
-                      onClick={() => setSelectedId(question.id)}
-                    >
-                      <span className={styles.createdAnswer}>
-                        {(question.expected_answers ?? []).join(', ')}
-                      </span>
-                      <span className={styles.createdPrompt}>{question.question_text}</span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-        </aside>
-        )}
       </div>
+
+      {/* WHAT IS ALREADY ON THIS PAGE, under the page it is about.
+          This used to be a third column, which cost the playbook 300px of
+          width for a list a coach consults between questions rather than
+          during one. The masks themselves, numbered on the page, are the
+          primary index; this is the way to jump to one that has become hard
+          to hit. */}
+      {canAuthor && pageQuestions.length > 0 && (
+        <div className={styles.created}>
+          <div className={styles.createdTitle}>
+            {pageQuestions.length} on this page
+          </div>
+          <ol className={styles.createdList}>
+            {pageQuestions.map((question) => (
+              <li key={question.id}>
+                <button
+                  type="button"
+                  className={styles.createdItem}
+                  onClick={() => setSelectedId(question.id)}
+                >
+                  <span className={styles.createdAnswer}>
+                    {(question.expected_answers ?? []).join(', ')}
+                  </span>
+                  <span className={styles.createdPrompt}>{question.question_text}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }

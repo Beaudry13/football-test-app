@@ -11,18 +11,15 @@
 
 .layout {
   display: grid;
-  /* Two columns, not three. The side column used to be declared here
-     unconditionally while the <aside> that fills it only renders while
-     AUTHORING - so simply reading a playbook reserved 300px for nothing and
-     paid for it out of the page. */
+  /* Two columns, in every state. There was a third for the authoring
+     panels, declared unconditionally while the aside that filled it
+     rendered only while authoring - so reading a playbook reserved 300px
+     for nothing. The panels now float beside the region they are about, so
+     the column is not needed while authoring either, and the page is the
+     same size whether a coach is reading or working. */
   grid-template-columns: 148px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
-}
-
-/* Authoring is the only state that has a third column to put anything in. */
-.layoutAuthoring {
-  grid-template-columns: 148px minmax(0, 1fr) 300px;
 }
 
 .quizPicker {
@@ -50,9 +47,12 @@
 }
 
 .created {
-  padding: 12px 14px;
-  border: 1px solid var(--nb-border);
-  border-radius: 8px;
+  /* Under the page now, so it is bounded by a rule rather than a box - one
+     less enclosure on a screen whose whole point is the paper. */
+  max-width: 720px;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--nb-border);
 }
 
 .createdTitle {
@@ -165,8 +165,7 @@
 @media (max-width: 60rem) {
   /* Authoring is a desktop workflow (design doc §12), but simply viewing a
      playbook on a phone should not be broken. */
-  .layout,
-  .layoutAuthoring {
+  .layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
@@ -199,7 +198,8 @@
 .selectedPanel {
   padding: 12px 14px;
   border: 1px solid var(--nb-accent);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
+  background: var(--nb-surface);
 }
 
 .selectedTitle {
