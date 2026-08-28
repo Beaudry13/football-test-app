@@ -332,20 +332,34 @@ button.actionDelete:hover:not(:disabled) {
  * therefore as tall as the number of FOLDERS, not the number of quizzes -
  * which is the whole point: a coach with a hundred quizzes sees eight rows.
  */
+/* No gap: the rows are separated by their own dividers now, the way the quiz
+   worklist below them is. A gap would put a hole through every divider. */
 .folderList {
   display: grid;
-  gap: 0.4rem;
   margin-bottom: 1.5rem;
 }
 
+/* A FOLDER IS A ROW IN THE WORKLIST, NOT A CARD ABOVE IT.
+ *
+ * These kept the bordered, rounded enclosure after the quizzes below them
+ * became divider-separated rows, so a coach with folders met two design
+ * systems on one page: ten boxes, then thirty rows.
+ *
+ * The padding is deliberately IDENTICAL to .quizCard rather than merely
+ * similar - matching the 4px horizontal inset is what puts folder names and
+ * quiz titles on one left edge, and that shared edge is what makes the two
+ * lists read as one column of work instead of two stacked components. */
 .folderRow {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid var(--nb-card-border);
-  border-radius: 8px;
-  padding: 0.6rem 0.75rem;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.folderRow:last-child {
+  border-bottom: none;
 }
 
 /*
@@ -368,11 +382,13 @@ button.actionDelete:hover:not(:disabled) {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 8px;
 }
 
-.folderRow:hover {
-  border-color: var(--nb-accent);
+/* Hover moved off the border, because there is no longer a border to move.
+   Recolouring the name is what the rail's lists already do for the same
+   gesture, so the whole Coaching Desk answers a hover the same way. */
+.folderRow:hover .folderName {
+  color: var(--peira-accent-text);
 }
 
 .folderIcon {
@@ -381,8 +397,17 @@ button.actionDelete:hover:not(:disabled) {
   flex-shrink: 0;
 }
 
+/* THIS IS WHAT SAYS "FOLDER" NOW THAT THE BOX IS GONE.
+   The display face, at the same size and weight as a quiz title in the body
+   face directly below it - so the two are unmistakably different KINDS of
+   thing without either being louder than the other. It is also the face the
+   folder section headings already use, so a folder reads the same whether it
+   is a row here or a heading on the page it opens. */
 .folderName {
+  font-family: var(--font-heading);
+  font-size: var(--peira-text-title);
   font-weight: 600;
+  letter-spacing: 0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
