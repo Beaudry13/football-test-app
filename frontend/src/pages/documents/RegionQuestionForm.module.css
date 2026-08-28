@@ -8,7 +8,11 @@
   padding: 14px;
   border: 1px solid var(--nb-border);
   border-radius: 8px;
-  background: var(--nb-surface);
+  /* --nb-surface HAS NEVER BEEN DEFINED, so this was transparent. That was
+     invisible while the form sat in the dark side column and looked like the
+     page behind it; floating over a white playbook page it made every label
+     unreadable and showed the diagram through the form. */
+  background: var(--peira-surface-raised);
 }
 
 .title {

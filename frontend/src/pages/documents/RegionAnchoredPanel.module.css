@@ -34,9 +34,26 @@
     bottom: 0;
     width: auto;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
-    /* Clear of the phone's bottom navigation and the home indicator. */
+    /* Clear of the home indicator on a notched phone. */
     padding-bottom: env(safe-area-inset-bottom, 0px);
     max-height: 62vh;
     overflow-y: auto;
+  }
+}
+
+/* ABOVE THE PHONE'S BOTTOM NAVIGATION, not under it.
+   SectionBar becomes a fixed 48px bar at this width and paints at z-index 9,
+   so a sheet pinned to bottom:0 had 33 of its Save button's 44px hidden
+   behind it - the one control the sheet exists to offer. The bar carries its
+   own safe-area padding, so this offset must not add it a second time.
+
+   40rem, not the 60rem above, on purpose: between the two there is a bottom
+   sheet and no bottom bar, and nothing to clear. Keep this breakpoint the
+   same as SectionBar's. */
+@media (max-width: 40rem) {
+  .panel {
+    bottom: 48px;
+    padding-bottom: 0;
+    max-height: calc(62vh - 48px);
   }
 }

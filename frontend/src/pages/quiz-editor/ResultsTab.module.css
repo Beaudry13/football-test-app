@@ -55,10 +55,17 @@
   flex-direction: column;
 }
 
+/* WRAPS AT NARROW WIDTHS. A player's name and their badges do not fit on one
+   375px line. Inside the old notebook card that went unnoticed, because the
+   card's `overflow: hidden` quietly cut the Reset button off; composing the
+   row without a card turned the same overflow into 21px of sideways scroll on
+   the whole page. Wrapping is what should have been happening either way. */
 .responseHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   cursor: pointer;
 }
 
@@ -83,6 +90,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .answerRow {
@@ -247,6 +255,16 @@
  * from the prototype: the per-question table carries the "Don't count this"
  * control, and hiding a control a coach uses in order to make the page look
  * calmer would be trading real function for appearance. */
+/* THE BREAKDOWN TABLE IS WIDER THAN A PHONE.
+   It used to sit in an nb.card, whose `overflow: hidden` quietly clipped the
+   right-hand columns; composing Results into plain sections removed that box,
+   and with nothing containing it the 516px table scrolled the entire page
+   sideways at 375. Scrolling inside its own container is what the card was
+   accidentally approximating, without the silent clipping. */
+.tableScroll {
+  overflow-x: auto;
+}
+
 .evidence {
   margin-top: var(--space-8);
   padding-top: var(--space-5);

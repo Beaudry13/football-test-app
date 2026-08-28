@@ -126,7 +126,9 @@
   display: block;
   width: 100%;
   height: auto;
-  background: var(--nb-surface-raised, var(--nb-surface));
+  /* Both names in the old fallback chain were undefined, so a thumbnail that
+     had not loaded yet had no backing at all. */
+  background: var(--peira-surface-raised);
 }
 
 .thumbLabel {
@@ -199,7 +201,9 @@
   padding: 12px 14px;
   border: 1px solid var(--nb-accent);
   border-radius: var(--radius-md);
-  background: var(--nb-surface);
+  /* A defined token: --nb-surface does not exist, so this panel was
+     transparent over the playbook page. */
+  background: var(--peira-surface-raised);
 }
 
 .selectedTitle {

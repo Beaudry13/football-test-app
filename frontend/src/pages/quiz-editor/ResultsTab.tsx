@@ -291,6 +291,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           {dashboard.question_breakdown.length > 0 && (
             <section className={styles.evidence}>
               <h2 className={styles.evidenceHeading}>Per-question breakdown</h2>
+              {/* The table is wider than a phone. It scrolls INSIDE this box
+                  rather than taking the whole page sideways with it. */}
+              <div className={styles.tableScroll}>
               <table className={nb.table}>
                 <thead>
                   <tr>
@@ -346,6 +349,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                   ))}
                 </tbody>
               </table>
+              </div>
             </section>
           )}
 
