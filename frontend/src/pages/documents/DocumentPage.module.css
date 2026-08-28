@@ -15,14 +15,14 @@
      unconditionally while the <aside> that fills it only renders while
      AUTHORING - so simply reading a playbook reserved 300px for nothing and
      paid for it out of the page. */
-  grid-template-columns: 132px minmax(0, 1fr);
+  grid-template-columns: 148px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 
 /* Authoring is the only state that has a third column to put anything in. */
 .layoutAuthoring {
-  grid-template-columns: 132px minmax(0, 1fr) 300px;
+  grid-template-columns: 148px minmax(0, 1fr) 300px;
 }
 
 .quizPicker {
@@ -83,7 +83,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 75vh;
+  /* Tall enough to show four pages at a glance, and it scrolls past that.
+     Capped against the viewport rather than the page so the strip never
+     becomes the tallest thing on screen. */
+  max-height: 78vh;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -92,6 +95,15 @@
   position: relative;
   display: block;
   width: 100%;
+  /* THE STRIP SCROLLS; THE THUMBNAILS DO NOT SHRINK.
+     This is a flex column with a max-height, so the default flex-shrink: 1
+     was squashing every page to make all of them fit: a 14-page playbook
+     rendered its thumbnails at 128x29 instead of 128x166, and the more pages
+     a coach had the smaller every one of them got - exactly backwards, since
+     a long playbook is when you most need to recognise a page. The strip has
+     always had overflow-y: auto; it was never reached, because shrinking
+     happens first. */
+  flex-shrink: 0;
   padding: 0;
   border: 2px solid transparent;
   border-radius: 6px;
