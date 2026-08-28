@@ -28,30 +28,71 @@ export function RegionAnchoredPanel({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<Placement | null>(null);
+  /** The boxes the current placement was computed from. Re-measuring is
+   *  cheap; re-POSITIONING from an unchanged measurement is what would loop. */
+  const measured = useRef({ panelW: 0, panelH: 0, pageW: 0, pageH: 0 });
 
   const reposition = useCallback(() => {
     const panel = panelRef.current;
     const page = panel?.offsetParent as HTMLElement | null;
     if (!panel || !page) return;
 
-    const pageSize = { width: page.clientWidth, height: page.clientHeight };
-    if (pageSize.width === 0 || pageSize.height === 0) return;
+    const pageW = page.clientWidth;
+    const pageH = page.clientHeight;
+    const panelW = panel.offsetWidth;
+    const panelH = panel.offsetHeight;
+    // A zero on any side means the browser has not laid this out yet.
+    // Positioning against it would produce a confidently wrong answer.
+    if (pageW === 0 || pageH === 0 || panelW === 0 || panelH === 0) return;
+
+    const last = measured.current;
+    if (
+      last.panelW === panelW &&
+      last.panelH === panelH &&
+      last.pageW === pageW &&
+      last.pageH === pageH
+    ) {
+      return;
+    }
+    measured.current = { panelW, panelH, pageW, pageH };
 
     // The normalised rect becomes pixels HERE and nowhere else, and only ever
     // in this direction. Nothing converts back.
     const box = {
-      x: region.x * pageSize.width,
-      y: region.y * pageSize.height,
-      width: region.width * pageSize.width,
-      height: region.height * pageSize.height,
+      x: region.x * pageW,
+      y: region.y * pageH,
+      width: region.width * pageW,
+      height: region.height * pageH,
     };
-    const size = { width: panel.offsetWidth, height: panel.offsetHeight };
-    setPlacement(placeBesideRegion(box, size, pageSize));
+    setPlacement(placeBesideRegion(box, { width: panelW, height: panelH }, {
+      width: pageW,
+      height: pageH,
+    }));
   }, [region]);
 
+  /* ORDER MATTERS: this clears the cache BEFORE the effect below reads it.
+     A new region is a new placement problem, and the panel does not remount
+     between drafts - so without this, a second mask the same size as the
+     first would keep the first one's position. */
+  useLayoutEffect(() => {
+    measured.current = { panelW: 0, panelH: 0, pageW: 0, pageH: 0 };
+  }, [region]);
+
+  /** AFTER EVERY RENDER, not just the first.
+   *
+   * The first measurement happens before the panel has been through a full
+   * layout, and can read a height the finished panel never has - which put
+   * the form 231px past the bottom of the page in testing, because the clamp
+   * had been handed a 15px panel. Re-measuring on every render lets the very
+   * next one correct it, and the early return above means an unchanged
+   * measurement costs a comparison and stops.
+   *
+   * Deliberately NOT dependent on ResizeObserver for this: RO callbacks are
+   * delivered on the rendering lifecycle, so a tab that is not producing
+   * frames never gets them. Layout effects still run. */
   useLayoutEffect(() => {
     reposition();
-  }, [reposition]);
+  });
 
   useEffect(() => {
     if (typeof ResizeObserver === 'undefined') return;
