@@ -593,3 +593,30 @@ change. Recorded here rather than fixed on the spot.
   dashboard. Redesigning the "Get set up" checklist was out of scope; the gold
   discipline the redesign established holds everywhere except that one
   surface, which should be revisited when onboarding is next touched.
+
+---
+
+## Intermittent dev-container death on an on-demand page render
+
+Seen twice while verifying the Playbook redesign (Aug 2026), in the local
+docker stack only. **Not reproduced on retry either time, and not
+investigated** - recorded so the next session recognises it rather than
+re-diagnosing it as a page defect.
+
+- The backend container exits with code 245 (`OOMKilled: false`, no container
+  memory limit, no Python traceback in the log) part-way through
+  `GET /api/documents/<id>/pages/<n>` - the on-demand page render. The log
+  simply stops after the preceding request.
+- The frontend shows "Could not reach the server", which is honest and
+  correct; nothing is corrupted.
+- Both occurrences were the FIRST render of a document after some idle time.
+  The same request succeeded in ~0.3s immediately after restarting the
+  container, on the same document, so it is not a property of any particular
+  PDF - a 1-page and a 30-page fixture each crashed once and each then
+  worked.
+- Abrupt exit with no traceback points at the native PDF renderer or the host
+  VM rather than application code, on a machine that was resource-constrained
+  throughout that session.
+
+Worth watching in production before spending time on it: if coaches never see
+it, this is a local-stack artefact.
