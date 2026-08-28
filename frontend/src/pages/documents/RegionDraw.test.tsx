@@ -151,6 +151,27 @@ describe('RegionDraw', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
+  it('marks the rectangle the parent is still holding, so the page is not blank under the form', () => {
+    // Its own draft state is cleared on pointerup, so without this prop there
+    // is nothing on the page while the coach fills in the question.
+    withSize(1000, 800);
+    const { surface } = setup({ pending: { x: 0.2, y: 0.4, width: 0.15, height: 0.05 } });
+
+    const marker = surface.querySelector('[style*="left"]') as HTMLElement;
+    expect(marker).not.toBeNull();
+    expect(marker.style.left).toBe('20%');
+    expect(marker.style.top).toBe('40%');
+    expect(marker.style.width).toBe('15%');
+    expect(marker.style.height).toBe('5%');
+  });
+
+  it('draws nothing extra when there is no pending rectangle', () => {
+    withSize(1000, 800);
+    const { surface } = setup({ pending: null });
+
+    expect(surface.querySelector('[style*="left"]')).toBeNull();
+  });
+
   it('positions an existing region as a percentage so it survives a resize', () => {
     withSize(1000, 800);
     const { surface } = setup({

@@ -62,10 +62,17 @@ export function RegionDraw({
   onRegionChanged,
   onSelect,
   disabled = false,
+  pending = null,
 }: {
   children: React.ReactNode;
   existing: ExistingRegion[];
   selectedId: number | null;
+  /** A rectangle the PARENT is still holding - drawn, but not yet saved as a
+   *  question. Purely a marker: this component's own `draft` state lives only
+   *  for the duration of the gesture and is cleared on pointerup, so without
+   *  this the page shows nothing at all while the coach fills in the form.
+   *  Read-only, like `existing` - it is rendered, never edited. */
+  pending?: NormalisedRect | null;
   /** A click that was not on an existing region. The parent hit-tests the
    *  text layer; a miss means "nothing there", which is not an error. */
   onClick: (x: number, y: number) => void;
@@ -285,7 +292,12 @@ export function RegionDraw({
         );
       })}
 
+      {/* The live gesture wins: while a drag is in progress the coach is
+          looking at the rectangle they are dragging, not the last one. */}
       {draft && <div className={styles.draft} style={asStyle(draft)} />}
+      {!draft && pending && (
+        <div className={styles.pending} style={asStyle(pending)} aria-hidden="true" />
+      )}
     </div>
   );
 }

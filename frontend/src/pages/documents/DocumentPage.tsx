@@ -639,6 +639,7 @@ export function DocumentPage() {
             <RegionDraw
               existing={regions}
               selectedId={selectedId}
+              pending={draft?.rect ?? null}
               disabled={!canAuthor}
               onClick={handleClick}
               onDrawn={(rect) => setDraft({ rect, answer: '' })}
