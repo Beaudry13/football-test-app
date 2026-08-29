@@ -55,6 +55,30 @@
   flex-direction: column;
 }
 
+/* ONE PLAYER, AS A ROW.
+ *
+ * Replaces the notebook card: the border and fill made ten players read as ten
+ * separate objects competing with the answer above them, when they are a list
+ * of one kind of thing. The divider does the separating; the row keeps its own
+ * padding so the expanded answers still have room.
+ *
+ * THIS LIVES HERE BECAUSE THE COMPONENT LOOKS HERE. ResponseRow.tsx imports
+ * exactly one page stylesheet - this one - and asks it for fifteen classes.
+ * Fourteen were here and worked; this one was written into a
+ * ResponseRow.module.css that nothing ever imported, so `styles.playerRow` was
+ * undefined and the rows rendered with no class at all: no padding, no
+ * divider, twenty-four players stacked with a 0px gap. Splitting one
+ * component's styles across two files is what made that possible, so the file
+ * is gone rather than newly imported. */
+.playerRow {
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.playerRow:last-child {
+  border-bottom: none;
+}
+
 /* WRAPS AT NARROW WIDTHS. A player's name and their badges do not fit on one
    375px line. Inside the old notebook card that went unnoticed, because the
    card's `overflow: hidden` quietly cut the Reset button off; composing the
