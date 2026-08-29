@@ -217,12 +217,24 @@
    than inside the table. Shown only when true; a zero-state version would be
    permanent furniture on every finished quiz. */
 .needsGrading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   margin: 0 0 var(--space-4);
   padding: var(--space-3) var(--space-4);
   border-left: 3px solid var(--color-warning);
   background: var(--peira-warning-bg);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: var(--peira-text-control);
+}
+
+.needsGradingLine {
+  margin: 0;
+  /* Takes the slack so the action keeps its natural width and the sentence
+     wraps instead, rather than the button shrinking to fit a long count. */
+  flex: 1 1 16rem;
 }
 
 /* "10 of 12 turned it in" - one sentence where three cards used to be.

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   exportResultsCsv,
   exportResultsDetailedPdf,
@@ -21,6 +22,7 @@ import { ExcludeQuestionDialog } from './ExcludeQuestionDialog';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
+import { needsManualGrading } from './gradingQueue';
 import nb from '../../styles/notebook.module.css';
 import { RetestVerification } from './RetestVerification';
 import { WeakestConcepts } from './WeakestConcepts';
@@ -182,10 +184,18 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
     (c) => !verifiedConceptIds.has(c.concept_id),
   );
 
-  const ungradedTotal = (dashboard?.question_breakdown ?? []).reduce(
-    (total, q) => total + q.ungraded_count,
-    0,
-  );
+  /* WHAT THE COACH IS ACTUALLY BEING OFFERED, which is not the same as every
+     ungraded row. This summed `ungraded_count` across the WHOLE breakdown, so
+     it counted questions no coach can grade - an auto-graded type decides
+     itself - and questions no coach SHOULD grade, the ones they marked "don't
+     count". Both inflated the offer above the work behind it.
+
+     Still the server's own per-question counts, merely filtered: the number
+     stays something Peira computed rather than something this screen derived,
+     and the filter is the same rule the grading queue applies. */
+  const ungradedTotal = (dashboard?.question_breakdown ?? [])
+    .filter((q) => needsManualGrading(q.question_type) && !q.is_excluded)
+    .reduce((total, q) => total + q.ungraded_count, 0);
 
   return (
     <div>
@@ -225,13 +235,21 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               inside them. Only when there is something to do: an "0 answers
               need grading" line is a permanent piece of furniture. */}
           {ungradedTotal > 0 && (
-            <p className={styles.needsGrading} role="status">
-              <strong>
-                {ungradedTotal} answer{ungradedTotal === 1 ? '' : 's'} need
-                {ungradedTotal === 1 ? 's' : ''} grading
-              </strong>{' '}
-              &mdash; not counted right or wrong until you do.
-            </p>
+            <div className={styles.needsGrading} role="status">
+              <p className={styles.needsGradingLine}>
+                <strong>
+                  {ungradedTotal} response{ungradedTotal === 1 ? '' : 's'} need
+                  {ungradedTotal === 1 ? 's' : ''} a decision
+                </strong>{' '}
+                &mdash; not counted right or wrong until you make it.
+              </p>
+              {/* THE OFFER IS THE ACTION. This line stated the problem and
+                  left the coach to find the work themselves, at the bottom of
+                  the page, one player at a time. */}
+              <Link to={`/quizzes/${quiz.id}/grade`} className={nb.btnPrimary}>
+                Grade {ungradedTotal} response{ungradedTotal === 1 ? '' : 's'}
+              </Link>
+            </div>
           )}
 
           {/* WHO TURNED IT IN, IN ONE SENTENCE.

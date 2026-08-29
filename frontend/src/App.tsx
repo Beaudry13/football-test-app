@@ -20,6 +20,7 @@ import { JoinOrgPage } from './pages/JoinOrgPage';
 import { BetaInvitePage } from './pages/BetaInvitePage';
 import { RequestAccessPage } from './pages/RequestAccessPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
+import { GradeResponsesPage } from './pages/quiz-editor/GradeResponsesPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
 import { AdminQuizzesPage } from './pages/admin/AdminQuizzesPage';
@@ -146,6 +147,11 @@ function App() {
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />
               <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />
+              {/* Inside NotebookLayout, unlike annotation: grading is a
+                  destination a coach navigates to and back from, not a mode
+                  that takes over the screen. It keeps the header and the way
+                  out. */}
+              <Route path="/quizzes/:quizId/grade" element={<GradeResponsesPage />} />
             </Route>
 
             {/* ANNOTATION IS A MODE, NOT A PAGE, so it sits outside

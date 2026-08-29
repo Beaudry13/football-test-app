@@ -405,9 +405,97 @@ describe('Results leads with what to teach next', () => {
     });
     renderResultsTab();
 
-    expect(await screen.findByText(/3 answers need grading/)).toBeInTheDocument();
+    expect(await screen.findByText(/3 responses need a decision/)).toBeInTheDocument();
     // And it says what that means, rather than letting a coach assume wrong.
     expect(screen.getByText(/not counted right or wrong/)).toBeInTheDocument();
+    // THE OFFER IS THE ACTION. Stating the problem and leaving the coach to
+    // find the work at the bottom of the page is what this replaced.
+    const grade = screen.getByRole('link', { name: /Grade 3 responses/ });
+    expect(grade).toHaveAttribute('href', '/quizzes/1/grade');
+  });
+
+  it('offers grading for an ungraded DRAWING, not just short answers', async () => {
+    // The count bug, at the Results level: a quiz whose only outstanding work
+    // is a drawing must not report that there is nothing to do.
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [],
+      verification: null,
+      question_breakdown: [
+        {
+          question_id: 1,
+          question_number: 1,
+          question_text: 'Draw your drop.',
+          question_type: 'draw_response',
+          answered_count: 4,
+          correct_count: 2,
+          incorrect_count: 0,
+          ungraded_count: 2,
+          is_excluded: false,
+          exclusions: [],
+        },
+      ],
+    });
+    renderResultsTab();
+
+    expect(await screen.findByText(/2 responses need a decision/)).toBeInTheDocument();
+  });
+
+  it('does not offer grading for questions the server already scored', async () => {
+    // An auto-graded row with no grade is not work a coach can do, and
+    // offering it invites them to overrule a decision already recorded.
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [],
+      verification: null,
+      question_breakdown: [
+        {
+          question_id: 1,
+          question_number: 1,
+          question_text: 'Cover 3 or Cover 4?',
+          question_type: 'multiple_choice',
+          answered_count: 5,
+          correct_count: 2,
+          incorrect_count: 0,
+          ungraded_count: 3,
+          is_excluded: false,
+          exclusions: [],
+        },
+      ],
+    });
+    renderResultsTab();
+
+    await screen.findByText(/turned it in/);
+    expect(screen.queryByText(/need a decision/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Grade/ })).not.toBeInTheDocument();
+  });
+
+  it("does not offer grading for a question marked don't count", async () => {
+    // The coach already decided it does not affect a score. Asking them to
+    // grade it spends their time on a decision they have made.
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [],
+      verification: null,
+      question_breakdown: [
+        {
+          question_id: 1,
+          question_number: 1,
+          question_text: 'Describe your assignment.',
+          question_type: 'written',
+          answered_count: 5,
+          correct_count: 2,
+          incorrect_count: 0,
+          ungraded_count: 3,
+          is_excluded: true,
+          exclusions: [],
+        },
+      ],
+    });
+    renderResultsTab();
+
+    await screen.findByText(/turned it in/);
+    expect(screen.queryByText(/need a decision/)).not.toBeInTheDocument();
   });
 
   it('says nothing about grading when there is nothing to grade', async () => {

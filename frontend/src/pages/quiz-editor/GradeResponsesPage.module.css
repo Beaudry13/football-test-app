@@ -1,0 +1,277 @@
+/* Page-specific styles only - the shared notebook design system (buttons,
+   inputs, badges) lives in frontend/src/styles/notebook.module.css.
+
+   TRAINING CONTROL ROOM GRAMMAR. One background, few containers, strong type,
+   dividers instead of boxes, and gold reserved for the action the screen
+   exists to offer. There is no card anywhere on this page. */
+
+.page {
+  padding-bottom: var(--space-8);
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: var(--space-5);
+  font-family: var(--font-heading);
+  font-size: var(--peira-text-title);
+  color: var(--nb-text-muted);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--peira-accent-text);
+}
+
+/* --- The question ------------------------------------------------------- */
+
+.header {
+  /* Sticky so the standard being applied stays on screen while the coach
+     works down twenty-four answers. The whole point of question-first is that
+     the question is loaded once - it should not scroll away and force a
+     re-read, which is the cost this screen exists to remove. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: var(--space-5) 0 var(--space-4);
+  margin-bottom: var(--space-2);
+  background: var(--peira-bg);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.progress {
+  margin: 0 0 var(--space-2);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+/* THE LARGEST THING ON THE SCREEN. A coach should be able to read it once,
+   look away, and grade from memory. */
+.question {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.6rem, 1.1rem + 1.9vw, 2.4rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--nb-text);
+  overflow-wrap: break-word;
+}
+
+.accepted {
+  margin: var(--space-3) 0 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}
+
+.acceptedLabel {
+  margin-right: 0.6em;
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-faint);
+}
+
+/* --- The responses ------------------------------------------------------ */
+
+.responses {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  /* The answer takes the slack; the verdict takes exactly what it needs. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+/* A DECIDED ROW IS MARKED, NOT REMOVED. The gold rail is the same device the
+   rest of Peira uses for "this one has a state", and it reads down the left
+   edge so a coach scanning back for a misclick sees the pattern rather than
+   having to read each verdict. */
+.rowCorrect,
+.rowIncorrect {
+  padding-left: var(--space-4);
+  margin-left: calc(-1 * var(--space-4));
+}
+
+.rowCorrect {
+  border-left: 3px solid var(--peira-success);
+}
+
+.rowIncorrect {
+  border-left: 3px solid var(--peira-danger);
+}
+
+/* Secondary to the answer: the coach is judging what was written, and the
+   name is how they attribute it afterwards. */
+.player {
+  grid-column: 1 / -1;
+  margin: 0 0 var(--space-1);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.answer {
+  margin: 0;
+  font-size: var(--peira-text-section);
+  line-height: 1.35;
+  color: var(--nb-text);
+  overflow-wrap: break-word;
+}
+
+.empty {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-faint);
+}
+
+/* A DRAWING IS THE ANSWER, so it gets the room an answer gets. Capped by
+   viewport height rather than a fixed pixel size: the point is that a coach
+   can evaluate it without opening another page, and that is a function of how
+   much screen they have. */
+.drawing {
+  max-width: 560px;
+  max-height: 60vh;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.drawing img,
+.drawing canvas,
+.drawing svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- The call ----------------------------------------------------------- */
+
+.actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.verdict {
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--nb-text-muted);
+  font-family: var(--font-body);
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-base) var(--ease-standard),
+    color var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
+}
+
+.verdict:hover:not(:disabled) {
+  border-color: var(--nb-border-strong, var(--nb-accent));
+  color: var(--nb-text);
+}
+
+.verdict:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* THE DECISION LIVES ON THE BUTTON THAT MADE IT. Filling the chosen verdict
+   rather than adding a badge elsewhere keeps "what was decided" and "how to
+   change it" in one place, and makes a wrong call obvious while scanning. */
+.verdictCorrect {
+  border-color: var(--peira-success);
+  background: var(--peira-success-bg);
+  color: var(--peira-success);
+}
+
+.verdictIncorrect {
+  border-color: var(--color-danger-border);
+  background: var(--peira-danger-bg);
+  color: var(--peira-danger);
+}
+
+/* --- Moving on ---------------------------------------------------------- */
+
+.foot {
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+/* --- Nothing left ------------------------------------------------------- */
+
+.done {
+  padding: var(--space-8) 0;
+}
+
+.doneHeading {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-heading);
+  font-size: var(--peira-text-page);
+  font-weight: 700;
+  color: var(--nb-text);
+}
+
+.doneLine {
+  margin: 0 0 var(--space-5);
+  color: var(--nb-text-muted);
+}
+
+/* --- Phone -------------------------------------------------------------- */
+
+@media (max-width: 40rem) {
+  /* The verdict moves under the answer and both halves go full width: at
+     375px a side-by-side answer and pair of buttons leaves neither enough
+     room, and these are the two things the screen exists for. */
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+
+  .verdict {
+    /* Comfortably past the 44px floor for a thumb on a sideline. */
+    min-height: 48px;
+    padding: 0 var(--space-2);
+  }
+
+  .answer {
+    font-size: var(--peira-text-title);
+  }
+
+  /* A drawing may take most of the screen on a phone - it is the answer, and
+     a thumbnail of one cannot be judged. */
+  .drawing {
+    max-width: 100%;
+    max-height: 52vh;
+  }
+
+  .header {
+    padding-top: var(--space-4);
+  }
+}

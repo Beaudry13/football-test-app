@@ -19,6 +19,7 @@ import { resolveMediaUrl } from '../../api/client';
 import type { DrawingDocument } from '../../components/drawing/types';
 import nb from '../../styles/notebook.module.css';
 import { describeExclusionScope } from './assignmentLabel';
+import { countPlayerAwaitingGrades } from './gradingQueue';
 import styles from './ResultsTab.module.css';
 
 /** Shared empty default, so an unsupplied lookup does not allocate a new Map
@@ -260,12 +261,18 @@ export function ResponseRow({
   // live-type interpretation for grading state - one source, consistently.
   // (Type edits are blocked once answered, so this changes no count today; it
   // stops the two from being able to diverge at all.)
-  const pendingGrading = answers.filter((a) => {
-    const type =
-      deliveredById.get(a.question_id)?.question_type ??
-      quiz.questions?.find((q) => q.id === a.question_id)?.question_type;
-    return a.is_correct === null && type === 'written';
-  }).length;
+  //
+  // THE BUG THIS CLOSES: this asked `type === 'written'` and so ignored every
+  // ungraded DRAWING. A player with a drawing awaiting a decision and nothing
+  // else reported "0 to grade" - work that existed, was gradable right here,
+  // and was invisible. It now goes through the shared rule, which is derived
+  // from one list of manually-graded types rather than naming one of them.
+  const pendingGrading = countPlayerAwaitingGrades(
+    answers,
+    (questionId) =>
+      deliveredById.get(questionId)?.question_type ??
+      quiz.questions?.find((q) => q.id === questionId)?.question_type,
+  );
   // Mirrors the backend's get_editable_quiz rule so the UI doesn't offer an
   // action the API will refuse - the server is still the enforcement point.
   const canReset = coach != null && (coach.id === quiz.coach_id || coach.role === 'admin');
