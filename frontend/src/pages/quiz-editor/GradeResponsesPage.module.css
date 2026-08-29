@@ -28,9 +28,16 @@
   /* Sticky so the standard being applied stays on screen while the coach
      works down twenty-four answers. The whole point of question-first is that
      the question is loaded once - it should not scroll away and force a
-     re-read, which is the cost this screen exists to remove. */
+     re-read, which is the cost this screen exists to remove.
+
+     CLEARS THE APP'S OWN STICKY NAV. NotebookHeader is a sticky pill at
+     `top: var(--space-4)` and z-index 10; at top: 0 this slid underneath it
+     and the question - the largest and most important thing on the screen -
+     was clipped from 44px up. 58px is that pill's measured height at every
+     width it renders (its bottom edge sits at 74px, 16px of which is the
+     --space-4 offset above it). */
   position: sticky;
-  top: 0;
+  top: calc(var(--space-4) + 58px);
   z-index: 2;
   padding: var(--space-5) 0 var(--space-4);
   margin-bottom: var(--space-2);
