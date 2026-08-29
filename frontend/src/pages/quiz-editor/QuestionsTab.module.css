@@ -72,6 +72,14 @@
   flex-shrink: 0;
 }
 
+/* A PLAYBOOK PAGE IS PORTRAIT. `cover` on a 90x60 landscape box would crop a
+   1275x1651 page to a meaningless horizontal band out of its middle, which
+   tells a coach nothing about which page the question came from. `contain`
+   letterboxes the whole page instead - small, but recognisably that page. */
+.thumbPage {
+  object-fit: contain;
+}
+
 .formActions {
   display: flex;
   gap: 8px;

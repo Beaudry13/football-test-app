@@ -366,9 +366,29 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                 question.is_retired ? styles.retiredCard : ''
               }`}
             >
-              {question.image && (
+              {/* TWO KINDS OF PICTURE, AND THIS ONLY EVER RENDERED ONE.
+                  An uploaded film still lives in `image`. A question built
+                  from a playbook page has no uploaded image at all - its
+                  picture is the masked render the server derives from the
+                  region, and it arrives as `masked_image_url`. Players have
+                  always been shown it; this list never read it, so a question
+                  a coach had just cut from a playbook page appeared here as
+                  plain text while the player got the page.
+
+                  Same URL and same alt text as QuestionInput uses, so the
+                  coach's copy and the player's cannot disagree about what the
+                  picture is. And no fallback to an unmasked page, matching
+                  that file: if the server supplied no masked render, the right
+                  outcome is a question with no picture. */}
+              {question.image ? (
                 <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
-              )}
+              ) : question.masked_image_url ? (
+                <img
+                  className={`${styles.thumb} ${styles.thumbPage}`}
+                  src={resolveMediaUrl(question.masked_image_url)}
+                  alt="Playbook page with the answer covered"
+                />
+              ) : null}
               <div className={styles.questionBody}>
                 <div className={styles.questionMeta}>
                   {/* Derived from live list order, so it stays right after an
