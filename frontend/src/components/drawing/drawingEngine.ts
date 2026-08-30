@@ -124,6 +124,21 @@ export class DrawingEngine {
     const scale = this.document.coordinate_width / naturalWidth;
 
     image.set({
+      // THE SCENE STARTS AT ITS TOP-LEFT CORNER, AND SO MUST THE IMAGE.
+      //
+      // Fabric hands back an image whose origin is its CENTRE, so `left: 0,
+      // top: 0` placed the middle of the picture at the scene origin and the
+      // image spanned [-700, +700] x [-394, +394] for a 1400x788 document.
+      // Everything else here - containFit, getFit, resetView, the zoom floor
+      // and every stored stroke - measures a scene that runs [0, width] x
+      // [0, height], so the fit was correct and simply framed the wrong
+      // place: only the image's bottom-right quadrant fell inside the canvas,
+      // which is what a player saw pinned to the top-left of the board.
+      //
+      // Stated explicitly rather than relying on a default, because the two
+      // coordinates below mean different things depending on it.
+      originX: 'left',
+      originY: 'top',
       left: 0,
       top: 0,
       scaleX: scale,
