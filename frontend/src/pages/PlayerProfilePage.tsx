@@ -8,7 +8,9 @@ import {
   uploadPlayerPhoto,
 } from '../api/players';
 import { getErrorMessage } from '../api/client';
-import type { PlayerHistory } from '../api/types';
+import type { Group, PlayerHistory } from '../api/types';
+import { listGroups } from '../api/groups';
+import { PlayerGroups } from './PlayerGroups';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { PlayerAvatar } from '../components/PlayerAvatar';
@@ -28,6 +30,10 @@ export function PlayerProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  /* Every group in the organization, so the editor can offer the ones this
+     player is NOT in as well as the ones they are. Loaded once; membership
+     itself always comes from the profile payload. */
+  const [groups, setGroups] = useState<Group[]>([]);
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -48,6 +54,14 @@ export function PlayerProfilePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    // A failure here costs the group editor, not the profile: a coach who
+    // came to read a player's results should still get them.
+    listGroups()
+      .then(setGroups)
+      .catch(() => setGroups([]));
+  }, []);
 
   async function handleSaveEdit() {
     setIsSaving(true);
@@ -202,11 +216,16 @@ export function PlayerProfilePage() {
               </div>
             )}
 
-            {history.current_groups.length > 0 && (
-              <p className={styles.groupsLine}>
-                Groups: {history.current_groups.map((g) => g.name).join(', ')}
-              </p>
-            )}
+            {/* Was a read-only sentence. A coach could see that John was in
+                Defense and Safeties and had no way to change it here - the
+                only route was opening each group in turn. Membership is a
+                property of the player as much as of the group. */}
+            <PlayerGroups
+              playerId={id}
+              allGroups={groups}
+              memberOf={history.current_groups}
+              onChanged={load}
+            />
 
             <div className={styles.statsGrid}>
               <div className={nb.card}>

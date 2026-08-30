@@ -1,0 +1,110 @@
+/* Page-specific styles only - the shared notebook design system lives in
+   frontend/src/styles/notebook.module.css.
+
+   An operational control, not a settings panel: one row of toggles, no card,
+   no dialog, no save button. The state a coach reads and the control they
+   press are the same object. */
+
+.groups {
+  margin: var(--space-5) 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.heading {
+  margin: 0 0 var(--space-3);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.empty {
+  margin: 0;
+  color: var(--nb-text-faint);
+  font-size: var(--peira-text-control);
+}
+
+/* Wraps rather than scrolls: twenty groups is a realistic season, and a
+   coach should see all of them at once rather than discover the rest by
+   dragging something sideways. */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  /* 44px even on desktop. This is a toggle a coach hits repeatedly while
+     reorganising, and a 28px pill is a target you have to aim at. */
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--nb-text-muted);
+  font-family: var(--font-body);
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  cursor: pointer;
+  /* A long group name shortens the chip rather than widening the row past
+     the screen. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    border-color var(--duration-base) var(--ease-standard),
+    color var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
+}
+
+.chip:hover:not(:disabled) {
+  border-color: var(--nb-border-strong, var(--nb-accent));
+  color: var(--nb-text);
+}
+
+.chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* IN THE GROUP. Filled and ticked, so membership is legible at a glance
+   across twenty chips without reading a word of them. */
+.chipOn {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  color: var(--peira-accent-text);
+}
+
+.mark {
+  font-weight: 700;
+  /* Reserved either way so a chip does not resize when it is toggled and
+     shift the ones after it out from under the cursor. */
+  display: inline-block;
+  width: 0.9em;
+  text-align: center;
+}
+
+@media (max-width: 40rem) {
+  /* Full-width rows on a phone: a wrapped row of pills becomes a set of
+     small, ragged targets, and this is a control a coach uses one-handed. */
+  .list {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+
+  .chip {
+    justify-content: flex-start;
+    min-height: 48px;
+    width: 100%;
+  }
+}

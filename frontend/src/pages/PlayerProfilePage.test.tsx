@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerProfilePage } from './PlayerProfilePage';
 import * as playersApi from '../api/players';
+import * as groupsApi from '../api/groups';
 import { acceptConfirm } from '../test/confirmDialog';
 import type { Player, PlayerHistory } from '../api/types';
 
@@ -56,11 +57,26 @@ describe('PlayerProfilePage', () => {
     vi.spyOn(playersApi, 'getPlayerHistory').mockResolvedValue(
       makeHistory({ current_groups: [{ id: 1, name: 'Defense' }] }),
     );
+    // The group list the editor offers. Membership itself still comes from
+    // the profile payload above. Stubbed BEFORE render - the page loads it in
+    // an effect on mount.
+    vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([
+      { id: 1, name: 'Defense' },
+      { id: 2, name: 'Safeties' },
+    ] as never);
     renderPage();
 
     expect(await screen.findByText('Jordan Lee')).toBeInTheDocument();
     expect(screen.getByText('#12 · WR')).toBeInTheDocument();
-    expect(screen.getByText('Groups: Defense')).toBeInTheDocument();
+    // Same fact as before - this player is in Defense - now stated by the
+    // control that can change it rather than by a sentence beside it.
+    expect(
+      await screen.findByRole('button', { name: /Defense/ }),
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Safeties/ })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('67%')).toBeInTheDocument();
     expect(screen.getByText('85%')).toBeInTheDocument();
