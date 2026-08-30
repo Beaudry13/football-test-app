@@ -324,17 +324,36 @@ export function ResponseRow({
         }}
       >
         <div>
-          <Link
-            // The legacy name-based history page is keyed by the historical
-            // snapshot, not the live name - the link target intentionally
-            // stays player_name even though the label below shows the
-            // current canonical name.
-            to={`/players/${encodeURIComponent(response.player_name)}/history`}
-            className={styles.playerNameLink}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {response.display_name}
-          </Link>
+          {/* A NAME IS NOT A PERSON.
+              This linked to the name-keyed history page, which finds attempts
+              by matching `player_name` - so two real players who share a name
+              had their histories returned as one person's, and a player who
+              was renamed could not be found under the name every other coach
+              surface now shows them by. Both were reproduced against real
+              rows before this changed.
+
+              `player_id` is the durable identity and the server has always
+              sent it. A legacy attempt that was never linked to a Player has
+              none, and there is genuinely no canonical person to open - so
+              that case keeps the old page rather than guessing which player
+              the name meant. The same refusal to guess the join gate makes. */}
+          {response.player_id != null ? (
+            <Link
+              to={`/roster/${response.player_id}`}
+              className={styles.playerNameLink}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {response.display_name}
+            </Link>
+          ) : (
+            <Link
+              to={`/players/${encodeURIComponent(response.player_name)}/history`}
+              className={styles.playerNameLink}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {response.display_name}
+            </Link>
+          )}
           <span className={styles.responseMeta}>{new Date(response.submitted_at).toLocaleString()}</span>
         </div>
         <div className={styles.responseActions}>

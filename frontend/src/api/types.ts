@@ -501,6 +501,12 @@ export interface PlayerResponse {
   // legacy or since-deleted Player). See PlayerAttempt.display_name.
   player_name: string;
   display_name: string;
+  /** CANONICAL IDENTITY, and the only safe way to reach this person's
+   *  history. The server has always sent it; nothing on the coach side
+   *  declared it, so the one link into a player's past was built from the
+   *  name instead. NULL on a legacy attempt that was never linked to a
+   *  Player - there is no canonical person to reach in that case. */
+  player_id?: number | null;
   submitted_at: string;
   answers?: Answer[];
   /** What THIS attempt received, snapshot-backed. Present on the coach's

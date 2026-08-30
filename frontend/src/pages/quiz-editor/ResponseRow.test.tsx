@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,6 +81,71 @@ describe('ResponseRow player name display', () => {
     renderRow({ player_name: 'Jordan Legacy', display_name: 'Jordan Legacy' });
 
     expect(screen.getByRole('link', { name: 'Jordan Legacy' })).toBeInTheDocument();
+  });
+});
+
+/** WHERE A PLAYER'S NAME TAKES YOU.
+ *
+ * Reproduced against real rows before this changed: two canonical players
+ * genuinely named "Chris Williams" each had one attempt, and the name-keyed
+ * history page returned BOTH as one person's history. Renaming one of them
+ * then made their history unreachable under the name every other coach
+ * surface shows. player_id is the only identity that survives either.
+ */
+describe('ResponseRow player link identity', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('opens the canonical player, not a name lookup', () => {
+    mockAuth({ id: 1 });
+    renderRow({ player_id: 483, player_name: 'Chris Williams', display_name: 'Chris Williams' });
+
+    const link = screen.getByRole('link', { name: 'Chris Williams' });
+    expect(link).toHaveAttribute('href', '/roster/483');
+  });
+
+  it('sends two players who share a name to two different profiles', () => {
+    // THE DEFECT. Same name, same snapshot, different people.
+    mockAuth({ id: 1 });
+    renderRow({ player_id: 483, player_name: 'Chris Williams', display_name: 'Chris Williams' });
+    expect(screen.getByRole('link', { name: 'Chris Williams' })).toHaveAttribute(
+      'href',
+      '/roster/483',
+    );
+    cleanup();
+
+    renderRow({ player_id: 484, player_name: 'Chris Williams', display_name: 'Chris Williams' });
+    expect(screen.getByRole('link', { name: 'Chris Williams' })).toHaveAttribute(
+      'href',
+      '/roster/484',
+    );
+  });
+
+  it('follows a renamed player by id, while the snapshot stays as it was', () => {
+    mockAuth({ id: 1 });
+    renderRow({
+      player_id: 483,
+      player_name: 'Chris Williams',
+      display_name: 'Christopher Williams',
+    });
+
+    // Label is the live name; destination is the id; the snapshot is not used
+    // for either, and is not rewritten.
+    const link = screen.getByRole('link', { name: 'Christopher Williams' });
+    expect(link).toHaveAttribute('href', '/roster/483');
+  });
+
+  it('leaves a legacy attempt on the name-based page rather than guessing', () => {
+    // No canonical player exists to open. Picking one from the name is the
+    // guess the join gate already refuses to make.
+    mockAuth({ id: 1 });
+    renderRow({ player_id: null, player_name: 'Jordan Legacy', display_name: 'Jordan Legacy' });
+
+    expect(screen.getByRole('link', { name: 'Jordan Legacy' })).toHaveAttribute(
+      'href',
+      '/players/Jordan%20Legacy/history',
+    );
   });
 });
 
