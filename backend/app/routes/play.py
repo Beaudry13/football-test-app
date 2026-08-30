@@ -52,6 +52,7 @@ from app.schemas.play import (
 from app.services.access_codes import (
     effective_roster_names,
     effective_roster_players,
+    selectable_players_for_code,
     find_access_code_by_code,
     reason_for_invalid,
 )
@@ -374,7 +375,14 @@ def validate_code():
             # alongside each name so the frontend can distinguish two
             # canonical Players who share a display name, and submit the
             # right one back on /start. See effective_roster_players.
-            "roster_players_v2": effective_roster_players(access_code),
+            # WHO MAY IDENTIFY THEMSELVES, which is a wider set than who may
+            # begin: it also carries anyone holding an attempt under this
+            # code, so a player removed from the group - or deactivated -
+            # after starting can still find their own name and finish.
+            # /start remains the enforcement point; this only decides who is
+            # offered the chance to try. `roster_players` above is left as the
+            # live-eligibility name list it has always been.
+            "roster_players_v2": selectable_players_for_code(access_code),
         }
     )
 

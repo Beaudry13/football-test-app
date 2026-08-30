@@ -25,6 +25,26 @@ from app.models.question import TEXT_ANSWER_TYPES
 from app.services.answer_matching import matches
 
 
+def identities_with_attempts(access_code_id: int) -> list[tuple[int | None, str]]:
+    """Every identity that already holds an attempt under this code, as
+    (player_id, player_name) pairs.
+
+    Lives here, beside `find_attempt`, for the reason attempt_scope exempts
+    this module: these are the PLAYER's own attempts, and a practice session
+    is one of them. `official_only` would be actively wrong - it would hide a
+    practice attempt from the player sitting in the middle of it.
+
+    Deliberately returns raw identity pairs rather than resolving them: who
+    those identities belong to, and how they are displayed, is the caller's
+    business. Nothing here writes, and a legacy attempt keeps its NULL
+    player_id rather than being matched to a canonical player by name.
+    """
+    return [
+        (attempt.player_id, attempt.player_name)
+        for attempt in PlayerAttempt.query.filter_by(access_code_id=access_code_id).all()
+    ]
+
+
 def find_attempt(
     access_code_id: int, player_name: str, player_id: int | None = None
 ) -> PlayerAttempt | None:

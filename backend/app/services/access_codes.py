@@ -8,7 +8,8 @@ import secrets
 import string
 from datetime import datetime, timezone
 
-from app.models import AccessCode, Quiz
+from app.extensions import db
+from app.models import AccessCode, Player, Quiz
 
 CODE_ALPHABET = "".join(sorted(set(string.ascii_uppercase + string.digits) - set("0O1IL")))
 CODE_LENGTH = 6
@@ -149,6 +150,98 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
                     }
                 )
     return result
+
+
+def selectable_players_for_code(access_code: AccessCode) -> list[dict]:
+    """WHO MAY IDENTIFY THEMSELVES against this code, for the name picker.
+
+    Deliberately NOT the same question as `effective_roster_players`, which
+    answers "who may BEGIN" and is what /play/start gates a new attempt on.
+    This is the display set, and it is the union of two different kinds of
+    authority:
+
+      LIVE ELIGIBILITY - an active player currently in a linked group (or on
+      the quiz's own roster). Groups stay live distribution lists, so somebody
+      added after the quiz went out appears here immediately.
+
+      AN ATTEMPT THAT ALREADY EXISTS - proof enough on its own, exactly as
+      /play/start now treats it. A player removed from every linked group, or
+      since deactivated, must still be able to point at their own name and
+      finish what they started; the alternative is work the server would
+      happily accept but the player can no longer reach.
+
+    INACTIVE PLAYERS ARE DROPPED UNLESS THEY HOLD AN ATTEMPT. Deactivation is
+    a coach saying "not on the team", which decides what happens next - so
+    they are not offered a new start, but they are never stranded mid-quiz.
+
+    IDENTITY IS NEVER INVENTED HERE. Canonical entries dedupe on player_id, so
+    two people who share a display name stay two rows and one can never be
+    offered the other's attempt; a legacy attempt (player_id NULL) is listed
+    under its own recorded name with player_id still NULL, and is not upgraded
+    into a canonical player by appearing in this list. Both keys match the ones
+    `effective_roster_players` already uses, so a player who is both live and
+    mid-attempt appears exactly once.
+    """
+    entries = effective_roster_players(access_code)
+    by_key: dict[str, dict] = {}
+    for entry in entries:
+        key = (
+            f"player:{entry['player_id']}"
+            if entry["player_id"] is not None
+            else f"name:{entry['name'].lower()}"
+        )
+        by_key[key] = entry
+
+    # Imported here rather than at module scope: attempts.py imports nothing
+    # from this module today, and a top-level import would create the cycle.
+    from app.services.attempts import identities_with_attempts
+
+    attempts = identities_with_attempts(access_code.id)
+    holds_attempt = {
+        (f"player:{pid}" if pid is not None else f"name:{name.lower()}")
+        for pid, name in attempts
+    }
+
+    # An inactive player with nothing underway is not offered a start. Read
+    # through the linked Player, so a legacy free-text entry - which has no
+    # activity flag to consult - is left exactly as it was.
+    for key, entry in list(by_key.items()):
+        if entry["player_id"] is None or key in holds_attempt:
+            continue
+        player = db.session.get(Player, entry["player_id"])
+        if player is not None and not player.is_active:
+            del by_key[key]
+
+    for attempt_player_id, attempt_player_name in attempts:
+        if attempt_player_id is not None:
+            key = f"player:{attempt_player_id}"
+            if key in by_key:
+                continue
+            player = db.session.get(Player, attempt_player_id)
+            by_key[key] = {
+                "player_id": attempt_player_id,
+                # The player's CURRENT name, matching how a live canonical
+                # entry is rendered - the attempt's own player_name is a
+                # snapshot of what they were called when they started, and is
+                # left untouched.
+                "name": player.full_name if player is not None else attempt_player_name,
+                "jersey_number": player.jersey_number if player is not None else None,
+                "position": player.position if player is not None else None,
+                "photo_url": player.photo_url if player is not None else None,
+            }
+        else:
+            key = f"name:{attempt_player_name.lower()}"
+            if key in by_key:
+                continue
+            by_key[key] = {
+                "player_id": None,
+                "name": attempt_player_name,
+                "jersey_number": None,
+                "position": None,
+                "photo_url": None,
+            }
+
+    return list(by_key.values())
 
 
 def effective_roster_names_for_quiz(quiz: Quiz, active_code: AccessCode | None) -> list[str]:
