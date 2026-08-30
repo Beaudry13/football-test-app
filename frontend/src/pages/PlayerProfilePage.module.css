@@ -97,3 +97,17 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* RECENT RESULTS IS WIDER THAN A PHONE.
+   Quiz, Date and Score measured 512px inside a 327px column at 375, and with
+   nothing containing it the table widened the whole PAGE to 536 - so the
+   profile scrolled sideways and the player's own name could be dragged off
+   screen. Scrolling inside its own box keeps every column reachable without
+   moving anything else, and matches what the Results breakdown table already
+   does for the same reason.
+
+   Pre-existing: this predates the group editor above it, which contributes no
+   overflow of its own. */
+.tableScroll {
+  overflow-x: auto;
+}

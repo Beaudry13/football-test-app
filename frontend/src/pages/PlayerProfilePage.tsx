@@ -254,6 +254,10 @@ export function PlayerProfilePage() {
             {history.recent_results.length === 0 ? (
               <EmptyState message="No completed Quizzes yet." />
             ) : (
+              /* The three columns need more than a phone has. Scrolling inside
+                 this box rather than widening the page is the same treatment
+                 the Results breakdown table already gets. */
+              <div className={styles.tableScroll}>
               <table className={nb.table}>
                 <thead>
                   <tr>
@@ -281,6 +285,7 @@ export function PlayerProfilePage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         )}
