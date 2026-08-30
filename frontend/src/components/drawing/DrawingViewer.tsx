@@ -71,7 +71,23 @@ export function DrawingViewer({
 
         const naturalWidth = image.width ?? document.coordinate_width;
         const imageScale = document.coordinate_width / naturalWidth;
-        image.set({ left: 0, top: 0, scaleX: imageScale, scaleY: imageScale, selectable: false });
+        // SAME ORIGIN RULE AS THE PLAYER'S BOARD, and it has to be, because
+        // this renders the same document. Fabric hands back an image whose
+        // origin is its CENTRE, so `left: 0, top: 0` put the middle of the
+        // picture at scene (0,0) and only its bottom-right quadrant fell
+        // inside a canvas that starts there - while the strokes, which carry
+        // absolute coordinate-space points, sat exactly where the player drew
+        // them. The coach therefore saw the right marks over the wrong part of
+        // the picture, which is worse than either being wrong alone.
+        image.set({
+          originX: 'left',
+          originY: 'top',
+          left: 0,
+          top: 0,
+          scaleX: imageScale,
+          scaleY: imageScale,
+          selectable: false,
+        });
         canvas.add(image);
 
         // Ordered explicitly rather than trusting array order, so a document
