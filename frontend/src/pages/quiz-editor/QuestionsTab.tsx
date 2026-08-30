@@ -362,10 +362,23 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
           ) : (
             <div
               key={question.id}
-              className={`${nb.card} ${styles.questionCard} ${
-                question.is_retired ? styles.retiredCard : ''
+              className={`${styles.questionRow} ${
+                question.is_retired ? styles.retiredRow : ''
               }`}
             >
+              {/* THE NUMBER IS THE STRUCTURE, so it lives in its own column
+                  rather than on the metadata line. Derived from live list
+                  order, exactly as before, so it stays right after an add,
+                  delete or reorder without any extra bookkeeping. */}
+              <div className={styles.qNum}>
+                {/* The full label for assistive tech, the bare numeral on
+                    screen. Split as two whole strings rather than a hidden
+                    prefix plus a visible digit: a screen reader announces one
+                    phrase instead of two fragments, and "Question 7" stays a
+                    single text node for anything reading the DOM. */}
+                <span className={nb.srOnly}>Question {index + 1}</span>
+                <span aria-hidden="true">{index + 1}</span>
+              </div>
               {/* TWO KINDS OF PICTURE, AND THIS ONLY EVER RENDERED ONE.
                   An uploaded film still lives in `image`. A question built
                   from a playbook page has no uploaded image at all - its
@@ -390,21 +403,6 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                 />
               ) : null}
               <div className={styles.questionBody}>
-                <div className={styles.questionMeta}>
-                  {/* Derived from live list order, so it stays right after an
-                      add, delete, or reorder without any extra bookkeeping. */}
-                  <span className={styles.questionNumber}>Question {index + 1}</span>
-                  <span className={`${nb.badge} ${nb.badgeNeutral}`}>{TYPE_LABELS[question.question_type]}</span>
-                  {/* State, not a warning. Stopping a question is a normal
-                      authoring decision, so this reads as a label rather than
-                      an error - and it is always visible, because a stopped
-                      question a coach cannot see is one they cannot restore. */}
-                  {question.is_retired && (
-                    <span className={`${nb.badge} ${styles.retiredBadge}`}>
-                      Not sent to new Peiras
-                    </span>
-                  )}
-                </div>
                 <div className={styles.questionText}>{question.question_text}</div>
                 {question.options.length > 0 && (
                   <ul className={styles.optionsList}>
@@ -446,6 +444,18 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     and six permanent controls per question meant 120 of them on
                     a twenty-question quiz. Same "..." a quiz card uses, so the
                     pattern is learned once. */}
+                <div className={styles.questionMeta}>
+                  <span className={`${nb.badge} ${nb.badgeNeutral}`}>{TYPE_LABELS[question.question_type]}</span>
+                  {/* State, not a warning. Stopping a question is a normal
+                      authoring decision, so this reads as a label rather than
+                      an error - and it is always visible, because a stopped
+                      question a coach cannot see is one they cannot restore. */}
+                  {question.is_retired && (
+                    <span className={`${nb.badge} ${styles.retiredBadge}`}>
+                      Not sent to new Peiras
+                    </span>
+                  )}
+                </div>
                 <div className={styles.formActions}>
                   <button className={nb.btnSm} onClick={() => setEditingId(question.id)}>
                     Edit

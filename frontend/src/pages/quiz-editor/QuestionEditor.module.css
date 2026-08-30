@@ -1,5 +1,22 @@
+/* COLLAPSED IS A ROW; ACTIVE IS A WORKSPACE.
+   This had it exactly backwards. A question sitting in the list was drawn in
+   a filled card, and the moment a coach opened it to actually work on it the
+   container disappeared - so the one question being edited had LESS weight
+   than the nineteen that were not. The list is a document now (see
+   QuestionsTab.module.css .questionRow) and this is the only place on the
+   page that earns a surface, because it is the only place work is happening. */
 .form {
-  margin-bottom: 1.5em;
+  margin: 0.75em 0 1.5em;
+  padding: 1.35em;
+  background: var(--peira-surface-raised);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 40rem) {
+  .form {
+    padding: 1em;
+  }
 }
 
 .optionRow {

@@ -1,38 +1,90 @@
+/* AN ORDERED DOCUMENT, NOT TWENTY WIDGETS.
+   Measured before this change: 26 filled containers serving 11 controls, and
+   twenty questions rendered as twenty identical rectangles - so nothing on
+   the page said these are a SEQUENCE that ships in this order. A quiz is
+   authored material, closer to a numbered lesson than to a dashboard, and the
+   thing that has to own the screen is the run of questions itself rather than
+   any one of them.
+
+   So: no gap and no fill. The rows are separated the way a document separates
+   them, by a rule, and the numbers in the gutter carry the order. */
 .list {
   display: flex;
   flex-direction: column;
-  gap: 0.75em;
   margin-bottom: 1.5em;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
-.questionCard {
-  display: flex;
-  gap: 1em;
+/* Number gutter, then the question, then its picture. The gutter is a real
+   column rather than an inline label, because a number that shares a line
+   with a type badge reads as metadata; a number in its own column reads as
+   position in a sequence. */
+.questionRow {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr;
+  align-items: start;
+  gap: 0 1em;
+  padding: 1.15em 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+/* Not gold. Every question has one, so a gold number would state nothing and
+   would put twenty accents down a page whose single accent is Add question. */
+.qNum {
+  grid-column: 1;
+  grid-row: 1;
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.25;
+  /* Muted, not faint. These carry the order, which is the one thing the page
+     is trying to say - at --nb-text-faint they were legible in a screenshot
+     and invisible on a monitor. */
+  color: var(--peira-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+  padding-right: 0.2em;
+}
+
+/* The active question is the only one that gets a surface - see
+   QuestionEditor.module.css .form. A row and a workspace must not weigh the
+   same, which is exactly what they did before: the collapsed question sat in
+   a filled card and the open editor had no container at all. */
+.questionRow:focus-within {
+  background: var(--peira-wash-hover);
 }
 
 .questionBody {
-  flex: 1;
+  /* Placed explicitly: the picture and the reorder controls are rendered
+     either side of the body in the markup, and the grid must not follow that
+     order. */
+  grid-column: 2;
+  grid-row: 1 / -1;
+  min-width: 0;
 }
 
+/* Supporting information, under the question rather than above it: the
+   coach is looking for the question they want, and the type is how they
+   confirm it once found - not how they find it. */
 .questionMeta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5em;
-  margin-bottom: 0.4em;
+  margin-top: 0.55em;
 }
 
-.questionNumber {
-  font-family: var(--font-heading);
-  font-size: 0.85em;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--peira-text-muted);
-  white-space: nowrap;
-}
-
+/* The loudest thing in the row. Previously the card's border was heavier
+   than the question inside it. */
 .questionText {
+  font-size: var(--peira-text-title);
   font-weight: 600;
-  margin-bottom: 0.5em;
+  line-height: 1.3;
+  color: var(--nb-text);
+  margin-bottom: 0.45em;
+  overflow-wrap: break-word;
 }
 
 .optionsList {
@@ -64,8 +116,10 @@
 
 
 .thumb {
-  width: 90px;
-  height: 60px;
+  grid-column: 3;
+  grid-row: 1 / -1;
+  width: 108px;
+  height: 72px;
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--nb-card-border);
@@ -80,17 +134,43 @@
   object-fit: contain;
 }
 
+/* QUIETER, NEVER HIDDEN.
+   Twenty questions means twenty Edits and twenty menus, and that repetition
+   is a large part of what the page's texture was made of. The fix is weight,
+   not concealment: hover-to-reveal would work on a laptop and silently
+   delete the controls on a phone, and this page is used on both. So they
+   stay rendered, stay in the tab order, keep their 44px targets, and simply
+   stop shouting until they are approached. */
 .formActions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 0.75em;
+  margin-top: 0.85em;
+}
+
+.formActions button,
+.formActions a {
+  border-color: var(--color-border-subtle);
+  background: transparent;
+  color: var(--nb-text-muted);
+}
+
+.formActions button:hover:not(:disabled),
+.formActions a:hover,
+.formActions button:focus-visible,
+.formActions a:focus-visible {
+  border-color: var(--color-border-strong);
+  color: var(--nb-text);
 }
 
 .reorderActions {
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 0.2em;
-  justify-content: center;
+  padding-top: 0.35em;
 }
 
 /* 32px square: these were 22x22 icon-only buttons, under the design
@@ -143,12 +223,12 @@
    unrecoverable from the only screen that can undo it.
    Opacity alone would carry the meaning by appearance only, so the badge in
    the header states it in words too. */
-.retiredCard {
+.retiredRow {
   opacity: 0.62;
 }
 
-.retiredCard:hover,
-.retiredCard:focus-within {
+.retiredRow:hover,
+.retiredRow:focus-within {
   opacity: 1;
 }
 
@@ -236,6 +316,36 @@
 
 /* At 375 the two halves stack, and the buttons take the full width rather
    than sitting as two small targets in a corner. */
+/* PHONE: the sequence still has to read as a sequence.
+   The gutter narrows rather than disappearing - the numbers are what make
+   this a document rather than a list - and the picture drops beneath the
+   question instead of squeezing the text into a column too narrow to read. */
+@media (max-width: 40rem) {
+  .questionRow {
+    grid-template-columns: 1.85rem minmax(0, 1fr);
+    gap: 0 0.7em;
+    padding: 1em 0;
+  }
+
+  .qNum {
+    font-size: 0.95rem;
+  }
+
+  .thumb {
+    grid-column: 2;
+    grid-row: 3;
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+    aspect-ratio: 3 / 2;
+    margin-top: 0.75em;
+  }
+
+  .questionText {
+    font-size: var(--peira-text-body);
+  }
+}
+
 @media (max-width: 30rem) {
   .annotateOffer {
     flex-direction: column;

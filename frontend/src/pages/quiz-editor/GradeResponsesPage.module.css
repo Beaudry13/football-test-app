@@ -9,11 +9,17 @@
   padding-bottom: var(--space-8);
 }
 
+/* DELIBERATELY QUIET. This was set in the heading serif at title size,
+   sitting directly above the question - so the two largest things on the
+   screen were the question and a link away from it. The way back is
+   navigation, not content. */
 .back {
   display: inline-block;
-  margin-bottom: var(--space-5);
-  font-family: var(--font-heading);
-  font-size: var(--peira-text-title);
+  margin-bottom: var(--space-4);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--nb-text-muted);
   text-decoration: none;
 }
@@ -39,10 +45,25 @@
   position: sticky;
   top: calc(var(--space-4) + 58px);
   z-index: 2;
-  padding: var(--space-5) 0 var(--space-4);
-  margin-bottom: var(--space-2);
-  background: var(--peira-bg);
-  border-bottom: 1px solid var(--color-border-subtle);
+
+  /* THE ONE SURFACE ON THIS PAGE, and the reason there is exactly one.
+     Everything here was flat - correctly, since a page of cards is what this
+     screen was built to avoid - but flat everywhere left nothing owning the
+     page: measured, the largest element was 6% of the viewport and the
+     question was simply text that happened to stick. A single raised plane
+     governing a flat list of decisions is not card-everything; it is the
+     opposite, and it is what makes the question read as the standard being
+     applied rather than as the first item in the list. */
+  padding: var(--space-5) var(--space-5) var(--space-5);
+  margin-bottom: var(--space-5);
+  background: var(--peira-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+
+  /* The plane is opaque and it slides over the answers, so it needs an edge
+     under it once it is stuck - without this the rows appear to slide into
+     nothing. */
+  box-shadow: 0 6px 18px -12px rgba(0, 0, 0, 0.9);
 }
 
 .progress {
@@ -59,7 +80,7 @@
 .question {
   margin: 0;
   font-family: var(--font-heading);
-  font-size: clamp(1.6rem, 1.1rem + 1.9vw, 2.4rem);
+  font-size: clamp(1.75rem, 1.15rem + 2.4vw, 2.9rem);
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
@@ -168,17 +189,21 @@
 
 /* --- The call ----------------------------------------------------------- */
 
+/* ONE CONTROL, TWO POSITIONS. Correct and Incorrect are not two independent
+   buttons that happen to be adjacent - they are the two answers to a single
+   question, and exactly one of them is true at a time. Joining them says that
+   before the coach reads either label, and it stops the pair reading as
+   generic actions floating beside the answer. */
 .actions {
-  display: flex;
-  gap: var(--space-2);
+  display: inline-flex;
   align-items: center;
+  isolation: isolate;
 }
 
 .verdict {
   min-height: 44px;
   padding: 0 var(--space-4);
   border: 1px solid var(--nb-border);
-  border-radius: var(--radius-md);
   background: transparent;
   color: var(--nb-text-muted);
   font-family: var(--font-body);
@@ -190,6 +215,24 @@
     border-color var(--duration-base) var(--ease-standard),
     color var(--duration-base) var(--ease-standard),
     background-color var(--duration-base) var(--ease-standard);
+}
+
+.actions > .verdict:first-child {
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+.actions > .verdict:last-child {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  /* One shared edge rather than two abutting ones. */
+  margin-left: -1px;
+}
+
+/* The chosen half carries a coloured border on all four sides, so it must sit
+   above its neighbour or the shared edge would cut across it. */
+.verdictCorrect,
+.verdictIncorrect {
+  position: relative;
+  z-index: 1;
 }
 
 .verdict:hover:not(:disabled) {
@@ -258,7 +301,6 @@
   .actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
   }
 
   .verdict {
