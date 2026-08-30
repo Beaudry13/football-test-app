@@ -393,7 +393,25 @@ def start_attempt():
         raise _invalid_code_error(reason)
 
     player_id = data.get("player_id")
-    if player_id is not None:
+    # AN ATTEMPT ALREADY UNDERWAY IS ITS OWN AUTHORITY.
+    #
+    # Looked up BEFORE eligibility, because current group membership answers
+    # "may this player begin?" and has nothing to say about work already in
+    # progress. Groups are live distribution lists: a coach moving somebody
+    # out of Safeties on Tuesday is deciding who gets sent things next, not
+    # reaching into a quiz that player started on Monday.
+    #
+    # THE STATE THIS CLOSES. /submit has always re-derived the attempt from
+    # (access_code_id, player) and never consulted the roster, so a removed
+    # player could still finish - but /start refused to hand their work back,
+    # so reloading locked them out of an attempt the server would nonetheless
+    # have accepted. Submittable but not resumable is not a defensible state.
+    #
+    # Nothing here writes. Resuming returns the attempt as it stands: a legacy
+    # attempt is not upgraded, no player_name snapshot moves, and no id is
+    # guessed - the safety net below still runs only when creating.
+    existing = find_attempt(access_code.id, data["player_name"], player_id)
+    if existing is None and player_id is not None:
         # Never trust a client-supplied player_id as proof of eligibility on
         # its own - it must actually be one of this activation's effective
         # roster entries (same check `effective_roster_names` + membership
@@ -402,7 +420,7 @@ def start_attempt():
         canonical_ids = {p["player_id"] for p in effective_roster_players(access_code) if p["player_id"]}
         if player_id not in canonical_ids:
             raise ApiError("Player is not on this quiz's roster", status_code=422)
-    else:
+    elif existing is None:
         roster_names = set(effective_roster_names(access_code))
         if data["player_name"] not in roster_names:
             raise ApiError("Player name is not on this quiz's roster", status_code=422)
@@ -418,7 +436,7 @@ def start_attempt():
     # large: the candidates come from `effective_roster_players`, and a name
     # matching two of them is left alone rather than resolved - picking one
     # would attribute a real player's score to someone else.
-    if player_id is None:
+    if existing is None and player_id is None:
         wanted = data["player_name"].strip().casefold()
         canonical = [
             entry["player_id"]
@@ -428,7 +446,19 @@ def start_attempt():
         if len(canonical) == 1:
             player_id = canonical[0]
 
-    existing = find_attempt(access_code.id, data["player_name"], player_id)
+            # The resolved id can see an attempt the name-only lookup above
+            # could not: a canonical player renamed since they started no
+            # longer matches their own attempt's player_name snapshot.
+            existing = find_attempt(access_code.id, data["player_name"], player_id)
+
+    # A DEACTIVATED PLAYER MAY NOT BEGIN, BUT IS NEVER STRANDED MID-QUIZ.
+    # Checked once identity is settled and only when there is no attempt to
+    # hand back: deactivation is a coach saying "not on the team", which
+    # decides what happens NEXT and must not orphan work already underway.
+    if existing is None and player_id is not None:
+        player = db.session.get(Player, player_id)
+        if player is not None and not player.is_active:
+            raise ApiError("Player is not on this quiz's roster", status_code=422)
     if existing is not None:
         if existing.status == AttemptStatus.SUBMITTED:
             # Practice is unlimited: a finished practice attempt is history,
