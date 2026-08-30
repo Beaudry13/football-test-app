@@ -83,5 +83,5 @@
 
 .closeButton:hover {
   background: rgba(201, 162, 75, 0.22);
-  border-color: var(--color-accent);
+  border-color: var(--color-border-strong);
 }

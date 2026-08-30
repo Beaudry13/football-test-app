@@ -62,3 +62,9 @@
   gap: 8px;
   align-items: center;
 }
+
+/* Not gold - see .accentStripe in notebook.module.css. Every group has one,
+   so it marks the row, it does not single one out. */
+.groupStripe {
+  background: var(--color-border-strong);
+}

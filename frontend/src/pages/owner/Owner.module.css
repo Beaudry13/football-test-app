@@ -129,7 +129,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--peira-accent-text);
+  color: var(--peira-text);
   margin-bottom: 8px;
 }
 
@@ -510,7 +510,7 @@
 .inviteCreated {
   margin-top: var(--space-3);
   padding: var(--space-4);
-  border: 1px solid var(--color-accent);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--radius-md);
   background: var(--peira-surface-raised);
 }
@@ -583,7 +583,7 @@
   white-space: nowrap;
 }
 
-.status_pending { color: var(--color-accent); font-weight: 600; }
+.status_pending { color: var(--color-warning); font-weight: 600; }
 .status_redeemed { color: var(--nb-text-muted); }
 .status_expired { color: var(--nb-text-muted); }
 .status_revoked { color: var(--nb-text-muted); text-decoration: line-through; }

@@ -45,7 +45,7 @@
 }
 
 .panel:focus-visible {
-  border-color: var(--nb-accent);
+  border-color: var(--color-focus);
 }
 
 .title {
@@ -125,7 +125,7 @@
 
 .primary:hover {
   background: var(--nb-accent-hover);
-  border-color: var(--nb-accent-hover);
+  border-color: var(--color-border-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {

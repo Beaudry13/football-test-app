@@ -155,7 +155,7 @@
 
 /* THE GROUND BEHIND THE GROUND.
    `body` is painted by index.css - the PLAYER theme - at #f3efe6, while a
-   coach page paints #14120E. .page is min-height:100vh so it covers the
+   coach page paints --peira-bg. .page is min-height:100vh so it covers the
    viewport and the two never meet in normal use; they meet during overscroll
    rubber-banding on a touch device. On the light theme that showed as a band
    of the wrong cream; on this one it is a flash of cream on near-black, which
@@ -359,8 +359,8 @@
 
 .accountTrigger:hover,
 .accountTrigger[aria-expanded='true'] {
-  border-color: var(--nb-accent);
-  background: var(--color-accent-bg);
+  border-color: var(--color-border-strong);
+  background: var(--peira-wash-control-hover);
 }
 
 .accountName {
@@ -508,8 +508,8 @@
 }
 
 .input:focus {
-  border-color: var(--nb-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-bg);
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px var(--color-focus-bg);
 }
 
 .input::placeholder {
@@ -669,9 +669,14 @@ textarea.input {
   background: var(--peira-surface-raised);
 }
 
-/* Left accent stripe used on list-row cards (quiz/group cards). Parent
-   needs position:relative (.cardHoverable/.card already set it). Flat
-   gold, no gradient, per the current handoff. */
+/* Left accent stripe used on list-row cards. Parent needs position:relative
+   (.cardHoverable/.card already set it). Flat gold, no gradient.
+
+   GOLD HERE MEANS "LIVE" - ActiveQuizStatus is what earns it. A stripe that
+   appears on EVERY row in a list states nothing, and the Groups list was
+   drawing four of them above a screen whose only action was "New group"; it
+   overrides the colour rather than dropping the element, so the row keeps its
+   left inset either way. */
 .accentStripe {
   position: absolute;
   left: 0;

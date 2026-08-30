@@ -110,7 +110,7 @@
 
 .dropZone:hover,
 .dropZone:focus-visible {
-  border-color: var(--color-accent);
+  border-color: var(--color-focus);
   background: var(--peira-dropzone-focus);
 }
 
@@ -130,7 +130,7 @@
 
 .dropZoneKeys {
   font-size: 12px;
-  color: var(--peira-accent-text);
+  color: var(--peira-text-muted);
   font-variant-numeric: tabular-nums;
 }
 

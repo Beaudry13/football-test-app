@@ -130,12 +130,24 @@
    * ===================================================================== */
 
   /* --- Color: surfaces (collide with index.css - --peira-* prefixed) ------ */
-  --peira-bg: #14120E;
-  --peira-surface: #1E1B15;
-  --color-surface-input: #17150F;
-  --color-border-subtle: rgba(246, 242, 232, 0.06);
-  --peira-border: rgba(246, 242, 232, 0.10);
-  --color-border-strong: rgba(246, 242, 232, 0.18);
+  /* NEUTRAL GRAPHITE, NOT WARM BLACK.
+   *
+   * Every neutral here used to sit at hue 40-43deg - the SAME hue as the gold
+   * accent - so the app was a monochromatic gold ramp from background to text.
+   * Strip every gold element off the screen and it still read brown, because
+   * the ground and the lettering were the accent at different lightness.
+   * These sit at ~215deg and under 8% saturation: actually neutral.
+   *
+   * FOUR DEPTHS, and no more. Depth is for things that are interactive,
+   * transient or selected - never for "this is a section". */
+  --peira-bg: #0E1013;              /* Depth 0 - the environment */
+  --peira-surface: #14171C;         /* Depth 1 - the working plane */
+  --color-surface-input: #111419;
+  /* WHITE ALPHA, NOT CREAM ALPHA. Every border, wash, chip and card edge was
+     an alpha of the cream text, so each hairline carried the warmth too. */
+  --color-border-subtle: rgba(255, 255, 255, 0.07);
+  --peira-border: rgba(255, 255, 255, 0.11);
+  --color-border-strong: rgba(255, 255, 255, 0.20);
 
   /* --- Color: washes and fills ---------------------------------------------
    * NAMED FOR THEIR JOB, NOT THEIR OPACITY, and that is the point of this
@@ -160,33 +172,33 @@
    * its fallbacks were the live values - and the three disagreed with each
    * other (0.05, 0.06, 0.08). Each now names the wash it actually wanted.
    */
-  --peira-wash-hover: rgba(246, 242, 232, 0.04);
-  --peira-wash-control-hover: rgba(246, 242, 232, 0.07);
-  --peira-wash-control-hover-strong: rgba(246, 242, 232, 0.11);
-  --peira-surface-raised: #272319;
-  --peira-surface-raised-strong: #2E2A22;
-  --peira-dropzone: rgba(246, 242, 232, 0.03);
-  --peira-dropzone-focus: rgba(246, 242, 232, 0.06);
-  --peira-dropzone-active: rgba(201, 162, 75, 0.18);
-  --peira-chip: rgba(246, 242, 232, 0.08);
+  --peira-wash-hover: rgba(255, 255, 255, 0.04);
+  --peira-wash-control-hover: rgba(255, 255, 255, 0.07);
+  --peira-wash-control-hover-strong: rgba(255, 255, 255, 0.11);
+  --peira-surface-raised: #1C2027;         /* Depth 2 - raised/interacting */
+  --peira-surface-raised-strong: #242932;  /* Depth 3 - transient/floating */
+  --peira-dropzone: rgba(255, 255, 255, 0.03);
+  --peira-dropzone-focus: rgba(255, 255, 255, 0.06);
+  --peira-dropzone-active: rgba(217, 164, 65, 0.18);
+  --peira-chip: rgba(255, 255, 255, 0.08);
 
   /* THE CARD EDGE IS NOT THE SEPARATOR HAIRLINE, and on this ground they stop
      being the same value.
 
      On paper they had to be. A white card on a warm-white page is invisible
      without an outline, so --peira-border did both jobs and every card wore a
-     box. Here the ground is #14120E and a card is #1E1B15 - the STEP does the
-     separating, and repeating the outline on top of it draws 40 boxes on a
-     page that already reads as layered.
+     box. Here the ground is Depth 0 and a raised surface is Depth 2 - the STEP
+     does the separating, and repeating the outline on top of it draws 40 boxes
+     on a page that already reads as layered.
 
      So: this edge only resolves the corner and catches the eye at the radius.
      --peira-border stays where it belongs, dividing rows INSIDE a surface. */
-  --peira-card-edge: rgba(246, 242, 232, 0.055);
+  --peira-card-edge: rgba(255, 255, 255, 0.055);
   /* A field a coach types into. Already a LIGHT fill on the dark theme - the
      one place the interface was light all along, which is why it needs the
      least thought when the rest of it follows. */
-  --peira-field: #17150F;
-  --peira-field-soft: #17150F;
+  --peira-field: #111419;
+  --peira-field-soft: #111419;
 
   /* --- Color: text (collide with index.css - --peira-* prefixed) ----------
      Every text token here clears WCAG AA (4.5:1 for small text) against all
@@ -200,17 +212,29 @@
      case) while still reading as clearly-muted next to --peira-text-muted.
      Accessibility wins over an exact brand hex - the same rule that will
      later constrain per-organization colors. */
-  --peira-text: #F6F2E8;
-  --color-text-secondary: #DCD5C6;
-  --peira-text-muted: #A79E8C;
-  --color-text-muted-2: #A79E8C;
-  --color-text-muted-3: #8E8676;
+  /* THE SINGLE HIGHEST-LEVERAGE VALUE IN THE THEME. #F6F2E8 was cream at
+     43.8% saturation, not white, and it covered more pixels than anything
+     else - while also being the base every border and wash was an alpha of. */
+  --peira-text: #F2F4F7;
+  --color-text-secondary: #C3C9D4;
+  --peira-text-muted: #8B93A1;
+  --color-text-muted-2: #8B93A1;
+  /* Disabled: dimmer than muted but still legible - 3.88:1 even on Depth 3.
+     An earlier #5B626E measured 2.38:1 and was rejected. */
+  --color-text-muted-3: #7C8493;
 
   /* --- Color: accent (gold, flat - never a gradient; no index.css equivalent) */
-  --color-accent: #c9a24b;
-  --color-accent-bright: #E4C066;
-  --color-accent-contrast: #14120E;
-  --color-accent-bg: rgba(201, 162, 75, 0.14);
+  --color-accent: #D9A441;
+  --color-accent-bright: #E8C46B;
+  --color-accent-contrast: #0E1013;
+  /* TINT ALPHAS ARE LOWER THAN THE WARM SYSTEM'S. A warm alpha over a warm
+     ground barely showed, so these were pushed to 0.14 to register at all.
+     Over cool graphite the same alpha composites to a filled olive-brown slab
+     - measured rgba(229,168,60,.14) over Depth 1 lands on #312B21, which was
+     the loudest region on the Results tab. These blocks already carry a
+     coloured left rail and, usually, a filled button; the wash is the third
+     signal and only needs to whisper. */
+  --color-accent-bg: rgba(217, 164, 65, 0.10);
 
   /* GOLD IS ONE COLOUR AGAIN.
      On the light ground #c9a24b measured 2.25:1 as text - it failed AA, and
@@ -222,20 +246,27 @@
      each mean "gold, as text", which is still true and still correct - and if
      the ground ever changes again there is one value to move rather than
      thirty-four rules to find. */
-  --peira-accent-text: #C9A24B;
+  --peira-accent-text: #D9A441;
 
   /* --- Color: status (collide with index.css - --peira-* prefixed) -------- */
   /* Status colours are LIGHT on this ground, and all four clear AA against
      both the page and a card with room to spare - 9.2, 10.0 and 7.7. The
      light theme had to hunt for a success green that survived being placed on
      a tint of itself; on near-black that pressure disappears. */
-  --peira-success: #5FCB86;
-  --peira-success-bg: rgba(95, 203, 134, 0.14);
-  --color-warning: #E8B563;
-  --peira-warning-bg: rgba(232, 181, 99, 0.14);
-  --peira-danger: #F08A80;
-  --peira-danger-bg: rgba(240, 138, 128, 0.12);
-  --color-danger-border: rgba(240, 138, 128, 0.32);
+  --peira-success: #4ECB88;
+  --peira-success-bg: rgba(78, 203, 136, 0.10);
+  --color-warning: #E5A83C;
+  --peira-warning-bg: rgba(229, 168, 60, 0.10);
+  --peira-danger: #F2685E;
+  --peira-danger-bg: rgba(242, 104, 94, 0.10);
+  --color-danger-border: rgba(242, 104, 94, 0.32);
+
+  /* INFO / FOCUS. The palette had no info colour at all, so "this field is
+     focused" borrowed gold - which made focus indistinguishable from
+     selection and from a primary action. Blue is the one hue in the system
+     that means neither. 7.22:1 on Depth 1. */
+  --color-focus: #6AA5FF;
+  --color-focus-bg: rgba(106, 165, 255, 0.10);
 
   /* --- Typography (no index.css equivalent) -------------------------------- */
   /* 'Peira Plain Symbols' MUST come first - see the @font-face above. It

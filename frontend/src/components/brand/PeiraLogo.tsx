@@ -12,7 +12,10 @@ import peiraMark from '../../assets/peira-mark.png';
  * wordmark text color. */
 
 const WORDMARK_COLOR = {
-  dark: '#f3eee2',
+  /* Neutral, matching --peira-text. The mark image beside it is still
+   * gold; the wordmark no longer doubles the warmth. `light` is unchanged -
+   * it renders only on the player theme, and only via markOnly today. */
+  dark: '#F2F4F7',
   light: '#2a2416',
 } as const;
 

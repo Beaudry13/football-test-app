@@ -24,7 +24,7 @@
 .trigger:hover,
 .trigger[aria-expanded='true'] {
   color: var(--nb-text);
-  border-color: var(--nb-accent);
+  border-color: var(--color-border-strong);
 }
 
 .menu {
@@ -151,7 +151,7 @@
 }
 
 .emphasis {
-  color: var(--peira-accent-text);
+  color: var(--peira-text);
   font-style: normal;
 }
 

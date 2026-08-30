@@ -48,7 +48,7 @@
 }
 
 .listItem:hover {
-  border-color: var(--color-accent);
+  border-color: var(--color-border-strong);
 }
 
 .listTitle {
@@ -96,7 +96,7 @@
 }
 
 .page:hover:not(:disabled) {
-  border-color: var(--color-accent);
+  border-color: var(--color-border-strong);
 }
 
 .page:disabled {

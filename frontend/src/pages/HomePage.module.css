@@ -54,7 +54,7 @@
 }
 
 .navBtnOutline:hover {
-  border-color: var(--nb-accent);
+  border-color: var(--color-border-strong);
   background: var(--color-accent-bg);
 }
 
@@ -141,7 +141,7 @@
 }
 
 .heroBtnOutline:hover {
-  border-color: var(--nb-accent);
+  border-color: var(--color-border-strong);
   background: var(--color-accent-bg);
 }
 

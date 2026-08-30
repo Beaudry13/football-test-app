@@ -13,7 +13,7 @@
   font-family: var(--font-heading);
   font-size: 2.2em;
   font-weight: 700;
-  color: var(--peira-accent-text);
+  color: var(--peira-text);
 }
 
 .statLabel {
@@ -152,7 +152,7 @@
 }
 
 .gradingRow textarea:focus {
-  border-color: var(--nb-accent);
+  border-color: var(--color-focus);
 }
 
 /* !important because these combine with notebook.module.css's .btnSm in

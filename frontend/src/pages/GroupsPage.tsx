@@ -96,7 +96,7 @@ export function GroupsPage() {
         <div className={styles.list}>
           {groups.map((group) => (
             <div key={group.id} className={`${nb.card} ${nb.cardHoverable} ${styles.groupCard}`}>
-              <div className={nb.accentStripe} />
+              <div className={`${nb.accentStripe} ${styles.groupStripe}`} />
               <Link to={`/groups/${group.id}`} className={styles.groupInfo} style={{ flex: 1 }}>
                 <h2>{group.name}</h2>
                 <div className={styles.groupMeta}>

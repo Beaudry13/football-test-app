@@ -53,7 +53,7 @@
 }
 
 .preset:hover {
-  border-color: var(--nb-accent);
+  border-color: var(--color-border-strong);
   color: var(--peira-accent-text);
 }
 

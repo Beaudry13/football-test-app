@@ -38,7 +38,7 @@
      the hero - a #eee/#fafafa board on a near-black stage is the brightest
      thing on screen and pulls the eye off the photograph it exists to frame.
      Kept as two steps so it still reads as "nothing is here", not as a fill. */
-  background: repeating-conic-gradient(#1A1712 0% 25%, #201C16 0% 50%) 50% / 20px 20px;
+  background: repeating-conic-gradient(#14171C 0% 25%, #1C2027 0% 50%) 50% / 20px 20px;
   /* THE BUG THIS PREVENTS: drawing a route down the image and having the PAGE
      scroll instead. The browser claims a one-finger drag for scrolling unless
      told otherwise, and it makes that decision before any listener runs, so
@@ -113,7 +113,7 @@
 
 .viewButton:not(:disabled):hover,
 .fitButton:hover {
-  border-color: var(--color-accent);
+  border-color: var(--color-border-strong);
   background: var(--color-accent-bg);
 }
 

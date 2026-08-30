@@ -1,6 +1,6 @@
 .card {
   background: var(--color-surface, #FFFFFF);
-  border: 1.5px solid var(--nb-accent);
+  border: 1.5px solid var(--color-border-strong);
   border-radius: var(--radius-md, 10px);
   padding: 1.1em 1.3em;
   margin: 1em 0 1.4em;
@@ -28,7 +28,7 @@
   height: 22px;
   border-radius: 50%;
   background: var(--nb-accent);
-  color: var(--color-accent-contrast, #1C1A17);
+  color: var(--color-accent-contrast, #0E1013);
   font-weight: 700;
   font-size: 0.85em;
   font-style: normal;
@@ -41,7 +41,7 @@
   font-size: 1.05em;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--peira-accent-text);
+  color: var(--peira-text);
   margin: 0;
 }
 
