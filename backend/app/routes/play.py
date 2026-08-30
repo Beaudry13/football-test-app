@@ -369,6 +369,12 @@ def validate_code():
             # practice and will not be graded.
             "mode": access_code.mode,
             "quiz": quiz_payload,
+            # LEGACY, FROZEN. A list of display names cannot represent two
+            # canonical players who share one, and carries the name a group
+            # snapshot recorded rather than the player's current one. Kept
+            # because it is public API and removing it buys nothing;
+            # roster_players_v2 below is authoritative for player selection,
+            # and coach-facing counts read effective_roster_people_for_quiz.
             "roster_players": effective_roster_names(access_code),
             # Additive, not a replacement for roster_players above (kept
             # unchanged for backward compatibility) - carries player_id

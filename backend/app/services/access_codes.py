@@ -185,22 +185,14 @@ def selectable_players_for_code(access_code: AccessCode) -> list[dict]:
     entries = effective_roster_players(access_code)
     by_key: dict[str, dict] = {}
     for entry in entries:
-        key = (
-            f"player:{entry['player_id']}"
-            if entry["player_id"] is not None
-            else f"name:{entry['name'].lower()}"
-        )
-        by_key[key] = entry
+        by_key[identity_key(entry["player_id"], entry["name"])] = entry
 
     # Imported here rather than at module scope: attempts.py imports nothing
     # from this module today, and a top-level import would create the cycle.
     from app.services.attempts import identities_with_attempts
 
     attempts = identities_with_attempts(access_code.id)
-    holds_attempt = {
-        (f"player:{pid}" if pid is not None else f"name:{name.lower()}")
-        for pid, name in attempts
-    }
+    holds_attempt = {identity_key(pid, name) for pid, name in attempts}
 
     # An inactive player with nothing underway is not offered a start. Read
     # through the linked Player, so a legacy free-text entry - which has no
@@ -242,6 +234,73 @@ def selectable_players_for_code(access_code: AccessCode) -> list[dict]:
             }
 
     return list(by_key.values())
+
+
+def identity_key(player_id: int | None, name: str) -> str:
+    """ONE PERSON, ONE KEY - the rule every roster count depends on.
+
+    A canonical player is their `player_id` and nothing else, so two people
+    who happen to share a display name are two keys, and renaming somebody
+    changes no key at all. A free-text entry has no identity beyond what the
+    coach typed, so it falls back to its normalised name - which is the best
+    the data supports and is exactly the legacy behaviour, not a guess at a
+    canonical player.
+
+    Written once because the alternative is what this fixes: counting by name
+    silently merged two real players into one and made a roster smaller than
+    the team.
+    """
+    if player_id is not None:
+        return f"player:{player_id}"
+    return f"name:{name.strip().lower()}"
+
+
+def effective_roster_people_for_quiz(quiz: Quiz, active_code: AccessCode | None) -> list[dict]:
+    """The people eligible under this quiz's current activation, as canonical
+    entries rather than a list of names.
+
+    The identity-aware counterpart to `effective_roster_names_for_quiz`, and
+    the same fallback: whichever code is active decides, and with none active
+    the quiz's own Roster does. Coach-facing counts read this so a roster
+    reports how many PEOPLE are assigned - `effective_roster_names` cannot,
+    because a list of strings cannot hold two players called the same thing.
+
+    Reporting-safe: this reads groups, rosters and Players only. It issues no
+    attempt query, so it neither needs nor weakens attempt_scope's guard.
+    """
+    if active_code is not None:
+        return effective_roster_players(active_code)
+    roster_players = quiz.roster.players if quiz.roster else []
+    people: dict[str, dict] = {}
+    for entry in roster_players:
+        if entry.player_id is not None and entry.player is not None:
+            key = identity_key(entry.player_id, entry.player.full_name)
+            people.setdefault(
+                key,
+                {
+                    "player_id": entry.player_id,
+                    # The player's CURRENT name: this is operational roster
+                    # information, not a record of what they were called when
+                    # somebody was added to a list.
+                    "name": entry.player.full_name,
+                    "jersey_number": entry.player.jersey_number,
+                    "position": entry.player.position,
+                    "photo_url": entry.player.photo_url,
+                },
+            )
+        else:
+            key = identity_key(None, entry.player_name)
+            people.setdefault(
+                key,
+                {
+                    "player_id": None,
+                    "name": entry.player_name,
+                    "jersey_number": None,
+                    "position": None,
+                    "photo_url": None,
+                },
+            )
+    return list(people.values())
 
 
 def effective_roster_names_for_quiz(quiz: Quiz, active_code: AccessCode | None) -> list[str]:

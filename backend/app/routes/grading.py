@@ -33,7 +33,10 @@ from app.services.retest_verification import verification_for
 from app.services.scoring import count_answers, pending_grading_count
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
 from app.schemas.grading import GradeAnswerSchema
-from app.services.access_codes import effective_roster_names_for_quiz
+from app.services.access_codes import (
+    effective_roster_people_for_quiz,
+    identity_key,
+)
 from app.services.export import (
     build_detailed_results_pdf,
     build_results_csv,
@@ -218,8 +221,12 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         .options(selectinload(AccessCode.groups).selectinload(Group.players))
         .first()
     )
-    roster_names = effective_roster_names_for_quiz(quiz, active_code)
-    roster_size = len(roster_names)
+    # PEOPLE, NOT NAMES. This counted a list of display names, which cannot
+    # hold two players called the same thing - so a group with two "Chris
+    # Williams" reported one fewer player than it has, and every rate divided
+    # by that short denominator came out too high.
+    roster_people = effective_roster_people_for_quiz(quiz, active_code)
+    roster_size = len(roster_people)
     response_count = len(responses)
     # None, NOT 0.0, when there is no denominator - the same rule scoring
     # already follows (`score_percent` returns None rather than inventing 0%
@@ -244,8 +251,16 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
     # in the sense that a coach editing group membership after players have
     # already started won't retroactively change who's "missing" for
     # attempts already in progress - just like before groups existed.
-    responded_names = {r.player_name for r in responses}
-    missing_players = [name for name in roster_names if name not in responded_names]
+    #
+    # Matched on identity too: comparing names hid BOTH same-named players the
+    # moment either one submitted. The attempts here are already loaded, so
+    # this reads their player_id rather than issuing a query.
+    responded = {identity_key(r.player_id, r.player_name) for r in responses}
+    missing_players = [
+        person["name"]
+        for person in roster_people
+        if identity_key(person["player_id"], person["name"]) not in responded
+    ]
 
     # Every ACTIVE exclusion on this quiz, as rows rather than a boolean: a
     # question can be covered by BOTH a quiz-wide and an assignment exclusion,

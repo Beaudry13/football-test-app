@@ -35,7 +35,11 @@ from app.models import (
 )
 from app.schemas.retest import RetestCreateSchema
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
-from app.services.access_codes import effective_roster_names, effective_roster_names_for_quiz
+from app.services.access_codes import (
+    effective_roster_people_for_quiz,
+    effective_roster_players,
+    identity_key,
+)
 from app.services.player_identity import PlayerKey
 from app.services.retests import eligible_players, questions_to_copy
 from app.services.file_storage import StorageError, get_file_storage
@@ -167,8 +171,11 @@ def list_quizzes():
         # Group-aware: if the quiz's active code is restricted to group(s),
         # that's who's actually eligible to submit, not the quiz's own
         # Roster - see effective_roster_names_for_quiz.
+        # Counted by identity, not by display name - see
+        # effective_roster_people_for_quiz. Two players sharing a name are two
+        # players, and a rename moves nobody in or out of a roster.
         roster_size = len(
-            effective_roster_names_for_quiz(quiz, active_codes_by_quiz_id.get(quiz.id))
+            effective_roster_people_for_quiz(quiz, active_codes_by_quiz_id.get(quiz.id))
         )
         return quiz.to_dict(
             is_active=quiz.id in active_quiz_ids,
@@ -253,9 +260,18 @@ def active_status():
         # already-created attempt shouldn't vanish from view because of that
         # (same staleness tolerance _build_dashboard_data already documents
         # for its own missing_players list).
-        roster_names = effective_roster_names(code)
-        started_names = {a.player_name for a in attempts}
-        not_started = [name for name in roster_names if name not in started_names]
+        #
+        # Compared by identity: with two same-named players, one starting used
+        # to remove both from this list, so a coach chasing the one who had not
+        # started saw nobody. The attempts are already in hand here, so their
+        # player_id costs no extra query.
+        roster_people = effective_roster_players(code)
+        started = {identity_key(a.player_id, a.player_name) for a in attempts}
+        not_started = [
+            person["name"]
+            for person in roster_people
+            if identity_key(person["player_id"], person["name"]) not in started
+        ]
 
         result.append(
             {
@@ -276,7 +292,8 @@ def active_status():
                 # background poll when nothing actually changed - a poll
                 # that reorders things nobody touched reads as a bug.
                 "group_names": sorted(g.name for g in code.groups),
-                "roster_size": len(roster_names),
+                # People, matching not_started above and the quiz card.
+                "roster_size": len(roster_people),
                 "submitted": submitted,
                 "in_progress": in_progress,
                 "not_started": not_started,
