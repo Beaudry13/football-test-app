@@ -1,0 +1,154 @@
+/*
+ * THE PLAYER THEME, AS AN EXPLICIT SCOPE.
+ *
+ * ------------------------------------------------------------------------
+ * WHY THIS FILE EXISTS - read before changing a value in it.
+ * ------------------------------------------------------------------------
+ *
+ * Until now the player palette WAS `index.css`'s global `:root`. That made
+ * one set of values do two unrelated jobs at once:
+ *
+ *   1. the colours of the player quiz, and
+ *   2. the application-wide fallback every unscoped surface resolves against.
+ *
+ * Job (2) is much larger than it looks. Measured on this tree, `:root`
+ * declares nineteen names, `styles/tokens.css` collides with NONE of them
+ * (the `--peira-` prefix rule did its job), and the coach scope
+ * (`.page` / `.coachTokens` in notebook.module.css) overrides only thirteen.
+ * The remaining six - `--color-primary`, `--color-primary-hover`,
+ * `--color-primary-contrast`, `--color-primary-bg`, `--color-warning-text`
+ * and `--shadow-card` - are consumed by COACH code and never overridden, so
+ * they resolve from the player palette today. AnnotationToolbar, Alert and
+ * QuizPreviewPage are all reading player-theme values right now.
+ *
+ * So repainting `:root` dark to build Night Mode would have silently
+ * repainted coach surfaces, the login and register pages, the public home
+ * page, and anything that ever renders outside a theme scope. That is the
+ * exact failure class recorded in CLAUDE.md "Things that will bite you" #1
+ * and measured again in the Modal backdrop comment at 1.11:1.
+ *
+ * This file separates the two jobs WITHOUT changing a single colour:
+ *
+ *   `:root` in index.css  keeps the BASE palette - the fallback, and the
+ *                         theme the public and auth pages legitimately use.
+ *   `.playerTheme` (here) owns the PLAYER QUIZ palette.
+ *
+ * Today both hold identical values, so nothing moves. That is the point:
+ * F1 is a no-op by construction, and F2 can then change the player palette
+ * by editing THIS file alone.
+ *
+ * ------------------------------------------------------------------------
+ * WHAT IS DELIBERATELY NOT HERE
+ * ------------------------------------------------------------------------
+ *
+ * `--font-sans`, `--radius-sm` and `--radius-md` stay on `:root`. They are
+ * structural, not thematic - the player flow and the coach flow want the
+ * same corner radii and the same typeface, and a dark player theme will
+ * still want them. Duplicating every root variable into a new selector
+ * would have moved the ambiguity rather than removed it.
+ *
+ * `--shadow-card` IS here, because it is not a neutral shadow: it is
+ * rgba(30, 25, 10, 0.04), a warm shadow tuned for a cream surface, and a
+ * dark player theme will need a different one.
+ *
+ * ------------------------------------------------------------------------
+ * THE PUBLIC / AUTH PAGES ARE NOT "THE PLAYER THEME"
+ * ------------------------------------------------------------------------
+ *
+ * Login, register, invite and the marketing home page currently look like
+ * the player quiz, but only because they share the base. They are a
+ * different audience on a different device in a different situation, and
+ * they are NOT scoped here on purpose. When the player theme goes dark they
+ * stay light, which is the correct outcome and not an oversight - if they
+ * should follow later, that is a separate product decision, not a
+ * consequence of this refactor.
+ *
+ * ------------------------------------------------------------------------
+ * PORTALS
+ * ------------------------------------------------------------------------
+ *
+ * Three components portal to document.body: Modal, DashboardTour and
+ * DrawingBoard. The first two are coach-only and already carry
+ * `.coachTokens` where they need it. DrawingBoard is the one that appears
+ * mid-quiz for a Draw Response - and `DrawingBoard.module.css` uses NO
+ * custom properties at all, only literal colours, so it is theme-independent
+ * and escapes nothing. No player-facing portal reads these tokens, which is
+ * why this scope can live on the page wrapper rather than on `:root`.
+ */
+/*
+ * DECLARED ON THE CONDITIONAL ROOT, NOT ON THE WRAPPER - and the difference
+ * is not cosmetic. Measured with a temporary dark probe during this
+ * refactor: with the palette on `.playerTheme` itself the wrapper went dark
+ * correctly and `body` stayed cream, because `body` is an ANCESTOR of the
+ * wrapper. Custom properties inherit downwards, so a rule painting body with
+ * `var(--color-bg)` reads the BASE value however the wrapper is scoped. The
+ * coach theme does not hit this because `--peira-bg` is declared globally in
+ * tokens.css; the player palette deliberately is not.
+ *
+ * So `.playerTheme` stays the MARKER - one greppable class, mounted on the
+ * player route roots - and `:root:has(...)` is the DECLARATION SITE. One
+ * source of truth, and `body` can see it.
+ *
+ * This is still a scope, not a return to a global palette: it applies only
+ * while a player route is actually mounted. `:root:has(.playerTheme)` is
+ * (0,2,0) and beats the plain `:root` (0,1,0) it overrides; coach surfaces
+ * keep winning inside `.page` / `.coachTokens` regardless, and no player
+ * route ever co-mounts with a coach one.
+ */
+:root:has(.playerTheme) {
+  /* Values identical to index.css `:root`. Do not "tidy" them into
+     something shorter - F2 changes them, and a diff that only shows colour
+     changes is the whole reason this commit exists. */
+  --color-bg: #f3efe6;
+  --color-surface: #fffdf8;
+  --color-border: #e3dbc8;
+  --color-text: #2a2416;
+  --color-text-muted: #6e6858;
+  --color-primary: #c9a24b;
+  --color-primary-hover: #a6822f;
+  /* Dark, not white: white on this gold measured 2.40:1 - well under the
+     4.5:1 floor - on the player's PRIMARY action button ("Continue",
+     "Submit"), the single most important control in the flow. #121212
+     clears it on both the base (7.81:1) and hover (5.22:1) fills. */
+  --color-primary-contrast: #121212;
+  --color-primary-bg: #fbf3de;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fdecea;
+  --color-success: #1f5c3f;
+  --color-success-bg: #e8f3ec;
+  --color-warning-bg: #fff6e0;
+  --color-warning-text: #8a5a00;
+  --shadow-card: 0 2px 8px rgba(30, 25, 10, 0.04);
+}
+
+/*
+ * THE GROUND BEHIND THE GROUND - the same problem notebook.module.css
+ * solves for the coach theme, and it has to be solved here too or F2 is
+ * only half a theme.
+ *
+ * `body` is painted by index.css from the BASE palette. The player wrapper
+ * does not cover the viewport on a short screen, and on a touch device
+ * overscroll rubber-banding exposes whatever is behind it. Today base and
+ * player are the same colour so this rule changes nothing; the moment F2
+ * makes the player theme dark, this is what stops a band of cream appearing
+ * under it.
+ *
+ * Written now, as part of the no-op refactor, so F2 is a pure colour change.
+ */
+:root:has(.playerTheme) body {
+  background-color: var(--color-bg);
+}
+
+/* The marker itself. It carries no colour - the block above does - but it
+   must exist as a real class so CSS modules emits a hashed name for it and
+   the `:has()` above has something to match.
+
+   IT MUST DECLARE NOTHING THAT CAN LAYOUT. This class is applied to the same
+   element as PlayPage.module.css's `.wrapper`, which is a centred flex
+   column; any `display`, `margin` or `padding` here would race that rule in
+   the bundle and could silently rearrange the whole player flow. A custom
+   property is inert, cannot conflict, and keeps the rule from being dropped
+   as empty. Mounted in PlayPage.tsx and ResultsCheckPage.tsx. */
+.playerTheme {
+  --peira-player-scope: 1;
+}

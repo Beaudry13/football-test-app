@@ -15,6 +15,7 @@ import { NameStep } from './NameStep';
 import { PracticeCompleteStep } from './PracticeCompleteStep';
 import { QuizStep } from './QuizStep';
 import { SubmittedStep } from './SubmittedStep';
+import player from '../../styles/player.module.css';
 import styles from './PlayPage.module.css';
 
 type Step =
@@ -116,7 +117,7 @@ export function PlayPage() {
   }
 
   return (
-    <div className={styles.wrapper}>
+    <div className={`${player.playerTheme} ${styles.wrapper}`}>
       <div className={styles.brandRow}>
         <PeiraLogo variant="light" markOnly size={28} />
       </div>

@@ -7,6 +7,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { PeiraLogo } from '../../components/brand/PeiraLogo';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { ResultsView } from './ResultsView';
+import player from '../../styles/player.module.css';
 import styles from './PlayPage.module.css';
 
 /** A bookmarkable results page: /results/:code/:playerName auto-fetches (what
@@ -58,7 +59,7 @@ export function ResultsCheckPage() {
 
   if (results) {
     return (
-      <div className={styles.wrapper}>
+      <div className={`${player.playerTheme} ${styles.wrapper}`}>
         <div className={styles.brandRow}>
           <PeiraLogo variant="light" markOnly size={28} />
         </div>
@@ -68,7 +69,7 @@ export function ResultsCheckPage() {
   }
 
   return (
-    <div className={styles.wrapper}>
+    <div className={`${player.playerTheme} ${styles.wrapper}`}>
       <div className={styles.brandRow}>
         <PeiraLogo variant="light" markOnly size={28} />
       </div>
