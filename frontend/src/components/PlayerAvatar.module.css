@@ -39,3 +39,16 @@
   height: 96px;
   font-size: 2rem;
 }
+
+/* OPT-IN, BECAUSE THIS COMPONENT CROSSES THEMES.
+   The gold placeholder is right where an avatar appears a few at a time -
+   the picker, a profile, the player-facing name step - and it is the default
+   for exactly that reason. It is wrong on the master roster, where sixty-odd
+   of them turn the accent into wallpaper: a player existing is not an action
+   and not a selected state, so it should not be wearing the colour that
+   means both. Only the roster asks for this tone; nothing else changes, and
+   the light player theme in particular is untouched. */
+.toneNeutral {
+  background: var(--peira-surface-raised-strong, #242932);
+  color: var(--color-text-secondary, #C3C9D4);
+}

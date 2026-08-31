@@ -346,10 +346,25 @@ export function MasterRosterPage() {
                     />
                   </td>
                   <td>
-                    <PlayerAvatar name={player.full_name} photoUrl={player.photo_url} size="sm" />
+                    {/* Neutral here only: sixty-three gold discs down one
+                        page is not an accent, it is a background. */}
+                    <PlayerAvatar
+                      name={player.full_name}
+                      photoUrl={player.photo_url}
+                      size="sm"
+                      tone="neutral"
+                    />
                   </td>
                   <td>
-                    <Link to={`/roster/${player.id}`}>{player.full_name}</Link>
+                    {/* A player's NAME is what this table is made of. As a
+                        bare <a> it inherited the coach theme's gold link
+                        colour, so the roster rendered sixty-three gold names
+                        and gold stopped meaning "act on this". It is still a
+                        link, still underlined on approach - it just reads as
+                        the row's content at rest. */}
+                    <Link to={`/roster/${player.id}`} className={styles.playerName}>
+                      {player.full_name}
+                    </Link>
                   </td>
                   <td>{player.jersey_number ?? '—'}</td>
                   <td>{player.position ?? '—'}</td>
@@ -363,7 +378,7 @@ export function MasterRosterPage() {
                   <td>
                     {player.is_active ? (
                       <button
-                        className={nb.btnSm}
+                        className={`${nb.btnSm} ${styles.rowAction}`}
                         onClick={() => handleDeactivate(player)}
                         // Every row's button read simply "Deactivate", so a
                         // screen reader announced a column of identical
@@ -374,7 +389,7 @@ export function MasterRosterPage() {
                       </button>
                     ) : (
                       <button
-                        className={nb.btnSm}
+                        className={`${nb.btnSm} ${styles.rowAction}`}
                         onClick={() => handleReactivate(player)}
                         aria-label={`Reactivate ${player.full_name}`}
                       >

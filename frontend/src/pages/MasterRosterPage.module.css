@@ -8,9 +8,13 @@
   gap: 1em;
 }
 
+/* NO NEGATIVE TOP MARGIN. It was tucking this paragraph up under an <h1>
+   that no longer exists - the header above is now just the count badge - so
+   it pulled the description over "63 Players" and the two rendered on top of
+   each other. Visible in every screenshot of this page. */
 .subheading {
   color: var(--nb-text-muted);
-  margin: -0.5em 0 1.5em;
+  margin: 0.6em 0 1.5em;
   max-width: 60ch;
 }
 
@@ -111,4 +115,52 @@
 .tableScroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* THE ROSTER IS THE OWNER, AND IT IS MADE OF NAMES.
+   Measured before this: 63 gold name links and 66 gold avatar discs - more
+   gold on this one page than on every other coach page combined. Neither a
+   name nor a face is an action or a selected state, so neither should wear
+   the colour that means those things. The link keeps every link affordance
+   it had; it simply stops shouting at rest. */
+.playerName {
+  color: var(--nb-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.playerName:hover,
+.playerName:focus-visible {
+  color: var(--peira-accent-text);
+  text-decoration: underline;
+}
+
+/* SIXTY-THREE OF THESE, AND A COACH PRESSES ONE OF THEM A FEW TIMES A
+   SEASON.
+   Weight, not concealment: hover-to-reveal would work on a laptop and
+   silently remove the control on a phone, and this page is used on both. So
+   it stays rendered, stays in the tab order, keeps its target, and recedes
+   until approached - the same treatment the quiz editor's repeated Edit
+   controls got, for the same reason. */
+.rowAction {
+  border-color: transparent;
+  background: transparent;
+  color: var(--peira-text-muted);
+  font-weight: 500;
+}
+
+.rowAction:hover,
+.rowAction:focus-visible {
+  border-color: var(--color-border-strong);
+  color: var(--nb-text);
+}
+
+/* A THUMB NEEDS 44px. nb.btnSm renders 34px tall, which is fine for a mouse
+   and short for a finger; on the roster this control sits in a row a coach taps
+   while holding a phone. Raised here rather than in the shared button so
+   nothing else moves. */
+@media (max-width: 40rem) {
+  .rowAction {
+    min-height: 44px;
+  }
 }

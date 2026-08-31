@@ -16,17 +16,27 @@ export function PlayerAvatar({
   name,
   photoUrl,
   size = 'md',
+  tone = 'brand',
 }: {
   name: string;
   photoUrl: string | null | undefined;
   size?: 'sm' | 'md' | 'lg';
+  /** `neutral` for long lists, where a column of gold discs stops reading as
+   *  accent and starts reading as background. Only affects the initials
+   *  placeholder - a real photo is a photo either way. */
+  tone?: 'brand' | 'neutral';
 }) {
   const [failed, setFailed] = useState(false);
   const sizeClass = styles[size];
 
   if (!photoUrl || failed) {
     return (
-      <div className={`${styles.avatar} ${styles.placeholder} ${sizeClass}`} aria-hidden="true">
+      <div
+        className={`${styles.avatar} ${styles.placeholder} ${sizeClass} ${
+          tone === 'neutral' ? styles.toneNeutral : ''
+        }`}
+        aria-hidden="true"
+      >
         {initials(name)}
       </div>
     );

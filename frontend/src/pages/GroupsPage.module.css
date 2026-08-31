@@ -23,38 +23,66 @@
   flex: 1;
 }
 
+/* A LIST OF GROUPS, NOT A GALLERY OF THEM.
+   Twelve filled cards, each carrying a name and a member count, inside a
+   page a screen and a half tall - two fields per item does not earn twelve
+   visual islands, and it was the reason this page had no silhouette of its
+   own. Rows and rules instead, the way the rest of the Coaching Desk reads.
+   The decorative stripe goes with the cards: it was neutralised last pass
+   because it stated nothing, and a bar that states nothing does not need to
+   survive the flattening. */
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
-.groupCard {
+.groupRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1em;
-  padding: 20px 24px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
+/* The whole name-and-count block is the target, and it carries the row's
+   padding so the tap area is the row rather than the text inside it. */
 .groupInfo {
-  padding-left: 14px;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.9em;
+  flex-wrap: wrap;
+  padding: 16px 0;
   text-decoration: none;
   color: inherit;
 }
 
+/* Still the content of the row, no longer a 24px serif headline competing
+   with the page title above it. */
 .groupInfo h2 {
-  font-family: var(--font-heading);
-  font-size: 24px;
-  font-weight: 700;
+  font-family: var(--font-body);
+  font-size: var(--peira-text-title);
+  font-weight: 600;
   color: var(--nb-text);
   margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
+.groupInfo:hover h2,
+.groupInfo:focus-visible h2 {
+  color: var(--peira-accent-text);
+}
+
+/* On the same line as the name: a coach scanning for "which group has
+   nobody in it yet" should not have to read two lines per group. */
 .groupMeta {
-  color: var(--nb-text-faint);
-  font-size: 13px;
-  margin-top: 4px;
+  color: var(--peira-text-muted);
+  font-size: var(--peira-text-meta);
+  white-space: nowrap;
 }
 
 .actions {
@@ -63,8 +91,31 @@
   align-items: center;
 }
 
-/* Not gold - see .accentStripe in notebook.module.css. Every group has one,
-   so it marks the row, it does not single one out. */
-.groupStripe {
-  background: var(--color-border-strong);
+/* DESTRUCTIVE, BUT NOT THE POINT OF THE ROW.
+   As nb.btnDanger this was a filled red control on every group, so the
+   loudest thing on the page was the one action a coach almost never takes -
+   and the group names, which are what the page is for, were quieter than the
+   button beside them. It stays rendered, keeps its target and its
+   confirmation dialog, and turns red on approach. */
+.rowDelete {
+  border-color: transparent;
+  background: transparent;
+  color: var(--peira-text-muted);
+  font-weight: 500;
+}
+
+.rowDelete:hover,
+.rowDelete:focus-visible {
+  border-color: var(--color-danger-border);
+  color: var(--peira-danger);
+}
+
+/* A THUMB NEEDS 44px. nb.btnSm renders 34px tall, which is fine for a mouse
+   and short for a finger; on a group list this control sits in a row a coach taps
+   while holding a phone. Raised here rather than in the shared button so
+   nothing else moves. */
+@media (max-width: 40rem) {
+  .rowDelete {
+    min-height: 44px;
+  }
 }

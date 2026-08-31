@@ -95,9 +95,8 @@ export function GroupsPage() {
       ) : (
         <div className={styles.list}>
           {groups.map((group) => (
-            <div key={group.id} className={`${nb.card} ${nb.cardHoverable} ${styles.groupCard}`}>
-              <div className={`${nb.accentStripe} ${styles.groupStripe}`} />
-              <Link to={`/groups/${group.id}`} className={styles.groupInfo} style={{ flex: 1 }}>
+            <div key={group.id} className={styles.groupRow}>
+              <Link to={`/groups/${group.id}`} className={styles.groupInfo}>
                 <h2>{group.name}</h2>
                 <div className={styles.groupMeta}>
                   {group.players.length} player{group.players.length === 1 ? '' : 's'}
@@ -105,7 +104,7 @@ export function GroupsPage() {
               </Link>
               <div className={styles.actions}>
                 <button
-                  className={`${nb.btnSm} ${nb.btnDanger}`}
+                  className={`${nb.btnSm} ${styles.rowDelete}`}
                   onClick={() => handleDelete(group.id, group.name)}
                 >
                   Delete
