@@ -246,11 +246,14 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--space-3);
-  margin: 0 0 var(--space-4);
-  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-5);
+  /* No wash and no fill. This carried an amber rail, an amber background AND
+     a gold filled button - three signals - sitting immediately under a
+     conclusion that had one rail and one button, so the housekeeping
+     outdressed the coaching. It keeps the rail, because it is genuinely a
+     warning, and loses everything else. */
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
   border-left: 3px solid var(--color-warning);
-  background: var(--peira-warning-bg);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   font-size: var(--peira-text-control);
 }
 

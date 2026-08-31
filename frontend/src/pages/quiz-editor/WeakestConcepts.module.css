@@ -7,11 +7,13 @@
  * or pinching, which is why the numbers are prose rather than cells.
  */
 .wrap {
-  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-6);
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border-strong);
 }
 
 .eyebrow {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
   font-family: var(--font-body);
   font-size: var(--peira-text-meta);
   font-weight: 700;
@@ -20,10 +22,26 @@
   color: var(--nb-text-muted);
 }
 
-/* Gold on the left edge, the same mark the "Annotate now" offer uses: this is
-   the one thing on the screen a coach is meant to act on. */
+/* THE CONCLUSION, NOT THE FIRST CARD.
+ *
+ * This was `nb.card` plus a gold left rail - the same recipe as every other
+ * block on the page, only larger. Measured, it was already 31% of the
+ * viewport, so it never lacked SIZE; what it lacked was governance. It read
+ * as the first item in a sequence of dark rectangles rather than as the
+ * answer above them.
+ *
+ * On a page where everything else is boxed, the thing WITHOUT a box is the
+ * thing that outranks them. So the container goes and nothing replaces it:
+ * the conclusion now sits directly on the page ground, and the evidence
+ * beneath it keeps its surfaces. That inverts the relationship without
+ * adding a single pixel of height.
+ *
+ * The gold rail goes too. The Retest button below is gold because it is the
+ * action; a rail as well would spend the accent on decorating the block,
+ * which is exactly what makes an accent stop meaning anything. One gold
+ * signal here, and it is the thing to press. */
 .headline {
-  border-left: 3px solid var(--color-accent);
+  padding: 0;
 }
 
 /* THE ANSWER, AND THE LARGEST THING ON THE PAGE.
@@ -166,8 +184,14 @@
   margin-top: var(--space-4);
 }
 
+/* Intrinsic width on a desktop, full width on a phone.
+   `flex: 1 1 auto` stretched this across the whole column, and once Teach
+   Next lost its card the result was a 1000px gold bar - the giant gold slab
+   the conclusion is specifically not supposed to be. A button the width of
+   its own label reads as the action; a button the width of the page reads as
+   a banner. The phone rule below still wants the full-width thumb target. */
 .actions > button {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 44px;
 }
 
@@ -221,4 +245,49 @@
   color: var(--color-accent);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── PHONE: THE ACTION COMES BEFORE THE EVIDENCE ────────────────────────────
+ *
+ * Measured at 375px, "Retest these 10" sat at y=740 - 0.91 of a screen down,
+ * and the fixed bottom nav starts at 764, so the one thing a coach is meant
+ * to press was effectively unreachable without scrolling. At 320px it was at
+ * y=887, a full screen and a bit down.
+ *
+ * What pushes it there is the evidence: a wrapping list of ten name chips
+ * between the conclusion and the intervention. The names are worth showing
+ * and are not being removed - they are simply the least urgent thing in the
+ * block, so on a phone they move below the action.
+ *
+ * Reading order becomes decision -> miss count -> ACTION -> who missed, which
+ * is the order the page is supposed to have. Desktop is untouched: there is
+ * room for the evidence to precede the action there, and it reads better.
+ *
+ * DOM ORDER IS UNCHANGED, so the tab order and the screen-reader order still
+ * follow the markup. This is a visual reflow, not a re-sequencing of the
+ * content. */
+@media (max-width: 40rem) {
+  .headline {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Everything else keeps order 0 and therefore stays in DOM order; only the
+     evidence moves past the action. RetestAction renders .actions and
+     .confirm as siblings here, so the confirmation still opens directly
+     under the button that opened it. */
+  .players {
+    order: 3;
+    margin-top: var(--space-5);
+  }
+
+  .ungradedNote {
+    order: 4;
+  }
+
+  /* Full width for a thumb outdoors - the desktop rule above is what changes
+     here, not the original phone behaviour. */
+  .actions > button {
+    flex: 1 1 auto;
+  }
 }

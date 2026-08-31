@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ConceptBreakdown } from '../../api/types';
 import { RetestAction } from './RetestAction';
-import nb from '../../styles/notebook.module.css';
 import styles from './WeakestConcepts.module.css';
 
 /** "What should I teach next?", above everything else on Results.
@@ -63,7 +62,7 @@ export function WeakestConcepts({
         Teach next
       </h2>
 
-      <div className={`${nb.card} ${styles.headline}`}>
+      <div className={styles.headline}>
         <div className={styles.conceptName}>{weakest.concept_name}</div>
         <p className={styles.missLine}>
           {/* PLAYERS, AND IT SAYS SO. This line used to read "12 of 20 missed"

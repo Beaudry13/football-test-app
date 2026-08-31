@@ -246,7 +246,10 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               {/* THE OFFER IS THE ACTION. This line stated the problem and
                   left the coach to find the work themselves, at the bottom of
                   the page, one player at a time. */}
-              <Link to={`/quizzes/${quiz.id}/grade`} className={nb.btnPrimary}>
+              {/* Still a button, still one tap, no longer the page's primary
+                  action - Retest is. Grading is follow-up work, not the
+                  answer to "what should I teach next". */}
+              <Link to={`/quizzes/${quiz.id}/grade`} className={nb.btnSecondary}>
                 Grade {ungradedTotal} response{ungradedTotal === 1 ? '' : 's'}
               </Link>
             </div>
