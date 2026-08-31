@@ -127,7 +127,13 @@ export function QuestionInput({
   return (
     <div
       id={`question-${question.id}`}
-      className={`card ${styles.questionCard} ${isUnanswered ? styles.questionCardUnanswered : ''}`}
+      /* NO `card` HERE. The question and its answers were peers inside one
+         surface, and both were painted --color-surface, so the screen read
+         as a grey box inside a grey box. The question is CONTENT, not
+         chrome: it sits on the ground now, and the answer rows are the only
+         filled things on screen - which is what makes them read as the
+         things to touch. */
+      className={`${styles.questionCard} ${isUnanswered ? styles.questionCardUnanswered : ''}`}
     >
       {/* A playbook page, already masked by the server. The unmasked page is
           never sent to a player - the black box is baked into these pixels,

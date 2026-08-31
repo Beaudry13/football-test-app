@@ -6,6 +6,7 @@ import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { QuestionInput, type PlayerAnswer } from '../play/QuestionInput';
 import { QuizProgress } from '../play/QuizProgress';
+import player from '../../styles/player.module.css';
 import playStyles from '../play/PlayPage.module.css';
 import styles from './QuizPreviewPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -43,7 +44,7 @@ export function QuizPreviewPage() {
 
   if (!quiz) {
     return (
-      <div className={styles.page}>
+      <div className={`${player.playerTheme} ${styles.page}`}>
         <ErrorBanner message={error} />
         {!error && <LoadingState />}
       </div>
@@ -59,7 +60,7 @@ export function QuizPreviewPage() {
 
   if (questions.length === 0) {
     return (
-      <div className={styles.page}>
+      <div className={`${player.playerTheme} ${styles.page}`}>
         <div className={styles.header}>{backLink}</div>
         <div className={`card ${styles.emptyState}`}>
           No questions yet — add at least one before previewing.
@@ -69,7 +70,7 @@ export function QuizPreviewPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <div className={`${player.playerTheme} ${styles.page}`}>
       <div className={styles.header}>
         {backLink}
         <strong>{quiz.title}</strong>

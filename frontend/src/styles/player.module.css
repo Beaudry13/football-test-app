@@ -96,30 +96,65 @@
  * route ever co-mounts with a coach one.
  */
 :root:has(.playerTheme) {
-  /* Values identical to index.css `:root`. Do not "tidy" them into
-     something shorter - F2 changes them, and a diff that only shows colour
-     changes is the whole reason this commit exists. */
-  --color-bg: #f3efe6;
-  --color-surface: #fffdf8;
-  --color-border: #e3dbc8;
-  --color-text: #2a2416;
-  --color-text-muted: #6e6858;
-  --color-primary: #c9a24b;
-  --color-primary-hover: #a6822f;
-  /* Dark, not white: white on this gold measured 2.40:1 - well under the
-     4.5:1 floor - on the player's PRIMARY action button ("Continue",
-     "Submit"), the single most important control in the flow. #121212
-     clears it on both the base (7.81:1) and hover (5.22:1) fills. */
-  --color-primary-contrast: #121212;
-  --color-primary-bg: #fbf3de;
-  --color-danger: #b3261e;
-  --color-danger-bg: #fdecea;
-  --color-success: #1f5c3f;
-  --color-success-bg: #e8f3ec;
-  --color-warning-bg: #fff6e0;
-  --color-warning-text: #8a5a00;
-  --shadow-card: 0 2px 8px rgba(30, 25, 10, 0.04);
+  /* ---- PEIRA NIGHT MODE -------------------------------------------------
+     Three planes, not the coach's four. The coach app nests panels inside
+     panels and needs the extra step; the player app shows one question at a
+     time and never nests, so a fourth level would only add chrome.
+
+     The GROUND is shared with the coach theme on purpose - #0E1013 is the
+     same value as coach Depth 0. That single shared number is what makes
+     these read as one product; everything after it diverges. The surface
+     skips coach Depth 1 entirely and lands on Depth 2, so the one thing a
+     player touches separates hard from the ground instead of politely. */
+
+  /* 1. GROUND - the same anchor as the coach theme. */
+  --color-bg: #0E1013;
+  /* 2. INTERACTIVE SURFACE - answers and inputs. The only filled things on
+        the question screen, which is what makes them read as tappable. */
+  --color-surface: #1C2027;
+  /* 3. ACTIVE - see --color-primary-bg below. */
+
+  --color-border: #2C323C;
+
+  --color-text: #F2F4F7;
+  /* Brighter than the coach's muted step (#8B93A1). This is read outdoors,
+     at arm's length, on a phone that may be dimmed - the coach reads at a
+     desk. 7.28:1 on the ground. */
+  --color-text-muted: #98A0AE;
+
+  --color-primary: #D9A441;
+  /* Brightens on press rather than darkening: on a dark ground the light
+     theme's darker hover (#a6822f) reads as the button switching OFF. */
+  --color-primary-hover: #E8C46B;
+  /* The ground colour, so the label on a gold button belongs to this theme
+     rather than being generic black. 8.47:1. */
+  --color-primary-contrast: #0E1013;
+  /* 3. ACTIVE SURFACE - and it is NEUTRAL, which took a measurement to get
+        right. The obvious choice, a gold tint, composites to #363329 over
+        the surface below: a brown-olive, the exact "bronze surface" this
+        theme is meant to avoid, and the same trap the coach palette fell
+        into with its 14% washes. Any warm alpha over a cool near-black goes
+        muddy.
+
+        So selection is carried by the gold ring and the filled gold radio,
+        and the surface merely LIFTS. That is also the right weight: a
+        selected answer is a reversible choice and must not outshout Next,
+        which is the actual commitment. */
+  --color-primary-bg: #242932;
+
+  --color-danger: #F2685E;
+  --color-danger-bg: rgba(242, 104, 94, 0.12);
+  --color-success: #4ECB88;
+  --color-success-bg: rgba(78, 203, 136, 0.12);
+  --color-warning-bg: rgba(229, 168, 60, 0.12);
+  --color-warning-text: #E5A83C;
+
+  /* A light-theme drop shadow is invisible on near-black and the old value
+     (a warm shadow tuned for cream) would be wrong even if it were not.
+     Kept faint: separation here comes from the surface step, not from lift. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
+
 
 /*
  * THE GROUND BEHIND THE GROUND - the same problem notebook.module.css
