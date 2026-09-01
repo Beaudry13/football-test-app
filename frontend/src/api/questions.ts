@@ -41,18 +41,37 @@ export interface QuestionInput {
  *  both together or neither.
  *
  *  Without an image it stays plain JSON, exactly as before. */
+export interface DraftClip {
+  blob: Blob;
+  poster: Blob | null;
+  durationMs: number;
+  width: number;
+  height: number;
+}
+
 export function createQuestion(
   quizId: number,
   input: QuestionInput,
   image?: File | null,
+  clip?: DraftClip | null,
 ): Promise<Question> {
-  if (!image) return api.post<Question>(`/quizzes/${quizId}/questions`, input);
+  if (!image && !clip) return api.post<Question>(`/quizzes/${quizId}/questions`, input);
 
   const formData = new FormData();
   // The options are a nested list, which form fields cannot express without
   // inventing an encoding - so the question travels as one JSON field.
   formData.append('payload', JSON.stringify(input));
-  formData.append('image', image);
+  if (image) formData.append('image', image);
+  if (clip) {
+    // ONE REQUEST, so the question and its clip land together or not at all.
+    // Creating the question first and uploading afterwards would leave a
+    // half-made question behind whenever the second call failed.
+    formData.append('clip', clip.blob, 'clip.mp4');
+    if (clip.poster) formData.append('clip_poster', clip.poster, 'poster.webp');
+    formData.append('clip_duration_ms', String(clip.durationMs));
+    formData.append('clip_width', String(clip.width));
+    formData.append('clip_height', String(clip.height));
+  }
   return api.postForm<Question>(`/quizzes/${quizId}/questions`, formData);
 }
 

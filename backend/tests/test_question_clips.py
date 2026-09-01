@@ -465,3 +465,117 @@ class TestAudienceSeparation:
                 include_questions=True, include_correct_answers=True
             )
         assert payload["questions"][0]["clip"]["url"]
+
+
+class TestCreateWithClipInOneStep:
+    """A coach records while WRITING the question, not after saving it.
+
+    Recording only from an existing question's menu meant the real flow was
+    create -> save -> find it again -> open a menu -> record. This is the same
+    one-operation contract the image already had, and for the same reason: it
+    makes "Add question" mean what a coach already thinks it means.
+    """
+
+    def _quiz(self, client, headers):
+        return client.post(
+            "/api/quizzes", json={"title": "Clip on create"}, headers=headers
+        ).get_json()["id"]
+
+    def _create(self, client, headers, quiz_id, *, payload=None, clip=MP4_BYTES, poster=WEBP_BYTES):
+        import json as _json
+
+        body = payload or {
+            "question_text": "What happens next?",
+            "question_type": "written",
+            "options": [],
+        }
+        data = {"payload": _json.dumps(body)}
+        if clip is not None:
+            data["clip"] = (io.BytesIO(clip), "clip.mp4")
+        if poster is not None:
+            data["clip_poster"] = (io.BytesIO(poster), "poster.webp")
+        data["clip_duration_ms"] = "8000"
+        data["clip_width"] = "1280"
+        data["clip_height"] = "720"
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            data=data,
+            content_type="multipart/form-data",
+            headers=headers,
+        )
+
+    def test_a_new_question_can_be_created_with_its_clip(self, client, coach_headers):
+        quiz_id = self._quiz(client, coach_headers)
+        response = self._create(client, coach_headers, quiz_id)
+        assert response.status_code == 201, response.get_json()
+        body = response.get_json()
+        assert body["clip"] is not None
+        assert body["clip"]["content_type"] == "video/mp4"
+        assert body["clip"]["has_poster"] is True
+        # And it is really persisted, not just echoed.
+        quiz = client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).get_json()
+        assert quiz["questions"][0]["clip"] is not None
+
+    def test_a_rejected_clip_creates_no_question_and_no_orphan(
+        self, client, coach_headers, app
+    ):
+        # WebM is the measured browser default, so this is the realistic
+        # failure - and it must leave nothing behind in either half.
+        quiz_id = self._quiz(client, coach_headers)
+        before = client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).get_json()
+        assert before["questions"] == []
+
+        response = self._create(client, coach_headers, quiz_id, clip=WEBM_BYTES)
+        assert response.status_code == 400
+
+        after = client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).get_json()
+        assert after["questions"] == [], "a refused clip must not leave a half-made question"
+
+    def test_draw_response_with_a_clip_is_refused_at_creation(self, client, coach_headers):
+        quiz_id = self._quiz(client, coach_headers)
+        response = self._create(
+            client,
+            coach_headers,
+            quiz_id,
+            payload={
+                "question_text": "Draw the drop",
+                "question_type": "draw_response",
+                "options": [],
+            },
+        )
+        assert response.status_code == 422
+        assert "draw" in response.get_json()["error"].lower()
+        # And nothing was created on the way to refusing.
+        quiz = client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).get_json()
+        assert quiz["questions"] == []
+
+    def test_a_clip_and_an_image_together_are_refused(self, client, coach_headers):
+        import json as _json
+
+        quiz_id = self._quiz(client, coach_headers)
+        response = client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            data={
+                "payload": _json.dumps(
+                    {"question_text": "Both?", "question_type": "written", "options": []}
+                ),
+                "image": (io.BytesIO(b"\xff\xd8\xff\xe0" + b"\x00" * 64), "x.jpg"),
+                "clip": (io.BytesIO(MP4_BYTES), "clip.mp4"),
+            },
+            content_type="multipart/form-data",
+            headers=coach_headers,
+        )
+        assert response.status_code == 422
+        quiz = client.get(f"/api/quizzes/{quiz_id}", headers=coach_headers).get_json()
+        assert quiz["questions"] == []
+
+    def test_creating_without_a_clip_is_completely_unaffected(self, client, coach_headers):
+        # The JSON envelope every existing caller uses must be untouched.
+        quiz_id = self._quiz(client, coach_headers)
+        response = client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            json={"question_text": "Plain", "question_type": "written", "options": []},
+            headers=coach_headers,
+        )
+        assert response.status_code == 201
+        assert response.get_json()["clip"] is None

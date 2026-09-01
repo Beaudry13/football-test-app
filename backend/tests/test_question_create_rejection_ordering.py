@@ -37,6 +37,9 @@ and then proves the database is still usable by doing the exact work that
 deadlocked before: creating a question and deleting the quiz.
 """
 
+import io as _io
+import json as _json
+
 import pytest
 from sqlalchemy import text
 
@@ -243,3 +246,86 @@ class TestTheNormalPathIsUnaffected:
 
         assert refused.status_code == 422
         assert added == []
+
+
+#: Enough of an ISO base media file to pass the container check. The clip
+#: rejections below fire before the bytes are ever validated, but sending
+#: something that would NOT pass would prove the wrong thing - the point is
+#: that a legitimate clip is refused for its COMBINATION, not its contents.
+MP4_HEAD = bytes([0, 0, 0, 0x18]) + b"ftypisom" + bytes(64)
+JPEG_HEAD = bytes([0xFF, 0xD8, 0xFF, 0xE0]) + bytes(64)
+
+
+class TestAClipRejectionLeavesNothingOpen:
+    """THE SAME INVARIANT, ON THE MULTIPART ROUTE.
+
+    The cases above all travel through `/questions/from-region`, which is JSON.
+    Record Clip added a second way in - a multipart POST to `/questions` - and
+    put its exclusivity checks AFTER the flush, reintroducing the exact bug
+    this file exists to prevent. It returned a correct 422 and left the
+    connection `idle in transaction`; the suite then hung for five hours with
+    `DELETE FROM quizzes` blocked on those row locks.
+
+    Nothing here caught it, because every case above uses the JSON route. So
+    the guard now covers both doors rather than the one the bug came through
+    first.
+    """
+
+    def _post(self, client, headers, quiz_id, *, question_type="written", with_image=False):
+        data = {
+            "payload": _json.dumps(
+                {
+                    "question_text": "What happens next?",
+                    "question_type": question_type,
+                    "options": [],
+                }
+            ),
+            "clip": (_io.BytesIO(MP4_HEAD), "clip.mp4"),
+        }
+        if with_image:
+            data["image"] = (_io.BytesIO(JPEG_HEAD), "still.jpg")
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            data=data,
+            content_type="multipart/form-data",
+            headers=headers,
+        )
+
+    @pytest.mark.parametrize(
+        "name,kwargs",
+        [
+            # A clip cannot be the material for a question whose answer IS a
+            # drawing - there is nothing still to draw on.
+            ("draw response", {"question_type": "draw_response"}),
+            # Two sources of visual material in one request.
+            ("image and clip", {"with_image": True}),
+        ],
+    )
+    def test_it_rejects_without_putting_a_question_in_the_session(
+        self, name, kwargs, client, coach_headers, quiz_id, monkeypatch
+    ):
+        response, added = questions_added_during(
+            monkeypatch,
+            lambda: self._post(client, coach_headers, quiz_id, **kwargs),
+        )
+
+        assert response.status_code == 422, response.get_json()
+        assert added == [], (
+            f"{name}: the request flushed a Question before deciding to reject it, "
+            "which leaves the connection idle in transaction"
+        )
+
+    def test_the_quiz_can_still_be_deleted_afterwards(
+        self, client, coach_headers, quiz_id
+    ):
+        """The consequence, not the mechanism.
+
+        Teardown deletes every row in every table. That is the operation that
+        actually hung, so it is the one worth proving still works.
+        """
+        assert self._post(client, coach_headers, quiz_id, question_type="draw_response").status_code == 422
+
+        assert (
+            client.delete(f"/api/quizzes/{quiz_id}", headers=coach_headers).status_code
+            in (200, 204)
+        )

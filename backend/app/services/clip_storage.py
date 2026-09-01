@@ -132,6 +132,25 @@ def load_clip(key: str) -> bytes | None:
     return get_private_storage().load_private(key)
 
 
+def delete_clip_object(key: str) -> None:
+    """Removes a stored object.
+
+    ONLY FOR UNDOING A FAILED WRITE. Nothing in the normal lifecycle deletes a
+    clip: replacing one leaves the old object in place because a delivered
+    snapshot may name it, and history outranks reclaiming a megabyte. This
+    exists so a create that rolls back does not leave bytes nobody references
+    - those bytes were never delivered to anyone, so there is no history to
+    protect.
+    """
+    try:
+        get_private_storage().delete_private(key)
+    except Exception:
+        # Best effort. A failed cleanup leaves an unreferenced object, which is
+        # untidy; raising here would replace the coach's real error with a
+        # storage one and tell them nothing useful.
+        pass
+
+
 def copy_clip_object(key: str) -> str:
     """Duplicates the stored bytes under a NEW key.
 

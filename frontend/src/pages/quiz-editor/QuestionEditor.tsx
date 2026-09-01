@@ -9,6 +9,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import type { DocumentPage } from '../../api/documents';
 import { PlaybookPicker } from './PlaybookPicker';
 import { RegionDraw, type NormalisedRect } from '../documents/RegionDraw';
+import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecorder';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionEditor.module.css';
 
@@ -36,7 +37,11 @@ interface QuestionEditorProps {
   initialAllowsMultiple?: boolean;
   initialExplanation?: string | null;
   submitLabel: string;
-  onSave: (input: QuestionInput, image?: File | null) => Promise<void>;
+  onSave: (
+    input: QuestionInput,
+    image?: File | null,
+    clip?: RecordedClip | null,
+  ) => Promise<void>;
   onCancel: () => void;
   /** Whether players have ALREADY RECEIVED this question, from the delivered
    *  snapshot rather than from answer rows - a question can be delivered and
@@ -92,6 +97,19 @@ export function QuestionEditor({
   // what makes Cancel leave nothing behind: nothing was ever created.
   const [image, setImage] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  /* HELD LOCALLY UNTIL THE QUESTION IS SAVED. The recording lives in memory
+     as an unsaved draft exactly as a chosen image file does, and travels with
+     the create request - so "Add question" is one operation and a failure
+     leaves neither a half-made question nor an orphaned object. */
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordedClip, setRecordedClip] = useState<RecordedClip | null>(null);
+
+  function clearClip() {
+    setRecordedClip((current) => {
+      if (current) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+  }
   const [imageError, setImageError] = useState<string | null>(null);
   /** A PLAYBOOK PAGE AS THE PICTURE, and the one thing hidden on it if the
    *  coach chose to hide anything. Held here until save, exactly as an
@@ -371,6 +389,7 @@ export function QuestionEditor({
             : {}),
         },
         image,
+        recordedClip,
       );
     } catch (err) {
       setError(getErrorMessage(err));
@@ -662,9 +681,52 @@ export function QuestionEditor({
 
       {allowImage && (
         <div className={nb.field}>
-          <span className={nb.fieldLabel}>Image (optional)</span>
+          {/* NOT "Image" ANY MORE. Three things can supply a question's
+              football material now - a still, a playbook page, or a recorded
+              clip - and a label naming only the first hid the other two. */}
+          <span className={nb.fieldLabel}>Visual (optional)</span>
 
-          {isPicking ? (
+          {isRecording ? (
+            <ClipRecorder
+              onUse={(recorded) => {
+                // A clip and an image are two answers to the same question, so
+                // choosing one clears the other rather than leaving the coach
+                // to wonder which will win - the rule the playbook picker
+                // already follows.
+                clearImage();
+                setPlaybookPage(null);
+                setHidden(null);
+                setRecordedClip(recorded);
+                setIsRecording(false);
+              }}
+              onCancel={() => setIsRecording(false)}
+            />
+          ) : recordedClip ? (
+            <div className={styles.imagePreview}>
+              {/* The same four attributes the player will see, so what a coach
+                  approves here is what a player gets. */}
+              <video src={recordedClip.previewUrl} autoPlay loop muted playsInline />
+              <p className={styles.imageHint}>
+                Clip recorded &mdash; {Math.round(recordedClip.durationMs / 1000)}s, no sound.
+                Attached when you save this question.
+              </p>
+              <div className={styles.imageActions}>
+                <button
+                  type="button"
+                  className={nb.btnSm}
+                  onClick={() => {
+                    clearClip();
+                    setIsRecording(true);
+                  }}
+                >
+                  Record again
+                </button>
+                <button type="button" className={nb.btnSm} onClick={clearClip}>
+                  Remove clip
+                </button>
+              </div>
+            </div>
+          ) : isPicking ? (
             <PlaybookPicker
               onCancel={() => setIsPicking(false)}
               onPicked={(choice) => {
@@ -821,14 +883,33 @@ export function QuestionEditor({
               two ways of supplying a picture the coach already has. A coach who
               never opens a playbook reads six extra words and is otherwise
               unaffected. */}
-          {!isPicking && !playbookPage && !preview && (
-            <button
-              type="button"
-              className={styles.playbookLink}
-              onClick={() => setIsPicking(true)}
-            >
-              or choose from a Playbook
-            </button>
+          {/* TWO LINES, NOT TWO CARDS. Record Clip is discoverable at the
+              moment a coach is choosing what the question shows - not behind
+              an overflow menu on a question they have already saved, which
+              meant the only way to build a clip question was create, save,
+              find it again, open a menu. */}
+          {!isPicking && !isRecording && !playbookPage && !preview && !recordedClip && (
+            <div className={styles.visualChoices}>
+              <button
+                type="button"
+                className={styles.playbookLink}
+                onClick={() => setIsPicking(true)}
+              >
+                or choose from a Playbook
+              </button>
+              {/* Hidden on Draw Response: a drawing binds to a still's
+                  coordinate space, so the combination is refused by the server
+                  and offering it here would only teach a coach a dead end. */}
+              {questionType !== 'draw_response' && (
+                <button
+                  type="button"
+                  className={styles.playbookLink}
+                  onClick={() => setIsRecording(true)}
+                >
+                  or record a clip
+                </button>
+              )}
+            </div>
           )}
 
           {imageError && (
@@ -838,7 +919,11 @@ export function QuestionEditor({
           )}
 
           <p className={styles.imageHint}>
-            Attached when you save this question &mdash; you can annotate it afterwards.
+            {recordedClip
+              ? 'Attached when you save this question.'
+              : /* Only an image can be annotated - a clip has no fixed frame to
+                   draw on - so the promise is only made where it is true. */
+                'Attached when you save this question — you can annotate it afterwards.'}
           </p>
 
           <input

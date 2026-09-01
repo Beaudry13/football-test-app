@@ -213,10 +213,14 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
 
   const questions = quiz.questions ?? [];
 
-  async function handleCreate(input: QuestionInput, image?: File | null) {
+  async function handleCreate(
+    input: QuestionInput,
+    image?: File | null,
+    clip?: RecordedClip | null,
+  ) {
     // One call. The question and its image are committed together server-side,
     // so a rejected image leaves no half-made question to clean up.
-    const created = await createQuestion(quiz.id, input, image);
+    const created = await createQuestion(quiz.id, input, image, clip ?? null);
     setIsAdding(false);
     await reload();
     /* THE PHOTO IS NOT THE POINT - MARKING IT UP IS. Until now the route from

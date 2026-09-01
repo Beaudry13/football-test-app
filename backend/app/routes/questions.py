@@ -6,6 +6,7 @@ organization's data - or a teammate's quiz they didn't create.
 """
 
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
@@ -15,6 +16,7 @@ from marshmallow import ValidationError
 from app.errors import ApiError
 from app.services.clip_storage import (
     CLIP_CONTENT_TYPE,
+    delete_clip_object,
     save_clip,
     save_poster,
     validate_duration_ms,
@@ -210,6 +212,24 @@ def _reject_if_already_answered(question: Question, action: str) -> None:
         )
 
 
+@dataclass
+class _UploadedMedia:
+    """Whatever visual material arrived with a create request.
+
+    A question takes its picture from ONE source, so at most one of these is
+    ever populated - but they travel together because they arrive together, in
+    the single multipart request that makes "Add question" mean what a coach
+    already thinks it means.
+    """
+
+    image: object | None = None
+    clip: object | None = None
+    poster: object | None = None
+    duration_ms: str | None = None
+    width: str | None = None
+    height: str | None = None
+
+
 def _create_payload() -> tuple[dict, object | None]:
     """The create body, from JSON or from multipart.
 
@@ -240,7 +260,14 @@ def _create_payload() -> tuple[dict, object | None]:
             data = QuestionCreateSchema().load(parsed)
         except ValidationError as exc:
             raise ApiError("Validation failed", status_code=422, details=exc.messages) from exc
-        return data, request.files.get("image")
+        return data, _UploadedMedia(
+            image=request.files.get("image"),
+            clip=request.files.get("clip"),
+            poster=request.files.get("clip_poster"),
+            duration_ms=request.form.get("clip_duration_ms"),
+            width=request.form.get("clip_width"),
+            height=request.form.get("clip_height"),
+        )
 
     return load_json_body(QuestionCreateSchema()), None
 
@@ -254,7 +281,21 @@ def create_question(quiz_id: int):
 
 
 def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
-    """THE ONE PLACE A QUESTION IS CREATED."""
+    """THE ONE PLACE A QUESTION IS CREATED.
+
+    `uploaded_image` is either a bare file (every existing caller, unchanged)
+    or an `_UploadedMedia` carrying whichever single source of visual material
+    the coach chose. Widening rather than adding a second create path: two
+    would mean the next field added to one silently missing from the other,
+    which is how the explanation and the expected answers were each lost once
+    before.
+    """
+    media = (
+        uploaded_image
+        if isinstance(uploaded_image, _UploadedMedia)
+        else _UploadedMedia(image=uploaded_image)
+    )
+    uploaded_image = media.image
     quiz = get_editable_quiz(quiz_id)
     # Only multiple choice can be a "select all that apply". Anything else
     # silently keeps the default rather than erroring: a client sending it on a
@@ -305,6 +346,40 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
                 "Add at least one accepted answer that isn't blank.", status_code=422
             )
 
+    # ONE SOURCE OF VISUAL MATERIAL, AND IT IS REFUSED BEFORE THE INSERT.
+    #
+    # This sits above `db.session.add` because of the ordering rule stated at
+    # the top of this function, and it is here because an earlier draft broke
+    # that rule. Checking after the flush returned the correct 422 and still
+    # left the request holding an open transaction; the suite then hung for
+    # five hours with `DELETE FROM quizzes` in teardown blocked on exactly
+    # those row locks. The status code was right and the connection was
+    # ruined - which is why rejecting before the insert is a rule here and not
+    # a preference.
+    #
+    # Reading the type off `data` rather than off a Question is the point: at
+    # this line there is no Question yet, and there must not be one.
+    #
+    # Checking the combination in one place also keeps the answer to "why was
+    # this refused" about what the coach chose, rather than about which file
+    # the server happened to validate first.
+    has_clip = media.clip is not None and bool(getattr(media.clip, "filename", None))
+    if has_clip:
+        if data["question_type"] == QuestionType.DRAW_RESPONSE.value:
+            raise ApiError(
+                "A Draw Response question needs a still image to draw on, so it "
+                "cannot use a recorded clip.",
+                status_code=422,
+            )
+        if (uploaded_image is not None and getattr(uploaded_image, "filename", None)) or (
+            page is not None
+        ):
+            raise ApiError(
+                "A question shows one thing: an image, a playbook page, or a "
+                "recorded clip.",
+                status_code=422,
+            )
+
     next_position = data["position"]
     if next_position is None:
         next_position = len(quiz.questions)
@@ -334,7 +409,10 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
     # Written to storage before the commit, so a commit failure would leave the
     # bytes orphaned. Tracked and removed on any failure - the same discipline
     # the document upload uses, and the reason the two halves cannot disagree.
+    # Nothing here can reject: the combination was settled before the insert.
     stored_url: str | None = None
+    stored_clip_key: str | None = None
+    stored_poster_key: str | None = None
     try:
         if uploaded_image is not None and uploaded_image.filename:
             storage = get_file_storage()
@@ -346,11 +424,43 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
                 QuestionImage(question_id=question.id, image_url=stored_url, annotations=[])
             )
 
+        if has_clip:
+            # The conflict checks already ran above, before anything was
+            # written. This half only stores.
+            stored_clip_key = save_clip(media.clip.read())
+            poster_bytes = media.poster.read() if media.poster is not None else b""
+            if poster_bytes:
+                stored_poster_key = save_poster(poster_bytes)
+
+            def _as_int(raw):
+                try:
+                    return int(raw) if raw not in (None, "") else None
+                except (TypeError, ValueError):
+                    return None
+
+            db.session.add(
+                QuestionClip(
+                    question_id=question.id,
+                    storage_key=stored_clip_key,
+                    poster_key=stored_poster_key,
+                    content_type=CLIP_CONTENT_TYPE,
+                    duration_ms=validate_duration_ms(_as_int(media.duration_ms)),
+                    width=_as_int(media.width),
+                    height=_as_int(media.height),
+                )
+            )
+
         db.session.commit()
     except Exception:
+        # Both halves undone together. The question never existed and neither
+        # did its bytes - a coach whose "Add question" failed gets nothing
+        # rather than a half-made question or an unreferenced object.
         db.session.rollback()
         if stored_url:
             get_file_storage().delete_image(stored_url)
+        for key in (stored_clip_key, stored_poster_key):
+            if key:
+                delete_clip_object(key)
         raise
 
     return jsonify(question.to_dict(include_correct_answers=True)), 201

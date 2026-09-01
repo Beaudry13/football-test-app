@@ -93,8 +93,10 @@ describe('QuestionEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Add question' }));
 
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    // The second argument is the image, which the create flow now passes in
-    // the same call - null here because this editor has no picker.
+    // The second argument is the image and the third is a recorded clip -
+    // both supplied in the same call, because a question and its visual
+    // material are created in one operation. Null here on both: this editor
+    // has no picker and nothing was recorded.
     expect(onSave).toHaveBeenCalledWith(
       {
         question_text: 'Is this cover 2?',
@@ -118,6 +120,7 @@ describe('QuestionEditor', () => {
         // exact-shape assertion is exactly what surfaced this addition.
         concept_id: null,
       },
+      null,
       null,
     );
   });
@@ -179,6 +182,7 @@ describe('QuestionEditor image upload on create', () => {
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ question_text: 'Who has the flat?' }),
         file,
+        null,
       ),
     );
   });
@@ -195,7 +199,7 @@ describe('QuestionEditor image upload on create', () => {
     await user.type(screen.getByLabelText('Question'), 'Q');
     await user.click(screen.getByRole('button', { name: 'Add question' }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), second));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), second, null));
   });
 
   it('can remove the image before saving', async () => {
@@ -212,7 +216,7 @@ describe('QuestionEditor image upload on create', () => {
 
     await user.type(screen.getByLabelText('Question'), 'Q');
     await user.click(screen.getByRole('button', { name: 'Add question' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), null));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), null, null));
   });
 
   it('saves with no image when none was picked', async () => {
@@ -222,7 +226,7 @@ describe('QuestionEditor image upload on create', () => {
     await user.type(screen.getByLabelText('Question'), 'No picture');
     await user.click(screen.getByRole('button', { name: 'Add question' }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), null));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(expect.anything(), null, null));
   });
 
   it('cancelling never calls save, so nothing reaches the server', async () => {
@@ -263,6 +267,7 @@ describe('QuestionEditor image upload on create', () => {
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith(
         expect.objectContaining({ answer_explanation: 'Two deep safeties means Cover 2.' }),
+        null,
         null,
       ),
     );
