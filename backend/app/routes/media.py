@@ -20,14 +20,17 @@ from outside. A distinct "expired" or "bad signature" response would tell an
 attacker which half of a forged token was closer to right.
 """
 
-from flask import Blueprint, Response, abort
+from flask import Blueprint, Response, abort, request
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import AttemptQuestionSnapshot, DocumentPage, Question
+from app.models import AttemptQuestionSnapshot, DocumentPage, Question, QuestionClip
 from app.services.page_masking import delivered_mask_bytes, masked_render_bytes
 from app.services.private_storage import get_private_storage
+from app.services.clip_storage import POSTER_CONTENT_TYPE
 from app.services.signed_media import (
+    KIND_CLIP,
+    KIND_CLIP_POSTER,
     KIND_DELIVERED_MASK,
     KIND_QUESTION_MASK,
     KIND_THUMBNAIL,
@@ -38,6 +41,47 @@ from app.services.signed_media import (
 from app.services.document_render import RENDER_CONTENT_TYPE
 
 media_bp = Blueprint("media", __name__)
+
+
+def _ranged_response(data: bytes, content_type: str, max_age: int) -> Response:
+    """Serves `data`, honouring a single `Range: bytes=` header.
+
+    One range only. Multipart ranges are legal HTTP and no browser asks for
+    them here, so supporting them would be untested code guarding a case that
+    does not occur. A malformed or unsatisfiable range falls back to the whole
+    body, which is what a client that sent nonsense should get.
+    """
+    total = len(data)
+    start, end = 0, total - 1
+    partial = False
+
+    raw = request.headers.get("Range", "")
+    if raw.startswith("bytes="):
+        spec = raw[6:].split(",")[0].strip()
+        first, _, last = spec.partition("-")
+        try:
+            if first:
+                start = int(first)
+                end = int(last) if last else total - 1
+            elif last:
+                # A suffix range - "the final N bytes".
+                start = max(0, total - int(last))
+            if 0 <= start <= end < total:
+                partial = True
+            else:
+                start, end = 0, total - 1
+        except ValueError:
+            start, end = 0, total - 1
+
+    body = data[start : end + 1]
+    response = Response(body, status=206 if partial else 200, mimetype=content_type)
+    response.headers["Accept-Ranges"] = "bytes"
+    response.headers["Content-Length"] = str(len(body))
+    if partial:
+        response.headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+    response.headers["Cache-Control"] = f"private, max-age={max_age}"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def _masked_question_bytes(question_id: int) -> bytes | None:
@@ -83,7 +127,20 @@ def serve_signed_media(token: str):
 
     kind = payload["k"]
 
-    if kind == KIND_DELIVERED_MASK:
+    content_type = RENDER_CONTENT_TYPE
+
+    if kind in (KIND_CLIP, KIND_CLIP_POSTER):
+        clip = db.session.get(QuestionClip, payload["i"])
+        if clip is None:
+            abort(404)
+        if kind == KIND_CLIP:
+            key, content_type = clip.storage_key, clip.content_type
+        else:
+            key, content_type = clip.poster_key, POSTER_CONTENT_TYPE
+        if not key:
+            abort(404)
+        data = get_private_storage().load_private(key)
+    elif kind == KIND_DELIVERED_MASK:
         data = _delivered_mask_bytes(payload["i"])
     elif kind == KIND_QUESTION_MASK:
         data = _masked_question_bytes(payload["i"])
@@ -99,7 +156,21 @@ def serve_signed_media(token: str):
     if data is None:
         abort(404)
 
-    response = Response(data, mimetype=RENDER_CONTENT_TYPE)
+    # RANGE REQUESTS, AND WHY A VIDEO NEEDS THEM.
+    #
+    # iOS Safari will not play a video from a source that answers a ranged
+    # request with a plain 200 - it opens with `Range: bytes=0-1`, and a
+    # server that ignores that is treated as unable to serve media at all.
+    # The clip then fails on an iPhone for a transport reason that looks
+    # exactly like a codec problem, which would send the real-device test
+    # chasing the wrong thing.
+    #
+    # Only the clip kind needs it; the image kinds are small and are always
+    # fetched whole.
+    if kind == KIND_CLIP:
+        return _ranged_response(data, content_type, seconds_until_expiry(payload))
+
+    response = Response(data, mimetype=content_type)
     # Cacheable, but never for longer than the token authorising it remains
     # valid - so a cached copy cannot outlive its authorisation. `private`
     # keeps it out of any shared/CDN cache.

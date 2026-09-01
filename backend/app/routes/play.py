@@ -35,6 +35,8 @@ from app.models.question_region import QuestionRegion
 from app.models.answer_drawing import AnswerDrawing, document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
 from app.services.signed_media import (
+    KIND_CLIP,
+    KIND_CLIP_POSTER,
     KIND_DELIVERED_MASK,
     KIND_QUESTION_MASK,
     audience_for_access_code,
@@ -195,7 +197,27 @@ def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
                 audience=audience_for_access_code(attempt.access_code_id),
             )
             masked = f"/api/media/{token}"
-        payload.append(to_player_payload(delivered, masked_image_url=masked))
+        # A clip's URL is signed to THIS access code and expires, so it is
+        # minted here - where the audience is known - rather than baked into
+        # any cached question payload.
+        clip_url = clip_poster_url = None
+        if delivered.clip is not None and delivered.clip.clip_id is not None:
+            audience = audience_for_access_code(attempt.access_code_id)
+            clip_url = "/api/media/" + sign_media_token(
+                KIND_CLIP, delivered.clip.clip_id, audience=audience
+            )
+            if delivered.clip.poster_key:
+                clip_poster_url = "/api/media/" + sign_media_token(
+                    KIND_CLIP_POSTER, delivered.clip.clip_id, audience=audience
+                )
+        payload.append(
+            to_player_payload(
+                delivered,
+                masked_image_url=masked,
+                clip_url=clip_url,
+                clip_poster_url=clip_poster_url,
+            )
+        )
     return payload
 
 

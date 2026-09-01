@@ -138,6 +138,30 @@ def build_snapshot(question: Question) -> dict:
             if image is not None
             else None
         ),
+        # THE CLIP THIS ATTEMPT WAS DELIVERED.
+        #
+        # The STORAGE KEY is frozen, not the clip row's id, and the difference
+        # is the whole point. Replacing a clip writes a new row and leaves the
+        # old object in storage untouched, so a snapshot naming the key still
+        # resolves to the exact bytes this player was shown. Naming the row id
+        # instead would follow the coach's edit and quietly change what a
+        # finished attempt claims to have contained.
+        #
+        # Content type travels with it because the signed media route has to
+        # answer with one and an opaque key carries no extension.
+        "clip": (
+            {
+                "clip_id": question.clip.id,
+                "storage_key": question.clip.storage_key,
+                "poster_key": question.clip.poster_key,
+                "content_type": question.clip.content_type,
+                "duration_ms": question.clip.duration_ms,
+                "width": question.clip.width,
+                "height": question.clip.height,
+            }
+            if question.clip is not None
+            else None
+        ),
         # WHAT THIS ATTEMPT'S MASK WAS A FUNCTION OF, frozen.
         #
         # None for a question that is not built from a playbook page.

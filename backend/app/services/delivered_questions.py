@@ -79,6 +79,30 @@ class DeliveredImage:
 
 
 @dataclass(frozen=True)
+class DeliveredClip:
+    """The clip one attempt was shown.
+
+    Carries the STORAGE KEY, not the live clip row's id. Replacing a clip
+    writes a new row and leaves the old object in place, so a key resolves to
+    the exact bytes this player received; following the row would follow the
+    coach's edit instead.
+
+    `clip_id` is kept alongside it as a historical label - the same way
+    DeliveredImage keeps `image_id` - so a signed URL can be minted for a
+    surface that is showing today's clip, while anything replaying history
+    reads the key.
+    """
+
+    storage_key: str
+    content_type: str
+    poster_key: str | None = None
+    duration_ms: int | None = None
+    width: int | None = None
+    height: int | None = None
+    clip_id: int | None = None
+
+
+@dataclass(frozen=True)
 class DeliveredQuestion:
     """One question as one attempt received it."""
 
@@ -119,6 +143,11 @@ class DeliveredQuestion:
     #: back to the live document and says so - see `playbook_reference`.
     delivered_document_title: str | None = None
     delivered_page_number: int | None = None
+    #: None for every question not delivered with a recorded clip, which is
+    #: all of them before this feature existed. Declared last because the
+    #: fields above it have no defaults and a dataclass will not allow a
+    #: defaulted field to precede them.
+    clip: DeliveredClip | None = None
 
     @property
     def id(self) -> int | None:
@@ -246,6 +275,7 @@ def _from_snapshot(row: AttemptQuestionSnapshot, number: int) -> DeliveredQuesti
             if isinstance(image, dict) and image.get("image_url")
             else None
         ),
+        clip=_clip_from_snapshot(data.get("clip")),
         from_snapshot=True,
         snapshot_id=row.id,
         has_delivered_region=bool(data.get("region")),
@@ -292,7 +322,44 @@ def _from_live(question, number: int) -> DeliveredQuestion:
             if question.image is not None
             else None
         ),
+        clip=(
+            DeliveredClip(
+                storage_key=question.clip.storage_key,
+                content_type=question.clip.content_type,
+                poster_key=question.clip.poster_key,
+                duration_ms=question.clip.duration_ms,
+                width=question.clip.width,
+                height=question.clip.height,
+                clip_id=question.clip.id,
+            )
+            if question.clip is not None
+            else None
+        ),
         from_snapshot=False,
+    )
+
+
+def _clip_from_snapshot(raw) -> DeliveredClip | None:
+    """Reads a clip out of a snapshot blob, tolerating every older shape.
+
+    Snapshots written before this feature have no `clip` key at all, and that
+    is not a defect - it is the honest record that the attempt was delivered
+    no clip. Returning None rather than reaching for the live question is what
+    keeps a finished attempt describing itself.
+    """
+    if not isinstance(raw, dict):
+        return None
+    key = raw.get("storage_key")
+    if not key:
+        return None
+    return DeliveredClip(
+        storage_key=key,
+        content_type=raw.get("content_type") or "video/mp4",
+        poster_key=raw.get("poster_key"),
+        duration_ms=raw.get("duration_ms"),
+        width=raw.get("width"),
+        height=raw.get("height"),
+        clip_id=raw.get("clip_id"),
     )
 
 
@@ -424,7 +491,12 @@ def selection_text(delivered: DeliveredQuestion, answer) -> str | None:
     return SELECTION_SEPARATOR.join(texts) if texts else None
 
 
-def to_player_payload(delivered: DeliveredQuestion, masked_image_url: str | None = None) -> dict:
+def to_player_payload(
+    delivered: DeliveredQuestion,
+    masked_image_url: str | None = None,
+    clip_url: str | None = None,
+    clip_poster_url: str | None = None,
+) -> dict:
     """The question as a PLAYER may see it, for resuming an attempt.
 
     SEPARATE FROM `to_payload` ON PURPOSE, AND THIS SEPARATION IS A SECURITY
@@ -472,6 +544,19 @@ def to_player_payload(delivered: DeliveredQuestion, masked_image_url: str | None
     }
     if masked_image_url is not None:
         payload["masked_image_url"] = masked_image_url
+    if clip_url is not None:
+        # A SIGNED, SHORT-LIVED URL, passed in rather than derived, for the
+        # same reason `masked_image_url` is: minting a token needs the access
+        # code this player is using, and this function is deliberately
+        # identity-free. Dimensions travel with it so the player's layout can
+        # reserve the right box before a byte of video arrives.
+        payload["clip"] = {
+            "url": clip_url,
+            "poster_url": clip_poster_url,
+            "content_type": delivered.clip.content_type if delivered.clip else "video/mp4",
+            "width": delivered.clip.width if delivered.clip else None,
+            "height": delivered.clip.height if delivered.clip else None,
+        }
     return payload
 
 

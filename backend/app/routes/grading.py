@@ -448,6 +448,12 @@ def export_results_detailed_pdf(quiz_id: int):
         .options(
             selectinload(Quiz.questions).selectinload(Question.options),
             selectinload(Quiz.questions).selectinload(Question.image),
+            # The clip too, for the same reason and found the same way: the
+            # PDF reads `question.clip` to fall back to its poster frame, and
+            # without this that is one lazy load per question. The query-budget
+            # test caught it at 36 queries against a ceiling of 20 - which is
+            # the third time that test has paid for itself.
+            selectinload(Quiz.questions).selectinload(Question.clip),
         )
         .first()
     )

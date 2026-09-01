@@ -13,6 +13,7 @@ from app.models.quiz import Quiz
 from app.models.question import Question, QuestionOption, QuestionType
 from app.models.question_region import QuestionRegion, RegionRole
 from app.models.question_image import QuestionImage
+from app.models.question_clip import QuestionClip
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
 from app.models.answer_drawing import AnswerDrawing
@@ -50,6 +51,7 @@ __all__ = [
     "QuestionRegion",
     "RegionRole",
     "QuestionImage",
+    "QuestionClip",
     "Roster",
     "RosterPlayer",
     "AccessCode",

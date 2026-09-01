@@ -7,6 +7,45 @@ from sqlalchemy.dialects.postgresql import JSONB
 from app.extensions import db
 
 
+def _clip_payload(clip, with_urls: bool = False):
+    """Clip metadata plus freshly signed URLs, or None.
+
+    Kept out of QuestionClip.to_dict() on purpose: that method is a plain
+    serializer with no opinion about who is asking, and minting a credential
+    is emphatically an opinion. A caller with no request context (a script, a
+    test fixture) still gets the metadata.
+
+    `with_urls` is the audience gate - see the call site.
+    """
+    if clip is None:
+        return None
+    payload = clip.to_dict()
+    if not with_urls:
+        # Metadata only. The caller is not a coach, so it gets no credential
+        # from here.
+        return payload
+    try:
+        from app.services.signed_media import (
+            AUDIENCE_COACH,
+            KIND_CLIP,
+            KIND_CLIP_POSTER,
+            sign_media_token,
+        )
+
+        payload["url"] = "/api/media/" + sign_media_token(
+            KIND_CLIP, clip.id, audience=AUDIENCE_COACH
+        )
+        if clip.poster_key:
+            payload["poster_url"] = "/api/media/" + sign_media_token(
+                KIND_CLIP_POSTER, clip.id, audience=AUDIENCE_COACH
+            )
+    except RuntimeError:
+        # No application context - serializing outside a request is legitimate
+        # and should not fail over a URL nobody is going to click.
+        pass
+    return payload
+
+
 class QuestionType(str, enum.Enum):
     """The native Postgres enum `questiontype` stores MEMBER NAMES, not these
     values - 'WRITTEN', not 'written'. Any hand-written SQL touching this
@@ -159,8 +198,18 @@ class Question(db.Model):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    #: A short silent looping video, and the THIRD alternative source of
+    #: visual material alongside `image` and `regions`. Same exclusivity rule,
+    #: same enforcement point - see routes/questions.py.
+    clip = db.relationship(
+        "QuestionClip",
+        back_populates="question",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
     # A question gets its picture from EITHER an uploaded still
-    # (`image`) OR a document-page region - never both. The schema does not
+    # (`image`) OR a document-page region OR a recorded clip - never more than
+    # one. The schema does not
     # enforce that; the service layer does, and a test asserts it. Unifying
     # the two is the documented long-term target (design doc §4), deliberately
     # not attempted here.
@@ -222,6 +271,21 @@ class Question(db.Model):
                 else [o.to_dict(include_correct_answers) for o in self.options]
             ),
             "image": self.image.to_dict() if self.image else None,
+            # METADATA ONLY - never a playable URL. A signed URL expires, so
+            # baking one into a payload that gets cached would hand out a link
+            # that dies mid-quiz. The routes that actually render a clip mint
+            # a token at request time.
+            # MINTED PER REQUEST, never stored, and COACH-ONLY.
+            #
+            # Gated on the same flag that decides whether this payload may
+            # carry correct answers, because it answers the same question:
+            # is this response going to a coach. /validate-code serialises
+            # questions for a PLAYER through this method with the flag off,
+            # and without the gate it handed them a token stamped `coach` -
+            # which plays fine, which is exactly why it would never have been
+            # noticed. A player's clip URL is minted in routes/play.py,
+            # audienced to their access code.
+            "clip": _clip_payload(self.clip, with_urls=include_correct_answers),
             # Lets the editor show "Needs an image" without re-deriving the
             # rule, and lets the activation guard explain itself.
             "needs_image": self.question_type is QuestionType.DRAW_RESPONSE and self.image is None,

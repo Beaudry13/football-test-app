@@ -13,6 +13,10 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { Question, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { Modal } from '../../components/ui/Modal';
+import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecorder';
+import { ClipThumbnail } from '../../components/clip/ClipPlayer';
+import { deleteQuestionClip, uploadQuestionClip } from '../../api/questions';
 import { QuestionEditor } from './QuestionEditor';
 import { Icon } from '../../components/ui/Icon';
 import { MenuButton, MenuItem } from '../../components/ui/MenuButton';
@@ -168,6 +172,42 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
+  /* Which question is being recorded for, or null. One at a time - a coach
+     records for the question in front of them, and a second recorder open
+     behind the first would be a way to lose a take. */
+  const [recordingFor, setRecordingFor] = useState<number | null>(null);
+  const [clipError, setClipError] = useState<string | null>(null);
+
+  async function handleUseClip(questionId: number, recorded: RecordedClip) {
+    setClipError(null);
+    try {
+      await uploadQuestionClip(quiz.id, questionId, recorded.blob, recorded.poster, {
+        durationMs: recorded.durationMs,
+        width: recorded.width,
+        height: recorded.height,
+      });
+      URL.revokeObjectURL(recorded.previewUrl);
+      setRecordingFor(null);
+      await reload();
+    } catch (err) {
+      setClipError(getErrorMessage(err));
+    }
+  }
+
+  async function handleRemoveClip(questionId: number) {
+    const ok = await confirm({
+      title: 'Remove this clip?',
+      body: 'The question keeps everything else. You can record another one.',
+      confirmLabel: 'Remove clip',
+    });
+    if (!ok) return;
+    try {
+      await deleteQuestionClip(quiz.id, questionId);
+      await reload();
+    } catch (err) {
+      setClipError(getErrorMessage(err));
+    }
+  }
   // The annotate screen is a route, so the menu navigates rather than linking.
   const navigate = useNavigate();
 
@@ -285,6 +325,20 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
 
   return (
     <div>
+      {clipError && <ErrorBanner message={clipError} />}
+      {recordingFor !== null && (
+        <Modal
+          onDismiss={() => setRecordingFor(null)}
+          ariaLabel="Record a clip for this question"
+          showCloseButton
+        >
+          <ClipRecorder
+            onUse={(recorded) => void handleUseClip(recordingFor, recorded)}
+            onCancel={() => setRecordingFor(null)}
+          />
+        </Modal>
+      )}
+
       {dialog}
       <ErrorBanner message={error} />
 
@@ -393,7 +447,19 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   picture is. And no fallback to an unmasked page, matching
                   that file: if the server supplied no masked render, the right
                   outcome is a question with no picture. */}
-              {question.image ? (
+              {question.clip ? (
+                /* THE POSTER, NOT THE VIDEO. This list can hold twenty
+                   questions, and twenty simultaneously looping clips is real
+                   decoding work for a surface that is scanned rather than
+                   watched. */
+                <ClipThumbnail
+                  posterUrl={
+                    question.clip.poster_url ? resolveMediaUrl(question.clip.poster_url) : null
+                  }
+                  className={styles.thumb}
+                  alt="Still frame from the recorded clip"
+                />
+              ) : question.image ? (
                 <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
               ) : question.masked_image_url ? (
                 <img
@@ -487,6 +553,27 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                         }
                       >
                         {question.image ? 'Edit image' : 'Add image'}
+                      </MenuItem>
+                    )}
+                    {/* A clip is a third source of visual material and
+                        replaces the other two rather than joining them, so it
+                        is offered only where the API would accept it: not on
+                        a playbook-backed question, not alongside a still, and
+                        never on Draw Response - which needs a fixed frame to
+                        bind strokes to. The server refuses all three cases
+                        regardless; this only avoids offering a rejected
+                        action. */}
+                    {!question.region &&
+                      !question.image &&
+                      !question.clip &&
+                      question.question_type !== 'draw_response' && (
+                        <MenuItem onSelect={() => setRecordingFor(question.id)}>
+                          Record clip
+                        </MenuItem>
+                      )}
+                    {question.clip && (
+                      <MenuItem onSelect={() => void handleRemoveClip(question.id)}>
+                        Remove clip
                       </MenuItem>
                     )}
                     {/* Only worth offering when there is somewhere else to go. */}

@@ -82,6 +82,42 @@ export function uploadQuestionImage(
   return api.postForm<QuestionImage>(`/quizzes/${quizId}/questions/${questionId}/image`, formData);
 }
 
+export interface QuestionClip {
+  id: number;
+  question_id: number;
+  content_type: string;
+  duration_ms: number | null;
+  width: number | null;
+  height: number | null;
+  has_poster: boolean;
+}
+
+/** Uploads a recorded clip and its poster frame in one request.
+ *
+ * The poster is captured in the browser at record time rather than derived on
+ * the server: it costs nothing there, and it is what lets the PDF export, the
+ * question list and the `poster` attribute all keep working without anything
+ * learning to decode video. */
+export function uploadQuestionClip(
+  quizId: number,
+  questionId: number,
+  clip: Blob,
+  poster: Blob | null,
+  meta: { durationMs: number; width: number; height: number },
+): Promise<QuestionClip> {
+  const formData = new FormData();
+  formData.append('clip', clip, 'clip.mp4');
+  if (poster) formData.append('poster', poster, 'poster.webp');
+  formData.append('duration_ms', String(meta.durationMs));
+  formData.append('width', String(meta.width));
+  formData.append('height', String(meta.height));
+  return api.postForm<QuestionClip>(`/quizzes/${quizId}/questions/${questionId}/clip`, formData);
+}
+
+export function deleteQuestionClip(quizId: number, questionId: number): Promise<void> {
+  return api.delete<void>(`/quizzes/${quizId}/questions/${questionId}/clip`);
+}
+
 export function saveAnnotations(
   quizId: number,
   questionId: number,

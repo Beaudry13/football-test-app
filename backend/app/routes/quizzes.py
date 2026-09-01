@@ -15,6 +15,7 @@ from sqlalchemy import case, func
 from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
+from app.services.clip_storage import copy_clip_object, copy_poster_object
 from app.extensions import db
 from app.services.attempt_scope import official_filter
 from app.models import (
@@ -26,6 +27,7 @@ from app.models import (
     Player,
     PlayerAttempt,
     Question,
+    QuestionClip,
     QuestionImage,
     QuestionOption,
     QuestionRegion,
@@ -815,5 +817,32 @@ def _copy_questions_into(
                     # it silently MOVED every saved shape on the duplicate.
                     # Annotations and canvas_width only mean anything together.
                     canvas_width=question.image.canvas_width,
+                )
+            )
+
+        if question.clip is not None:
+            # ITS OWN STORAGE OBJECT, for exactly the reason the image above
+            # gets one. Every delete path assumes a single owner, so a shared
+            # key means the first destructive edit on either copy blanks the
+            # other - proven in both directions for images before it was
+            # fixed, and there is no reason to relearn it here.
+            #
+            # A failure raises and aborts the whole duplicate, matching the
+            # image rule: a copy that silently drops its football material is
+            # the failure this behaviour exists to prevent.
+            copied_clip_key = copy_clip_object(question.clip.storage_key)
+            copied_keys.append(copied_clip_key)
+            copied_poster_key = copy_poster_object(question.clip.poster_key)
+            if copied_poster_key:
+                copied_keys.append(copied_poster_key)
+            db.session.add(
+                QuestionClip(
+                    question_id=copy_question.id,
+                    storage_key=copied_clip_key,
+                    poster_key=copied_poster_key,
+                    content_type=question.clip.content_type,
+                    duration_ms=question.clip.duration_ms,
+                    width=question.clip.width,
+                    height=question.clip.height,
                 )
             )

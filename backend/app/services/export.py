@@ -1011,6 +1011,35 @@ def _load_image_flowable(load_image_bytes, image_url: str):
         return None
 
 
+def _poster_flowable(poster_key: str | None):
+    """A clip's still frame, for the surfaces that cannot show motion.
+
+    A PDF has no way to play a video, so the poster IS the clip on paper.
+    Loaded straight from private storage by key rather than through
+    `load_image_bytes`, which resolves public image URLs and has no notion of
+    an opaque key.
+
+    Degrades to None exactly as `_load_image_flowable` does: one unreadable
+    poster must never cost a coach the other nineteen results.
+    """
+    if not poster_key:
+        return None
+    try:
+        from app.services.private_storage import get_private_storage
+
+        raw = get_private_storage().load_private(poster_key)
+        if not raw:
+            return None
+        reader = ImageReader(io.BytesIO(raw))
+        width, height = reader.getSize()
+        if not width or not height:
+            return None
+        scale = min(_MAX_IMAGE_WIDTH / width, _MAX_IMAGE_HEIGHT / height, 1.0)
+        return RLImage(io.BytesIO(raw), width=width * scale, height=height * scale)
+    except Exception:
+        return None
+
+
 def build_results_csv(quiz, responses: list, exclusions=NO_EXCLUSIONS) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer)
@@ -1683,6 +1712,24 @@ def build_detailed_results_pdf(
                     image_flowable = _load_image_flowable(
                         load_image_bytes, question.image.image_url
                     )
+            # A CLIP BECOMES ITS POSTER ON PAPER. Nothing about a PDF can show
+            # motion, so the still frame captured at record time is the honest
+            # representation - and the caption says a clip existed, so a coach
+            # reading the export is not left thinking the question was a photo.
+            clip = getattr(question, "clip", None)
+            if image_flowable is None and clip is not None:
+                image_flowable = _poster_flowable(getattr(clip, "poster_key", None))
+                if image_flowable is not None:
+                    prompt_group.append(Spacer(1, theme["spacing"]["sm"]))
+                    prompt_group.append(image_flowable)
+                    prompt_group.append(
+                        Paragraph("[Recorded clip - still frame shown]", label_style)
+                    )
+                    image_flowable = None
+                else:
+                    prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
+                    prompt_group.append(Paragraph("[Recorded clip]", label_style))
+
             if question.image is not None and image_flowable is None:
                 prompt_group.append(Spacer(1, theme["spacing"]["xs"]))
                 prompt_group.append(Paragraph("[Image unavailable]", label_style))

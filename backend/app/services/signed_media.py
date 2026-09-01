@@ -75,8 +75,26 @@ KIND_QUESTION_MASK = "qmask"
 #: token travels to a browser. Coordinates and storage keys stay server-side,
 #: exactly as they do for every other kind here.
 KIND_DELIVERED_MASK = "dmask"
+#: A question's recorded clip. `id` is the `question_clips` row.
+#:
+#: Keyed by row rather than by storage key for the same reason every kind here
+#: is: the opaque key never leaves the server. A token names a resource; the
+#: route resolves it. That also means revoking a clip is a matter of deleting
+#: a row, not of hoping an issued URL expires.
+KIND_CLIP = "clip"
+#: The clip's poster still. Separate kind rather than a variant so a surface
+#: that only ever shows a frame - a PDF, a thumbnail - is issued a token that
+#: cannot fetch the video.
+KIND_CLIP_POSTER = "cpost"
 VALID_KINDS = frozenset(
-    {KIND_PAGE, KIND_THUMBNAIL, KIND_QUESTION_MASK, KIND_DELIVERED_MASK}
+    {
+        KIND_PAGE,
+        KIND_THUMBNAIL,
+        KIND_QUESTION_MASK,
+        KIND_DELIVERED_MASK,
+        KIND_CLIP,
+        KIND_CLIP_POSTER,
+    }
 )
 
 #: Audience for a coach-issued URL.

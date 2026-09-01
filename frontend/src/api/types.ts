@@ -284,6 +284,23 @@ export interface Question {
   position: number;
   options: QuestionOption[];
   image: QuestionImage | null;
+  /** Metadata only - never a playable URL. A signed clip URL expires, so the
+   *  routes that render one mint it per request. */
+  clip?: {
+    /** Present in the coach payload. */
+    id?: number;
+    content_type?: string;
+    duration_ms?: number | null;
+    width?: number | null;
+    height?: number | null;
+    has_poster?: boolean;
+    /** SIGNED AND SHORT-LIVED, present only in the player payload - minted
+     *  per access code by /play, exactly as `masked_image_url` above is, and
+     *  optional here for the same reason: QuestionInput is rendered by both
+     *  the player and the coach's preview, and the two payloads differ. */
+    url?: string;
+    poster_url?: string | null;
+  } | null;
   /** True for a `draw_response` question that has no image yet. Such a
    * question is answerable by nobody, so the API refuses to activate a quiz
    * containing one - the check lands at activation rather than creation
@@ -849,6 +866,15 @@ export interface DeliveredPlayerQuestion {
    *  region because the snapshot does not record region geometry - truthful
    *  only while region editing stays blocked after delivery. */
   masked_image_url?: string;
+  /** A recorded clip, with a signed short-lived URL minted for this access
+   *  code. Present only when the question was DELIVERED with one. */
+  clip?: {
+    url: string;
+    poster_url: string | null;
+    content_type: string;
+    width: number | null;
+    height: number | null;
+  } | null;
 }
 
 export interface AttemptState {

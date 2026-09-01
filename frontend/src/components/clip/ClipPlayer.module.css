@@ -1,0 +1,29 @@
+/* A recorded clip, wherever it is shown. Looks like a GIF: no controls, no
+   sound, starts on its own, repeats. */
+
+.clip {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* The football is never cropped or letterboxed into the wrong shape. */
+  object-fit: contain;
+  background: #000;
+  border-radius: var(--radius-sm);
+}
+
+/* A CLIP THAT CANNOT PLAY IS NOT A BLANK RECTANGLE. The poster still shows
+   the football; the line below it says plainly that the motion is missing,
+   because claiming a clip is playing when it is not is worse than saying so. */
+.fallback {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+}
+
+.fallbackNote {
+  margin: 0.4em 0 0;
+  font-size: var(--peira-text-meta);
+  color: var(--color-text-muted);
+}

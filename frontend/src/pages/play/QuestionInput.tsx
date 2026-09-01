@@ -9,6 +9,7 @@ import type { DrawingDocument } from '../../components/drawing/types';
 import { Icon } from '../../components/ui/Icon';
 import { renderArrows } from '../../utils/typography';
 import { clearDraft, createDrawingFor, draftKey, saveDraft } from './drawingDraft';
+import { ClipPlayer } from '../../components/clip/ClipPlayer';
 import styles from './PlayPage.module.css';
 
 export interface PlayerAnswer {
@@ -77,6 +78,12 @@ export function QuestionInput({
   // image here: if the server did not supply one, the right outcome is a
   // question with no picture, never an unmasked page.
   const maskedImageUrl = question.masked_image_url ?? null;
+  /** A recorded clip is a third source of visual material, alongside an
+   *  uploaded still and a masked playbook page - never combined with either.
+   *  The URL is signed and short-lived, minted per access code by /play. */
+  // Only renderable when the payload carried a signed URL - the coach's
+  // metadata-only shape has none, and there is nothing to play without it.
+  const clip = question.clip?.url ? question.clip : null;
   const canDraw = isDrawResponse && image !== null;
   /** "Select all that apply" - read from the DELIVERED question, so a coach
    *  flipping the setting cannot change how an attempt already underway
@@ -139,6 +146,19 @@ export function QuestionInput({
           never sent to a player - the black box is baked into these pixels,
           not drawn over them in CSS, so there is nothing to inspect, disable
           or right-click around. See backend/app/services/page_masking.py. */}
+      {/* THE FOOTBALL, MOVING. Rendered exactly like the still above it -
+          same class, same sizing rules - so a clip and a film still occupy
+          the same place in the question and neither is cropped. No lightbox:
+          a looping clip has nothing to enlarge into that the inline player
+          does not already show. */}
+      {clip && (
+        <ClipPlayer
+          url={resolveMediaUrl(clip.url as string)}
+          posterUrl={clip.poster_url ? resolveMediaUrl(clip.poster_url) : null}
+          className={styles.questionImage}
+          ariaLabel="Recorded clip for this question"
+        />
+      )}
       {maskedImageUrl && (
         <>
           <img

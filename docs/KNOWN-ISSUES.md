@@ -201,6 +201,33 @@ a coach hitting a bad question will reach for whichever exists.
 
 ---
 
+## Recorded clip storage is never reclaimed
+
+**Deliberate, and it is the safe direction of the trade.**
+
+Replacing or removing a question's clip deletes the `question_clips` row and
+leaves the stored object in place. Nothing sweeps it.
+
+That is not an oversight. A delivered snapshot freezes the clip's STORAGE KEY
+rather than its row id — that is precisely what lets a finished attempt keep
+resolving to the bytes the player was actually shown after a coach records
+something different. Deleting the object on replace would blank the evidence
+of a past attempt, which is the failure the whole snapshot architecture
+exists to prevent.
+
+So orphaned clips accumulate. At 15 seconds and roughly 0.15–2 MB each that
+is slow, but it is unbounded.
+
+**A real collector is possible and is not hard** — it just has to be written
+against the snapshots rather than against the live rows: an object is
+reclaimable only when no `question_clips` row and no `attempt_question_
+snapshots.snapshot->'clip'->>'storage_key'` names it. Doing it the obvious
+way, by walking live rows alone, would delete exactly the objects history
+depends on.
+
+Not started. Recorded so the next person meets the reasoning rather than the
+symptom.
+
 ## The Competition Mode M2 baseline
 
 **Competition Mode M2 is FROZEN and production verified as of 13 August 2026.**

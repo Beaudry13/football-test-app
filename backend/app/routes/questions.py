@@ -13,6 +13,12 @@ from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError
 
 from app.errors import ApiError
+from app.services.clip_storage import (
+    CLIP_CONTENT_TYPE,
+    save_clip,
+    save_poster,
+    validate_duration_ms,
+)
 from app.extensions import db
 from app.models import (
     Answer,
@@ -25,6 +31,7 @@ from app.models import (
     QuestionType,
     Quiz,
 )
+from app.models import QuestionClip
 from app.models.question_region import RegionRole
 from app.schemas.question import (
     AnnotationsUpdateSchema,
@@ -527,6 +534,20 @@ def update_question(quiz_id: int, question_id: int):
     # which is merely cosmetic.
     if "question_type" in data and data["question_type"] != question.question_type.value:
         _reject_if_already_answered(question, "change this question's type")
+        # THE OTHER DIRECTION OF THE CLIP RULE. The upload route refuses a clip
+        # on a Draw Response question; without this, a coach could record a
+        # clip first and then switch the type, arriving at the same
+        # unsupported state by a different door. A drawing has no frame to
+        # bind to, so both doors are shut.
+        if (
+            data["question_type"] == QuestionType.DRAW_RESPONSE.value
+            and question.clip is not None
+        ):
+            raise ApiError(
+                "This question shows a recorded clip, so it cannot become a "
+                "Draw Response question. Remove the clip first.",
+                status_code=422,
+            )
 
     if "allows_multiple_answers" in data:
         question.allows_multiple_answers = allows_multiple
@@ -674,6 +695,12 @@ def upload_question_image(quiz_id: int, question_id: int):
             "region from Playbooks instead of uploading a separate image.",
             status_code=422,
         )
+    if question.clip is not None:
+        raise ApiError(
+            "This question already shows a recorded clip. Remove the clip "
+            "before uploading a still image.",
+            status_code=422,
+        )
 
     if "image" not in request.files:
         raise ApiError("No image file provided under the 'image' field", status_code=400)
@@ -734,4 +761,103 @@ def delete_question_image(quiz_id: int, question_id: int):
     except StorageError as exc:
         _refuse_rather_than_destroy_history(exc)
 
+    return "", 204
+
+
+# ---------------------------------------------------------------------------
+# Recorded clips
+# ---------------------------------------------------------------------------
+#
+# A clip is the THIRD source of a question's visual material, and it is an
+# alternative to the other two rather than an addition. The rule is the same
+# one models/question.py states for image-versus-region, extended by one:
+# still, OR playbook region, OR clip. Enforced here, in the service layer,
+# because the schema does not express it - exactly as the existing rule is.
+
+
+@questions_bp.post("/<int:quiz_id>/questions/<int:question_id>/clip")
+@jwt_required()
+def upload_question_clip(quiz_id: int, question_id: int):
+    question = _get_editable_question(quiz_id, question_id)
+
+    # DRAW RESPONSE CANNOT USE A CLIP, and this is checked on the server
+    # rather than only hidden in the editor.
+    #
+    # A drawing binds to `image_id` and lives in a coordinate space pinned to
+    # one still. Over a moving picture there is no answer to "which frame was
+    # this drawn against", and the delivered-snapshot model has nowhere to
+    # record one. Refusing is the honest outcome; half-supporting it would
+    # produce strokes that mean nothing.
+    if question.question_type == QuestionType.DRAW_RESPONSE:
+        raise ApiError(
+            "A Draw Response question needs a still image to draw on, so it "
+            "cannot use a recorded clip.",
+            status_code=422,
+        )
+
+    if question.regions:
+        raise ApiError(
+            "This question already gets its image from a playbook page. Remove "
+            "the playbook region before recording a clip.",
+            status_code=422,
+        )
+    if question.image is not None:
+        raise ApiError(
+            "This question already has an image. Remove it before recording a clip.",
+            status_code=422,
+        )
+
+    if "clip" not in request.files:
+        raise ApiError("No clip file provided under the 'clip' field", status_code=400)
+
+    clip_bytes = request.files["clip"].read()
+    # Validates size AND container. The multipart Content-Type and the
+    # filename are both client claims; the `ftyp` box is not.
+    storage_key = save_clip(clip_bytes)
+
+    poster_key = None
+    if "poster" in request.files:
+        poster_bytes = request.files["poster"].read()
+        if poster_bytes:
+            poster_key = save_poster(poster_bytes)
+
+    def _int_or_none(name):
+        raw = request.form.get(name)
+        try:
+            return int(raw) if raw not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
+    clip = QuestionClip(
+        question_id=question.id,
+        storage_key=storage_key,
+        poster_key=poster_key,
+        content_type=CLIP_CONTENT_TYPE,
+        duration_ms=validate_duration_ms(_int_or_none("duration_ms")),
+        width=_int_or_none("width"),
+        height=_int_or_none("height"),
+    )
+    # Replacing keeps the OLD object in storage on purpose. A delivered
+    # snapshot may point at it, and historical integrity outranks reclaiming a
+    # megabyte. Recorded as cleanup debt in docs/KNOWN-ISSUES.md rather than
+    # solved with a delete that could blank a past attempt's evidence.
+    if question.clip is not None:
+        db.session.delete(question.clip)
+        db.session.flush()
+    db.session.add(clip)
+    db.session.commit()
+
+    return jsonify(clip.to_dict()), 201
+
+
+@questions_bp.delete("/<int:quiz_id>/questions/<int:question_id>/clip")
+@jwt_required()
+def delete_question_clip(quiz_id: int, question_id: int):
+    question = _get_editable_question(quiz_id, question_id)
+    if question.clip is None:
+        raise ApiError("Question has no clip", status_code=404)
+
+    # The row goes; the stored object stays. See the note on replacement above.
+    db.session.delete(question.clip)
+    db.session.commit()
     return "", 204

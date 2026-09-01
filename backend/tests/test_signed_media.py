@@ -76,7 +76,12 @@ class TestTokenRoundTrip:
         # the change that could quietly create such a capability, so it should
         # not be possible to do it without this test failing and forcing the
         # question to be asked again.
-        from app.services.signed_media import KIND_DELIVERED_MASK, VALID_KINDS
+        from app.services.signed_media import (
+            KIND_CLIP,
+            KIND_CLIP_POSTER,
+            KIND_DELIVERED_MASK,
+            VALID_KINDS,
+        )
 
         # `dmask` was added when delivered region geometry started being
         # frozen into the snapshot. It resolves an
@@ -84,15 +89,43 @@ class TestTokenRoundTrip:
         # rectangle that attempt was given - still a page-derived image, and
         # still nothing that names the document. The question this test exists
         # to force was asked, which is the test working rather than failing.
+        #
+        # `clip` and `cpost` were added for Record Clip, and this test failing
+        # is what forced the question to be asked again. The answer: neither
+        # can reach a document. They resolve a `question_clips` row to that
+        # row's own `storage_key` / `poster_key` - objects uploaded by a coach
+        # from a screen recording, which have no relationship to a
+        # SourceDocument of any kind. The dispatch in routes/media.py reads
+        # those two columns and nothing else.
+        #
+        # Note this widens the guarantee slightly and honestly: not every kind
+        # is page-derived any more. What still holds - and what this test is
+        # actually for - is that no kind names the source PDF.
         assert VALID_KINDS == {
             KIND_PAGE,
             KIND_THUMBNAIL,
             KIND_QUESTION_MASK,
             KIND_DELIVERED_MASK,
+            KIND_CLIP,
+            KIND_CLIP_POSTER,
         }
-        # Every kind resolves to a rendered image derived from a page. None
-        # names the document itself.
+        # No kind names the document itself.
         assert all("pdf" not in kind and "document" not in kind for kind in VALID_KINDS)
+
+    def test_a_clip_token_cannot_name_a_document(self):
+        # The structural half of the guarantee above. If someone later gave
+        # QuestionClip a document reference, the clip kinds WOULD become a
+        # path to a PDF - so the model is asserted to carry only its own two
+        # storage keys.
+        from app.models import QuestionClip
+
+        columns = {c.key for c in QuestionClip.__table__.columns}
+        assert {"storage_key", "poster_key"} <= columns
+        assert not any(
+            "document" in name or "pdf" in name or "source" in name for name in columns
+        )
+        assert not hasattr(QuestionClip, "document")
+        assert not hasattr(QuestionClip, "source_document")
 
 
 class TestTokenRejection:

@@ -1,0 +1,81 @@
+/* Record Clip. A tool inside the question editor, not a second application -
+   so it borrows the notebook buttons and adds only what a recorder needs. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85em;
+  padding: 1em;
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-md);
+  background: var(--peira-surface-raised);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+/* "RECORDING · 08 / 15 SEC". A count, not a timeline: a coach needs to know
+   how long they have left, not to edit what they have. */
+.recording {
+  display: flex;
+  align-items: center;
+  gap: 0.55em;
+  margin: 0;
+  font-size: var(--peira-text-control);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--nb-text);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--peira-danger);
+  flex: 0 0 auto;
+}
+
+/* The browser is already showing its own recording indicator; this one only
+   needs to pulse enough to read as live, and it stops entirely for anyone who
+   has asked for less movement. */
+@media (prefers-reduced-motion: no-preference) {
+  .dot {
+    animation: clipPulse 1.4s ease-in-out infinite;
+  }
+}
+
+@keyframes clipPulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.preview {
+  width: 100%;
+  max-height: 42vh;
+  border-radius: var(--radius-sm);
+  background: #000;
+  /* The recorded football keeps its shape - never cropped to fit a box. */
+  object-fit: contain;
+}
+
+.unsupported {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--color-warning);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--peira-danger);
+}
