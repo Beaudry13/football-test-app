@@ -118,3 +118,12 @@
   font-size: var(--peira-text-control);
   color: var(--nb-text);
 }
+
+/* A failed attempt to share, stated without alarm. Cancelling the picker is
+   ordinary and is not an error - but a coach must never be left watching an
+   unchanged screen wondering whether their click registered. */
+.notice {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}

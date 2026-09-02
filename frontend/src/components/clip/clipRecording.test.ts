@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CAPTURE_SIZE_CAP,
   CLIP_BITS_PER_SECOND,
   DISPLAY_MEDIA_CONSTRAINTS,
   MAX_CLIP_MS,
@@ -146,25 +147,31 @@ describe('elapsed counter', () => {
 });
 
 describe('capture resolution', () => {
-  it('caps the captured frame at 1080p-class without cropping or stretching', () => {
-    // Only frameRate was constrained, so sharing a 4K monitor captured 4K and
-    // spent the same bitrate ceiling on four times the pixels - worse football
-    // than a sane 1080p capture of the same film, because the first thing to
-    // smear at too few bits per pixel is small high-contrast detail. Which is
-    // what a jersey number is.
+  it('asks for NO size constraint, because one refused the capture in production', () => {
+    // THE BUG. `width: { max: 1920 }` and `height: { max: 1080 }` were
+    // requested here on the reasoning that a maximum can only downscale and so
+    // cannot fail. In production the call REJECTED after the coach picked a
+    // window: no READY state, no error, nothing. A constraint that can refuse
+    // the capture does not belong on the request.
     const video = DISPLAY_MEDIA_CONSTRAINTS.video as MediaTrackConstraints;
-    expect(video.width).toEqual({ max: 1920 });
-    expect(video.height).toEqual({ max: 1080 });
+    expect(video.width).toBeUndefined();
+    expect(video.height).toBeUndefined();
+  });
+
+  it('still caps the frame at 1080p-class, on the track instead', () => {
+    // The quality intent is unchanged: sharing a 4K monitor otherwise spends
+    // the bitrate ceiling on four times the pixels, and the first thing to
+    // smear is small high-contrast detail - a jersey number. Only the failure
+    // mode moved, from "no clip at all" to "a clip at the source resolution".
+    expect(CAPTURE_SIZE_CAP.width).toEqual({ max: 1920 });
+    expect(CAPTURE_SIZE_CAP.height).toEqual({ max: 1080 });
   });
 
   it('constrains only the maximum, so a smaller window is never upscaled', () => {
-    const video = DISPLAY_MEDIA_CONSTRAINTS.video as MediaTrackConstraints;
-    for (const dimension of [video.width, video.height]) {
+    for (const dimension of [CAPTURE_SIZE_CAP.width, CAPTURE_SIZE_CAP.height]) {
       const constraint = dimension as ConstrainULongRange;
       expect(constraint.min).toBeUndefined();
       expect(constraint.exact).toBeUndefined();
-      // `ideal` is advisory and would be ignored on exactly the oversized
-      // sources this exists for.
       expect(constraint.ideal).toBeUndefined();
     }
   });

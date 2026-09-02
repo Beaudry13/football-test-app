@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import nb from '../../styles/notebook.module.css';
 import styles from './ClipRecorder.module.css';
 import {
+  CAPTURE_SIZE_CAP,
   DISPLAY_MEDIA_CONSTRAINTS,
   MAX_CLIP_MS,
   UNSUPPORTED_MESSAGE,
@@ -57,6 +58,8 @@ export function ClipRecorder({
   const [phase, setPhase] = useState<'idle' | 'ready' | 'recording' | 'preview'>('idle');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  /** Quieter than an error, and never silent. See chooseSource. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [clip, setClip] = useState<RecordedClip | null>(null);
   /** A COMPLETED TAKE IS EXPENSIVE TO REPLACE, so throwing one away is a two
    *  step action. Not a browser confirm(): re-recording is an ordinary thing
@@ -111,20 +114,48 @@ export function ClipRecorder({
   async function chooseSource() {
     if (!capability.supported || !capability.mimeType) return;
     setError(null);
+    setNotice(null);
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getDisplayMedia(DISPLAY_MEDIA_CONSTRAINTS);
     } catch (err) {
-      // Cancelling the picker is the overwhelmingly common case and is not an
-      // error worth shouting about.
+      // A REFUSAL MUST NEVER LOOK LIKE NOTHING HAPPENING.
+      //
+      // This used to return silently for NotAllowedError and AbortError on the
+      // grounds that cancelling the picker is the common case. It is - but
+      // those two names also cover a browser or policy REFUSING the capture,
+      // and the two are not reliably distinguishable: a real refusal and a
+      // real cancellation both arrive as `NotAllowedError: Permission denied`.
+      //
+      // Swallowing both meant a coach who picked a window watched the screen
+      // not change, with nothing to read and nothing to do. So every failed
+      // attempt now says something. It is a quiet line rather than an alarm,
+      // because for the common case there is genuinely nothing wrong - and a
+      // browser that gave a reason of its own has it appended, so the next
+      // report of this arrives with the reason attached.
       const name = (err as DOMException)?.name;
-      if (name !== 'NotAllowedError' && name !== 'AbortError') {
-        setError('Screen recording could not start. Check your browser permissions.');
-      }
+      const unexpected = name && name !== 'NotAllowedError' && name !== 'AbortError';
+      setNotice(
+        unexpected
+          ? `Nothing was shared, so there is nothing to record. Your browser said: ${name}.`
+          : 'Nothing was shared, so there is nothing to record. Choose a window, tab or screen to try again.',
+      );
       return;
     }
     streamRef.current = stream;
     setSeconds(0);
+
+    // THE SIZE CAP, ASKED FOR ONLY ONCE THE SHARE IS SAFELY IN HAND.
+    //
+    // Requesting it up front is what broke this: a maximum that a display
+    // surface cannot satisfy refuses the whole capture. Here the worst case is
+    // a clip at the source's own resolution, which is what shipped before the
+    // cap existed, so a coach never loses the take over a quality preference.
+    try {
+      await stream.getVideoTracks()[0]?.applyConstraints(CAPTURE_SIZE_CAP);
+    } catch {
+      // Not worth telling anyone about: the film records either way.
+    }
 
     // ENDING THE SHARE FROM THE BROWSER'S OWN BAR, in either state. While
     // recording it is a stop and the take is kept, which is the behaviour that
@@ -220,6 +251,12 @@ export function ClipRecorder({
       {error && (
         <p className={styles.error} role="alert">
           {error}
+        </p>
+      )}
+
+      {notice && (
+        <p className={styles.notice} role="status">
+          {notice}
         </p>
       )}
 

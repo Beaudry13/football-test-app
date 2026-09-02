@@ -130,26 +130,36 @@ export function detectClipCapability({
  *  recording that captured a meeting would be a privacy incident, and the
  *  player never hears it anyway because muted autoplay is mandatory.
  *
- *  CAPPED AT 1080p-CLASS, AND WHY THAT IS A QUALITY FIX RATHER THAN A LIMIT.
- *  Only `frameRate` was constrained, so sharing a 4K monitor captured 4K and
- *  then spent the same bitrate ceiling on four times the pixels. The result
- *  was WORSE football than a sane 1080p capture of the same film: the first
- *  thing to smear at too few bits per pixel is small high-contrast detail,
- *  which is exactly what a jersey number is.
+ *  NO SIZE CONSTRAINT HERE, AND THAT IS THE WHOLE POINT OF THIS SHAPE.
+ *  `width: { max: 1920 }` and `height: { max: 1080 }` were requested here
+ *  once, on the reasoning that a maximum can only ever downscale and so could
+ *  not fail. That reasoning was wrong in production: after the coach picked a
+ *  source the call REJECTED, the recorder swallowed the rejection as an
+ *  ordinary cancellation, and the READY state never arrived - a coach chose a
+ *  window and watched nothing happen.
  *
- *  `max` never upscales, so a 1280x720 window is untouched. A larger source
- *  is scaled DOWN proportionally - the browser fits the frame inside the box
- *  rather than cropping or stretching it, so the football keeps its shape.
- *  Height is capped too: width alone would leave a portrait monitor or a very
- *  tall window uncapped.
- *
- *  `max` rather than `ideal` because ideal is advisory and would simply be
- *  ignored on the sources that need it most. It cannot over-constrain here -
- *  downscaling always satisfies a maximum - so it introduces no way to fail.
- */
+ *  A constraint that can refuse the capture must not sit on the request. The
+ *  cap is applied AFTER the stream is granted instead, where failing costs
+ *  nothing but resolution. See CAPTURE_SIZE_CAP. */
 export const DISPLAY_MEDIA_CONSTRAINTS: MediaStreamConstraints = {
-  video: { frameRate: 30, width: { max: 1920 }, height: { max: 1080 } },
+  video: { frameRate: 30 },
   audio: false,
+};
+
+/** The 1080p-class cap, applied to the track AFTER the share is granted.
+ *
+ *  Same quality intent as before: sharing a 4K monitor otherwise spends the
+ *  bitrate ceiling on four times the pixels, and the first thing to smear at
+ *  too few bits per pixel is small high-contrast detail - which is what a
+ *  jersey number is.
+ *
+ *  What changed is the failure mode. As a REQUEST it could refuse the whole
+ *  capture; as an `applyConstraints` call afterwards the worst case is a clip
+ *  at the source's own resolution, which is exactly what shipped before the
+ *  cap existed. Quality is worth asking for; it is not worth the feature. */
+export const CAPTURE_SIZE_CAP: MediaTrackConstraints = {
+  width: { max: 1920 },
+  height: { max: 1080 },
 };
 
 /** Options for a recorder that must produce MP4 or nothing. */
