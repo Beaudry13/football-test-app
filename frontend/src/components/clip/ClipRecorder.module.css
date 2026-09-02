@@ -79,3 +79,26 @@
   font-size: var(--peira-text-control);
   color: var(--peira-danger);
 }
+
+/* READY. Deliberately NOT the recording treatment: no red, no pulse, no
+   count. The whole job of this state is to look unmistakably like "not yet",
+   next to a browser indicator that is already saying "sharing". */
+.ready {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55em;
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}
+
+.readyDot {
+  width: 10px;
+  height: 10px;
+  margin-top: 0.35em;
+  border-radius: 50%;
+  /* Hollow, where recording is solid. A ring reads as armed-but-idle even
+     for anyone who cannot separate the two colours. */
+  border: 2px solid var(--nb-text-muted);
+  flex: 0 0 auto;
+}

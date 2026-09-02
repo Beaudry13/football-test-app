@@ -37,7 +37,12 @@ describe('ClipRecorder in the create flow', () => {
     const restore = withRecorder(['video/mp4;codecs="avc1.42E01E"']);
     try {
       render(<ClipRecorder onUse={vi.fn()} onCancel={vi.fn()} />);
-      expect(screen.getByRole('button', { name: /start recording/i })).toBeInTheDocument();
+      // The entry point is the PICKER, not the clock - choosing a source and
+      // starting the recording are two deliberate presses.
+      expect(
+        screen.getByRole('button', { name: /choose what to record/i }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^start recording$/i })).toBeNull();
       expect(screen.getByText(/up to 15 seconds, no sound/i)).toBeInTheDocument();
     } finally {
       restore();
@@ -50,7 +55,8 @@ describe('ClipRecorder in the create flow', () => {
     const restore = withRecorder(['video/webm;codecs=vp9', 'video/webm']);
     try {
       render(<ClipRecorder onUse={vi.fn()} onCancel={vi.fn()} />);
-      expect(screen.queryByRole('button', { name: /start recording/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /choose what to record/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^start recording$/i })).toBeNull();
       expect(screen.getByText(/needs a browser that can record MP4/i)).toBeInTheDocument();
     } finally {
       restore();

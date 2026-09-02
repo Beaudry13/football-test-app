@@ -21,15 +21,23 @@ export interface RecordedClip {
 
 /** Record a short silent clip of the coach's screen.
  *
- * A TOOL, NOT AN APPLICATION. Start, stop, look at it, keep it or throw it
- * away. No timeline, no trimming, no crop - the browser's own picker already
- * crops by letting a coach choose one window or tab, at the operating-system
- * level, before a single frame is encoded.
+ * A TOOL, NOT AN APPLICATION. Choose, start, stop, look at it, keep it or
+ * throw it away. No timeline, no trimming, no crop - the browser's own picker
+ * already crops by letting a coach choose one window or tab, at the operating-
+ * system level, before a single frame is encoded.
+ *
+ * CHOOSING A SOURCE IS NOT CONSENT TO RECORD. The picker and the clock are two
+ * decisions, and they used to be one: choosing a window started the recorder
+ * on the same click, so the fifteen seconds were spent finding the film,
+ * moving the mouse out of shot and getting to the right frame. A coach cannot
+ * arrange a window that is already being recorded. READY exists so the
+ * expensive, irreversible thing - the clock - waits for its own deliberate
+ * press.
  *
  * FAILS BEFORE RECORDING, NEVER AFTER. Capability is checked up front, and a
- * browser that cannot produce MP4 gets a message instead of a Start button.
- * The alternative - record, then discover at save time - would waste the
- * coach's take and leave them with nothing.
+ * browser that cannot produce MP4 gets a message instead of a button. The
+ * alternative - record, then discover at save time - would waste the coach's
+ * take and leave them with nothing.
  */
 export function ClipRecorder({
   onUse,
@@ -45,7 +53,7 @@ export function ClipRecorder({
     }),
   );
 
-  const [phase, setPhase] = useState<'idle' | 'recording' | 'preview'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'ready' | 'recording' | 'preview'>('idle');
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [clip, setClip] = useState<RecordedClip | null>(null);
@@ -54,6 +62,13 @@ export function ClipRecorder({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const stopTimerRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
+  const liveRef = useRef<HTMLVideoElement | null>(null);
+  /** The `ended` listener is attached once, when the share is granted, but has
+   *  to behave differently depending on what we are doing with that share. A
+   *  ref rather than the state value because the listener closes over its
+   *  creation-time scope and would otherwise read a stale phase forever. */
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
   /** Ends the capture and, importantly, the browser's sharing indicator.
    *  Leaving tracks live keeps the OS telling the coach their screen is being
@@ -69,7 +84,23 @@ export function ClipRecorder({
 
   useEffect(() => releaseStream, [releaseStream]);
 
-  async function start() {
+  /** Shows the granted share back to the coach while they arrange it.
+   *
+   *  `srcObject` cannot be set as a JSX prop - React only assigns attributes,
+   *  and a MediaStream is not one - so it is attached here and detached when
+   *  the element goes away. Muted is not cosmetic: an unmuted live preview of
+   *  a tab that is playing audio feeds back through the speakers.  */
+  useEffect(() => {
+    const el = liveRef.current;
+    if (!el) return;
+    el.srcObject = streamRef.current;
+    return () => {
+      el.srcObject = null;
+    };
+  }, [phase]);
+
+  /** Step one: get the share. Deliberately does NOT touch MediaRecorder. */
+  async function chooseSource() {
     if (!capability.supported || !capability.mimeType) return;
     setError(null);
     let stream: MediaStream;
@@ -85,6 +116,28 @@ export function ClipRecorder({
       return;
     }
     streamRef.current = stream;
+    setSeconds(0);
+
+    // ENDING THE SHARE FROM THE BROWSER'S OWN BAR, in either state. While
+    // recording it is a stop and the take is kept, which is the behaviour that
+    // already existed. While merely ready there is nothing to keep, so it
+    // returns to the start rather than leaving a dead preview on screen.
+    stream.getVideoTracks()[0]?.addEventListener('ended', () => {
+      if (phaseRef.current === 'recording') {
+        if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop();
+        return;
+      }
+      releaseStream();
+      setPhase('idle');
+    });
+
+    setPhase('ready');
+  }
+
+  /** Step two, and the only place the clock starts. */
+  function beginRecording() {
+    const stream = streamRef.current;
+    if (!stream || !capability.mimeType) return;
 
     const chunks: Blob[] = [];
     const recorder = new MediaRecorder(stream, recorderOptions(capability.mimeType));
@@ -104,12 +157,7 @@ export function ClipRecorder({
       setPhase('preview');
     };
 
-    // A COACH STOPS ANY TIME; THE BROWSER STOPS AT 15 SECONDS. Sharing ended
-    // from the browser's own "Stop sharing" bar also lands here, because the
-    // track ending is what we listen for.
-    stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-      if (recorder.state !== 'inactive') recorder.stop();
-    });
+    // A COACH STOPS ANY TIME; THE BROWSER STOPS AT 15 SECONDS.
     stopTimerRef.current = window.setTimeout(() => {
       if (recorder.state !== 'inactive') recorder.stop();
     }, MAX_CLIP_MS);
@@ -125,6 +173,19 @@ export function ClipRecorder({
 
   function stop() {
     if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop();
+  }
+
+  /** Cancelling a share that has not recorded anything.
+   *
+   *  Releases the tracks rather than just changing screens: the coach is still
+   *  visibly sharing until the tracks stop, and a UI that has moved on while
+   *  the operating system says otherwise is the alarming case. Returns to the
+   *  start so a different window can be chosen without reopening the recorder.
+   */
+  function cancelReady() {
+    releaseStream();
+    setSeconds(0);
+    setPhase('idle');
   }
 
   function discard() {
@@ -156,11 +217,12 @@ export function ClipRecorder({
       {phase === 'idle' && (
         <>
           <p className={styles.hint}>
-            Choose a window, tab or screen to record. Up to 15 seconds, no sound.
+            Choose a window, tab or screen. Nothing records until you press Start
+            recording. Up to 15 seconds, no sound.
           </p>
           <div className={styles.actions}>
-            <button type="button" className={nb.btnPrimary} onClick={() => void start()}>
-              Start recording
+            <button type="button" className={nb.btnPrimary} onClick={() => void chooseSource()}>
+              Choose what to record
             </button>
             <button type="button" className={nb.btnSecondary} onClick={onCancel}>
               Cancel
@@ -169,8 +231,33 @@ export function ClipRecorder({
         </>
       )}
 
+      {phase === 'ready' && (
+        <>
+          {/* Muted, and never `loop` - this is a live mirror of the share, not
+              a clip. Autoplay is safe because the stream carries no audio. */}
+          <video className={styles.preview} ref={liveRef} autoPlay muted playsInline />
+          {/* THE WHOLE POINT OF THIS STATE, said plainly. The browser is
+              already showing its own sharing indicator, so a coach who is told
+              only "sharing" will reasonably assume the clock is running. */}
+          <p className={styles.ready} role="status">
+            <span className={styles.readyDot} aria-hidden="true" />
+            Your screen is shared, but nothing is being recorded yet. Arrange the
+            window, then press Start recording.
+          </p>
+          <div className={styles.actions}>
+            <button type="button" className={nb.btnPrimary} onClick={beginRecording}>
+              Start recording
+            </button>
+            <button type="button" className={nb.btnSecondary} onClick={cancelReady}>
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
       {phase === 'recording' && (
         <>
+          <video className={styles.preview} ref={liveRef} autoPlay muted playsInline />
           <p className={styles.recording} role="status">
             <span className={styles.dot} aria-hidden="true" />
             Recording · {String(seconds).padStart(2, '0')} / 15 sec
