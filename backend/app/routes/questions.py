@@ -17,6 +17,7 @@ from app.errors import ApiError
 from app.services.clip_storage import (
     CLIP_CONTENT_TYPE,
     delete_clip_object,
+    validate_decision_point_ms,
     save_clip,
     save_poster,
     validate_duration_ms,
@@ -228,6 +229,7 @@ class _UploadedMedia:
     duration_ms: str | None = None
     width: str | None = None
     height: str | None = None
+    decision_point_ms: str | None = None
 
 
 def _create_payload() -> tuple[dict, object | None]:
@@ -267,6 +269,7 @@ def _create_payload() -> tuple[dict, object | None]:
             duration_ms=request.form.get("clip_duration_ms"),
             width=request.form.get("clip_width"),
             height=request.form.get("clip_height"),
+            decision_point_ms=request.form.get("clip_decision_point_ms"),
         )
 
     return load_json_body(QuestionCreateSchema()), None
@@ -438,15 +441,24 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
                 except (TypeError, ValueError):
                     return None
 
+            clip_duration = validate_duration_ms(_as_int(media.duration_ms))
+            # Validated against THIS clip's duration - a point past the end
+            # would never stop anything, so the player would watch the whole
+            # play and the question would answer itself.
+            clip_decision_point = validate_decision_point_ms(
+                media.decision_point_ms, clip_duration
+            )
+
             db.session.add(
                 QuestionClip(
                     question_id=question.id,
                     storage_key=stored_clip_key,
                     poster_key=stored_poster_key,
                     content_type=CLIP_CONTENT_TYPE,
-                    duration_ms=validate_duration_ms(_as_int(media.duration_ms)),
+                    duration_ms=clip_duration,
                     width=_as_int(media.width),
                     height=_as_int(media.height),
+                    decision_point_ms=clip_decision_point,
                 )
             )
 
@@ -938,14 +950,27 @@ def upload_question_clip(quiz_id: int, question_id: int):
         except (TypeError, ValueError):
             return None
 
+    duration_ms = validate_duration_ms(_int_or_none("duration_ms"))
     clip = QuestionClip(
         question_id=question.id,
         storage_key=storage_key,
         poster_key=poster_key,
         content_type=CLIP_CONTENT_TYPE,
-        duration_ms=validate_duration_ms(_int_or_none("duration_ms")),
+        duration_ms=duration_ms,
         width=_int_or_none("width"),
         height=_int_or_none("height"),
+        # REPLACING THE FILM CLEARS THE DECISION POINT unless this request
+        # sets a new one, and that is the owner's decision made deliberately:
+        # "freeze at 6.0s" was chosen by looking at a FRAME, and on different
+        # football 6.0s is an arbitrary moment that may show the outcome the
+        # coach meant to hide. Carrying it silently would be the one way this
+        # feature can fail without anyone noticing.
+        #
+        # Nothing is lost from history - a delivered attempt keeps the clip AND
+        # the decision point it was given, frozen in its snapshot.
+        decision_point_ms=validate_decision_point_ms(
+            request.form.get("decision_point_ms"), duration_ms
+        ),
     )
     # Replacing keeps the OLD object in storage on purpose. A delivered
     # snapshot may point at it, and historical integrity outranks reclaiming a
@@ -958,6 +983,35 @@ def upload_question_clip(quiz_id: int, question_id: int):
     db.session.commit()
 
     return jsonify(clip.to_dict()), 201
+
+
+@questions_bp.patch("/<int:quiz_id>/questions/<int:question_id>/clip/decision-point")
+@jwt_required()
+def set_clip_decision_point(quiz_id: int, question_id: int):
+    """Set or clear where a clip freezes, WITHOUT touching the film.
+
+    A coach chooses this moment by watching the clip and pausing on the frame,
+    which happens long after the bytes were uploaded. Re-sending the video to
+    record one integer would be slow on a phone tether and would also mint a
+    new storage object for no reason.
+
+    `decision_point_ms: null` clears it and the clip goes back to being an
+    ordinary looping one. Deliberately NOT a delete of the clip.
+
+    DELIVERED ATTEMPTS ARE UNAFFECTED, here as everywhere: they read the value
+    frozen in their own snapshot, so a coach moving or clearing this cannot
+    change what a player already received.
+    """
+    question = _get_editable_question(quiz_id, question_id)
+    if question.clip is None:
+        raise ApiError("Question has no clip", status_code=404)
+
+    body = request.get_json(silent=True) or {}
+    question.clip.decision_point_ms = validate_decision_point_ms(
+        body.get("decision_point_ms"), question.clip.duration_ms
+    )
+    db.session.commit()
+    return jsonify(question.clip.to_dict()), 200
 
 
 @questions_bp.delete("/<int:quiz_id>/questions/<int:question_id>/clip")

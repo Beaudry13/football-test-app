@@ -68,6 +68,19 @@ class QuestionClip(db.Model):
     width = db.Column(db.Integer, nullable=True)
     height = db.Column(db.Integer, nullable=True)
 
+    #: WHERE THE FILM STOPS SO THE PLAYER CAN DECIDE, in milliseconds.
+    #:
+    #: NULL is an ordinary Record Clip: autoplay, native loop, whole play. A
+    #: value stops playback there and holds the frame until the player has
+    #: answered. Nullable is what makes this additive - every clip recorded
+    #: before this column existed reads as NULL and behaves exactly as it did.
+    #:
+    #: A PRESENTATION FACT, NOT AN ANSWER FACT. Nothing about grading, option
+    #: matching or scoring reads this; it decides what the player is allowed to
+    #: SEE before answering, which is why it lives on the clip rather than
+    #: becoming a question type.
+    decision_point_ms = db.Column(db.Integer, nullable=True)
+
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
 
     question = db.relationship("Question", back_populates="clip")
@@ -83,5 +96,6 @@ class QuestionClip(db.Model):
             "duration_ms": self.duration_ms,
             "width": self.width,
             "height": self.height,
+            "decision_point_ms": self.decision_point_ms,
             "has_poster": self.poster_key is not None,
         }

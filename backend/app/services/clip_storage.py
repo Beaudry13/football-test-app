@@ -185,3 +185,38 @@ def copy_poster_object(key: str | None) -> str | None:
     return get_private_storage().save_private(
         data, content_type=POSTER_CONTENT_TYPE, extension=POSTER_EXTENSION
     )
+
+
+def validate_decision_point_ms(raw, duration_ms: int | None) -> int | None:
+    """Where the film stops, in milliseconds, or None for an ordinary clip.
+
+    VALIDATED AGAINST THE CLIP IT BELONGS TO. A decision point at or past the
+    end never stops anything, so the player would watch the whole play and the
+    question would answer itself - the exact failure the feature exists to
+    prevent. A point at zero is equally useless: it freezes before any football
+    has happened.
+
+    Refuses rather than clamps. Silently moving a coach's decision point would
+    change which frame a player is shown without telling anybody, and the whole
+    value of the feature is that the coach chose that frame deliberately.
+    """
+    if raw is None or raw == "":
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise ApiError("That decision point isn't a valid time.", status_code=400) from None
+
+    if value <= 0:
+        raise ApiError(
+            "A decision point has to be after the start of the clip.", status_code=400
+        )
+
+    # A clip whose duration was never recorded still gets the absolute ceiling,
+    # so a nonsense value cannot ride in on missing metadata.
+    ceiling = duration_ms if duration_ms else MAX_DURATION_MS
+    if value >= ceiling:
+        raise ApiError(
+            "A decision point has to be before the end of the clip.", status_code=400
+        )
+    return value

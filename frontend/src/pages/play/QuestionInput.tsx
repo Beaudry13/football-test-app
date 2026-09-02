@@ -42,6 +42,8 @@ export function QuestionInput({
   isUnanswered = false,
   drawingScope,
   locked = false,
+  canRevealClip = false,
+  autostartClip = true,
 }: {
   question: Question;
   index: number;
@@ -53,6 +55,13 @@ export function QuestionInput({
   /** Namespaces this player's drawing drafts in localStorage. Omitted by the
    * coach's preview, which deliberately keeps nothing. */
   drawingScope?: string;
+  /** A decision-point clip may show the rest of the play. THE TRIGGER IS
+   * THAT AN ANSWER EXISTS, decided by the caller with the same rule that
+   * governs submitting - never whether the answer is right. */
+  canRevealClip?: boolean;
+  /** False on the all-questions-on-one-page layout, so a screen of clips
+   * does not all start playing at once. */
+  autostartClip?: boolean;
   /** Practice only: this question has been checked, so the answer is fixed
    * for this attempt. Shown read-only rather than hidden - a player should
    * still be able to re-read what they put and what their coach said.
@@ -157,6 +166,11 @@ export function QuestionInput({
           posterUrl={clip.poster_url ? resolveMediaUrl(clip.poster_url) : null}
           className={styles.questionImage}
           ariaLabel="Recorded clip for this question"
+          /* Read from the DELIVERED clip, so an attempt keeps the freeze it
+             was given even after the coach moves or clears the live one. */
+          decisionPointMs={(clip as { decision_point_ms?: number | null }).decision_point_ms}
+          canReveal={canRevealClip}
+          autostart={autostartClip}
         />
       )}
       {maskedImageUrl && (

@@ -15,9 +15,14 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/ui/Modal';
 import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecorder';
-import { ClipPlayer, ClipThumbnail } from '../../components/clip/ClipPlayer';
+import { ClipThumbnail } from '../../components/clip/ClipPlayer';
+import { DecisionPointEditor } from '../../components/clip/DecisionPointEditor';
 import { formatClipDuration } from '../../components/clip/clipRecording';
-import { deleteQuestionClip, uploadQuestionClip } from '../../api/questions';
+import {
+  deleteQuestionClip,
+  setClipDecisionPoint,
+  uploadQuestionClip,
+} from '../../api/questions';
 import { QuestionEditor } from './QuestionEditor';
 import { Icon } from '../../components/ui/Icon';
 import { MenuButton, MenuItem } from '../../components/ui/MenuButton';
@@ -182,6 +187,23 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
    *  see the clip they attached without previewing the whole quiz as a
    *  player, which is a long way to go to check one take. */
   const [previewingClip, setPreviewingClip] = useState<Question | null>(null);
+  const [savingDecisionPoint, setSavingDecisionPoint] = useState(false);
+
+  /** Sets or clears where the film stops. Reloads so the list's own copy of
+   *  the question matches the server rather than a local guess. */
+  async function handleDecisionPoint(questionId: number, ms: number | null) {
+    setClipError(null);
+    setSavingDecisionPoint(true);
+    try {
+      await setClipDecisionPoint(quiz.id, questionId, ms);
+      await reload();
+      setPreviewingClip(null);
+    } catch (err) {
+      setClipError(getErrorMessage(err));
+    } finally {
+      setSavingDecisionPoint(false);
+    }
+  }
 
   async function handleUseClip(questionId: number, recorded: RecordedClip) {
     setClipError(null);
@@ -359,14 +381,17 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               the take the coach is editing. A delivered attempt resolves
               through its frozen snapshot instead, and the two must not be
               swapped just because they render with the same component. */}
-          <ClipPlayer
+          <DecisionPointEditor
             url={resolveMediaUrl(previewingClip.clip.url)}
             posterUrl={
               previewingClip.clip.poster_url
                 ? resolveMediaUrl(previewingClip.clip.poster_url)
                 : null
             }
-            ariaLabel="Clip attached to this question"
+            decisionPointMs={previewingClip.clip.decision_point_ms ?? null}
+            durationMs={previewingClip.clip.duration_ms ?? null}
+            busy={savingDecisionPoint}
+            onChange={(ms) => void handleDecisionPoint(previewingClip.id, ms)}
           />
         </Modal>
       )}
@@ -503,6 +528,14 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                       {formatClipDuration(question.clip.duration_ms)}
                     </span>
                   )}
+                  {/* A decision-point clip behaves differently for the
+                      player, so it must not look identical to an ordinary
+                      one in a list a coach scans. */}
+                  {question.clip.decision_point_ms ? (
+                    <span className={styles.freezeChip}>
+                      &#9209; {formatClipDuration(question.clip.decision_point_ms)}
+                    </span>
+                  ) : null}
                 </span>
               ) : question.image ? (
                 <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
@@ -626,7 +659,9 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     {question.clip && (
                       <>
                         <MenuItem onSelect={() => setPreviewingClip(question)}>
-                          Watch clip
+                          {question.clip.decision_point_ms
+                            ? 'Watch clip / decision point'
+                            : 'Watch clip'}
                         </MenuItem>
                         <MenuItem onSelect={() => setRecordingFor(question.id)}>
                           Replace clip

@@ -1,0 +1,45 @@
+/* Choosing where the film stops. A tool inside the question editor, so it
+   borrows the notebook buttons and adds only what this job needs. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+}
+
+.video {
+  width: 100%;
+  max-height: 60vh;
+  display: block;
+  background: #000;
+  border-radius: var(--radius-sm);
+  /* The football keeps its shape - never cropped to fit a box. */
+  object-fit: contain;
+}
+
+/* The current setting, stated plainly. A coach must be able to read what the
+   question will do without pressing anything. */
+.state {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--nb-text);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+
+.error {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--peira-danger);
+}

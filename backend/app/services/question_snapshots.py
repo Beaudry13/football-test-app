@@ -158,6 +158,11 @@ def build_snapshot(question: Question) -> dict:
                 "duration_ms": question.clip.duration_ms,
                 "width": question.clip.width,
                 "height": question.clip.height,
+                # WHERE THIS ATTEMPT'S FILM STOPPED. Frozen for the same reason
+                # the storage key is: a coach who later moves the decision
+                # point, or clears it entirely, must not change how much of the
+                # play a finished attempt is able to show.
+                "decision_point_ms": question.clip.decision_point_ms,
             }
             if question.clip is not None
             else None

@@ -844,5 +844,10 @@ def _copy_questions_into(
                     duration_ms=question.clip.duration_ms,
                     width=question.clip.width,
                     height=question.clip.height,
+                    # CARRIED DELIBERATELY. The copy points at a byte-identical
+                    # clip, so the frame the coach chose is the same frame -
+                    # and a duplicate that silently played the whole play would
+                    # hand the outcome to the next squad.
+                    decision_point_ms=question.clip.decision_point_ms,
                 )
             )

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import styles from './ClipPlayer.module.css';
+import { armDecisionPointStop, decisionPointSeconds } from './decisionPoint';
 
 /** A recorded clip, rendered the way a GIF reads.
  *
@@ -40,23 +41,115 @@ import styles from './ClipPlayer.module.css';
  * The play glyph appears only while paused. A clip that is doing its job
  * carries no chrome at all.
  *
- * NATIVE `loop` IS UNTOUCHED. The looping is still the browser's, so nothing
- * here can drift, stutter or double-fire at the loop point.
+ * NATIVE `loop` IS UNTOUCHED for an ordinary clip. The looping is still the
+ * browser's, so nothing here can drift, stutter or double-fire at the loop
+ * point.
+ *
+ * ---------------------------------------------------------------------------
+ * A DECISION-POINT CLIP IS THE SAME COMPONENT IN A DIFFERENT MODE
+ * ---------------------------------------------------------------------------
+ *
+ * With `decisionPointMs` the film stops on the frame the coach chose and holds
+ * it: no looping, because a pre-snap sequence repeating every few seconds
+ * while a player is trying to read it is a distraction rather than a help.
+ * Replay puts it back to the start; See the rest is offered only once an
+ * answer exists, and plays the remainder once.
+ *
+ * `autostart={false}` covers the single-page quiz, where every clip on screen
+ * would otherwise begin at once.
+ *
+ * NOT A SECOND COMPONENT, because the two must never disagree about scale,
+ * position or fallback - the same reason the coach and the player share this
+ * one today. An ordinary clip takes none of these branches.
  */
 export function ClipPlayer({
   url,
   posterUrl,
   className,
   ariaLabel,
+  decisionPointMs,
+  canReveal = false,
+  autostart = true,
 }: {
   url: string;
   posterUrl?: string | null;
   className?: string;
   ariaLabel?: string;
+  /** Where the film stops so the player can decide. Absent or null is an
+   *  ordinary clip and every decision-point branch below is skipped. */
+  decisionPointMs?: number | null;
+  /** Whether "See the rest" is offered. THE TRIGGER IS THAT AN ANSWER
+   *  EXISTS, never that it is correct - revealing the play is not revealing
+   *  the answer, and this component is given no way to tell the difference. */
+  canReveal?: boolean;
+  /** False on a single-page quiz, where a screen of clips would otherwise
+   *  all start playing at once. */
+  autostart?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const [paused, setPaused] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const stopAt = decisionPointSeconds(decisionPointMs);
+  const isDecisionPoint = stopAt !== null;
+  /** 'holding' - stopped on the coach's frame, waiting for an answer.
+   *  'revealed' - the player asked for the rest and it is playing out. */
+  const [phase, setPhase] = useState<'holding' | 'revealed'>('holding');
+  const disarmRef = useRef<(() => void) | null>(null);
+
+  /** Plays from `from` with the stop armed BEFORE playback begins.
+   *
+   *  Arming first is not a detail: arming after `play()` leaves a window in
+   *  which the film is running with nothing watching it, and on a short clip
+   *  that window can contain the decision point. */
+  const playGuarded = useCallback(
+    (from: number) => {
+      const el = videoRef.current;
+      if (!el || stopAt === null) return;
+      disarmRef.current?.();
+      try {
+        el.currentTime = from;
+      } catch {
+        // Metadata not ready yet; playback still starts from the beginning,
+        // which is the only value `from` ever takes before it is.
+      }
+      disarmRef.current = armDecisionPointStop(el, stopAt, () => {
+        disarmRef.current = null;
+      });
+      const attempt = el.play();
+      if (attempt && typeof attempt.catch === 'function') {
+        attempt.catch(() => setPaused(true));
+      }
+    },
+    [stopAt],
+  );
+
+  const replay = useCallback(() => {
+    setPhase('holding');
+    playGuarded(0);
+  }, [playGuarded]);
+
+  /** THE REMAINDER, ONCE. No stopper is armed - this is the part the player
+   *  has earned by answering - and no loop, because re-watching the outcome
+   *  is the least instructive thing on offer. */
+  const reveal = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || stopAt === null) return;
+    disarmRef.current?.();
+    disarmRef.current = null;
+    setPhase('revealed');
+    try {
+      el.currentTime = stopAt;
+    } catch {
+      /* If the seek is refused the film simply continues from where it is. */
+    }
+    const attempt = el.play();
+    if (attempt && typeof attempt.catch === 'function') {
+      attempt.catch(() => setPaused(true));
+    }
+  }, [stopAt]);
+
+  useEffect(() => () => disarmRef.current?.(), []);
 
   /** Autoplay is a REQUEST, not a guarantee.
    *
@@ -68,11 +161,21 @@ export function ClipPlayer({
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
+    if (!autostart) {
+      // A single-page quiz. Nothing plays until the player asks, so the page
+      // does not become a wall of simultaneous film.
+      setPaused(true);
+      return;
+    }
+    if (stopAt !== null) {
+      playGuarded(0);
+      return;
+    }
     const attempt = el.play();
     if (attempt && typeof attempt.catch === 'function') {
       attempt.catch(() => setPaused(true));
     }
-  }, [url]);
+  }, [url, autostart, stopAt, playGuarded]);
 
   const toggle = useCallback(() => {
     const el = videoRef.current;
@@ -80,6 +183,14 @@ export function ClipPlayer({
     // Reads the ELEMENT rather than React state, so repeated taps cannot get
     // out of step with what the video is actually doing.
     if (el.paused) {
+      // A TAP MUST NEVER BE A WAY PAST THE DECISION POINT. Resuming a clip
+      // that is being held on the coach's frame would play straight into the
+      // outcome, so while holding, the tap restarts the run-up instead.
+      if (stopAt !== null && phase === 'holding') {
+        if (el.currentTime >= stopAt - 0.05) replay();
+        else playGuarded(el.currentTime);
+        return;
+      }
       const attempt = el.play();
       if (attempt && typeof attempt.catch === 'function') {
         attempt.catch(() => setPaused(true));
@@ -87,7 +198,7 @@ export function ClipPlayer({
     } else {
       el.pause();
     }
-  }, []);
+  }, [stopAt, phase, replay, playGuarded]);
 
   if (failed) {
     return (
@@ -109,7 +220,7 @@ export function ClipPlayer({
     );
   }
 
-  return (
+  const surface = (
     /* A BUTTON WRAPPING THE VIDEO, rather than a click handler on the video.
        A <video> without controls is not focusable and not reachable by
        keyboard at all, so a bare onClick would have been a mouse-and-touch
@@ -131,8 +242,13 @@ export function ClipPlayer({
         className={`${styles.clip} ${className ?? ''}`}
         src={url}
         poster={posterUrl ?? undefined}
-        autoPlay
-        loop
+        // Autoplay is a REQUEST; the effect above catches a refusal. Off
+        // entirely on a single-page quiz.
+        autoPlay={autostart}
+        // NO NATIVE LOOP on a decision-point clip: looping the run-up every
+        // few seconds while a player is trying to read it is a distraction,
+        // and after the reveal, re-watching the outcome teaches nothing.
+        loop={!isDecisionPoint}
         muted
         playsInline
         // No controls bar: a fifteen-second silent loop has nothing to
@@ -159,6 +275,32 @@ export function ClipPlayer({
         </span>
       )}
     </button>
+  );
+
+  if (!isDecisionPoint) return surface;
+
+  return (
+    <div className={styles.decision}>
+      {surface}
+      <div className={styles.decisionActions}>
+        <button type="button" className={styles.decisionBtn} onClick={replay}>
+          Replay
+        </button>
+        {/* OFFERED ONLY ONCE AN ANSWER EXISTS. Not once it is right - the
+            component is never told whether it is, so it cannot become a
+            correctness signal by accident. */}
+        {phase === 'holding' && canReveal && (
+          <button type="button" className={styles.decisionBtn} onClick={reveal}>
+            See the rest
+          </button>
+        )}
+      </div>
+      {phase === 'holding' && !canReveal && (
+        <p className={styles.decisionNote}>
+          The film stops here. Answer the question to see the rest of the play.
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -603,6 +603,12 @@ export function QuizStep({
           isUnanswered={unansweredIds.has(question.id)}
           drawingScope={drawingScope}
           locked={Boolean(checked)}
+          /* THE SAME RULE THAT GOVERNS SUBMITTING decides whether the rest of
+             the play may be shown. Reusing `isAnswered` rather than writing a
+             second rule is the point: a blank box or an untouched choice must
+             not count as an answer here either. Correctness is never consulted
+             and is not available to consult. */
+          canRevealClip={isAnswered(question, answers[question.id])}
         />
         {checked && (
           <PracticeFeedbackCard
@@ -663,6 +669,12 @@ export function QuizStep({
               isUnanswered={unansweredIds.has(question.id)}
               drawingScope={drawingScope}
               locked={Boolean(checked)}
+              canRevealClip={isAnswered(question, answers[question.id])}
+              /* EVERY QUESTION IS ON SCREEN AT ONCE HERE, so nothing may start
+                 on its own - twenty clips playing together is a wall of film
+                 and a lot of decoding for a page a player is still reading.
+                 Each one waits for a tap. */
+              autostartClip={false}
             />
             {isPractice &&
               (checked ? (

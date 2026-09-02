@@ -391,3 +391,21 @@
   line-height: 1.4;
   pointer-events: none;
 }
+
+/* A decision-point clip stops mid-play for the player, which is a different
+   question to answer than an ordinary loop. The timecode chip says how long
+   the film is; this one says where it freezes. */
+.freezeChip {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: rgba(217, 164, 65, 0.92);
+  color: #0E1013;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  pointer-events: none;
+}

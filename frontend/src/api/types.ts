@@ -291,6 +291,7 @@ export interface Question {
     id?: number;
     content_type?: string;
     duration_ms?: number | null;
+    decision_point_ms?: number | null;
     width?: number | null;
     height?: number | null;
     has_poster?: boolean;

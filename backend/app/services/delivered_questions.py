@@ -100,6 +100,10 @@ class DeliveredClip:
     width: int | None = None
     height: int | None = None
     clip_id: int | None = None
+    #: None for an ordinary looping clip AND for every snapshot written before
+    #: decision points existed - which are the same thing, so no distinction is
+    #: needed and nothing has to be backfilled.
+    decision_point_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -331,6 +335,7 @@ def _from_live(question, number: int) -> DeliveredQuestion:
                 width=question.clip.width,
                 height=question.clip.height,
                 clip_id=question.clip.id,
+                decision_point_ms=question.clip.decision_point_ms,
             )
             if question.clip is not None
             else None
@@ -360,6 +365,7 @@ def _clip_from_snapshot(raw) -> DeliveredClip | None:
         width=raw.get("width"),
         height=raw.get("height"),
         clip_id=raw.get("clip_id"),
+        decision_point_ms=raw.get("decision_point_ms"),
     )
 
 
@@ -554,6 +560,11 @@ def to_player_payload(
             "url": clip_url,
             "poster_url": clip_poster_url,
             "content_type": delivered.clip.content_type if delivered.clip else "video/mp4",
+            # The player's copy of where the film stops. Read from the snapshot,
+            # so a live edit cannot move it under an attempt in progress.
+            "decision_point_ms": (
+                delivered.clip.decision_point_ms if delivered.clip else None
+            ),
             "width": delivered.clip.width if delivered.clip else None,
             "height": delivered.clip.height if delivered.clip else None,
         }

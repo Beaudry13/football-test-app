@@ -79,3 +79,44 @@
   /* The button underneath owns the interaction; this must never eat the tap. */
   pointer-events: none;
 }
+
+/* A decision-point clip carries two controls under the film. An ordinary clip
+   renders none of this and is byte-for-byte the component it was. */
+.decision {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.decisionActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+/* Quiet, and deliberately not the question's primary action - answering is.
+   These sit under the film as film controls, not as things to press first. */
+.decisionBtn {
+  flex: 0 1 auto;
+  min-height: 44px;
+  padding: 0 1em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.decisionBtn:focus-visible {
+  outline: 2px solid var(--color-focus, currentColor);
+  outline-offset: 2px;
+}
+
+/* Says why the film stopped. Without it a frozen clip reads as a bug. */
+.decisionNote {
+  margin: 0;
+  font-size: var(--peira-text-meta);
+  color: var(--color-text-muted);
+}

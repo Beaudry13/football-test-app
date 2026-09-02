@@ -133,6 +133,22 @@ export function uploadQuestionClip(
   return api.postForm<QuestionClip>(`/quizzes/${quizId}/questions/${questionId}/clip`, formData);
 }
 
+/** Sets or clears where a clip freezes, WITHOUT re-uploading the film.
+ *
+ * A coach chooses this moment by watching the clip and pausing on the frame,
+ * long after the bytes were uploaded. `null` clears it and the clip goes back
+ * to being an ordinary looping one - it does not delete the clip. */
+export function setClipDecisionPoint(
+  quizId: number,
+  questionId: number,
+  decisionPointMs: number | null,
+): Promise<QuestionClip> {
+  return api.patch<QuestionClip>(
+    `/quizzes/${quizId}/questions/${questionId}/clip/decision-point`,
+    { decision_point_ms: decisionPointMs },
+  );
+}
+
 export function deleteQuestionClip(quizId: number, questionId: number): Promise<void> {
   return api.delete<void>(`/quizzes/${quizId}/questions/${questionId}/clip`);
 }

@@ -157,17 +157,28 @@ describe('watching, replacing and removing a clip', () => {
     // document rather than the render container - the modal is a portal.
     const video = document.querySelector('video') as HTMLVideoElement;
     expect(video).toBeTruthy();
-    // ...and it resolves the LIVE clip through the coach's own signed URL.
-    // A delivered attempt resolves its frozen snapshot instead; rendering both
-    // with ClipPlayer must never merge those two paths.
+    // It resolves the LIVE clip through the coach's own signed URL. A
+    // delivered attempt resolves its frozen snapshot instead, and the two
+    // paths must never merge.
     expect(video.getAttribute('src')).toContain(COACH_CLIP_URL);
     expect(video.getAttribute('poster')).toContain(COACH_POSTER_URL);
 
-    // The player's own behaviour comes along unchanged.
-    expect(video.hasAttribute('autoplay')).toBe(true);
-    expect(video.hasAttribute('loop')).toBe(true);
-    expect(video.hasAttribute('playsinline')).toBe(true);
-    expect(video.hasAttribute('controls')).toBe(false);
+    // AND IT HAS ORDINARY CONTROLS, unlike the player's copy. The coach is
+    // choosing a frame, which means scrubbing through the whole clip -
+    // including the part a player will never see. Handing them the player
+    // component here would stop the film at the very moment they are trying
+    // to pick.
+    expect(video.hasAttribute('controls')).toBe(true);
+  });
+
+  it('lets the coach set the decision point from the frame on screen', async () => {
+    renderTab([withClip()]);
+    const user = await openQuestionMenu();
+    await user.click(screen.getByText('Watch clip'));
+
+    expect(screen.getByRole('button', { name: /set decision point/i })).toBeInTheDocument();
+    // Nothing is set yet, so the clip is described honestly as an ordinary one.
+    expect(screen.getByText(/plays the whole clip on a loop/i)).toBeInTheDocument();
   });
 
   it('opens the recorder when the coach chooses Replace', async () => {
