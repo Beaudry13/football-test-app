@@ -8,10 +8,17 @@ prefix from day one.
 
 WHAT THIS ENDPOINT CAN REACH
 ----------------------------
-Page rasters and thumbnails. That is the complete list, and it is enforced by
-construction: `sign_media_token` refuses to mint any other kind, and the
+Page rasters, thumbnails, masked page renders, recorded clips and their
+posters - live and as-delivered. That is the complete list, and it is enforced
+by construction: `sign_media_token` refuses to mint any other kind, and the
 dispatch below has no branch that reads a `SourceDocument.storage_key`. The
 original PDF is unreachable from here no matter what a caller sends.
+
+LIVE AND HISTORICAL ARE DIFFERENT KINDS, NOT THE SAME KIND WITH A FLAG. A
+`clip` token names the live `question_clips` row; a `dclip` token names an
+`attempt_question_snapshots` row and reads the key frozen inside it. Keeping
+them apart is what stops a coach's replacement from rewriting what a finished
+attempt is able to show.
 
 EVERY FAILURE IS A 404
 ----------------------
@@ -27,10 +34,12 @@ from app.extensions import db
 from app.models import AttemptQuestionSnapshot, DocumentPage, Question, QuestionClip
 from app.services.page_masking import delivered_mask_bytes, masked_render_bytes
 from app.services.private_storage import get_private_storage
-from app.services.clip_storage import POSTER_CONTENT_TYPE
+from app.services.clip_storage import CLIP_CONTENT_TYPE, POSTER_CONTENT_TYPE
 from app.services.signed_media import (
     KIND_CLIP,
     KIND_CLIP_POSTER,
+    KIND_DELIVERED_CLIP,
+    KIND_DELIVERED_CLIP_POSTER,
     KIND_DELIVERED_MASK,
     KIND_QUESTION_MASK,
     KIND_THUMBNAIL,
@@ -102,6 +111,42 @@ def _masked_question_bytes(question_id: int) -> bytes | None:
         return None
 
 
+def _delivered_clip_object(snapshot_id: int, *, poster: bool) -> tuple[bytes | None, str]:
+    """The clip ONE ATTEMPT WAS DELIVERED, read from that attempt's snapshot.
+
+    Resolves through the frozen `storage_key`, never through the live
+    `question_clips` row - which is the entire point. Replacing a clip deletes
+    that row, so anything resolving by row id returned 404 for every past
+    attempt while the bytes sat untouched in storage.
+
+    The snapshot's own `content_type` travels with it too: a historical object
+    must be served as what it WAS, not as whatever the current clip happens to
+    be encoded as.
+
+    Fails closed at every step. A missing row, a snapshot recorded before clips
+    existed, a malformed blob and a missing object are all None, and the caller
+    turns every one of them into the same 404.
+    """
+    row = db.session.get(AttemptQuestionSnapshot, snapshot_id)
+    if row is None:
+        return None, POSTER_CONTENT_TYPE
+    blob = row.snapshot if isinstance(row.snapshot, dict) else {}
+    clip = blob.get("clip")
+    if not isinstance(clip, dict):
+        # No clip key at all is an attempt delivered before this feature, or
+        # one delivered without a clip. Neither is a licence to serve today's.
+        return None, POSTER_CONTENT_TYPE
+    if poster:
+        key, content_type = clip.get("poster_key"), POSTER_CONTENT_TYPE
+    else:
+        key, content_type = clip.get("storage_key"), clip.get("content_type")
+    if not key or not isinstance(key, str):
+        return None, POSTER_CONTENT_TYPE
+    if not isinstance(content_type, str) or not content_type:
+        content_type = CLIP_CONTENT_TYPE
+    return get_private_storage().load_private(key), content_type
+
+
 def _delivered_mask_bytes(snapshot_id: int) -> bytes | None:
     """The mask one attempt was delivered, from its frozen geometry.
 
@@ -140,6 +185,10 @@ def serve_signed_media(token: str):
         if not key:
             abort(404)
         data = get_private_storage().load_private(key)
+    elif kind in (KIND_DELIVERED_CLIP, KIND_DELIVERED_CLIP_POSTER):
+        data, content_type = _delivered_clip_object(
+            payload["i"], poster=kind == KIND_DELIVERED_CLIP_POSTER
+        )
     elif kind == KIND_DELIVERED_MASK:
         data = _delivered_mask_bytes(payload["i"])
     elif kind == KIND_QUESTION_MASK:
@@ -167,7 +216,7 @@ def serve_signed_media(token: str):
     #
     # Only the clip kind needs it; the image kinds are small and are always
     # fetched whole.
-    if kind == KIND_CLIP:
+    if kind in (KIND_CLIP, KIND_DELIVERED_CLIP):
         return _ranged_response(data, content_type, seconds_until_expiry(payload))
 
     response = Response(data, mimetype=content_type)

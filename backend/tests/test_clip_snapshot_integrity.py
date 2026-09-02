@@ -183,7 +183,11 @@ def test_play_start_gives_the_player_an_access_code_scoped_clip_url(
     payload = json.loads(base64.urlsafe_b64decode(payload_b64))
     # Audienced to this access code, not to a coach.
     assert payload["a"] == f"ac:{access_code['id']}"
-    assert payload["k"] == "clip"
+    # `dclip`, NOT `clip`. A player is issued a token naming their own snapshot
+    # row, so the route resolves the key frozen inside it. `clip` names the live
+    # `question_clips` row, which a replacement DELETES - and every past attempt
+    # 404'd the moment a coach re-recorded.
+    assert payload["k"] == "dclip"
 
     # And the player payload still leaks nothing about the answer.
     raw = started.get_data(as_text=True)

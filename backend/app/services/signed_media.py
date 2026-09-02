@@ -86,6 +86,25 @@ KIND_CLIP = "clip"
 #: that only ever shows a frame - a PDF, a thumbnail - is issued a token that
 #: cannot fetch the video.
 KIND_CLIP_POSTER = "cpost"
+#: THE CLIP ONE ATTEMPT WAS DELIVERED. `id` is an `attempt_question_snapshots`
+#: row, exactly as it is for `dmask`, and for exactly the same reason.
+#:
+#: `clip` above names the `question_clips` row, which is correct for a surface
+#: showing TODAY's clip and wrong for anything replaying history: replacing a
+#: clip DELETES that row and inserts a new one, so a historical token naming
+#: the old id resolved to nothing and a past attempt's football 404'd. The
+#: bytes were still in storage and the snapshot still named them - only the
+#: delivery path could not reach either.
+#:
+#: Keyed by snapshot row rather than by storage key because the key must never
+#: leave the server, and because a row id is something the player already
+#: legitimately holds a delivered copy of. The route reads the frozen key out
+#: of the snapshot, so a coach's later edit cannot move it.
+KIND_DELIVERED_CLIP = "dclip"
+#: That clip's frozen poster. A separate kind for the same reason `cpost` is
+#: separate from `clip`: a surface that only ever shows a still must not be
+#: issued a token that can pull the video.
+KIND_DELIVERED_CLIP_POSTER = "dcpost"
 VALID_KINDS = frozenset(
     {
         KIND_PAGE,
@@ -94,8 +113,25 @@ VALID_KINDS = frozenset(
         KIND_DELIVERED_MASK,
         KIND_CLIP,
         KIND_CLIP_POSTER,
+        KIND_DELIVERED_CLIP,
+        KIND_DELIVERED_CLIP_POSTER,
     }
 )
+
+#: How long a media URL minted for a PLAYER ATTEMPT stays valid.
+#:
+#: The global default is ten minutes, which is right for a coach loading a
+#: page and wrong for a player working through a quiz: `/play/start` mints
+#: every question's media at once, so on any quiz taking longer than ten
+#: minutes the later clips expired before the player reached them. Both the
+#: video AND its poster died on the same clock, so even the still-frame
+#: fallback was gone - the question stayed answerable and the coach's football
+#: silently vanished.
+#:
+#: Two hours is not a guess at "long enough for anything": it is a bound on
+#: ONE SITTING. Anything longer is a resumed attempt, and a resume re-enters
+#: `/play/start` and is minted fresh, so no token has to survive it.
+ATTEMPT_MEDIA_TTL_SECONDS = 2 * 60 * 60
 
 #: Audience for a coach-issued URL.
 AUDIENCE_COACH = "coach"

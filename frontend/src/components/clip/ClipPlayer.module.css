@@ -27,3 +27,55 @@
   font-size: var(--peira-text-meta);
   color: var(--color-text-muted);
 }
+
+/* The tap target IS the clip. A button reset, because everything a button
+   normally draws - border, padding, background - would be chrome around
+   football that should look like nothing but football. */
+.surface {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  /* NO overflow or max-height here. The caller's sizing class sits on the
+     video, so a wrapper that clipped would crop football the video was about
+     to scale correctly. */
+}
+
+/* The play surface owns the gesture, so the cursor must say so even where the
+   caller's class asks for something else - the question image class carries
+   `cursor: zoom-in`, which would promise a lightbox this does not open. */
+.surface video {
+  cursor: pointer;
+}
+
+/* Visible focus, and only for keyboard. A mouse user who just tapped the clip
+   does not need a ring; a keyboard user cannot work without one. */
+.surface:focus-visible {
+  outline: 2px solid var(--color-focus, currentColor);
+  outline-offset: 2px;
+}
+
+/* Shown ONLY while paused. A clip that is playing carries no chrome at all. */
+.playBadge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  /* Dark disc under a white glyph, so it reads over a bright still and a dark
+     one alike - a frozen frame could be either. */
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  /* The button underneath owns the interaction; this must never eat the tap. */
+  pointer-events: none;
+}

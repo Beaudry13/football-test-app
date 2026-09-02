@@ -79,6 +79,8 @@ class TestTokenRoundTrip:
         from app.services.signed_media import (
             KIND_CLIP,
             KIND_CLIP_POSTER,
+            KIND_DELIVERED_CLIP,
+            KIND_DELIVERED_CLIP_POSTER,
             KIND_DELIVERED_MASK,
             VALID_KINDS,
         )
@@ -98,6 +100,16 @@ class TestTokenRoundTrip:
         # SourceDocument of any kind. The dispatch in routes/media.py reads
         # those two columns and nothing else.
         #
+        # `dclip` and `dcpost` were added when delivered clips stopped
+        # resolving through the live `question_clips` row - replacing a clip
+        # deletes that row, so every past attempt 404'd. They resolve an
+        # `attempt_question_snapshots` row to the `storage_key` / `poster_key`
+        # frozen INSIDE that snapshot. So the question this test forces gets
+        # the same answer a third time: the only keys reachable are ones a
+        # coach's own screen recording put there, and a snapshot blob carries
+        # no document reference of any kind. The dispatch in routes/media.py
+        # reads those two fields out of the blob and nothing else.
+        #
         # Note this widens the guarantee slightly and honestly: not every kind
         # is page-derived any more. What still holds - and what this test is
         # actually for - is that no kind names the source PDF.
@@ -108,6 +120,8 @@ class TestTokenRoundTrip:
             KIND_DELIVERED_MASK,
             KIND_CLIP,
             KIND_CLIP_POSTER,
+            KIND_DELIVERED_CLIP,
+            KIND_DELIVERED_CLIP_POSTER,
         }
         # No kind names the document itself.
         assert all("pdf" not in kind and "document" not in kind for kind in VALID_KINDS)

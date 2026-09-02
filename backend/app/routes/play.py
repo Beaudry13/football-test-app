@@ -35,8 +35,11 @@ from app.models.question_region import QuestionRegion
 from app.models.answer_drawing import AnswerDrawing, document_has_strokes
 from app.models.question import TEXT_ANSWER_TYPES
 from app.services.signed_media import (
+    ATTEMPT_MEDIA_TTL_SECONDS,
     KIND_CLIP,
     KIND_CLIP_POSTER,
+    KIND_DELIVERED_CLIP,
+    KIND_DELIVERED_CLIP_POSTER,
     KIND_DELIVERED_MASK,
     KIND_QUESTION_MASK,
     audience_for_access_code,
@@ -130,6 +133,19 @@ def _resolve_answer_text(question, answer: Answer | None) -> str | None:
 
 
 def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
+    """Every delivered question, player-safe, with its media already signed.
+
+    EVERY URL HERE IS MINTED AT ONCE, FOR A QUIZ THAT IS TAKEN OVER TIME, and
+    that is why they carry `ATTEMPT_MEDIA_TTL_SECONDS` rather than the ten
+    minute default. A player reaching question fourteen forty minutes in was
+    handed a URL that expired half an hour earlier: the clip 404'd, its poster
+    404'd on the same clock so even the still-frame fallback was gone, and a
+    masked playbook page left no picture at all.
+
+    The TTL is a bound on ONE SITTING, not a guess at "long enough". A resumed
+    attempt re-enters `/play/start` and is minted fresh, so no token ever has
+    to survive being put down and picked up again.
+    """
     """THE ATTEMPT VERSION INVARIANT, enforced here.
 
     Once an attempt starts, it stays on the version it was delivered. A coach
@@ -184,6 +200,7 @@ def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
                 KIND_DELIVERED_MASK,
                 delivered.snapshot_id,
                 audience=audience_for_access_code(attempt.access_code_id),
+                ttl_seconds=ATTEMPT_MEDIA_TTL_SECONDS,
             )
             masked = f"/api/media/{token}"
         elif live is not None and live.id in region_question_ids:
@@ -195,21 +212,57 @@ def _delivered_payload(attempt: PlayerAttempt) -> list[dict]:
                 KIND_QUESTION_MASK,
                 live.id,
                 audience=audience_for_access_code(attempt.access_code_id),
+                ttl_seconds=ATTEMPT_MEDIA_TTL_SECONDS,
             )
             masked = f"/api/media/{token}"
         # A clip's URL is signed to THIS access code and expires, so it is
         # minted here - where the audience is known - rather than baked into
         # any cached question payload.
         clip_url = clip_poster_url = None
-        if delivered.clip is not None and delivered.clip.clip_id is not None:
+        if delivered.clip is not None:
             audience = audience_for_access_code(attempt.access_code_id)
-            clip_url = "/api/media/" + sign_media_token(
-                KIND_CLIP, delivered.clip.clip_id, audience=audience
-            )
-            if delivered.clip.poster_key:
-                clip_poster_url = "/api/media/" + sign_media_token(
-                    KIND_CLIP_POSTER, delivered.clip.clip_id, audience=audience
+
+            # THE SNAPSHOT, WHENEVER THERE IS ONE.
+            #
+            # `dclip` names this attempt's snapshot row and the route reads the
+            # key frozen inside it, so replacing or removing the live clip
+            # cannot touch what this attempt shows. Resolving by `clip_id`
+            # instead - which is what this did - broke every past attempt the
+            # moment a coach re-recorded, because replacement DELETES that row.
+            # The bytes survived and the snapshot named them; only this line
+            # could not reach them.
+            if delivered.snapshot_id is not None:
+                clip_url = "/api/media/" + sign_media_token(
+                    KIND_DELIVERED_CLIP,
+                    delivered.snapshot_id,
+                    audience=audience,
+                    ttl_seconds=ATTEMPT_MEDIA_TTL_SECONDS,
                 )
+                if delivered.clip.poster_key:
+                    clip_poster_url = "/api/media/" + sign_media_token(
+                        KIND_DELIVERED_CLIP_POSTER,
+                        delivered.snapshot_id,
+                        audience=audience,
+                        ttl_seconds=ATTEMPT_MEDIA_TTL_SECONDS,
+                    )
+            elif delivered.clip.clip_id is not None:
+                # LEGACY ONLY: an attempt from before snapshots existed, whose
+                # clip is the live one by fallback rather than by record. There
+                # is nothing frozen to point at, so this follows the live row -
+                # the same compatibility stance the mask above takes.
+                clip_url = "/api/media/" + sign_media_token(
+                    KIND_CLIP,
+                    delivered.clip.clip_id,
+                    audience=audience,
+                    ttl_seconds=ATTEMPT_MEDIA_TTL_SECONDS,
+                )
+                if delivered.clip.poster_key:
+                    clip_poster_url = "/api/media/" + sign_media_token(
+                        KIND_CLIP_POSTER,
+                        delivered.clip.clip_id,
+                        audience=audience,
+                        ttl_seconds=ATTEMPT_MEDIA_TTL_SECONDS,
+                    )
         payload.append(
             to_player_payload(
                 delivered,
