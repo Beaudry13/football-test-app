@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import nb from '../../styles/notebook.module.css';
 import styles from './ClipRecorder.module.css';
 import {
+  type FloatingControls,
+  canFloatOver,
+  openFloatingControls,
+} from './floatingRecorder';
+import {
   CAPTURE_SIZE_CAP,
   DISPLAY_MEDIA_CONSTRAINTS,
   MAX_CLIP_MS,
@@ -74,6 +79,12 @@ export function ClipRecorder({
   const stopTimerRef = useRef<number | null>(null);
   const tickRef = useRef<number | null>(null);
   const liveRef = useRef<HTMLVideoElement | null>(null);
+  /** The always-on-top Start/Stop control, when the chosen surface allows
+   *  one. Null is the ordinary case, not a failure - see floatingRecorder. */
+  const floatingRef = useRef<FloatingControls | null>(null);
+  /** What the coach chose to share, for the line that tells them where the
+   *  controls are. */
+  const [surface, setSurface] = useState<string | null>(null);
   /** The `ended` listener is attached once, when the share is granted, but has
    *  to behave differently depending on what we are doing with that share. A
    *  ref rather than the state value because the listener closes over its
@@ -85,6 +96,10 @@ export function ClipRecorder({
    *  Leaving tracks live keeps the OS telling the coach their screen is being
    *  shared after they have stopped, which reads as a bug and is alarming. */
   const releaseStream = useCallback(() => {
+    // The floating control goes with the capture it operates. Leaving it up
+    // after the share has ended would offer a Stop button for nothing.
+    floatingRef.current?.close();
+    floatingRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     if (stopTimerRef.current) window.clearTimeout(stopTimerRef.current);
@@ -170,8 +185,42 @@ export function ClipRecorder({
       setPhase('idle');
     });
 
+    // WHERE THE COACH IS LOOKING, not where this tab is.
+    //
+    // Opened only for a window or tab capture; a whole-screen capture keeps
+    // the page controls, because a floating control sitting on the captured
+    // screen could end up inside the football. See floatingRecorder.
+    //
+    // Awaited AFTER the stream is safely held and the `ended` listener is
+    // attached, so a refusal here can only cost the floating control - never
+    // the capture, and never the READY state.
+    const chosen = stream.getVideoTracks()[0]?.getSettings?.().displaySurface;
+    setSurface(chosen ?? null);
     setPhase('ready');
+
+    floatingRef.current = await openFloatingControls(chosen, {
+      maxSeconds: MAX_CLIP_MS / 1000,
+      onStart: () => beginRef.current(),
+      onStop: () => stopRef.current(),
+      onCancel: () => {
+        releaseStream();
+        setSeconds(0);
+        setPhase('idle');
+      },
+      // Closing the floating window while recording must not strand a capture
+      // the coach can no longer stop, so it ends the take rather than the
+      // control alone.
+      onClosed: () => {
+        if (phaseRef.current === 'recording') stopRef.current();
+      },
+    });
   }
+
+  /** Called by BOTH the page and the floating window. Refs rather than the
+   *  functions directly, because the floating control is built once and must
+   *  keep working after any number of re-renders. */
+  const beginRef = useRef<() => void>(() => {});
+  const stopRef = useRef<() => void>(() => {});
 
   /** Step two, and the only place the clock starts. */
   function beginRecording() {
@@ -200,19 +249,28 @@ export function ClipRecorder({
     stopTimerRef.current = window.setTimeout(() => {
       if (recorder.state !== 'inactive') recorder.stop();
     }, MAX_CLIP_MS);
-    tickRef.current = window.setInterval(
-      () => setSeconds(elapsedSeconds(startedAt, Date.now())),
-      250,
-    );
+    tickRef.current = window.setInterval(() => {
+      const elapsed = elapsedSeconds(startedAt, Date.now());
+      setSeconds(elapsed);
+      // The floating control shows the same count as the page. One clock, two
+      // views - a coach watching the floating one must not see a different
+      // number from the tab they left behind.
+      floatingRef.current?.setSeconds(elapsed);
+    }, 250);
 
     recorder.start();
     setSeconds(0);
+    floatingRef.current?.setPhase('recording');
     setPhase('recording');
   }
+
+  beginRef.current = beginRecording;
 
   function stop() {
     if (recorderRef.current?.state !== 'inactive') recorderRef.current?.stop();
   }
+
+  stopRef.current = stop;
 
   /** Cancelling a share that has not recorded anything.
    *
@@ -289,6 +347,20 @@ export function ClipRecorder({
             <span className={styles.readyDot} aria-hidden="true" />
             Your screen is shared, but nothing is being recorded yet. Arrange the
             window, then press Start recording.
+          </p>
+          {/* SAYS WHERE THE CONTROLS ARE, because the coach is about to leave
+              this tab. With a floating control they never come back here; with
+              a whole-screen capture they must, and being told beforehand is
+              the difference between waiting and hunting. */}
+          {/* NOT a second live region: the line above already announces, and
+              two of them talk over each other. This is supplementary detail
+              read in order, not an independent update. */}
+          <p className={styles.ready}>
+            {floatingRef.current
+              ? 'A small Peira recorder is floating on top of your other windows. Start and stop from there - you do not need this tab.'
+              : canFloatOver(surface)
+                ? 'Come back to this tab to start recording.'
+                : 'Recording the whole screen, so the controls stay here. Come back to this tab to start - or share a single window instead and Peira will float the controls for you.'}
           </p>
           <div className={styles.actions}>
             <button type="button" className={nb.btnPrimary} onClick={beginRecording}>
