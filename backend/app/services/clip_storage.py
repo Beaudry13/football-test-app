@@ -48,9 +48,14 @@ POSTER_EXTENSION = "webp"
 DEFAULT_CLIP_MAX_BYTES = 25 * 1024 * 1024
 DEFAULT_POSTER_MAX_BYTES = 2 * 1024 * 1024
 
-#: 15s cap plus slack for the browser overshooting its own auto-stop by a
-#: frame or two. A clip claiming an hour is a bug or an attack, not a coach.
-MAX_DURATION_MS = 20_000
+#: The client's 20s cap plus slack for the browser overshooting its own
+#: auto-stop by a frame or two. A clip claiming an hour is a bug or an attack,
+#: not a coach.
+#:
+#: This tracks MAX_CLIP_MS in components/clip/clipRecording.ts and must be
+#: raised WITH it, never instead of it: the client decides when to stop, and
+#: this only refuses a duration no honest recorder could report.
+MAX_DURATION_MS = 25_000
 
 
 def _clip_max_bytes() -> int:

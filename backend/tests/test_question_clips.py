@@ -579,3 +579,51 @@ class TestCreateWithClipInOneStep:
         )
         assert response.status_code == 201
         assert response.get_json()["clip"] is None
+
+
+class TestTheDurationCeiling:
+    """The server bound, and why it is not the same number as the client cap.
+
+    The recorder stops itself at MAX_CLIP_MS; this only refuses a duration no
+    honest recorder could report. The slack between them absorbs a browser
+    overshooting its own auto-stop by a frame or two, so the two constants must
+    move TOGETHER - raising the client cap without this would start rejecting
+    perfectly ordinary takes at the top of the range.
+    """
+
+    def test_it_accepts_a_full_length_take(self, app):
+        from app.services.clip_storage import validate_duration_ms
+
+        with app.app_context():
+            # Twenty seconds is the client cap: the longest take a coach can
+            # deliberately record.
+            assert validate_duration_ms(20_000) == 20_000
+
+    def test_it_tolerates_a_small_overshoot(self, app):
+        from app.services.clip_storage import validate_duration_ms
+
+        with app.app_context():
+            # A browser stopping a few frames late must not cost the coach the
+            # take they just recorded.
+            assert validate_duration_ms(20_400) == 20_400
+
+    def test_it_refuses_a_duration_no_recorder_could_produce(self, app):
+        from app.errors import ApiError
+        from app.services.clip_storage import validate_duration_ms
+
+        with app.app_context():
+            with pytest.raises(ApiError):
+                validate_duration_ms(60_000)
+
+    def test_the_ceiling_leaves_room_above_the_client_cap(self):
+        """Pins the RELATIONSHIP, not either number.
+
+        MAX_CLIP_MS lives in components/clip/clipRecording.ts and cannot be
+        imported here, so 20_000 is written out - but this fails loudly if the
+        server ceiling is ever lowered to meet it, which is the mistake worth
+        catching.
+        """
+        from app.services.clip_storage import MAX_DURATION_MS
+
+        client_cap_ms = 20_000
+        assert MAX_DURATION_MS > client_cap_ms

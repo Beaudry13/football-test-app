@@ -102,3 +102,19 @@
   border: 2px solid var(--nb-text-muted);
   flex: 0 0 auto;
 }
+
+/* The length of the take. Quiet and factual - it answers "did I get it",
+   not "let me edit it", so it is text and not a scrubber. */
+.takeLength {
+  margin: 0;
+  font-size: var(--peira-text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--nb-text-muted);
+}
+
+/* The one step between a good take and losing it. */
+.confirm {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text);
+}

@@ -43,7 +43,7 @@ describe('ClipRecorder in the create flow', () => {
         screen.getByRole('button', { name: /choose what to record/i }),
       ).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^start recording$/i })).toBeNull();
-      expect(screen.getByText(/up to 15 seconds, no sound/i)).toBeInTheDocument();
+      expect(screen.getByText(/up to 20 seconds, no sound/i)).toBeInTheDocument();
     } finally {
       restore();
     }

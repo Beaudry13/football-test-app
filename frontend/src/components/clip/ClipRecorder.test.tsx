@@ -5,7 +5,7 @@ import { ClipRecorder } from './ClipRecorder';
 /** CHOOSING A SOURCE IS NOT CONSENT TO RECORD.
  *
  * Record Clip originally started MediaRecorder on the same click that granted
- * the share, so the fifteen-second budget was spent arranging the window,
+ * the share, so the whole recording budget was spent arranging the window,
  * finding the right frame and moving the mouse out of shot. A coach cannot
  * arrange a window that is already recording.
  *
@@ -100,7 +100,7 @@ function setup() {
 /** `fireEvent`, not `userEvent`, throughout.
  *
  * userEvent schedules its own timers between events, and these tests run on
- * fake ones to reach the fifteen-second cap without waiting fifteen seconds.
+ * fake ones to reach the auto-stop cap without waiting out the clock.
  * Driving both from one test hung every case at the 5s limit. fireEvent
  * dispatches synchronously and needs no timer coordination at all, and the
  * behaviour under test here is a state machine rather than an input gesture,
@@ -163,7 +163,7 @@ describe('starting and stopping', () => {
     expect(recorders[0].stream).toBe(stream);
     // The picker is NOT shown a second time - the coach already chose.
     expect(getDisplayMedia).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/recording · 00 \/ 15 sec/i)).toBeInTheDocument();
+    expect(screen.getByText(/recording · 00 \/ 20 sec/i)).toBeInTheDocument();
   });
 
   it('Stop stops the recorder', async () => {
@@ -175,12 +175,12 @@ describe('starting and stopping', () => {
     expect(recorders[0].stop).toHaveBeenCalled();
   });
 
-  it('still auto-stops at fifteen seconds', async () => {
+  it('still auto-stops at the cap', async () => {
     setup();
     await reachReady();
     click(/^start recording$/i);
 
-    act(() => void vi.advanceTimersByTime(14_000));
+    act(() => void vi.advanceTimersByTime(19_000));
     expect(recorders[0].stop).not.toHaveBeenCalled();
 
     act(() => void vi.advanceTimersByTime(1_500));
@@ -197,7 +197,7 @@ describe('starting and stopping', () => {
 
     // Three, not eight: the time spent arranging the window is not charged to
     // the clip.
-    expect(screen.getByText(/recording · 03 \/ 15 sec/i)).toBeInTheDocument();
+    expect(screen.getByText(/recording · 03 \/ 20 sec/i)).toBeInTheDocument();
   });
 });
 
@@ -246,5 +246,89 @@ describe('abandoning a share', () => {
 
     // Closing the editor mid-share must not leave the coach's screen captured.
     expect(stream.track.stop).toHaveBeenCalled();
+  });
+});
+
+describe('after the take', () => {
+  /** Reaching the preview means letting `capturePoster` finish.
+   *
+   *  It creates a detached <video>, points it at the blob URL and waits for
+   *  `loadeddata` - which jsdom never fires, because jsdom does not load
+   *  media. It has its own 8s timeout for exactly that class of failure, so
+   *  advancing past it makes the helper give up and return a null poster,
+   *  which every consumer already handles. That is the real degradation path,
+   *  not a shortcut around one.
+   */
+  async function reachPreview() {
+    const handles = setup();
+    await reachReady();
+    click(/^start recording$/i);
+    act(() => void vi.advanceTimersByTime(8_000));
+    click(/^stop$/i);
+    await act(async () => {
+      vi.advanceTimersByTime(8_100);
+    });
+    return handles;
+  }
+
+  it('shows how long the take is', async () => {
+    await reachPreview();
+    // Eight seconds of recording, reported as a timecode. The recorder always
+    // captured this and showed it nowhere, so a six second take and a fourteen
+    // second one looked identical.
+    expect(screen.getByText('0:08')).toBeInTheDocument();
+  });
+
+  it('offers Use clip and Record again', async () => {
+    await reachPreview();
+    expect(screen.getByRole('button', { name: /use clip/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /record again/i })).toBeInTheDocument();
+  });
+
+  it('does NOT destroy the take on the first Record again click', async () => {
+    await reachPreview();
+    click(/record again/i);
+
+    // Still in preview, still holding the take - just asking.
+    expect(screen.getByText(/this take will be thrown away/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /keep clip/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /choose what to record/i })).toBeNull();
+  });
+
+  it('Keep clip backs out and leaves the take intact', async () => {
+    await reachPreview();
+    click(/record again/i);
+    click(/keep clip/i);
+
+    expect(screen.getByRole('button', { name: /use clip/i })).toBeInTheDocument();
+    expect(screen.getByText('0:08')).toBeInTheDocument();
+    expect(screen.queryByText(/thrown away/i)).toBeNull();
+  });
+
+  it('a deliberate second press does discard it', async () => {
+    await reachPreview();
+    click(/record again/i);
+    click(/^record again$/i);
+
+    // Back to the start, ready to choose a source again.
+    expect(screen.getByRole('button', { name: /choose what to record/i })).toBeInTheDocument();
+    expect(screen.queryByText('0:08')).toBeNull();
+  });
+
+  it('Use clip hands the take over with its duration', async () => {
+    const { onUse } = setup();
+    await reachReady();
+    click(/^start recording$/i);
+    act(() => void vi.advanceTimersByTime(8_000));
+    click(/^stop$/i);
+    await act(async () => {
+      vi.advanceTimersByTime(8_100);
+    });
+    click(/use clip/i);
+
+    expect(onUse).toHaveBeenCalledTimes(1);
+    const handed = onUse.mock.calls[0][0];
+    expect(handed.durationMs).toBe(8_000);
+    expect(handed.blob.type).toBe('video/mp4');
   });
 });

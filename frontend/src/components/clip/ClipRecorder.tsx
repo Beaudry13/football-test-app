@@ -7,6 +7,7 @@ import {
   UNSUPPORTED_MESSAGE,
   detectClipCapability,
   elapsedSeconds,
+  formatClipDuration,
   recorderOptions,
 } from './clipRecording';
 
@@ -28,7 +29,7 @@ export interface RecordedClip {
  *
  * CHOOSING A SOURCE IS NOT CONSENT TO RECORD. The picker and the clock are two
  * decisions, and they used to be one: choosing a window started the recorder
- * on the same click, so the fifteen seconds were spent finding the film,
+ * on the same click, so the whole budget was spent finding the film,
  * moving the mouse out of shot and getting to the right frame. A coach cannot
  * arrange a window that is already being recorded. READY exists so the
  * expensive, irreversible thing - the clock - waits for its own deliberate
@@ -57,6 +58,13 @@ export function ClipRecorder({
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [clip, setClip] = useState<RecordedClip | null>(null);
+  /** A COMPLETED TAKE IS EXPENSIVE TO REPLACE, so throwing one away is a two
+   *  step action. Not a browser confirm(): re-recording is an ordinary thing
+   *  a coach does often, and a modal alert for a routine action trains people
+   *  to dismiss alerts without reading them. An inline second press asks the
+   *  question exactly where the mistake would happen and costs nothing to
+   *  back out of. */
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -157,7 +165,7 @@ export function ClipRecorder({
       setPhase('preview');
     };
 
-    // A COACH STOPS ANY TIME; THE BROWSER STOPS AT 15 SECONDS.
+    // A COACH STOPS ANY TIME; THE BROWSER STOPS AT THE CAP.
     stopTimerRef.current = window.setTimeout(() => {
       if (recorder.state !== 'inactive') recorder.stop();
     }, MAX_CLIP_MS);
@@ -192,6 +200,7 @@ export function ClipRecorder({
     if (clip) URL.revokeObjectURL(clip.previewUrl);
     setClip(null);
     setSeconds(0);
+    setConfirmingDiscard(false);
     setPhase('idle');
   }
 
@@ -218,7 +227,7 @@ export function ClipRecorder({
         <>
           <p className={styles.hint}>
             Choose a window, tab or screen. Nothing records until you press Start
-            recording. Up to 15 seconds, no sound.
+            recording. Up to 20 seconds, no sound.
           </p>
           <div className={styles.actions}>
             <button type="button" className={nb.btnPrimary} onClick={() => void chooseSource()}>
@@ -260,7 +269,7 @@ export function ClipRecorder({
           <video className={styles.preview} ref={liveRef} autoPlay muted playsInline />
           <p className={styles.recording} role="status">
             <span className={styles.dot} aria-hidden="true" />
-            Recording · {String(seconds).padStart(2, '0')} / 15 sec
+            Recording · {String(seconds).padStart(2, '0')} / 20 sec
           </p>
           <div className={styles.actions}>
             <button type="button" className={nb.btnPrimary} onClick={stop}>
@@ -282,17 +291,51 @@ export function ClipRecorder({
             muted
             playsInline
           />
-          <div className={styles.actions}>
-            <button type="button" className={nb.btnPrimary} onClick={() => onUse(clip)}>
-              Use clip
-            </button>
-            <button type="button" className={nb.btnSecondary} onClick={discard}>
-              Record again
-            </button>
-            <button type="button" className={nb.btnSecondary} onClick={onCancel}>
-              Cancel
-            </button>
-          </div>
+          {/* HOW LONG THE TAKE IS, which the coach otherwise had no way to
+              know - the recorder captured `durationMs` and showed it nowhere,
+              so a six second take and a fourteen second one looked identical.
+              A single line of text rather than a scrubber: this answers "did
+              I get it", not "let me edit it". */}
+          {formatClipDuration(clip.durationMs) && (
+            <p className={styles.takeLength}>{formatClipDuration(clip.durationMs)}</p>
+          )}
+          {confirmingDiscard ? (
+            <>
+              <p className={styles.confirm} role="status">
+                Record again? This take will be thrown away.
+              </p>
+              <div className={styles.actions}>
+                {/* KEEPING IS THE DEFAULT-LOOKING CHOICE. The destructive
+                    option must not be the one a coach hits by reflex twice. */}
+                <button
+                  type="button"
+                  className={nb.btnPrimary}
+                  onClick={() => setConfirmingDiscard(false)}
+                >
+                  Keep clip
+                </button>
+                <button type="button" className={nb.btnSecondary} onClick={discard}>
+                  Record again
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className={styles.actions}>
+              <button type="button" className={nb.btnPrimary} onClick={() => onUse(clip)}>
+                Use clip
+              </button>
+              <button
+                type="button"
+                className={nb.btnSecondary}
+                onClick={() => setConfirmingDiscard(true)}
+              >
+                Record again
+              </button>
+              <button type="button" className={nb.btnSecondary} onClick={onCancel}>
+                Cancel
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

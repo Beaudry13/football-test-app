@@ -6,6 +6,7 @@ import {
   MP4_CANDIDATES,
   detectClipCapability,
   elapsedSeconds,
+  formatClipDuration,
   pickMp4MimeType,
   recorderOptions,
 } from './clipRecording';
@@ -124,8 +125,8 @@ describe('recording settings', () => {
     expect(DISPLAY_MEDIA_CONSTRAINTS.audio).toBe(false);
   });
 
-  it('caps the clip at fifteen seconds', () => {
-    expect(MAX_CLIP_MS).toBe(15_000);
+  it('caps the clip at twenty seconds', () => {
+    expect(MAX_CLIP_MS).toBe(20_000);
   });
 
   it('passes the chosen MP4 type and a bitrate ceiling to the recorder', () => {
@@ -139,7 +140,64 @@ describe('elapsed counter', () => {
   it('counts whole seconds and stops at the cap', () => {
     expect(elapsedSeconds(1_000, 1_000)).toBe(0);
     expect(elapsedSeconds(1_000, 9_400)).toBe(8);
-    // Never shows 16/15 if a timer fires late.
-    expect(elapsedSeconds(1_000, 99_000)).toBe(15);
+    // Never shows 21/20 if a timer fires late.
+    expect(elapsedSeconds(1_000, 99_000)).toBe(20);
+  });
+});
+
+describe('capture resolution', () => {
+  it('caps the captured frame at 1080p-class without cropping or stretching', () => {
+    // Only frameRate was constrained, so sharing a 4K monitor captured 4K and
+    // spent the same bitrate ceiling on four times the pixels - worse football
+    // than a sane 1080p capture of the same film, because the first thing to
+    // smear at too few bits per pixel is small high-contrast detail. Which is
+    // what a jersey number is.
+    const video = DISPLAY_MEDIA_CONSTRAINTS.video as MediaTrackConstraints;
+    expect(video.width).toEqual({ max: 1920 });
+    expect(video.height).toEqual({ max: 1080 });
+  });
+
+  it('constrains only the maximum, so a smaller window is never upscaled', () => {
+    const video = DISPLAY_MEDIA_CONSTRAINTS.video as MediaTrackConstraints;
+    for (const dimension of [video.width, video.height]) {
+      const constraint = dimension as ConstrainULongRange;
+      expect(constraint.min).toBeUndefined();
+      expect(constraint.exact).toBeUndefined();
+      // `ideal` is advisory and would be ignored on exactly the oversized
+      // sources this exists for.
+      expect(constraint.ideal).toBeUndefined();
+    }
+  });
+
+  it('still never asks for audio', () => {
+    // A screen recording that captured a meeting would be a privacy incident.
+    expect(DISPLAY_MEDIA_CONSTRAINTS.audio).toBe(false);
+  });
+
+  it('still asks for 30fps', () => {
+    const video = DISPLAY_MEDIA_CONSTRAINTS.video as MediaTrackConstraints;
+    expect(video.frameRate).toBe(30);
+  });
+});
+
+describe('formatClipDuration', () => {
+  it('reads as a timecode a coach can scan', () => {
+    expect(formatClipDuration(8000)).toBe('0:08');
+    expect(formatClipDuration(20000)).toBe('0:20');
+    expect(formatClipDuration(65000)).toBe('1:05');
+  });
+
+  it('rounds to the nearest second rather than truncating', () => {
+    // A 7.6s take reading "0:07" invites a coach to think the recorder lost
+    // the end of it.
+    expect(formatClipDuration(7600)).toBe('0:08');
+    expect(formatClipDuration(7400)).toBe('0:07');
+  });
+
+  it('says nothing rather than something wrong when there is no duration', () => {
+    expect(formatClipDuration(null)).toBeNull();
+    expect(formatClipDuration(undefined)).toBeNull();
+    expect(formatClipDuration(0)).toBeNull();
+    expect(formatClipDuration(Number.NaN)).toBeNull();
   });
 });

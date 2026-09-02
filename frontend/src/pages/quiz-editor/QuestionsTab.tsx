@@ -15,7 +15,8 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/ui/Modal';
 import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecorder';
-import { ClipThumbnail } from '../../components/clip/ClipPlayer';
+import { ClipPlayer, ClipThumbnail } from '../../components/clip/ClipPlayer';
+import { formatClipDuration } from '../../components/clip/clipRecording';
 import { deleteQuestionClip, uploadQuestionClip } from '../../api/questions';
 import { QuestionEditor } from './QuestionEditor';
 import { Icon } from '../../components/ui/Icon';
@@ -177,6 +178,10 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
      behind the first would be a way to lose a take. */
   const [recordingFor, setRecordingFor] = useState<number | null>(null);
   const [clipError, setClipError] = useState<string | null>(null);
+  /** The question whose clip the coach asked to watch. A coach had no way to
+   *  see the clip they attached without previewing the whole quiz as a
+   *  player, which is a long way to go to check one take. */
+  const [previewingClip, setPreviewingClip] = useState<Question | null>(null);
 
   async function handleUseClip(questionId: number, recorded: RecordedClip) {
     setClipError(null);
@@ -343,6 +348,29 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         </Modal>
       )}
 
+      {previewingClip?.clip?.url && (
+        <Modal
+          onDismiss={() => setPreviewingClip(null)}
+          ariaLabel="Clip attached to this question"
+          showCloseButton
+        >
+          {/* THE COACH'S OWN MEDIA PATH. `clip.url` is minted for the coach
+              audience against the LIVE clip row, which is right here: this is
+              the take the coach is editing. A delivered attempt resolves
+              through its frozen snapshot instead, and the two must not be
+              swapped just because they render with the same component. */}
+          <ClipPlayer
+            url={resolveMediaUrl(previewingClip.clip.url)}
+            posterUrl={
+              previewingClip.clip.poster_url
+                ? resolveMediaUrl(previewingClip.clip.poster_url)
+                : null
+            }
+            ariaLabel="Clip attached to this question"
+          />
+        </Modal>
+      )}
+
       {dialog}
       <ErrorBanner message={error} />
 
@@ -456,13 +484,26 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                    questions, and twenty simultaneously looping clips is real
                    decoding work for a surface that is scanned rather than
                    watched. */
-                <ClipThumbnail
-                  posterUrl={
-                    question.clip.poster_url ? resolveMediaUrl(question.clip.poster_url) : null
-                  }
-                  className={styles.thumb}
-                  alt="Still frame from the recorded clip"
-                />
+                <span className={styles.thumbWrap}>
+                  <ClipThumbnail
+                    posterUrl={
+                      question.clip.poster_url ? resolveMediaUrl(question.clip.poster_url) : null
+                    }
+                    className={styles.thumb}
+                    alt="Still frame from the recorded clip"
+                  />
+                  {/* THE DURATION IS THE VIDEO BADGE. A poster is
+                      indistinguishable from an uploaded still, and a coach
+                      scanning a list could not tell which questions carried
+                      film. A timecode says "this moves" AND says how long -
+                      two facts for the price of one small chip, where a
+                      "VIDEO" label would say less and shout more. */}
+                  {formatClipDuration(question.clip.duration_ms) && (
+                    <span className={styles.durationChip}>
+                      {formatClipDuration(question.clip.duration_ms)}
+                    </span>
+                  )}
+                </span>
               ) : question.image ? (
                 <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
               ) : question.masked_image_url ? (
@@ -575,10 +616,25 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                           Record clip
                         </MenuItem>
                       )}
+                    {/* AN EXISTING CLIP IS THREE DELIBERATE ACTIONS, not one
+                        destructive one. The only thing offered used to be
+                        Remove, so a coach who wanted a better take had to
+                        delete the current one first and re-record from
+                        nothing - with the old take already gone if the second
+                        attempt went badly. The backend has always replaced in
+                        one call; only the menu was missing. */}
                     {question.clip && (
-                      <MenuItem onSelect={() => void handleRemoveClip(question.id)}>
-                        Remove clip
-                      </MenuItem>
+                      <>
+                        <MenuItem onSelect={() => setPreviewingClip(question)}>
+                          Watch clip
+                        </MenuItem>
+                        <MenuItem onSelect={() => setRecordingFor(question.id)}>
+                          Replace clip
+                        </MenuItem>
+                        <MenuItem onSelect={() => void handleRemoveClip(question.id)}>
+                          Remove clip
+                        </MenuItem>
+                      </>
                     )}
                     {/* Only worth offering when there is somewhere else to go. */}
                     {questions.length > 1 && (
