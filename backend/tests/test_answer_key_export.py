@@ -8,10 +8,11 @@ two rules worth defending are:
     so there is nothing in scope to leak - and the tests below read the actual
     rendered text back out of the PDF rather than trusting that.
 
-  * EXCLUDED QUESTIONS ARE OMITTED, NOT LABELLED. A question marked "don't
-    count" is not part of the test any more; printing it greyed out would
-    restate a decision the coach already made and invite them to teach from it.
-    What remains is renumbered 1..n so the key reads as the test now stands.
+  * ONLY WHAT A PLAYER IS STILL MEANT TO LEARN. The key doubles as a study
+    guide, so a question marked "don't count" AND a question a coach has
+    stopped sending are both omitted entirely - never labelled, because a
+    label restates a decision already made and invites teaching from it
+    anyway. What remains is renumbered 1..n so the guide reads naturally.
 """
 
 import io
@@ -57,6 +58,14 @@ def exclude(app, question_id):
             QuestionExclusion(question_id=question_id, access_code_id=None)
         )
         db.session.commit()
+
+
+def retire(client, headers, quiz_id, question_id):
+    """Stop sending a question, through the real coach endpoint."""
+    response = client.post(
+        f"/api/quizzes/{quiz_id}/questions/{question_id}/retire", headers=headers
+    )
+    assert response.status_code in (200, 201), response.get_json()
 
 
 def fetch(client, headers, ids):
@@ -401,3 +410,105 @@ class TestItChangesNothing:
             ]
             assert after == before
             assert db.session.query(QuestionOption).count() == options_before
+
+
+class TestRetiredQuestionsAreGone:
+    """A question a coach has stopped sending is not something to study.
+
+    The key doubles as a study guide, so it must not put a question in front of
+    players that no future attempt will ever ask them.
+    """
+
+    def test_a_retired_question_does_not_appear_at_all(self, client, coach_headers):
+        quiz_id, ids = make_quiz(
+            client,
+            coach_headers,
+            "Cover 3 Test",
+            [
+                ("Keep this one", ["a", "b"], 0),
+                ("STOPPED SENDING THIS", ["gone-c", "gone-d"], 0),
+                ("Keep this too", ["e", "f"], 1),
+            ],
+        )
+        retire(client, coach_headers, quiz_id, ids[1])
+
+        text = pdf_text(fetch(client, coach_headers, [quiz_id]).data)
+
+        assert "Keep this one" in text
+        assert "Keep this too" in text
+        assert "STOPPED SENDING THIS" not in text
+        assert "gone-c" not in text
+        assert "gone-d" not in text
+
+    def test_it_is_omitted_rather_than_labelled(self, client, coach_headers):
+        quiz_id, ids = make_quiz(
+            client, coach_headers, "Cover 3 Test", [("Keep", ["a", "b"], 0), ("Drop", ["c", "d"], 0)]
+        )
+        retire(client, coach_headers, quiz_id, ids[1])
+
+        text = pdf_text(fetch(client, coach_headers, [quiz_id]).data)
+        for word in ("Retired", "retired", "Stopped", "Stop sending", "No longer"):
+            assert word not in text
+
+    def test_what_remains_is_renumbered_from_one(self, client, coach_headers):
+        quiz_id, ids = make_quiz(
+            client,
+            coach_headers,
+            "Cover 3 Test",
+            [
+                ("Alpha question", ["a", "b"], 0),
+                ("Bravo question", ["c", "d"], 0),
+                ("Charlie question", ["e", "f"], 0),
+            ],
+        )
+        retire(client, coach_headers, quiz_id, ids[0])
+
+        flat = pdf_text(fetch(client, coach_headers, [quiz_id]).data).replace(chr(10), " ")
+        assert "1. Bravo question" in flat
+        assert "2. Charlie question" in flat
+        assert "3." not in flat
+
+    def test_retired_and_excluded_are_both_removed_together(self, app, client, coach_headers):
+        """The two rules compose - neither cancels the other, and the survivors
+        are numbered as though the removed ones were never there."""
+        quiz_id, ids = make_quiz(
+            client,
+            coach_headers,
+            "Cover 3 Test",
+            [
+                ("Retired one", ["a", "b"], 0),
+                ("Excluded one", ["c", "d"], 0),
+                ("The only survivor", ["e", "f"], 1),
+            ],
+        )
+        retire(client, coach_headers, quiz_id, ids[0])
+        exclude(app, ids[1])
+
+        text = pdf_text(fetch(client, coach_headers, [quiz_id]).data)
+        assert "Retired one" not in text
+        assert "Excluded one" not in text
+        assert "The only survivor" in text
+        assert "1. The only survivor" in text.replace(chr(10), " ")
+
+    def test_restoring_a_question_brings_it_back(self, client, coach_headers):
+        """Retirement is reversible, and the key follows the live decision."""
+        quiz_id, ids = make_quiz(
+            client, coach_headers, "Cover 3 Test", [("Comes back", ["a", "b"], 0)]
+        )
+        retire(client, coach_headers, quiz_id, ids[0])
+        assert "Comes back" not in pdf_text(fetch(client, coach_headers, [quiz_id]).data)
+
+        client.delete(
+            f"/api/quizzes/{quiz_id}/questions/{ids[0]}/retire", headers=coach_headers
+        )
+        assert "Comes back" in pdf_text(fetch(client, coach_headers, [quiz_id]).data)
+
+    def test_a_quiz_whose_questions_are_all_retired_still_renders(self, client, coach_headers):
+        quiz_id, ids = make_quiz(client, coach_headers, "All Stopped", [("Only one", ["a", "b"], 0)])
+        retire(client, coach_headers, quiz_id, ids[0])
+
+        response = fetch(client, coach_headers, [quiz_id])
+        assert response.status_code == 200
+        text = pdf_text(response.data)
+        assert "ALL STOPPED" in text.upper()
+        assert "Only one" not in text

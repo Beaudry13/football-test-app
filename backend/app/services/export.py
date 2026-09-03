@@ -2296,18 +2296,30 @@ def build_answer_key_pdf(
     that is the guarantee: there is no attempt, name, score or percentage in
     scope to leak into the document by accident.
 
-    EXCLUDED QUESTIONS ARE OMITTED, NOT LABELLED. A question a coach has marked
-    "don't count" is not part of the test any more, so printing it greyed out
-    would restate a decision the coach already made and invite them to teach
-    from it. The remaining questions are then numbered 1..n so the key reads as
-    the test now stands - the numbering follows what is printed, never the
-    positions of questions that are not.
+    ONLY WHAT A PLAYER IS STILL MEANT TO LEARN. This is a study guide as much
+    as a marking sheet, so two kinds of question are omitted ENTIRELY - never
+    labelled, because a label restates a decision the coach already made and
+    invites them to teach from it anyway:
 
-    `access_code_id=None` when filtering, so only QUIZ-WIDE exclusions apply. An
-    exclusion scoped to a single access code belongs to that assignment rather
-    than to the test, and hiding it from every key would be the wrong reading of
-    a narrower decision.
+      * EXCLUDED - marked "don't count", so no longer part of the test.
+      * RETIRED - "stop sending", so no future player will ever be asked it.
+
+    The remaining questions are numbered 1..n, so the numbering follows what is
+    PRINTED rather than the positions of questions that are not.
+
+    `access_code_id=None` when filtering exclusions, so only QUIZ-WIDE ones
+    apply. An exclusion scoped to a single access code belongs to that
+    assignment rather than to the test, and hiding it from every key would be
+    the wrong reading of a narrower decision.
+
+    Retirement comes from `attempts.deliverable_questions`, the one place that
+    rule is spelled. This is neither a delivery path nor a historical surface -
+    it describes the test AS IT STANDS TODAY - so the same predicate is the
+    right one, and reusing it is what stops a second spelling drifting from the
+    first.
     """
+    from app.services.attempts import deliverable_questions
+
     theme = theme or PDF_THEME
     buffer = io.BytesIO()
     title = quizzes[0].title if len(quizzes) == 1 else "Answer key"
@@ -2337,7 +2349,9 @@ def build_answer_key_pdf(
         elements.append(_section_header(theme, styles, quiz.title))
         elements.append(Spacer(1, theme["spacing"]["md"]))
 
-        ordered = sorted(quiz.questions, key=lambda q: (q.position, q.id))
+        # Retired first, then excluded. Both vanish; what is left is renumbered.
+        live = deliverable_questions(quiz)
+        ordered = sorted(live, key=lambda q: (q.position, q.id))
         printed = exclusions.active_questions(ordered, None)
 
         if not printed:
