@@ -70,6 +70,35 @@ class PrivateAssetStorage(ABC):
     def load_private(self, key: str) -> bytes | None:
         """Read bytes back. Returns None if the key does not exist."""
 
+    def private_size(self, key: str) -> int | None:
+        """The object's length in bytes, WITHOUT downloading it.
+
+        Needed for a `Content-Range` total, and for deciding whether a
+        requested range is satisfiable at all. The default answers by loading
+        the object, so a backend that cannot do better still works; both
+        backends below override it with something cheap.
+        """
+        data = self.load_private(key)
+        return None if data is None else len(data)
+
+    def load_private_range(self, key: str, start: int, end: int) -> bytes | None:
+        """Bytes `start`..`end` INCLUSIVE, without fetching the whole object.
+
+        THE POINT OF THIS METHOD. iOS Safari opens a video with
+        `Range: bytes=0-1`, and the naive implementation - fetch everything,
+        then slice - downloaded several megabytes from object storage to
+        answer with two bytes, then did it again for the next request. The
+        player waited through both.
+
+        The default below is that naive behaviour, kept only so a backend
+        without ranged reads is still correct rather than broken. Both real
+        backends override it.
+        """
+        data = self.load_private(key)
+        if data is None:
+            return None
+        return data[start : end + 1]
+
     @abstractmethod
     def delete_private(self, key: str) -> None:
         """Remove an asset. Idempotent - no error if it is already gone."""
@@ -101,6 +130,22 @@ class LocalPrivateStorage(PrivateAssetStorage):
     def load_private(self, key: str) -> bytes | None:
         try:
             return self._path_for(key).read_bytes()
+        except (OSError, ValueError):
+            return None
+
+    def private_size(self, key: str) -> int | None:
+        try:
+            return self._path_for(key).stat().st_size
+        except (OSError, ValueError):
+            return None
+
+    def load_private_range(self, key: str, start: int, end: int) -> bytes | None:
+        # Seek and read, so dev behaves like production rather than hiding a
+        # full read behind a fast disk.
+        try:
+            with self._path_for(key).open("rb") as handle:
+                handle.seek(start)
+                return handle.read(end - start + 1)
         except (OSError, ValueError):
             return None
 
@@ -153,6 +198,32 @@ class S3PrivateStorage(PrivateAssetStorage):
             # botocore raises its own hierarchy for "not found" alongside
             # network and credential errors, and a caller only ever needs to
             # know whether it got the bytes.
+            return None
+
+    def private_size(self, key: str) -> int | None:
+        """HEAD, not GET. Cheap, and it does not move the bytes."""
+        try:
+            return int(self.client.head_object(Bucket=self.bucket_name, Key=key)["ContentLength"])
+        except Exception:
+            # Same broad catch as load_private, and for the same reason: the
+            # caller only needs to know whether it got an answer.
+            return None
+
+    def load_private_range(self, key: str, start: int, end: int) -> bytes | None:
+        """A genuine ranged GET against R2.
+
+        S3 and R2 both take an HTTP Range header on `get_object`, so only the
+        requested bytes cross the network. This is the whole optimisation:
+        answering `bytes=0-1` used to cost a full-object download.
+        """
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Range=f"bytes={start}-{end}",
+            )
+            return response["Body"].read()
+        except Exception:
             return None
 
     def delete_private(self, key: str) -> None:

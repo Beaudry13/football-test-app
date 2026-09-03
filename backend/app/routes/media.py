@@ -52,42 +52,118 @@ from app.services.document_render import RENDER_CONTENT_TYPE
 media_bp = Blueprint("media", __name__)
 
 
-def _ranged_response(data: bytes, content_type: str, max_age: int) -> Response:
-    """Serves `data`, honouring a single `Range: bytes=` header.
+def _parse_range(raw: str, total: int):
+    """One `Range: bytes=` header, resolved against a known total.
 
-    One range only. Multipart ranges are legal HTTP and no browser asks for
-    them here, so supporting them would be untested code guarding a case that
-    does not occur. A malformed or unsatisfiable range falls back to the whole
-    body, which is what a client that sent nonsense should get.
+    Returns `(start, end)` inclusive, `None` when there is no usable range
+    (serve the whole object), or the string "unsatisfiable" when the client
+    asked for something outside the object and HTTP requires a 416.
+
+    ONE RANGE ONLY. Multipart ranges are legal and no browser asks for them
+    here, so supporting them would be untested code guarding a case that does
+    not occur.
     """
-    total = len(data)
-    start, end = 0, total - 1
-    partial = False
+    if not raw.startswith("bytes="):
+        return None
+    spec = raw[6:].split(",")[0].strip()
+    first, sep, last = spec.partition("-")
+    if not sep:
+        return None
+    try:
+        if first:
+            start = int(first)
+            # `bytes=1000-` means "from here to the end".
+            end = int(last) if last else total - 1
+        elif last:
+            # A suffix range - "the final N bytes".
+            suffix = int(last)
+            if suffix <= 0:
+                return "unsatisfiable"
+            start = max(0, total - suffix)
+            end = total - 1
+        else:
+            return None
+    except ValueError:
+        # Nonsense rather than a boundary error. Falling back to the whole
+        # object is what a client sending garbage should get.
+        return None
 
-    raw = request.headers.get("Range", "")
-    if raw.startswith("bytes="):
-        spec = raw[6:].split(",")[0].strip()
-        first, _, last = spec.partition("-")
-        try:
-            if first:
-                start = int(first)
-                end = int(last) if last else total - 1
-            elif last:
-                # A suffix range - "the final N bytes".
-                start = max(0, total - int(last))
-            if 0 <= start <= end < total:
-                partial = True
-            else:
-                start, end = 0, total - 1
-        except ValueError:
-            start, end = 0, total - 1
+    if start < 0 or start >= total:
+        return "unsatisfiable"
+    # A client may ask past the end; the spec says clamp rather than refuse.
+    end = min(end, total - 1)
+    if end < start:
+        return "unsatisfiable"
+    return start, end
 
-    body = data[start : end + 1]
-    response = Response(body, status=206 if partial else 200, mimetype=content_type)
+
+def _serve_object(key: str, content_type: str, max_age: int, *, allow_ranges: bool):
+    """Serves a stored object, fetching ONLY the bytes the client asked for.
+
+    WHY THIS EXISTS. The previous implementation loaded the entire object from
+    storage and then sliced it. iOS Safari opens a video with
+    `Range: bytes=0-1`, so answering that probe meant downloading several
+    megabytes from R2 to return two bytes - and then doing it again for the
+    real request. Every player paid for both before the first frame appeared.
+
+    Now the size comes from a HEAD and the body from a ranged GET, so a
+    two-byte probe moves two bytes.
+
+    `allow_ranges` is False for the small image kinds, which are always fetched
+    whole and would only pay an extra HEAD for the privilege.
+    """
+    storage = get_private_storage()
+
+    raw = request.headers.get("Range", "") if allow_ranges else ""
+    if not raw:
+        data = storage.load_private(key)
+        if data is None:
+            abort(404)
+        return _whole_body(data, content_type, max_age, allow_ranges=allow_ranges)
+
+    total = storage.private_size(key)
+    if total is None:
+        abort(404)
+    if total == 0:
+        # Nothing to range over; let the empty body answer honestly.
+        return _whole_body(b"", content_type, max_age, allow_ranges=allow_ranges)
+
+    resolved = _parse_range(raw, total)
+    if resolved is None:
+        data = storage.load_private(key)
+        if data is None:
+            abort(404)
+        return _whole_body(data, content_type, max_age, allow_ranges=allow_ranges)
+
+    if resolved == "unsatisfiable":
+        # 416 with the total, so the client can correct itself rather than
+        # guess. Returning the whole object here - which this used to do -
+        # tells a confused client that its bad request was fine.
+        response = Response(status=416, mimetype=content_type)
+        response.headers["Content-Range"] = f"bytes */{total}"
+        response.headers["Accept-Ranges"] = "bytes"
+        return response
+
+    start, end = resolved
+    body = storage.load_private_range(key, start, end)
+    if body is None:
+        abort(404)
+
+    response = Response(body, status=206, mimetype=content_type)
     response.headers["Accept-Ranges"] = "bytes"
     response.headers["Content-Length"] = str(len(body))
-    if partial:
-        response.headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+    response.headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+    response.headers["Cache-Control"] = f"private, max-age={max_age}"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+def _whole_body(data: bytes, content_type: str, max_age: int, *, allow_ranges: bool):
+    response = Response(data, mimetype=content_type)
+    if allow_ranges:
+        # Advertised so a player's browser knows it may seek at all.
+        response.headers["Accept-Ranges"] = "bytes"
+    response.headers["Content-Length"] = str(len(data))
     response.headers["Cache-Control"] = f"private, max-age={max_age}"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
@@ -111,7 +187,7 @@ def _masked_question_bytes(question_id: int) -> bytes | None:
         return None
 
 
-def _delivered_clip_object(snapshot_id: int, *, poster: bool) -> tuple[bytes | None, str]:
+def _delivered_clip_object(snapshot_id: int, *, poster: bool) -> tuple[str | None, str]:
     """The clip ONE ATTEMPT WAS DELIVERED, read from that attempt's snapshot.
 
     Resolves through the frozen `storage_key`, never through the live
@@ -123,9 +199,12 @@ def _delivered_clip_object(snapshot_id: int, *, poster: bool) -> tuple[bytes | N
     must be served as what it WAS, not as whatever the current clip happens to
     be encoded as.
 
+    Returns the KEY rather than the bytes, so the caller can ask storage for
+    only the range the player actually requested - see `_serve_object`.
+
     Fails closed at every step. A missing row, a snapshot recorded before clips
-    existed, a malformed blob and a missing object are all None, and the caller
-    turns every one of them into the same 404.
+    existed and a malformed blob are all None, and the caller turns every one
+    of them into the same 404.
     """
     row = db.session.get(AttemptQuestionSnapshot, snapshot_id)
     if row is None:
@@ -144,7 +223,7 @@ def _delivered_clip_object(snapshot_id: int, *, poster: bool) -> tuple[bytes | N
         return None, POSTER_CONTENT_TYPE
     if not isinstance(content_type, str) or not content_type:
         content_type = CLIP_CONTENT_TYPE
-    return get_private_storage().load_private(key), content_type
+    return key, content_type
 
 
 def _delivered_mask_bytes(snapshot_id: int) -> bytes | None:
@@ -173,7 +252,16 @@ def serve_signed_media(token: str):
     kind = payload["k"]
 
     content_type = RENDER_CONTENT_TYPE
+    max_age = seconds_until_expiry(payload)
 
+    # THE OBJECT IS RESOLVED TO A KEY, NEVER TO BYTES, for anything a player
+    # might seek through. Loading first and slicing afterwards is what made a
+    # two-byte probe cost a whole video - see `_serve_object`.
+    #
+    # AUTHORIZATION IS UNCHANGED AND STILL HAPPENS FIRST: the token was
+    # verified above, and every branch below still resolves the key through
+    # the same row lookups it always did. A ranged request gets no different
+    # treatment from a whole one.
     if kind in (KIND_CLIP, KIND_CLIP_POSTER):
         clip = db.session.get(QuestionClip, payload["i"])
         if clip is None:
@@ -184,12 +272,22 @@ def serve_signed_media(token: str):
             key, content_type = clip.poster_key, POSTER_CONTENT_TYPE
         if not key:
             abort(404)
-        data = get_private_storage().load_private(key)
-    elif kind in (KIND_DELIVERED_CLIP, KIND_DELIVERED_CLIP_POSTER):
-        data, content_type = _delivered_clip_object(
+        return _serve_object(key, content_type, max_age, allow_ranges=kind == KIND_CLIP)
+
+    if kind in (KIND_DELIVERED_CLIP, KIND_DELIVERED_CLIP_POSTER):
+        key, content_type = _delivered_clip_object(
             payload["i"], poster=kind == KIND_DELIVERED_CLIP_POSTER
         )
-    elif kind == KIND_DELIVERED_MASK:
+        if not key:
+            abort(404)
+        return _serve_object(
+            key, content_type, max_age, allow_ranges=kind == KIND_DELIVERED_CLIP
+        )
+
+    # The image kinds below are small, are always fetched whole, and some are
+    # rendered on demand rather than stored - so they keep the simple path and
+    # do not pay for a HEAD they would never use.
+    if kind == KIND_DELIVERED_MASK:
         data = _delivered_mask_bytes(payload["i"])
     elif kind == KIND_QUESTION_MASK:
         data = _masked_question_bytes(payload["i"])
@@ -197,34 +295,17 @@ def serve_signed_media(token: str):
         page = db.session.get(DocumentPage, payload["i"])
         if page is None:
             abort(404)
-        key = page.thumbnail_key if kind == KIND_THUMBNAIL else page.image_key
-        if not key:
+        image_key = page.thumbnail_key if kind == KIND_THUMBNAIL else page.image_key
+        if not image_key:
             abort(404)
-        data = get_private_storage().load_private(key)
+        data = get_private_storage().load_private(image_key)
 
     if data is None:
         abort(404)
 
-    # RANGE REQUESTS, AND WHY A VIDEO NEEDS THEM.
-    #
-    # iOS Safari will not play a video from a source that answers a ranged
-    # request with a plain 200 - it opens with `Range: bytes=0-1`, and a
-    # server that ignores that is treated as unable to serve media at all.
-    # The clip then fails on an iPhone for a transport reason that looks
-    # exactly like a codec problem, which would send the real-device test
-    # chasing the wrong thing.
-    #
-    # Only the clip kind needs it; the image kinds are small and are always
-    # fetched whole.
-    if kind in (KIND_CLIP, KIND_DELIVERED_CLIP):
-        return _ranged_response(data, content_type, seconds_until_expiry(payload))
-
-    response = Response(data, mimetype=content_type)
     # Cacheable, but never for longer than the token authorising it remains
     # valid - so a cached copy cannot outlive its authorisation. `private`
-    # keeps it out of any shared/CDN cache.
-    response.headers["Cache-Control"] = f"private, max-age={seconds_until_expiry(payload)}"
-    # These bytes are only ever images. Belt and braces against a browser
-    # deciding otherwise about content it was handed from a signed URL.
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    return response
+    # keeps it out of any shared/CDN cache. These bytes are only ever images,
+    # and `nosniff` is belt and braces against a browser deciding otherwise
+    # about content handed to it from a signed URL.
+    return _whole_body(data, content_type, max_age, allow_ranges=False)
