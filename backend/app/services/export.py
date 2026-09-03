@@ -2109,3 +2109,251 @@ def build_cumulative_performance_pdf(histories: list[dict], theme: dict | None =
     footer = _compact_footer(theme, "Cumulative Performance Report")
     doc.build(elements, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# ANSWER KEY
+#
+# THE TEST ITSELF, NOT HOW ANYBODY DID ON IT. Everything below reads the quiz
+# and its questions and touches no attempt, answer, score or player - a coach
+# reviewing what they wrote should not be handed their squad's performance, and
+# an answer key that quietly carried results would be the wrong document to
+# leave on a desk.
+#
+# It reuses this module's existing chrome, styles and image loading rather than
+# growing a second exporter, so the answer key and the results PDF cannot drift
+# apart in how a question, an image or a playbook page is rendered.
+# ---------------------------------------------------------------------------
+
+#: Marks the right answer. A glyph rather than a colour: an answer key gets
+#: printed, photocopied and read in a team room, and colour is the first thing
+#: those lose.
+_CORRECT_MARK = "✓"
+
+#: A, B, C ... for the options of one question.
+_CHOICE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _question_mask_flowable(question):
+    """A playbook-backed question's masked page, rendered LIVE.
+
+    The results PDF renders a DELIVERED mask from an attempt's snapshot. There
+    is no attempt here, so this renders the question as it stands today - which
+    is the right answer for a document about the test rather than about a
+    performance.
+
+    Best-effort like every other image in this module: an unreadable render
+    costs this one picture, never the whole key.
+    """
+    from app.services.page_masking import masked_render_bytes
+
+    try:
+        if not question.regions:
+            return None
+        raw = masked_render_bytes(question.regions[0])
+        if not raw:
+            return None
+        reader = ImageReader(io.BytesIO(raw))
+        width, height = reader.getSize()
+        if not width or not height:
+            return None
+        scale = min(_MAX_IMAGE_WIDTH / width, _MAX_IMAGE_HEIGHT / height, 1.0)
+        return RLImage(io.BytesIO(raw), width=width * scale, height=height * scale)
+    except Exception:
+        return None
+
+
+def _answer_key_visual(question, load_image_bytes):
+    """Whatever picture this question asks about, in whichever way it has one.
+
+    The three sources are mutually exclusive by construction - a question takes
+    its visual material from an uploaded still, OR a playbook page, OR a clip -
+    so this returns the first that resolves rather than trying to combine them.
+    A clip becomes its poster, because paper cannot move.
+    """
+    if question.image is not None and getattr(question.image, "image_url", None):
+        found = _load_image_flowable(load_image_bytes, question.image.image_url)
+        if found is not None:
+            return found
+    if question.regions:
+        found = _question_mask_flowable(question)
+        if found is not None:
+            return found
+    if question.clip is not None:
+        return _poster_flowable(question.clip.poster_key)
+    return None
+
+
+def _expected_answer_line(question) -> str | None:
+    """The configured correct answer for a question with no options.
+
+    FILL_BLANK stores every accepted spelling, and all of them belong on a key -
+    a coach marking by hand needs to know that "Cover 3 Buzz" and "Cover 3" were
+    both set up to pass.
+    """
+    raw = question.expected_answers
+    if not isinstance(raw, list):
+        return None
+    accepted = [str(item).strip() for item in raw if str(item).strip()]
+    if not accepted:
+        return None
+    return ", ".join(accepted)
+
+
+def _answer_key_question(theme, styles, number: int, question, load_image_bytes) -> list:
+    """One numbered question, its picture, and its answer.
+
+    Returned as a flat list the caller wraps in KeepTogether, so a question and
+    its own answers are never split across a page break - an answer key whose
+    correct option landed overleaf would be worse than useless in a team room.
+    """
+    parts = [
+        Paragraph(
+            f"<b>{number}.</b> {_xml_escape(question.question_text or '')}",
+            styles["normal"],
+        ),
+        Spacer(1, theme["spacing"]["xs"]),
+    ]
+
+    visual = _answer_key_visual(question, load_image_bytes)
+    if visual is not None:
+        parts.extend([visual, Spacer(1, theme["spacing"]["xs"])])
+
+    options = sorted(question.options, key=lambda o: (o.position, o.id))
+    if options:
+        for index, option in enumerate(options):
+            letter = _CHOICE_LETTERS[index] if index < len(_CHOICE_LETTERS) else "?"
+            correct = bool(option.is_correct_answer)
+            # The mark sits in its own leading column on every row, correct or
+            # not, so the ticks line up down the page and can be found at a
+            # glance instead of read for.
+            mark = _CORRECT_MARK if correct else "&nbsp;"
+            body = _xml_escape(option.option_text or "")
+            text = f"{mark} <b>{letter}.</b> <b>{body}</b>" if correct else f"{mark} {letter}. {body}"
+            parts.append(Paragraph(text, styles["normal"]))
+        if question.allows_multiple_answers:
+            parts.append(
+                Paragraph("Select all that apply.", styles["label"])
+            )
+    else:
+        accepted = _expected_answer_line(question)
+        if accepted:
+            parts.append(
+                Paragraph(
+                    f"{_CORRECT_MARK} <b>Accepted answers:</b> {_xml_escape(accepted)}",
+                    styles["normal"],
+                )
+            )
+        elif question.answer_explanation:
+            # THE EXPLANATION IS THE MODEL ANSWER when there is nothing else to
+            # mark against. Saying "no model answer set" directly above the
+            # coach's own model answer - which an earlier draft did - reads as
+            # a contradiction and makes the key look wrong.
+            parts.append(
+                Paragraph(
+                    f"{_CORRECT_MARK} <b>Model answer:</b> "
+                    f"{_xml_escape(question.answer_explanation)}",
+                    styles["normal"],
+                )
+            )
+        elif question.question_type is QuestionType.DRAW_RESPONSE:
+            parts.append(
+                Paragraph("Answered by drawing on the image. Graded by hand.", styles["label"])
+            )
+        else:
+            # Said plainly rather than left blank, so a coach can see the gap
+            # is real and go and fill it in.
+            parts.append(
+                Paragraph("Written answer, graded by hand. No model answer set.", styles["label"])
+            )
+
+    # Supplementary only where the correct answer is already shown above it -
+    # otherwise it has just been printed as the model answer.
+    if question.answer_explanation and (options or _expected_answer_line(question)):
+        parts.extend(
+            [
+                Spacer(1, theme["spacing"]["xs"]),
+                Paragraph(
+                    f"<b>Explanation:</b> {_xml_escape(question.answer_explanation)}",
+                    styles["label"],
+                ),
+            ]
+        )
+
+    parts.append(Spacer(1, theme["spacing"]["md"]))
+    return parts
+
+
+def build_answer_key_pdf(
+    quizzes: list,
+    theme: dict | None = None,
+    exclusions=NO_EXCLUSIONS,
+    load_image_bytes=None,
+) -> bytes:
+    """One cumulative PDF of the given quizzes and their correct answers.
+
+    NO PLAYER DATA REACHES THIS FUNCTION. It takes quizzes, not responses, and
+    that is the guarantee: there is no attempt, name, score or percentage in
+    scope to leak into the document by accident.
+
+    EXCLUDED QUESTIONS ARE OMITTED, NOT LABELLED. A question a coach has marked
+    "don't count" is not part of the test any more, so printing it greyed out
+    would restate a decision the coach already made and invite them to teach
+    from it. The remaining questions are then numbered 1..n so the key reads as
+    the test now stands - the numbering follows what is printed, never the
+    positions of questions that are not.
+
+    `access_code_id=None` when filtering, so only QUIZ-WIDE exclusions apply. An
+    exclusion scoped to a single access code belongs to that assignment rather
+    than to the test, and hiding it from every key would be the wrong reading of
+    a narrower decision.
+    """
+    theme = theme or PDF_THEME
+    buffer = io.BytesIO()
+    title = quizzes[0].title if len(quizzes) == 1 else "Answer key"
+    doc = SimpleDocTemplate(buffer, pagesize=letter, title=f"{title} - Answer Key")
+    styles = _pdf_styles(theme)
+
+    elements = [
+        *_masthead(
+            theme,
+            styles,
+            [f"Generated {datetime.now(timezone.utc).strftime('%b %d, %Y at %I:%M %p UTC')}"],
+        ),
+        Spacer(1, theme["spacing"]["lg"]),
+        Paragraph("ANSWER KEY", styles["eyebrow"]),
+        Spacer(1, theme["spacing"]["xs"]),
+        Paragraph(
+            _xml_escape(title if len(quizzes) == 1 else f"{len(quizzes)} quizzes"),
+            styles["display"],
+        ),
+        Spacer(1, theme["spacing"]["xl"]),
+    ]
+
+    for index, quiz in enumerate(quizzes):
+        if index > 0:
+            # Each quiz starts its own page. A key is read one test at a time.
+            elements.append(PageBreak())
+        elements.append(_section_header(theme, styles, quiz.title))
+        elements.append(Spacer(1, theme["spacing"]["md"]))
+
+        ordered = sorted(quiz.questions, key=lambda q: (q.position, q.id))
+        printed = exclusions.active_questions(ordered, None)
+
+        if not printed:
+            elements.append(
+                Paragraph("No questions to show for this quiz.", styles["label"])
+            )
+            elements.append(Spacer(1, theme["spacing"]["lg"]))
+            continue
+
+        for number, question in enumerate(printed, start=1):
+            elements.append(
+                KeepTogether(
+                    _answer_key_question(theme, styles, number, question, load_image_bytes)
+                )
+            )
+
+    footer = _make_footer(theme, title)
+    doc.build(elements, onFirstPage=footer, onLaterPages=footer)
+    return buffer.getvalue()

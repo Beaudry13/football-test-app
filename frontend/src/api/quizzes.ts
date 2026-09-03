@@ -42,3 +42,11 @@ export function deleteQuiz(quizId: number): Promise<void> {
 export function duplicateQuiz(quizId: number): Promise<Quiz> {
   return api.post<Quiz>(`/quizzes/${quizId}/duplicate`);
 }
+
+/** One cumulative answer-key PDF for the chosen quizzes.
+ *
+ * NOT a results export - the endpoint loads quizzes and never touches attempts,
+ * so no player, score or percentage can reach the document. */
+export function exportAnswerKeyPdf(quizIds: number[]): Promise<Blob> {
+  return api.getBlob(`/quizzes/answer-key.pdf?ids=${quizIds.join(',')}`);
+}

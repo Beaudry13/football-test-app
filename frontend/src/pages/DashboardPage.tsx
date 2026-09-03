@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
+import { AnswerKeyDialog } from '../components/AnswerKeyDialog';
 import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
 import { getErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -24,6 +25,9 @@ import styles from './DashboardPage.module.css';
 export function DashboardPage() {
   const { coach } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
+  /** The answer-key picker. Opened from the toolbar rather than living on
+   *  each card, so no coach sees a checkbox they did not ask for. */
+  const [answerKeyOpen, setAnswerKeyOpen] = useState(false);
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const [newTitle, setNewTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -239,6 +243,9 @@ export function DashboardPage() {
   return (
     <NotebookPage>
       {dialog}
+      {answerKeyOpen && (
+        <AnswerKeyDialog quizzes={quizzes ?? []} onClose={() => setAnswerKeyOpen(false)} />
+      )}
       <NotebookHeader />
 
       <div className={nb.content}>
@@ -298,6 +305,18 @@ export function DashboardPage() {
             >
               <Icon name="add" size={14} /> New folder
             </button>
+            {/* THE TEST, NOT THE RESULTS. Sits with the other quiz actions
+                rather than anywhere near Results, because a coach reaching for
+                it wants to read what they wrote - not how anybody did. */}
+            {quizzes && quizzes.length > 0 && (
+              <button
+                type="button"
+                className={nb.btnSecondary}
+                onClick={() => setAnswerKeyOpen(true)}
+              >
+                Answer key
+              </button>
+            )}
           </div>
         ) : creating === 'quiz' ? (
           <form className={styles.newQuizForm} onSubmit={handleCreate}>

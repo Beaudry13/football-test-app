@@ -1,0 +1,52 @@
+/* Picking tests for an answer key. A short list and two buttons - this is a
+   thing a coach does in a few seconds on the way to a printer. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8em;
+  min-width: min(420px, 80vw);
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}
+
+/* Scrolls rather than growing without end: a coach with a hundred quizzes
+   must still be able to reach the download button. */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-sm);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.55em 0.7em;
+  /* A 44px target, because this list is used on a tablet in a team room. */
+  min-height: 44px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--nb-border);
+  font-size: var(--peira-text-control);
+}
+
+.list li:last-child .row {
+  border-bottom: 0;
+}
+
+.row:hover {
+  background: var(--peira-surface-raised);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}

@@ -9,7 +9,7 @@ import copy
 from collections import defaultdict
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, Response, jsonify, request
 from flask_jwt_extended import jwt_required
 from sqlalchemy import case, func
 from sqlalchemy.orm import contains_eager, selectinload
@@ -46,7 +46,8 @@ from app.services.player_identity import PlayerKey
 from app.services.retests import eligible_players, questions_to_copy
 from app.services.file_storage import StorageError, get_file_storage
 from app.services.page_masking import attach_masked_media
-from app.services.question_exclusions import sql_not_excluded
+from app.services.export import build_answer_key_pdf, export_filename_slug
+from app.services.question_exclusions import load_for_quizzes, sql_not_excluded
 from app.services.question_snapshots import delivered_question_ids_for_quiz
 from app.services.scoring import score_percent
 from app.services.signed_media import AUDIENCE_COACH
@@ -851,3 +852,70 @@ def _copy_questions_into(
                     decision_point_ms=question.clip.decision_point_ms,
                 )
             )
+
+
+@quizzes_bp.get("/answer-key.pdf")
+@jwt_required()
+def export_answer_key_pdf():
+    """One cumulative answer key for the quizzes named in `?ids=1,2,3`.
+
+    NOT A RESULTS EXPORT, and the shape of this route is what enforces that: it
+    loads quizzes and never touches attempts, answers or players, so there is no
+    performance data in scope to leak into the document. The results exports
+    live in routes/grading.py and stay there.
+
+    AUTHORIZATION IS PER QUIZ, through the same `get_visible_quiz` every
+    single-quiz read uses - so a cumulative export can never become a way to
+    read a quiz the caller could not open one at a time. An id they may not see
+    404s the whole request rather than being quietly dropped, because a key that
+    silently omits a requested test is worse than one that refuses.
+    """
+    raw = (request.args.get("ids") or "").strip()
+    if not raw:
+        raise ApiError("Choose at least one quiz to export.", status_code=400)
+
+    ids = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            ids.append(int(part))
+        except ValueError:
+            raise ApiError("That is not a valid quiz id.", status_code=400) from None
+
+    if not ids:
+        raise ApiError("Choose at least one quiz to export.", status_code=400)
+    if len(ids) > 50:
+        # A bound, not a policy: fifty quizzes is already a very long document,
+        # and an unbounded list is a way to ask the server to render forever.
+        raise ApiError("That is too many quizzes for one export.", status_code=400)
+
+    # Order follows the ids the coach asked for, and duplicates collapse.
+    seen = set()
+    quizzes = []
+    for quiz_id in ids:
+        if quiz_id in seen:
+            continue
+        seen.add(quiz_id)
+        quizzes.append(get_visible_quiz(quiz_id))
+
+    storage = get_file_storage()
+    pdf_bytes = build_answer_key_pdf(
+        quizzes,
+        exclusions=load_for_quizzes([q.id for q in quizzes]),
+        load_image_bytes=storage.load_image_bytes,
+    )
+    slug = (
+        export_filename_slug(quizzes[0].title) if len(quizzes) == 1 else "quizzes"
+    )
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{slug}-answer-key-{date_str}.pdf"'
+            )
+        },
+    )
