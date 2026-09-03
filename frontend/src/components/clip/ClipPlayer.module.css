@@ -120,3 +120,70 @@
   font-size: var(--peira-text-meta);
   color: var(--color-text-muted);
 }
+
+/* THE WAIT, MADE VISIBLE. A recorded clip is a few megabytes over a phone
+   network; without this a player sees an inert rectangle and cannot tell a
+   slow video from a broken one. Sits over the poster, which is already the
+   right shape, so nothing moves when the film arrives. */
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  /* Must never be the reason a tap misses the play surface underneath. */
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: var(--radius-sm);
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.28);
+  border-top-color: #fff;
+  animation: clipSpin 0.9s linear infinite;
+}
+
+/* Anyone who has asked for less movement gets a still ring rather than none:
+   the message below still says what is happening. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
+
+@keyframes clipSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingText {
+  color: #fff;
+  font-size: var(--peira-text-meta);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Tappable, so it cannot live inside the pointer-events:none overlay. */
+.retryWrap {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  transform: translateX(-50%);
+}
+
+.retryButton {
+  min-height: 44px;
+  padding: 0 1em;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

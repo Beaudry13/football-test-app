@@ -88,6 +88,15 @@ export function ClipPlayer({
 }) {
   const [failed, setFailed] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** False until the browser says it can actually play something.
+   *
+   *  A recorded clip is a few megabytes over a phone network, so there is a
+   *  real wait before the first frame - measured at roughly five seconds on
+   *  a real handset. Without this the player sees an inert rectangle and
+   *  cannot tell a slow video from a broken one. */
+  const [ready, setReady] = useState(false);
+  /** The load took long enough that silence is no longer honest. */
+  const [stalled, setStalled] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const stopAt = decisionPointSeconds(decisionPointMs);
@@ -150,6 +159,28 @@ export function ClipPlayer({
   }, [stopAt]);
 
   useEffect(() => () => disarmRef.current?.(), []);
+
+  /** NEVER SPIN FOREVER. A load that has produced nothing after this long is
+   *  not going to, and a player staring at a spinner has no idea whether to
+   *  wait or to move on. Cleared as soon as the clip becomes playable. */
+  useEffect(() => {
+    if (ready || failed) return;
+    const timer = window.setTimeout(() => setStalled(true), 20000);
+    return () => window.clearTimeout(timer);
+  }, [ready, failed, url]);
+
+  /** Starts the load again from the top, for a player who waited it out. */
+  const retry = useCallback(() => {
+    const el = videoRef.current;
+    setStalled(false);
+    setFailed(false);
+    setReady(false);
+    try {
+      el?.load();
+    } catch {
+      /* Nothing to reload; the failure state below still applies. */
+    }
+  }, []);
 
   /** Autoplay is a REQUEST, not a guarantee.
    *
@@ -242,6 +273,16 @@ export function ClipPlayer({
         className={`${styles.clip} ${className ?? ''}`}
         src={url}
         poster={posterUrl ?? undefined}
+        /* METADATA, NOT AUTO. iOS defaults a video to `preload="none"` on a
+           cellular connection, so nothing at all was fetched until the
+           player tapped - the whole wait happened after the tap, which is
+           what made it feel broken. Asking for metadata gets the header and
+           dimensions moving immediately.
+
+           NOT `auto`: a quiz can hold twenty clips, and pulling every one
+           of them in full would spend a player's mobile data on football
+           they may never reach. */
+        preload="metadata"
         // Autoplay is a REQUEST; the effect above catches a refusal. Off
         // entirely on a single-page quiz.
         autoPlay={autostart}
@@ -259,13 +300,53 @@ export function ClipPlayer({
         // The button carries the accessible name, so announcing the video
         // separately would read the same clip twice.
         aria-hidden="true"
+        // Either event means there is something to show; whichever the
+        // browser sends first clears the loading state.
+        onLoadedData={() => setReady(true)}
+        onCanPlay={() => setReady(true)}
         onPlay={() => setPaused(false)}
         // Fires for a background tab too, which is exactly the case that used
         // to strand a player on a frozen frame.
         onPause={() => setPaused(true)}
         onError={() => setFailed(true)}
       />
-      {paused && (
+      {!ready && !failed && (
+        /* THE WAIT, MADE VISIBLE. Sits over the poster - which is already
+           the right shape and arrives long before the video - so the box
+           never collapses or jumps when the film finally loads.
+
+           `pointer-events: none` so it can never become the reason a tap
+           does not reach the play surface underneath it. */
+        <span className={styles.loading} aria-live="polite">
+          {stalled ? (
+            <span className={styles.loadingText}>Video is taking a while.</span>
+          ) : (
+            <>
+              <span className={styles.spinner} aria-hidden="true" />
+              <span className={styles.loadingText}>Loading video…</span>
+            </>
+          )}
+        </span>
+      )}
+
+      {stalled && !ready && !failed && (
+        /* OUTSIDE the overlay, because unlike the spinner this one has to be
+           tappable. */
+        <span className={styles.retryWrap}>
+          <button
+            type="button"
+            className={styles.retryButton}
+            onClick={(e) => {
+              e.stopPropagation();
+              retry();
+            }}
+          >
+            Try again
+          </button>
+        </span>
+      )}
+
+      {paused && ready && (
         /* THE ONLY CHROME, and only when it means something. A player looking
            at a still frame has to be told it is not simply a photograph. */
         <span className={styles.playBadge} aria-hidden="true">

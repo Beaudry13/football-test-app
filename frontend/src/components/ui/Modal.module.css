@@ -67,6 +67,16 @@
   position: absolute;
   top: var(--space-3);
   right: var(--space-3);
+  /* ALWAYS ON TOP OF THE PANEL'S CONTENT, and this is load-bearing rather
+     than cosmetic. The button is rendered BEFORE `{children}`, so without a
+     stacking order of its own any positioned content paints over it. In the
+     image lightbox that content is a pinch-zoom surface with
+     `touch-action: none` which captures pointers and stops click
+     propagation - so on a phone, where a large image covers the whole panel,
+     the close button was underneath the image and every tap on it went to the
+     image instead. Escape still worked, which is why only mobile players got
+     trapped and had to reload the page to escape a photograph. */
+  z-index: 2;
   width: 32px;
   height: 32px;
   display: flex;
