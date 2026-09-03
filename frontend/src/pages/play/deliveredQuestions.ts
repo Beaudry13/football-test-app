@@ -66,6 +66,19 @@ export function applyDeliveredContent(
       // the LIVE region - truthful only while region editing stays blocked
       // after delivery. See docs/DESIGN-delivered-question-snapshots.md.
       masked_image_url: d.masked_image_url ?? base?.masked_image_url ?? null,
+      // THE DELIVERED CLIP, AND ONLY THE DELIVERED CLIP HAS A URL.
+      //
+      // This was missing, and a player saw no film at all. The live copy from
+      // /validate-code is serialized with `with_urls=include_correct_answers`,
+      // which is FALSE for a player - so `base.clip` carries the metadata and
+      // no `url` or `poster_url` at all. Falling through to it rendered a
+      // <video> with no source: no picture, no poster, nothing to press.
+      //
+      // The signed URL is minted per access code on /play/start, so it can
+      // only come from the delivered payload. That payload also carries the
+      // frozen decision point, which must win for the same reason the image's
+      // identity does - it is what this attempt was actually given.
+      clip: d.clip ? { ...base?.clip, ...d.clip } : (base?.clip ?? null),
     } as Question;
   });
 }

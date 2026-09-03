@@ -90,7 +90,19 @@ describe('the full-view media surfaces present the whole frame', () => {
     }
   });
 
-  it('the one cropping rule is the thumbnail, and it is scoped to thumbnails', () => {
+  it('a RECORDING is never cropped, even at thumbnail size', () => {
+    // REPORTED FROM REAL USE: the saved question in the builder showed only
+    // part of the recording. `.thumb` is a 3:2 box with `cover`, so a 16:9
+    // capture lost its sides - and a screen recording carries football at its
+    // edges, where a play develops sideways.
+    //
+    // An uploaded still still crops on purpose: the coach framed that picture
+    // themselves when they took it.
+    expect(ruleBody(listCss, '.thumbClip')).toContain('object-fit: contain');
+    expect(ruleBody(listCss, '.thumbClip')).not.toContain('cover');
+  });
+
+  it('the base thumbnail crop stays, and stays scoped to thumbnails', () => {
     // A thumbnail may crop on purpose. Nothing else may, and this is the line
     // that has to stay true.
     expect(ruleBody(listCss, '.thumb')).toContain('object-fit: cover');

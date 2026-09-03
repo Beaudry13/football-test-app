@@ -33,6 +33,26 @@ export function QuizEditorPage() {
      with an action of its own competing for the top of the screen. */
   const readingResults = activeTab === 'results';
 
+  /** Applies what PATCH returned WITHOUT discarding what it left out.
+   *
+   *  `PATCH /api/quizzes/:id` responds with `to_dict()`, which only carries a
+   *  `questions` key when it is asked for one - and it is not asked here. So
+   *  `setQuiz(updated)` replaced a complete quiz with a partial one, and
+   *  QuestionsTab, reading `quiz.questions ?? []`, rendered an empty list.
+   *  Every question of every type vanished from the builder until a refresh
+   *  went back through GET.
+   *
+   *  A coach hits this by renaming the quiz or toggling a setting - both of
+   *  which happen on the way to activating one, which is why it looked like
+   *  activation was deleting questions.
+   *
+   *  Spreading rather than replacing is what fixes it: keys the response
+   *  actually carries win, and keys it omits keep the value already on screen.
+   */
+  const applyPatched = useCallback((updated: Quiz) => {
+    setQuiz((previous) => (previous ? { ...previous, ...updated } : updated));
+  }, []);
+
   const reload = useCallback(async () => {
     if (!quizId) return;
     try {
@@ -50,7 +70,7 @@ export function QuizEditorPage() {
     if (!quiz) return;
     try {
       const updated = await updateQuiz(quiz.id, { [field]: value });
-      setQuiz(updated);
+      applyPatched(updated);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -60,7 +80,7 @@ export function QuizEditorPage() {
     if (!quiz) return;
     try {
       const updated = await updateQuiz(quiz.id, { one_question_at_a_time: !quiz.one_question_at_a_time });
-      setQuiz(updated);
+      applyPatched(updated);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -70,7 +90,7 @@ export function QuizEditorPage() {
     if (!quiz) return;
     try {
       const updated = await updateQuiz(quiz.id, { require_all_answers: !quiz.require_all_answers });
-      setQuiz(updated);
+      applyPatched(updated);
     } catch (err) {
       setError(getErrorMessage(err));
     }

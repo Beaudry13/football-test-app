@@ -116,6 +116,20 @@ describe('a clip question in the coach list', () => {
     expect(poster.getAttribute('src')).toContain(COACH_POSTER_URL);
   });
 
+  it('shows the WHOLE recorded frame, not a crop of it', () => {
+    // REPORTED FROM REAL USE: the saved question showed only part of the
+    // recording. The poster carries the clip's own crop-free class as well as
+    // the shared thumbnail one; an uploaded still gets only the shared one.
+    renderTab([withClip(), withUploadedImage()]);
+
+    const poster = screen.getByAltText('Still frame from the recorded clip');
+    const still = screen.getByAltText('Question film');
+    expect(poster.className).not.toBe(still.className);
+    expect(poster.className.split(' ').length).toBeGreaterThan(
+      still.className.split(' ').length,
+    );
+  });
+
   it('does NOT autoplay a wall of video', () => {
     // Twenty questions is twenty simultaneous decodes on a surface that is
     // scanned rather than watched.

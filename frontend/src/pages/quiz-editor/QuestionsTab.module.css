@@ -134,6 +134,20 @@
   object-fit: contain;
 }
 
+/* A RECORDING IS NOT A PHOTOGRAPH THE COACH FRAMED. `cover` crops a 16:9
+   capture into this 3:2 box, and a screen recording carries football at its
+   edges - a play develops sideways, and the cut-off part is often the part the
+   question is about. So the whole frame is fitted and the spare space is left
+   black, the same choice `.thumbPage` already makes for a portrait playbook
+   page in a landscape slot.
+
+   An uploaded still keeps `cover` deliberately: a coach chose that crop when
+   they took the picture. */
+.thumbClip {
+  object-fit: contain;
+  background: #000;
+}
+
 /* QUIETER, NEVER HIDDEN.
    Twenty questions means twenty Edits and twenty menus, and that repetition
    is a large part of what the page's texture was made of. The fix is weight,

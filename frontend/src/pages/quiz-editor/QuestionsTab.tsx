@@ -514,7 +514,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     posterUrl={
                       question.clip.poster_url ? resolveMediaUrl(question.clip.poster_url) : null
                     }
-                    className={styles.thumb}
+                    className={`${styles.thumb} ${styles.thumbClip}`}
                     alt="Still frame from the recorded clip"
                   />
                   {/* THE DURATION IS THE VIDEO BADGE. A poster is
