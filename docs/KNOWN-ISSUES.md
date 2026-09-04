@@ -287,12 +287,14 @@ still open** - see the PRIORITY 1 entry above for exactly what remains.
 
 ---
 
-## Recorded clip storage is never reclaimed
+## Recorded clip storage — why nothing is deleted on replace, and how it is finally reclaimed
 
-**Deliberate, and it is the safe direction of the trade.**
+**Leaving the object in place is deliberate, and it is the safe direction of
+the trade. A collector now exists for the objects that genuinely become
+unreachable — see RESOLVED below.**
 
 Replacing or removing a question's clip deletes the `question_clips` row and
-leaves the stored object in place. Nothing sweeps it.
+leaves the stored object in place.
 
 That is not an oversight. A delivered snapshot freezes the clip's STORAGE KEY
 rather than its row id — that is precisely what lets a finished attempt keep
@@ -304,15 +306,77 @@ exists to prevent.
 So orphaned clips accumulate. At 15 seconds and roughly 0.15–2 MB each that
 is slow, but it is unbounded.
 
-**A real collector is possible and is not hard** — it just has to be written
-against the snapshots rather than against the live rows: an object is
-reclaimable only when no `question_clips` row and no `attempt_question_
-snapshots.snapshot->'clip'->>'storage_key'` names it. Doing it the obvious
-way, by walking live rows alone, would delete exactly the objects history
-depends on.
+### RESOLVED for objects unlinked from 3 September 2026 onwards
 
-Not started. Recorded so the next person meets the reasoning rather than the
-symptom.
+**`unlinked_clip_objects` + `services/clip_gc.py` + `tools/clip_storage_collect.py`.**
+
+The collector is written against the snapshots as this entry required. An
+object is reclaimable only when no `question_clips` row and no
+`attempt_question_snapshots.snapshot->'clip'` names it — as video OR as poster
+— and it has been unlinked for longer than the grace period.
+
+**The candidate list is a RECORD, not a bucket listing, and that is the whole
+safety argument.** A clip's key disappears from the database the instant its
+row is deleted, so an orphan is by definition absent from every live table —
+which means the only way to *discover* one is to enumerate storage. That is the
+dangerous path, and not for the obvious reason:
+
+> `new_storage_key` labels objects only by extension. `.mp4` happens to be
+> unique to clip video, but **`.webp` is produced by four different features** —
+> a clip poster, a rendered document page, a page thumbnail and a masked
+> playbook region. Worse, a page raster is referenced by delivered snapshots
+> through its page ID rather than its key, so "no row names this key" is not
+> the same question as "nothing needs these bytes".
+
+A listing-based collector therefore has to be exhaustively right about every
+producer, forever, and the cost of being wrong once is deleting a coach's
+playbook. Anchoring on objects Peira itself recorded as clip objects removes
+that entire class of mistake by construction rather than by vigilance.
+
+**ONE HOOK, NOT FOUR CALL SITES.** A clip row stops being live in four places —
+replacing a clip, removing it, deleting the question, deleting the quiz — and
+only the first two are explicit; the other two arrive through
+`cascade="all, delete-orphan"` with no clip code running at all. A `before_flush`
+session hook catches every one, including a fifth path nobody has written yet.
+Two of the tests delete a question and a quiz precisely to prove the cascade is
+covered, and they fail if the hook is narrowed to the explicit routes.
+
+**Grace period: 30 days**, and it is NOT protecting against a transactional
+race — reachability is re-derived at collection time against committed rows, so
+a snapshot written while a coach was removing a clip is seen either way. It is
+protecting against **people**: a coach removes the wrong clip, or resets an
+attempt and then wants the film back. Nothing in the product restores either,
+but while the bytes exist an operator can. Seven days would expire before a
+coach who opens Peira on game weeks had looked twice.
+
+**Storage first, then the row** — the opposite ordering to
+`tools/production_cleanup.py`, deliberately. There the rows describe a live
+product, so a half-finished run must never leave a customer pointing at missing
+files. Here the row is only bookkeeping: marking it collected before the delete
+succeeded would hide the object from every future run, a permanent leak
+recorded as a success.
+
+**Execution is a tool, not a scheduler.** `python tools/clip_storage_collect.py`
+reports; `--execute` reclaims. Dry run is the default and is enforced by
+`SET TRANSACTION READ ONLY`, and a dry run never constructs a storage client at
+all. Peira has no worker, queue or cron, and this does not justify introducing
+one: orphans accrue at the rate a coach re-records film, and everything the
+tool touches has already waited out 30 days. The valuable half is the DECISION,
+which is fully tested; automating the trigger would add infrastructure and
+remove the human who reads the list first.
+
+### Still true, and deliberately not fixed
+
+**NO BACKFILL.** Objects orphaned before 3 September 2026 are not in
+`unlinked_clip_objects` and cannot be found without the bucket listing this
+design rejects. **They stay forever.** That is a false negative — bytes kept
+longer than necessary — which is the acceptable direction of the trade, and it
+costs almost nothing because Record Clip had been live for days rather than
+months when this shipped. Doing it later would have cost proportionally more,
+which is why it went in now rather than after the feature had run a season.
+
+If that backlog ever needs sweeping, `.mp4` is safely listable (single producer,
+unique extension) and `.webp` is not. Do not extend a listing sweep to posters.
 
 ## The Competition Mode M2 baseline
 

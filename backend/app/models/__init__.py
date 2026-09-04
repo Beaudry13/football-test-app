@@ -14,6 +14,7 @@ from app.models.question import Question, QuestionOption, QuestionType
 from app.models.question_region import QuestionRegion, RegionRole
 from app.models.question_image import QuestionImage
 from app.models.question_clip import QuestionClip
+from app.models.unlinked_clip_object import UnlinkedClipObject
 from app.models.roster import Roster, RosterPlayer
 from app.models.access_code import AccessCode
 from app.models.answer_drawing import AnswerDrawing
@@ -52,6 +53,7 @@ __all__ = [
     "RegionRole",
     "QuestionImage",
     "QuestionClip",
+    "UnlinkedClipObject",
     "Roster",
     "RosterPlayer",
     "AccessCode",

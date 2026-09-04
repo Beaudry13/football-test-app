@@ -24,6 +24,14 @@ def create_app(env_name: str | None = None) -> Flask:
     _init_extensions(app)
     register_error_handlers(app)
 
+    # RECORDS EVERY CLIP OBJECT THAT STOPS BEING LIVE, so the storage collector
+    # has something safe to work from. Wired here rather than at import time so
+    # the hook is visible in the app's own assembly - it writes rows during
+    # ordinary coach operations, which is not something to discover by grep.
+    from app.services.clip_gc import register_clip_unlink_tracking
+
+    register_clip_unlink_tracking()
+
     from app.routes import register_blueprints
 
     register_blueprints(app)

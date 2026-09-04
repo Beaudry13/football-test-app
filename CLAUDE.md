@@ -245,6 +245,24 @@ approved. Use `npm run build` (`tsc -b && vite build`) — see the Commands
 section. This one is easy to repeat, because the wrong command looks
 *more* careful than the right one.
 
+**10. NEVER RECLAIM STORAGE BY ASKING WHAT THE LIVE ROWS POINT AT.**
+Replacing a clip deletes the `question_clips` row and deliberately leaves the
+object, because a delivered snapshot froze its `storage_key` and that is how a
+finished attempt still resolves to the bytes its player saw. So "delete every
+stored clip no live row names" deletes the evidence of every past attempt — and
+it looks correct precisely BECAUSE the product works. `services/clip_gc.py` is
+the only sanctioned collector; it re-derives reachability from
+`question_clips` AND `attempt_question_snapshots` at collection time.
+
+**And do not reach for a bucket listing.** `new_storage_key` labels objects
+only by extension: `.mp4` is unique to clip video, but **`.webp` is produced by
+four features** — clip poster, rendered document page, page thumbnail, masked
+playbook region — and a page raster is referenced by snapshots through its page
+ID, not its key. "No row names this key" is therefore not the same question as
+"nothing needs these bytes". The collector works from
+`unlinked_clip_objects`, a record Peira writes itself, so it cannot reach a
+playbook page however wrong it is about everything else.
+
 ---
 
 ## Conventions
