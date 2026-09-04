@@ -335,29 +335,35 @@ asked.** Polish items found in production are recorded in
 ## Queued next — read before picking up new work
 
 `docs/KNOWN-ISSUES.md` holds the approved queue. The owner decides the order -
-do not pick one up unprompted:
+do not pick one up unprompted.
 
-1. **A coach cannot correct a question on an active quiz.** The lock is
-   `_reject_if_already_answered` in `routes/questions.py`, and it fires only
-   once somebody has ANSWERED, not on activation. It guards option changes,
-   region changes and deletion; question text and explanation are already
-   editable. Trace how answers and grading reference questions BEFORE designing
-   an override, and stop for approval before implementing one.
-2. **"Don't count this question".** Exclude a question from results AFTER
-   players have taken it, preserving the responses for audit. This lands on the
-   shared `score = correct / (correct + incorrect)` rule implemented twice on
-   purpose (see Things That Will Bite You #4) - it changes the DENOMINATOR, so
-   any design touching only one of those two places has already failed.
+**ONE ITEM REMAINS OPEN. A coach cannot CORRECT a question on an active quiz.**
+The lock is `_reject_if_already_answered` in `routes/questions.py`, and it fires
+only once somebody has ANSWERED, not on activation. It guards option changes,
+region changes and deletion; question text and explanation are already editable.
+Trace how answers and grading reference questions BEFORE designing an override,
+and stop for approval before implementing one.
 
-**(1) and (2) are the same architectural gap seen from two sides**, and
-`answers.is_correct` being a STORED column is why. See the analysis at the top
-of PRIORITY 1 before designing either.
+**The other two sides of that gap have SHIPPED, and this list used to claim they
+had not:**
+
+- **"Don't count this question" is DONE** - `question_exclusions` + Phase 3.
+  Exclusion filters the ANSWER ROWS that feed the score; it never touches the
+  arithmetic in `services/scoring.py`.
+- **"Stop sending this question" is DONE** - `questions.retired_at` + Phase 4b.
+
+So a coach who finds a mistake mid-flight can now stop the question and stop it
+counting. What they still cannot do is FIX it. The blunt instruments exist; the
+precise one does not.
 
 **Duplicating a quiz losing its images is FIXED and production verified**
 (`0f146bd`) - recorded under RESOLVED in KNOWN-ISSUES.md. Do not reopen it.
 
-(2) and (3) are two halves of the same gap: a coach who finds a mistake after
-players are already in has no safe move. Consider designing them together.
+**Record Clip playback startup is CLOSED FOR BETA** - ~5s to ~2s on the owner's
+real phone after true R2 ranged reads (`0efb603`). Video quality is frozen by
+owner decision: H.264 MP4, 2.5 Mbps, 30 FPS, 1920x1080 cap, 20-second maximum.
+Do not lower any of them to chase speed. Recorded under RESOLVED in
+KNOWN-ISSUES.md.
 
 ## Work in flight
 

@@ -57,8 +57,47 @@ conclusion; they are the questions to answer *before* proposing a fix.
 > pointing at the old version. Both are schema changes and neither should be
 > chosen without the owner.
 
-**Status: reported, uninvestigated. This is a product gap, NOT simply a bug -
-the restriction exists for a good reason and must not just be removed.**
+**STATUS: PARTIALLY ADDRESSED. The escape hatch shipped; the correction did
+not.** This is a product gap, NOT simply a bug - the restriction exists for a
+good reason and must not just be removed.
+
+### Where this actually stands
+
+Two of the three things a trapped coach might want now exist. The third - the
+one this entry is named after - does not.
+
+| A coach wants to... | Ships as | State |
+|---|---|---|
+| Stop this question reaching anyone else | `questions.retired_at` (Phase 4b) | **SHIPPED** |
+| Stop this question counting for those who got it | `question_exclusions` (Phase 3) | **SHIPPED** |
+| **Fix the question itself, in place, on an active quiz** | — | **STILL BLOCKED** |
+
+**What still blocks the edit**, unchanged: `_reject_if_already_answered` in
+`routes/questions.py:201`. It fires the moment ANY `Answer` row exists for the
+question - not on activation - and guards option changes, region changes and
+deletion. Question text and explanation are already editable; retirement is
+deliberately NOT guarded by it, because unlike every other operation there it
+cannot corrupt a past attempt, and being usable after players have answered is
+the entire point of it.
+
+So the coach is no longer *trapped* - they can stop the bad question and stop
+it counting - but they still cannot correct a typo, a mislabelled option or a
+wrong correct-answer on a quiz that is live. The blunt instruments arrived; the
+precise one did not.
+
+**Retirement and exclusion are separate and neither implies the other.**
+Stopping a question does not excuse the players who already answered it. A
+coach who wants both must choose both, deliberately.
+
+**One thing the two shipped phases changed for this design:** delivered-question
+snapshots now exist (`attempt_question_snapshots`), and
+`services/delivered_questions.py` is the single reader. The "missing concept"
+the note at the top of this entry identified - an immutable record of what was
+delivered, separate from the authoring state - **is no longer missing for
+content**. It is still missing for REGION GEOMETRY: a region question's masked
+URL is rendered from the LIVE region, which is truthful only while region
+editing stays blocked after delivery. **Do not unlock region corrections
+without building masked-render preservation first.**
 
 ### What happened
 
@@ -138,11 +177,50 @@ approval before implementing the override.**
 
 ---
 
-## PRIORITY 2 — "Don't count this question"
+## SHIPPED — "Don't count this question"
 
-**Status: requested by the owner, approved as work, not designed, not
-investigated.** Recorded 13 August 2026 during the Competition M2 freeze,
-because until now it existed only in conversation.
+**STATUS: IMPLEMENTED.** `question_exclusions` +
+`backend/app/services/question_exclusions.py`, delivered as Phase 3 of the
+delivered-question-snapshots work. This entry was written on 13 August 2026 as
+an un-designed request and stayed that way in the file long after the feature
+landed; the section below is kept because the questions it raised are the ones
+the implementation had to answer, and the answers are recorded against them.
+
+### What actually shipped
+
+A `question_exclusions` row marks a question as not counting. The predicate is
+stated once, in the service docstring:
+
+> ACTIVE (`restored_at IS NULL`) AND for that question AND (quiz-wide OR scoped
+> to that attempt's access code).
+
+- **Scope was answered BOTH ways.** `access_code_id` is nullable: NULL is
+  quiz-wide, a value scopes the exclusion to one assignment - so a question
+  broken for one group can be excluded for that group alone.
+- **Exclusion filters the INPUT, never the arithmetic.**
+  `answers -> drop excluded -> count_answers -> score_percent`. Phase 2's
+  `services/scoring.py` is untouched, which is how every surface stayed in
+  agreement rather than needing the change applied five times.
+- **It did NOT need delivered-question snapshots to move a score**, and that
+  was measured rather than assumed. The denominator is graded ANSWER ROWS, so a
+  delivered question nobody answered is already outside it. Snapshots matter
+  for what a report SHOWS, not for the percentage - which is why legacy
+  attempts with no snapshots still score correctly.
+- **Reversible, never destructive.** `restored_at` restores; no row is ever
+  deleted, and no answer is edited, hidden or removed.
+- **Auditable.** `coach_id` (SET NULL, so a departing coach loses attribution
+  but not the record), `reason`, `excluded_at`, `restored_at`.
+- **Never shown to a player.** `reason` appears in no `/play` payload.
+- **Competition Mode stayed out of scope**, as this entry required.
+
+**The predicate is spelled TWICE on purpose** - Python `ExclusionSet.excludes`
+and a SQL translation in `routes/quizzes.py`, because the quiz-card aggregate
+must not load every answer of every attempt to divide two numbers (19ms in SQL
+against 88ms in Python at 75k answers). The equivalence tests in
+`tests/test_question_exclusions.py` are what keep the two honest. Change one,
+change the other.
+
+### The original request, kept for the reasoning
 
 ### What the coach wants
 
@@ -194,10 +272,18 @@ implements exclusion in one of those places has already failed.
 ### Relationship to the other two
 
 This is the *third* thing the same underlying gap produced: a coach who finds a
-mistake after players are already in has no safe move. PRIORITY 2 is "let me
+mistake after players are already in has no safe move. PRIORITY 1 is "let me
 fix it going forward", this is "let me neutralise it after the fact". They
 should probably be designed together, or at least sequenced deliberately, since
 a coach hitting a bad question will reach for whichever exists.
+
+*(That cross-reference used to say "PRIORITY 2" while sitting inside PRIORITY 2,
+which meant it pointed at itself. It means PRIORITY 1.)*
+
+**They were in the end sequenced rather than designed together, and the
+sequencing held.** "Neutralise it after the fact" shipped as exclusion;
+"stop it reaching anyone else" shipped as retirement; **"fix it in place" is
+still open** - see the PRIORITY 1 entry above for exactly what remains.
 
 ---
 
@@ -455,3 +541,81 @@ architecture question comes first.
 ---
 
 </details>
+
+## RESOLVED — Record Clip took ~5 seconds to start on a phone
+
+**STATUS: FIXED AND VERIFIED ON THE OWNER'S REAL PHONE** (3 September 2026).
+**FIX COMMIT: `0efb603`** — production baseline.
+
+### The measurement that closed it
+
+| | Startup, player taps the clip -> film plays |
+|---|---|
+| Before (`31ea433`) | **~5 seconds** |
+| After (`0efb603`) | **~2 seconds** |
+
+Owner's own phone, production, same connection. That is a real-device
+measurement, not an inferred one — and it is the only startup number anyone
+should quote.
+
+**CLOSED FOR BETA.** ~2s is accepted. Do not reopen this as a performance
+project without being asked.
+
+### Root cause
+
+`S3PrivateStorage.load_private` was a whole-object `get_object(...).read()`,
+and `routes/media.py` sliced the result afterwards. iOS Safari opens a video
+with `Range: bytes=0-1`, so answering that two-byte probe downloaded the
+ENTIRE MP4 out of R2 — and then the next Range request downloaded it again.
+Every player waited through both before the first frame.
+
+### The fix — transport only
+
+`private_storage` gained `private_size` (a `HEAD`, so the `Content-Range`
+total costs no bytes) and `load_private_range` (a genuine ranged `GET`).
+`media.py` now resolves a storage KEY rather than bytes for every seekable
+kind and fetches only what was asked for.
+
+Measured on the route with a recording storage wrapper, 10 KB object:
+
+| Client asks | R2 read BEFORE | R2 read AFTER |
+|---|---|---|
+| `bytes=0-1` | 10,240 bytes (the whole object) | **2 bytes** |
+| `bytes=0-1048575` | the whole object | the requested 1 MiB |
+| out of bounds | the whole object, status 200 | `HEAD` only, status **416** |
+
+The amplification factor was the file size, so on a multi-megabyte clip the
+saving is the clip, twice.
+
+**DO NOT REINTRODUCE LOAD-THEN-SLICE.** It reads as a harmless simplification
+and it is the entire defect.
+
+### The moov question, answered so nobody asks it again
+
+Real MediaRecorder output was dumped box by box:
+
+```
+ftyp @0  ·  moov @36 (704 bytes)  ·  moof @740  ·  mdat @1132  ·  mfra @36963
+```
+
+A **fragmented MP4 with `moov` at the FRONT**. Safari never seeks to the tail
+in order to start. There is no moov-at-end problem here, and therefore **no
+reason to add ffmpeg to fix one**.
+
+### What must NOT change now that it is closed
+
+Video quality was deliberately never touched — the defect was the server path,
+and degrading football film to compensate for it would have been the wrong
+trade. Frozen by owner decision:
+
+- H.264 MP4
+- 2.5 Mbps
+- 30 FPS
+- 1920x1080 cap
+- 20-second maximum
+- the preload / loading UI
+- true R2 ranged reads
+
+Authorization was untouched by this work and stays that way: the signed token
+is verified BEFORE any key is resolved or any byte is fetched, and a Range
+request gets no different treatment from a whole one.
