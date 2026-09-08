@@ -16,6 +16,7 @@ import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { Modal } from '../../components/ui/Modal';
 import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecorder';
 import { ClipThumbnail } from '../../components/clip/ClipPlayer';
+import { ImageLightbox } from '../../components/ImageLightbox';
 import { DecisionPointEditor } from '../../components/clip/DecisionPointEditor';
 import { formatClipDuration } from '../../components/clip/clipRecording';
 import {
@@ -187,6 +188,11 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
    *  see the clip they attached without previewing the whole quiz as a
    *  player, which is a long way to go to check one take. */
   const [previewingClip, setPreviewingClip] = useState<Question | null>(null);
+  /* WHICH question's picture is enlarged, not a boolean per row. One viewer
+     can be open at a time, and holding the question itself means the enlarged
+     image is always re-derived from the row it was opened from - a reload that
+     changes a picture cannot leave a stale url on screen. */
+  const [viewingImage, setViewingImage] = useState<Question | null>(null);
   const [savingDecisionPoint, setSavingDecisionPoint] = useState(false);
 
   /** Sets or clears where the film stops. Reloads so the list's own copy of
@@ -370,6 +376,30 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         </Modal>
       )}
 
+      {/* THE SAME VIEWER THE PLAYER GETS, deliberately. It already handles
+          Escape, the backdrop, the close button, pinch-zoom and focus, and a
+          second lightbox would be a second set of those behaviours to keep
+          in step. Annotations are passed exactly as `QuestionInput` passes
+          them - an uploaded still carries the coach's drawn routes, a masked
+          playbook page has none - so what a coach checks here is what a
+          player is shown. */}
+      {viewingImage?.image ? (
+        <ImageLightbox
+          src={resolveMediaUrl(viewingImage.image.image_url)}
+          alt="Question film, enlarged"
+          annotations={viewingImage.image.annotations}
+          canvasWidth={viewingImage.image.canvas_width}
+          onClose={() => setViewingImage(null)}
+        />
+      ) : viewingImage?.masked_image_url ? (
+        <ImageLightbox
+          src={resolveMediaUrl(viewingImage.masked_image_url)}
+          alt="Playbook page, enlarged"
+          annotations={[]}
+          onClose={() => setViewingImage(null)}
+        />
+      ) : null}
+
       {previewingClip?.clip?.url && (
         <Modal
           onDismiss={() => setPreviewingClip(null)}
@@ -538,13 +568,38 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                   ) : null}
                 </span>
               ) : question.image ? (
-                <img className={styles.thumb} src={resolveMediaUrl(question.image.image_url)} alt="Question film" />
+                /* A BUTTON, NOT AN IMAGE WITH AN onClick. A coach scanning
+                   this list wants to look at the picture, and 108x72 is too
+                   small to judge anything by - but the affordance has to be
+                   reachable by keyboard and announce itself, which a clickable
+                   <img> does neither of. Wrapping rather than adding a "View"
+                   control beside it keeps the row exactly as compact as it
+                   was. */
+                <button
+                  type="button"
+                  className={styles.thumbButton}
+                  onClick={() => setViewingImage(question)}
+                  aria-label="View question image"
+                >
+                  <img
+                    className={styles.thumb}
+                    src={resolveMediaUrl(question.image.image_url)}
+                    alt="Question film"
+                  />
+                </button>
               ) : question.masked_image_url ? (
-                <img
-                  className={`${styles.thumb} ${styles.thumbPage}`}
-                  src={resolveMediaUrl(question.masked_image_url)}
-                  alt="Playbook page with the answer covered"
-                />
+                <button
+                  type="button"
+                  className={styles.thumbButton}
+                  onClick={() => setViewingImage(question)}
+                  aria-label="View question image"
+                >
+                  <img
+                    className={`${styles.thumb} ${styles.thumbPage}`}
+                    src={resolveMediaUrl(question.masked_image_url)}
+                    alt="Playbook page with the answer covered"
+                  />
+                </button>
               ) : null}
               <div className={styles.questionBody}>
                 <div className={styles.questionText}>{question.question_text}</div>

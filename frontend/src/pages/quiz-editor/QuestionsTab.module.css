@@ -134,6 +134,52 @@
   object-fit: contain;
 }
 
+/* THE THUMBNAIL IS THE CONTROL. A coach reviewing questions wants a proper
+   look at the picture, and 108x72 is too small to judge a coverage from - but
+   the row is scanned, not read, so it must not grow a "View image" button per
+   question to say so. The thumbnail becomes the button instead: same slot,
+   same size, no extra pixels.
+
+   It takes the grid placement its <img> used to have, and the image inside
+   fills it - otherwise the button lays out as an inline-block in column 1 and
+   the row collapses. */
+.thumbButton {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  display: block;
+  width: 108px;
+  height: 72px;
+  padding: 0;
+  border: none;
+  background: none;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.thumbButton .thumb {
+  /* The border and radius stay on the image, so the focus ring below sits
+     outside them rather than cutting across the picture. */
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: border-color 120ms ease, filter 120ms ease;
+}
+
+/* NOT A HOVER-ONLY AFFORDANCE. This list is used on a phone, where hover does
+   not exist, so hover is a confirmation for a coach who already has a pointer
+   over the picture - never the thing that reveals it is clickable. The cursor,
+   the button role and the aria-label carry that on their own. */
+.thumbButton:hover .thumb {
+  border-color: var(--nb-accent);
+  filter: brightness(1.08);
+}
+
+.thumbButton:focus-visible {
+  outline: 2px solid var(--nb-accent);
+  outline-offset: 2px;
+}
+
 /* A RECORDING IS NOT A PHOTOGRAPH THE COACH FRAMED. `cover` crops a 16:9
    capture into this 3:2 box, and a screen recording carries football at its
    edges - a play develops sideways, and the cut-off part is often the part the
