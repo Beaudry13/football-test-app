@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
@@ -52,10 +53,27 @@ interface QuestionEditorProps {
   hasBeenDelivered?: boolean;
   /** Offers an image picker whose file is held here until save.
    *
-   *  Only the create flow passes this. Editing keeps its existing route to the
-   *  annotation page, which does more than upload - it is where a coach draws
-   *  on the image - and folding that in here would be a different change. */
+   *  Only the create flow passes this: on create the file is held locally
+   *  until the question exists. An EXISTING question does not need a picker
+   *  here - it needs a way back to the annotation page, which is what the two
+   *  props below provide. */
   allowImage?: boolean;
+  /** The picture this question ALREADY has, so editing it shows the thing
+   *  being edited. Absent while creating, when there is nothing saved yet. */
+  existingImageUrl?: string | null;
+  /** Route to the annotation page for THIS question.
+   *
+   *  WHY THIS PROP EXISTS AT ALL. Annotating was reachable from a banner that
+   *  appears once, right after a photo is added, and from an overflow menu
+   *  item labelled "Edit image" - which reads as "replace the file". The
+   *  button actually labelled Edit led here, to a form that promised "you can
+   *  annotate it afterwards" and offered no way to. So a coach coming back to
+   *  an older question later had no reliable route to their own drawing.
+   *
+   *  A ROUTE, NOT AN EDITOR. This navigates to the existing AnnotationPage,
+   *  which owns the canvas, the persisted annotations and the saving. Nothing
+   *  about annotation state lives in this form. */
+  annotateHref?: string | null;
 }
 
 /** The image types Peira accepts, in ONE place.
@@ -82,6 +100,8 @@ export function QuestionEditor({
   onCancel,
   hasBeenDelivered = false,
   allowImage = false,
+  existingImageUrl = null,
+  annotateHref = null,
 }: QuestionEditorProps) {
   const [questionText, setQuestionText] = useState(initialText);
   /** "Select all that apply". Multiple choice only - see the control below. */
@@ -678,6 +698,35 @@ export function QuestionEditor({
           never shown during a graded quiz.
         </p>
       </div>
+
+      {/* EDITING A QUESTION THAT ALREADY HAS A PICTURE. Deliberately not the
+          `allowImage` picker: that holds a file locally until save, which is
+          right on create and wrong here - this question exists, its image
+          exists, and the thing a coach wants is to draw on it again.
+
+          Shown together because a link on its own is a guess. The coach sees
+          the exact picture attached to the question they opened, and the
+          action sits next to it. */}
+      {existingImageUrl && annotateHref && (
+        <div className={nb.field}>
+          <span className={nb.fieldLabel}>Image</span>
+          <div className={styles.imagePreview}>
+            <img src={resolveMediaUrl(existingImageUrl)} alt="Current question image" />
+            <div className={styles.imageActions}>
+              {/* A Link, not a button with navigate(): a coach mid-edit may
+                  well want this in a new tab, and the annotation page saves
+                  its own work independently of this form. */}
+              <Link className={nb.btnSm} to={annotateHref}>
+                Edit / Annotate
+              </Link>
+            </div>
+            <p className={styles.imageHint}>
+              Opens the drawing canvas for this question, with everything you have already
+              drawn on it.
+            </p>
+          </div>
+        </div>
+      )}
 
       {allowImage && (
         <div className={nb.field}>

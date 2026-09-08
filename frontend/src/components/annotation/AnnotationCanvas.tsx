@@ -44,6 +44,30 @@ import { getRememberedStyle, rememberStyle } from './styleMemory';
 import { ANNOTATION_PROPS, type AnnotationStyle, type AnnotationTool } from './types';
 import styles from './AnnotationCanvas.module.css';
 
+/** WHETHER AN ANNOTATION ANSWERS THE POINTER, decided in exactly one place.
+ *
+ * A drawing tool owns the canvas: a drag creates a shape, so nothing already
+ * on the canvas may take that drag and turn it into a move. Select is the
+ * opposite - it owns nothing and manipulates everything.
+ *
+ * THIS USED TO BE APPLIED ONLY BY A SWEEP OVER EXISTING OBJECTS when the tool
+ * changed, which left a hole exactly the shape of the reported bug: a shape
+ * created AFTER that sweep kept Fabric's defaults (selectable, evented), so
+ * the newest annotation - the one a coach is most likely to reposition - was
+ * the one object still offering to be dragged while an Arrow was active.
+ * Grabbing it drew a second arrow instead, because Fabric painted selection
+ * handles on it and the mouse-down handler drew anyway.
+ *
+ * The sweep alone was sufficient only while mouse-up reset the tool to Select,
+ * because that re-ran it. Sticky tools removed the reset and, silently, the
+ * sweep with it. So interactivity is now set AT CREATION as well, from this
+ * one function, rather than depending on a later pass arriving.
+ */
+function setToolInteractivity(object: FabricObject, tool: AnnotationTool) {
+  const interactive = tool === 'select';
+  object.set({ selectable: interactive, evented: interactive });
+}
+
 export interface AnnotationCanvasHandle {
   getAnnotations: () => AnnotationLayer[];
   getCanvasWidth: () => number;
@@ -396,7 +420,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
       canvas.isDrawingMode = tool === 'freehand';
       canvas.selection = tool === 'select';
-      canvas.forEachObject((obj) => obj.set({ selectable: tool === 'select', evented: tool === 'select' }));
+      // Still needed for everything already on the canvas when the tool
+      // changes; new objects no longer wait for it - see setToolInteractivity.
+      canvas.forEachObject((obj) => setToolInteractivity(obj, tool));
 
       if (tool === 'freehand') {
         const brush = new PencilBrush(canvas);
@@ -446,6 +472,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         if (curvePointsRef.current.length >= 2) {
           const path = createSmoothPath(curvePointsRef.current, styleRef.current);
           path.set('id', makeId());
+          // Route stays sticky, so this finished curve would otherwise be the
+          // one grabbable object while the coach draws the next one.
+          setToolInteractivity(path, toolRef.current);
           canvas!.add(path);
         }
         curvePointsRef.current = [];
@@ -531,6 +560,19 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
 
         if (!['line', 'arrow', 'circle', 'rectangle'].includes(currentTool)) return;
 
+        /* THE SAFETY NET, AND IT MUST NOT COST DRAWING-OVER.
+           `opt.target` is only ever an object that answers the pointer, and
+           setToolInteractivity has already made every annotation inert while a
+           drawing tool is active - so under Line/Arrow/Circle/Box this is
+           always null and a coach can still start an arrow on top of an
+           existing circle, which is ordinary football diagramming.
+
+           It fires only if something IS grabbable and was grabbed, which is
+           the one case where a drag means "move this", never "draw another".
+           Guarding on the target ALONE would have been the naive fix: it reads
+           as equivalent and quietly forbids drawing over anything. */
+        if (opt.target) return;
+
         // Suppress history while the shape is created and resized live; handleMouseUp
         // records exactly one snapshot for the finished shape instead of one per tick.
         history.isRestoring.current = true;
@@ -541,6 +583,7 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
         else shape = createRectangle(styleRef.current);
 
         shape.set('id', makeId());
+        setToolInteractivity(shape, currentTool);
         canvas!.add(shape);
       }
 
@@ -582,6 +625,9 @@ export const AnnotationCanvas = forwardRef<AnnotationCanvasHandle, AnnotationCan
               ? createArrow(startPoint, point, styleRef.current)
               : createLine(startPoint, point, styleRef.current);
           shape.set('id', makeId());
+          // Rebuilt on every move, so the rule has to be re-applied to each
+          // replacement or the shape becomes grabbable the instant it is drawn.
+          setToolInteractivity(shape, currentTool);
           canvas!.add(shape);
         } else if (currentTool === 'circle') {
           shape.set({

@@ -496,6 +496,15 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               initialExplanation={question.answer_explanation ?? null}
               initialConcept={question.concept ?? null}
               hasBeenDelivered={question.has_been_delivered ?? false}
+              /* The way back to the drawing canvas for THIS question. Passed
+                 only for a question that actually has an uploaded still: a
+                 playbook-backed question gets its picture from its region and
+                 has no annotation canvas, and a clip has no fixed frame to
+                 draw on. */
+              existingImageUrl={question.image?.image_url ?? null}
+              annotateHref={
+                question.image ? `/quizzes/${quiz.id}/questions/${question.id}/annotate` : null
+              }
               submitLabel="Save question"
               onSave={(input) => handleUpdate(question.id, input)}
               onCancel={() => setEditingId(null)}
