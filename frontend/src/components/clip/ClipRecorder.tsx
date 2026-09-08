@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import nb from '../../styles/notebook.module.css';
 import styles from './ClipRecorder.module.css';
+import { ClipEditor, type EditedClip } from './ClipEditor';
 import {
   type FloatingControls,
   canFloatOver,
@@ -60,7 +61,9 @@ export function ClipRecorder({
     }),
   );
 
-  const [phase, setPhase] = useState<'idle' | 'ready' | 'recording' | 'preview'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'ready' | 'recording' | 'preview' | 'editing'>(
+    'idle',
+  );
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   /** Quieter than an error, and never silent. See chooseSource. */
@@ -285,6 +288,38 @@ export function ClipRecorder({
     setPhase('idle');
   }
 
+  /** Turn an edited result back into the RecordedClip the upload path takes.
+   *
+   * A NEW POSTER FOR AN EDITED CLIP, always. The original poster was captured
+   * from the full frame, so keeping it would hand the player a still showing
+   * the browser chrome the coach just cropped away - the one place where a
+   * cosmetic shortcut would be visible to everybody.
+   *
+   * An untouched clip keeps the poster it already has: nothing changed, so
+   * re-capturing it would only be a chance to fail.
+   */
+  async function handleEdited(edited: EditedClip) {
+    if (!clip) return;
+    if (!edited.wasEdited) {
+      onUse(clip);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(edited.blob);
+    const { poster } = await capturePoster(previewUrl);
+    // The ORIGINAL preview url is released only now that a replacement
+    // exists; the blob it pointed at is still referenced by `clip` until this
+    // component unmounts, so nothing the coach recorded has been lost.
+    URL.revokeObjectURL(clip.previewUrl);
+    onUse({
+      blob: edited.blob,
+      poster,
+      durationMs: edited.durationMs,
+      width: edited.width,
+      height: edited.height,
+      previewUrl,
+    });
+  }
+
   function discard() {
     if (clip) URL.revokeObjectURL(clip.previewUrl);
     setClip(null);
@@ -388,6 +423,19 @@ export function ClipRecorder({
         </>
       )}
 
+      {phase === 'editing' && clip && capability.mimeType && (
+        <ClipEditor
+          blob={clip.blob}
+          previewUrl={clip.previewUrl}
+          sourceWidth={clip.width}
+          sourceHeight={clip.height}
+          durationMs={clip.durationMs}
+          mimeType={capability.mimeType}
+          onDone={(edited) => void handleEdited(edited)}
+          onCancel={() => setPhase('preview')}
+        />
+      )}
+
       {phase === 'preview' && clip && (
         <>
           {/* The same four attributes the player will use, so what a coach
@@ -432,6 +480,16 @@ export function ClipRecorder({
             <div className={styles.actions}>
               <button type="button" className={nb.btnPrimary} onClick={() => onUse(clip)}>
                 Use clip
+              </button>
+              {/* OFFERED, NEVER IMPOSED. A coach who is happy with the take
+                  presses Use and never meets the editor at all - which is
+                  also the path that does no re-encoding. */}
+              <button
+                type="button"
+                className={nb.btnSecondary}
+                onClick={() => setPhase('editing')}
+              >
+                Trim &amp; crop
               </button>
               <button
                 type="button"
