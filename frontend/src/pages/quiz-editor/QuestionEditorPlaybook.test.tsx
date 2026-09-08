@@ -7,7 +7,7 @@
  *
  * THE COACH NEVER MEETS OUR VOCABULARY. No test here looks for the words mask,
  * region, crop, role or page id, because none of them appears on screen. The
- * coach sees "or choose from a Playbook" and "Hide something from players".
+ * coach sees "Choose from Playbook" and "Hide something from players".
  *
  * THE SIMPLE PATH HAS NO HIDING IN IT. Choose a playbook, choose a page, done.
  * Hiding is offered afterwards and never required, so
@@ -65,7 +65,7 @@ function renderEditor(props: Record<string, unknown> = {}) {
 }
 
 const openPicker = (user: ReturnType<typeof userEvent.setup>) =>
-  user.click(screen.getByRole('button', { name: /choose from a playbook/i }));
+  user.click(screen.getByRole('button', { name: /choose from playbook/i }));
 
 async function pickPage(user: ReturnType<typeof userEvent.setup>, pageNumber = 1) {
   await openPicker(user);
@@ -90,7 +90,7 @@ describe('the coach who never uses a playbook', () => {
     expect(screen.getByText(/or drag & drop, or choose a file/i)).toBeInTheDocument();
     // And exactly one thing is new.
     expect(
-      screen.getByRole('button', { name: /choose from a playbook/i }),
+      screen.getByRole('button', { name: /choose from playbook/i }),
     ).toBeInTheDocument();
   });
 

@@ -114,7 +114,7 @@ function renderAddQuestion() {
 
 /** Opens the recorder from the Visual (optional) row, exactly as a coach does. */
 async function openRecorder() {
-  fireEvent.click(screen.getByRole('button', { name: /or record a clip/i }));
+  fireEvent.click(screen.getByRole('button', { name: /record a clip/i }));
   await act(async () => {});
 }
 

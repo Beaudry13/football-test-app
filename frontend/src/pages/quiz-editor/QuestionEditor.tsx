@@ -941,10 +941,10 @@ export function QuestionEditor({
             <div className={styles.visualChoices}>
               <button
                 type="button"
-                className={styles.playbookLink}
+                className={nb.btnSm}
                 onClick={() => setIsPicking(true)}
               >
-                or choose from a Playbook
+                Choose from Playbook
               </button>
               {/* Hidden on Draw Response: a drawing binds to a still's
                   coordinate space, so the combination is refused by the server
@@ -952,10 +952,10 @@ export function QuestionEditor({
               {questionType !== 'draw_response' && (
                 <button
                   type="button"
-                  className={styles.playbookLink}
+                  className={nb.btnSm}
                   onClick={() => setIsRecording(true)}
                 >
-                  or record a clip
+                  Record a Clip
                 </button>
               )}
             </div>

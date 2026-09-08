@@ -205,20 +205,17 @@
 /* A quiet third option under the drop zone, not a button competing with Save.
    Deliberately text-weight: uploading is still the common case, and this must
    not shout at the coach who never uses playbooks. */
-.playbookLink {
-  margin-top: 0.4em;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--peira-accent-text);
-  font: inherit;
-  font-size: 0.9em;
-  cursor: pointer;
-}
+/* The two alternative media sources used to be text links reading "or choose
+   from a Playbook" and "or record a clip". They are authoring ACTIONS - the
+   two other ways a question gets its football material - and a coach reading
+   a column of instructional prose had no reason to see them as controls at
+   all. They now use nb.btnSm, the same neutral bordered control the image
+   actions beside them already use, so the affordance is visible without
+   hover and the two paths look like the peers they are.
 
-.playbookLink:hover {
-  text-decoration: underline;
-}
+   The "or" is gone with the link styling: their placement under the upload
+   area already says they are alternatives, and repeating it in every label
+   made the row read as prose. */
 
 /* The phone's image entry: two buttons, camera first. No drop target, because
    there is nothing to drop, and no keyboard hint, because there is no
@@ -276,5 +273,9 @@
 .visualChoices {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25em 1.25em;
+  /* A real gap now that these are buttons rather than run-together text, and
+     wrap rather than shrink: at 375px two bordered controls will not sit side
+     by side, and a label clipped mid-word is worse than a second line. */
+  gap: var(--space-3);
+  margin-top: 0.6em;
 }
