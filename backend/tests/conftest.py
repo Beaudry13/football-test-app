@@ -20,6 +20,7 @@ nothing to gain from dropping it, so we just leave it in place between runs.
 import io
 
 import pytest
+from flask import has_app_context
 from sqlalchemy import text
 
 from flask_migrate import upgrade
@@ -100,6 +101,32 @@ def _terminate_other_connections() -> None:
 @pytest.fixture(autouse=True)
 def _clean_database(app):
     yield
+    # RELEASE THE TEST'S OWN SESSION BEFORE DELETING ANYTHING.
+    #
+    # pytest-flask pushes ONE request context for the whole test (its autouse
+    # `_push_request_context`), and Flask reuses an already-pushed app context
+    # rather than making a new one - so every `client.<verb>()` inside a test
+    # runs on THIS session, and Flask-SQLAlchemy's teardown_appcontext cleanup
+    # never fires between requests the way it does in production.
+    #
+    # A request that answered 4xx after touching a row therefore returns with
+    # this session still in a transaction, holding that row's locks. The
+    # DELETEs below then wait on it forever. Measured before this line existed:
+    # the suite stalled at exactly the test AFTER a refusal, with Postgres
+    # showing "idle in transaction" against a blocked "DELETE FROM questions".
+    #
+    # IT MUST BE THIS SESSION, NOT A FRESH ONE. `with app.app_context()` below
+    # pushes a NEW context, and Flask-SQLAlchemy scopes the session per app
+    # context - so rolling back inside that block gets a different session and
+    # leaves the real lock-holder untouched. Measured: the hang survived.
+    #
+    # PRODUCTION IS NOT AFFECTED AND IS NOT CHANGED FOR THIS. There, each
+    # request pushes and pops its own app context, so the session is cleaned on
+    # pop. Verified by driving a write-then-refuse request with no outer
+    # context: zero rows persisted, zero locks held, zero idle-in-transaction
+    # backends, and the DELETE that hangs here completed immediately.
+    if has_app_context():
+        _db.session.rollback()
     with app.app_context():
         for table in reversed(_db.metadata.sorted_tables):
             _db.session.execute(table.delete())
