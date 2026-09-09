@@ -505,6 +505,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               annotateHref={
                 question.image ? `/quizzes/${quiz.id}/questions/${question.id}/annotate` : null
               }
+              /* The SAME handler the row menu uses, passed rather than
+                 reimplemented: a refusal offers the way out, and there is
+                 still only one place that retires a question. */
+              onStopSending={
+                question.is_retired ? null : () => void handleRetire(question.id, index + 1)
+              }
               submitLabel="Save question"
               onSave={(input) => handleUpdate(question.id, input)}
               onCancel={() => setEditingId(null)}

@@ -36,7 +36,7 @@ describe('a question players have already received', () => {
     renderEditor(true);
 
     expect(
-      screen.getByText(/changes the question for future attempts only/i),
+      screen.getByText(/corrections apply to players who start after you save/i),
     ).toBeInTheDocument();
   });
 
@@ -44,14 +44,14 @@ describe('a question players have already received', () => {
     renderEditor(true);
 
     expect(
-      screen.getByText(/keep the version they got, along with their answers and scores/i),
+      screen.getByText(/keep the version they received, along with their answers, scores/i),
     ).toBeInTheDocument();
   });
 
   it('explains that the image players saw is kept', () => {
     renderEditor(true);
 
-    expect(screen.getByText(/image players already saw is kept/i)).toBeInTheDocument();
+    expect(screen.getByText(/and the picture they saw/i)).toBeInTheDocument();
   });
 
   it('does not present the correction as dangerous', () => {
@@ -77,7 +77,7 @@ describe('a question nobody has received', () => {
     renderEditor(false);
 
     expect(
-      screen.queryByText(/changes the question for future attempts only/i),
+      screen.queryByText(/corrections apply to players who start after you save/i),
     ).not.toBeInTheDocument();
   });
 
@@ -95,7 +95,7 @@ describe('a question nobody has received', () => {
     );
 
     expect(
-      screen.queryByText(/changes the question for future attempts only/i),
+      screen.queryByText(/corrections apply to players who start after you save/i),
     ).not.toBeInTheDocument();
   });
 });

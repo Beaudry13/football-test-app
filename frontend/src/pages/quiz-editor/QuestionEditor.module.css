@@ -172,6 +172,30 @@
 /* Informational, NOT a warning. Neutral surface and no alert colouring: a
    coach fixing a mistake is doing the right thing, and a red banner would
    suggest otherwise. */
+/* A REFUSAL PEIRA CAN EXPLAIN, and deliberately not an error banner. The coach
+   asked for something that would rewrite history; that is a boundary, not a
+   mistake, so this reads as guidance. Same neutral raised surface as the
+   delivered note above it, with the accent on the left edge doing the work an
+   alarming fill would otherwise do - gold as a verb, not a texture. */
+.blockedNote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--peira-space-2, 8px);
+  margin: 0 0 var(--peira-space-3, 12px);
+  padding: var(--peira-space-3, 12px);
+  border-radius: var(--peira-radius-sm, 6px);
+  background: var(--peira-surface-raised-strong);
+  border-left: 3px solid var(--nb-accent);
+  color: var(--peira-text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.blockedNote p {
+  margin: 0;
+}
+
 .deliveredNote {
   margin: 0 0 var(--peira-space-3, 12px);
   padding: var(--peira-space-3, 12px);

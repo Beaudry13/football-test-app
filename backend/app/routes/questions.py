@@ -34,7 +34,8 @@ from app.models import (
     QuestionType,
     Quiz,
 )
-from app.models import QuestionClip
+from app.models import CompetitionSession, QuestionClip
+from app.models.competition import LOBBY
 from app.models.question_region import RegionRole
 from app.schemas.question import (
     AnnotationsUpdateSchema,
@@ -211,6 +212,59 @@ def _reject_if_already_answered(question: Question, action: str) -> None:
             "Reset the affected player attempts first if you need to change it.",
             status_code=422,
         )
+
+
+def _reject_if_played_in_competition(question: Question, action: str) -> None:
+    """Refuse a content change to a question a competition has already played.
+
+    WHY THIS IS SEPARATE FROM THE DELIVERED-QUESTION RULES ABOVE.
+
+    Ordinary attempts are protected by `attempt_question_snapshots`: an edit
+    changes what FUTURE players receive and cannot touch what a finished
+    attempt shows, because that attempt recorded its own copy. Safe correction
+    rests entirely on that.
+
+    COMPETITION HAS NO SUCH RECORD. `CompetitionSession.question_order` freezes
+    which questions were played and in what order - the ORDER half of the
+    problem - but the CONTENT is read live through `question_id` every time.
+    There is no competition equivalent of a delivered snapshot; it is the
+    immutable-question-snapshot entry in IMPROVEMENT-BANK.md, deliberately not
+    built. So a reworded question silently rewrites what a room was asked, and
+    a competition a team has already played stops matching what happened.
+
+    This is not a hazard V1 introduced - wording has always been editable - but
+    V1 makes safe correction discoverable, and discoverable is exactly what
+    turns a latent hole into a routine one.
+
+    BLOCKS ON `question_order`, NOT ON ANSWERS. A question nobody answered was
+    still put on the room's screen, and a competition is watched live: what the
+    room SAW is the history worth protecting, and answers are only a subset of
+    it. Sessions still in LOBBY have shown nothing and are left alone, so a
+    coach can still fix a question right up until the room starts.
+
+    Scoped to one quiz's sessions and read in Python rather than through a JSON
+    containment query: `question_order` is a plain JSON column, the row count
+    per quiz is tiny, and a query that silently matches nothing when the column
+    shape moves would look exactly like "no competition used this" - the one
+    wrong answer this must never give.
+    """
+    sessions = (
+        CompetitionSession.query.filter(
+            CompetitionSession.quiz_id == question.quiz_id,
+            CompetitionSession.status != LOBBY,
+        )
+        .with_entities(CompetitionSession.question_order)
+        .all()
+    )
+    for (order,) in sessions:
+        if question.id in (order or []):
+            raise ApiError(
+                f"Cannot {action} - it has already been played in a competition, "
+                "and competition history reads the question live rather than from "
+                "a saved copy. Stop sending this question instead.",
+                status_code=422,
+                reason="competition_history_blocked",
+            )
 
 
 @dataclass
@@ -578,6 +632,7 @@ def create_region_question(quiz_id: int):
 @jwt_required()
 def update_region_question(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "change this question")
     if question.question_type is not QuestionType.FILL_BLANK or not question.regions:
         raise ApiError("This question was not built from a playbook page", status_code=422)
 
@@ -623,6 +678,7 @@ def update_region_question(quiz_id: int, question_id: int):
 @jwt_required()
 def update_question(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "change this question")
     data = load_json_body(QuestionUpdateSchema())
 
     question_type = data.get("question_type", question.question_type.value)
@@ -705,6 +761,18 @@ def update_question(quiz_id: int, question_id: int):
 @jwt_required()
 def delete_question(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    # DELIBERATELY NOT GUARDED BY _reject_if_played_in_competition, unlike every
+    # content edit. That guard exists to stop a competition's history being
+    # SILENTLY rewritten - a reworded question makes a finished room's questions
+    # read differently with nothing to notice it. Deletion is not silent, and
+    # Competition is already built to survive it: a deleted round is stepped
+    # over, and deleting the last remaining question ends the run cleanly. Both
+    # behaviours are covered in tests/test_competition_answers.py and remain
+    # valuable however the question disappeared.
+    #
+    # Deletion keeps its own protection below, which is the stronger one here:
+    # a competition answer IS an answer, so a played question is refused by
+    # _reject_if_already_answered anyway.
     _reject_if_already_answered(question, "delete this question")
 
     # ANSWERED is not the same as DELIVERED. This guard only fires once a
@@ -805,6 +873,7 @@ def reorder_questions(quiz_id: int):
 @jwt_required()
 def upload_question_image(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "change this question's image")
 
     # A question gets its picture from EITHER an uploaded still OR a document
     # page region - never both. Allowing both would leave two answers to "what
@@ -856,6 +925,7 @@ def upload_question_image(quiz_id: int, question_id: int):
 @jwt_required()
 def update_question_image_annotations(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "change this question's annotations")
     if question.image is None:
         raise ApiError("Question has no image to annotate", status_code=404)
 
@@ -874,6 +944,7 @@ def update_question_image_annotations(quiz_id: int, question_id: int):
 @jwt_required()
 def delete_question_image(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "remove this question's image")
     if question.image is None:
         raise ApiError("Question has no image", status_code=404)
 
@@ -901,6 +972,7 @@ def delete_question_image(quiz_id: int, question_id: int):
 @jwt_required()
 def upload_question_clip(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "change this question's clip")
 
     # DRAW RESPONSE CANNOT USE A CLIP, and this is checked on the server
     # rather than only hidden in the editor.
@@ -1003,6 +1075,7 @@ def set_clip_decision_point(quiz_id: int, question_id: int):
     change what a player already received.
     """
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "change this question's decision point")
     if question.clip is None:
         raise ApiError("Question has no clip", status_code=404)
 
@@ -1018,6 +1091,7 @@ def set_clip_decision_point(quiz_id: int, question_id: int):
 @jwt_required()
 def delete_question_clip(quiz_id: int, question_id: int):
     question = _get_editable_question(quiz_id, question_id)
+    _reject_if_played_in_competition(question, "remove this question's clip")
     if question.clip is None:
         raise ApiError("Question has no clip", status_code=404)
 

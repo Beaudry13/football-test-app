@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
-import { getErrorMessage, resolveMediaUrl } from '../../api/client';
+import { ApiError, getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { createConcept, listConcepts, type Concept } from '../../api/concepts';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { IMAGE_FILE_ACCEPT, describeUnsupportedImage } from '../../utils/imageFormat';
@@ -61,6 +61,10 @@ interface QuestionEditorProps {
   /** The picture this question ALREADY has, so editing it shows the thing
    *  being edited. Absent while creating, when there is nothing saved yet. */
   existingImageUrl?: string | null;
+  /** Offers "Stop sending it" from a refusal, using the caller's EXISTING
+   *  retire handler. Absent on the create form, where nothing has been sent
+   *  and nothing can be refused. */
+  onStopSending?: (() => void) | null;
   /** Route to the annotation page for THIS question.
    *
    *  WHY THIS PROP EXISTS AT ALL. Annotating was reachable from a banner that
@@ -87,6 +91,35 @@ interface QuestionEditorProps {
  * linting, and nothing outside needs it - the point is that all three
  * entry points inside THIS form share one list. */
 
+/** What a refused correction MEANS, and what to do instead.
+ *
+ * The API already names why it refused - `option_removal_blocked`,
+ * `correct_answer_change_blocked`, `competition_history_blocked` - and those
+ * codes existed long before anything read them, so every refusal reached the
+ * coach as one flat sentence with no route out of it.
+ *
+ * SAY WHY, THEN SAY WHAT INSTEAD. A coach who has just found a broken question
+ * on an active quiz does not need to be told no; they need the two tools Peira
+ * already has. "Stop sending it" is right here on the row, and "Don't count
+ * this question" lives on Results, which is why it is NAMED rather than
+ * offered - a second exclusion entry point would be a second thing to keep
+ * correct.
+ */
+const BLOCKED_EDIT_HELP: Record<string, { why: string; instead: string }> = {
+  correct_answer_change_blocked: {
+    why: 'Players have already received this question, so changing the correct answer would grade them differently from everyone who answers next.',
+    instead: 'Stop sending this question, then use "Don’t count this question" on Results for the players who already have it.',
+  },
+  option_removal_blocked: {
+    why: 'Players have already received this question, and one of them may have chosen the option you removed.',
+    instead: 'You can reword an option or add a new one. To take the question out of play, stop sending it.',
+  },
+  competition_history_blocked: {
+    why: 'This question has already been played in a competition, and competition results read the question as it is now rather than from a saved copy.',
+    instead: 'Stop sending this question instead, so the competition keeps matching what the room actually saw.',
+  },
+};
+
 export function QuestionEditor({
   autoFocusQuestion = false,
   initialConcept = null,
@@ -102,6 +135,7 @@ export function QuestionEditor({
   allowImage = false,
   existingImageUrl = null,
   annotateHref = null,
+  onStopSending = null,
 }: QuestionEditorProps) {
   const [questionText, setQuestionText] = useState(initialText);
   /** "Select all that apply". Multiple choice only - see the control below. */
@@ -112,6 +146,8 @@ export function QuestionEditor({
   );
   const [explanation, setExplanation] = useState(initialExplanation ?? '');
   const [error, setError] = useState<string | null>(null);
+  /** A refusal Peira can explain, as opposed to an ordinary failure. */
+  const [blocked, setBlocked] = useState<{ why: string; instead: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // The file lives HERE, not on the server, until the coach saves. That is
   // what makes Cancel leave nothing behind: nothing was ever created.
@@ -374,6 +410,9 @@ export function QuestionEditor({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    // The coach may have undone whatever was refused; let the server decide
+    // again rather than leaving last attempt's explanation on screen.
+    setBlocked(null);
 
     if (questionType === 'multiple_choice' && options.some((o) => !o.option_text.trim())) {
       setError('Every option needs text.');
@@ -412,7 +451,15 @@ export function QuestionEditor({
         recordedClip,
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      const help = err instanceof ApiError && err.reason ? BLOCKED_EDIT_HELP[err.reason] : undefined;
+      if (help) {
+        // An explained refusal replaces the raw message rather than joining it:
+        // the server sentence and this one say the same thing, and printing
+        // both reads as two different problems.
+        setBlocked(help);
+      } else {
+        setError(getErrorMessage(err));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -443,11 +490,26 @@ export function QuestionEditor({
           delivered question has no boundary to explain. */}
       {hasBeenDelivered && (
         <p className={styles.deliveredNote}>
-          <strong>This changes the question for future attempts only.</strong>{' '}
-          Players who already received it keep the version they got, along with
-          their answers and scores. The image players already saw is kept with
-          their results.
+          <strong>Players have already received this question.</strong>{' '}
+          Corrections apply to players who start after you save. Existing attempts keep the
+          version they received, along with their answers, scores and the picture they saw.
         </p>
+      )}
+
+      {/* NOT AN ERROR BANNER. The coach did nothing wrong - they asked for a
+          change Peira cannot make safely - so this explains the reason and
+          hands them the tool that does work, rather than colouring the screen
+          red and stopping. */}
+      {blocked && (
+        <div className={styles.blockedNote} role="alert">
+          <p>{blocked.why}</p>
+          <p>{blocked.instead}</p>
+          {onStopSending && (
+            <button type="button" className={nb.btnSm} onClick={onStopSending}>
+              Stop sending it
+            </button>
+          )}
+        </div>
       )}
 
       <div className={nb.field}>
