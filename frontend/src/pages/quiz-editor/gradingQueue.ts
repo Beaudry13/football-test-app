@@ -34,6 +34,11 @@ export interface GradeTarget {
   answerId: number;
   attemptId: number;
   playerName: string;
+  /** Canonical identity, carried through so nothing downstream has to fall
+   *  back to the name. Null for a legacy free-text attempt. */
+  playerId: number | null;
+  /** DISPLAY ONLY - tells two same-named players apart on the grading screen. */
+  jerseyNumber: string | null;
   answerText: string | null;
   /** Present only for a draw_response the player actually drew on. */
   drawing: AnswerDrawing | null | undefined;
@@ -102,6 +107,8 @@ export function buildGradingQueue(
           answerId: answer.id,
           attemptId: response.id,
           playerName: response.display_name || response.player_name,
+          playerId: response.player_id ?? null,
+          jerseyNumber: response.jersey_number ?? null,
           answerText: answer.answer_text,
           drawing: answer.drawing,
           isCorrect: answer.is_correct,

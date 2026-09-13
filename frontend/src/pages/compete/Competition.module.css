@@ -497,6 +497,22 @@
   cursor: not-allowed;
 }
 
+/* A same-named player's jersey and position, on its own line under the name.
+   Quiet on purpose: it answers "which one is me", and only appears when that
+   question exists. */
+.identityName {
+  display: grid;
+  gap: 0.15rem;
+  text-align: left;
+}
+
+.identityDetail {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--comp-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
 .takenTag {
   flex-shrink: 0;
   font-size: 0.68rem;

@@ -118,6 +118,12 @@ CSV_HEADER = [
     "Answer",
     "Correct",
     "Coach Feedback",
+    # APPENDED, NEVER INSERTED. A coach's spreadsheet reads these columns by
+    # position; putting a new one anywhere but the end shifts every column a
+    # saved formula already points at. Blank for a legacy attempt with no
+    # canonical Player. Only the jersey: live position does not belong on a
+    # record of an attempt.
+    "Player Jersey",
 ]
 
 #: The CSV's OWN vocabulary for the same four outcomes the PDF labels
@@ -1094,6 +1100,11 @@ def build_results_csv(quiz, responses: list, exclusions=NO_EXCLUSIONS) -> str:
                     _answer_text(question, answer),
                     verdict,
                     (answer.coach_feedback or "") if answer else "",
+                    (
+                        (response.player.jersey_number or "")
+                        if response.player_id is not None and response.player is not None
+                        else ""
+                    ),
                 ]
             )
 

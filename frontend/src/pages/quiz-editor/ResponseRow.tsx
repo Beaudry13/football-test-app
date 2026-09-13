@@ -209,9 +209,14 @@ export function ResponseRow({
   exclusionsByQuestion,
   assignments,
   onChanged,
+  displayLabel,
 }: {
   quiz: Quiz;
   response: PlayerResponse;
+  /** The name as it should READ in this list - "John Smith · #12" when another
+   *  John Smith is on it. Display only: every link and action below still uses
+   *  `response.player_id` / `response.id`. Defaults to `display_name`. */
+  displayLabel?: string;
   /** question_id -> active exclusions covering it. */
   exclusionsByQuestion?: Map<number, QuestionExclusion[]>;
   assignments?: Map<number, QuizAssignment>;
@@ -222,6 +227,7 @@ export function ResponseRow({
   const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
+  const label = displayLabel ?? response.display_name;
   const answers = response.answers ?? [];
   // WHAT THIS ATTEMPT RECEIVED, keyed for lookup. Comes with the response
   // payload, so the numbering and content here are the player's own rather
@@ -283,7 +289,7 @@ export function ResponseRow({
     try {
       await confirm({
         title: 'Reset Attempt?',
-        body: `${response.display_name}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Quiz fresh. This action cannot be undone.`,
+        body: `${label}'s answers and any grading or feedback on them will be permanently deleted, and they can start the Quiz fresh. This action cannot be undone.`,
         confirmLabel: 'Reset Attempt',
         action: async () => {
           setIsResetting(true);
@@ -314,7 +320,7 @@ export function ResponseRow({
         role="button"
         tabIndex={0}
         aria-expanded={isOpen}
-        aria-label={`${isOpen ? 'Collapse' : 'Expand'} answers for ${response.display_name}`}
+        aria-label={`${isOpen ? 'Collapse' : 'Expand'} answers for ${label}`}
         onClick={() => setIsOpen((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -343,7 +349,7 @@ export function ResponseRow({
               className={styles.playerNameLink}
               onClick={(e) => e.stopPropagation()}
             >
-              {response.display_name}
+              {label}
             </Link>
           ) : (
             <Link
@@ -351,7 +357,7 @@ export function ResponseRow({
               className={styles.playerNameLink}
               onClick={(e) => e.stopPropagation()}
             >
-              {response.display_name}
+              {label}
             </Link>
           )}
           <span className={styles.responseMeta}>{new Date(response.submitted_at).toLocaleString()}</span>

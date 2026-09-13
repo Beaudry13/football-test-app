@@ -80,6 +80,10 @@ export interface CompetitionReadiness {
 export interface RosterEntry {
   player_id: number;
   display_name: string;
+  /** DISPLAY ONLY, live from the roster - lets a player tell two same-named
+   *  seats apart. The seat is still `player_id`. */
+  jersey_number?: string | null;
+  position?: string | null;
   taken: boolean;
 }
 

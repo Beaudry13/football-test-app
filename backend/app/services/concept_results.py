@@ -108,6 +108,10 @@ class MissingPlayer:
     #: which is every attempt older than Phase A - and None is shown as
     #: nothing, not as a guess.
     position_at_attempt: str | None
+    #: DISPLAY ONLY, so two same-named players in "who missed it" can be told
+    #: apart. None for a free-text join. Never paired with the roster's live
+    #: position - the position shown here is `position_at_attempt`.
+    jersey_number: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -115,6 +119,7 @@ class MissingPlayer:
             "player_name": self.player_name,
             "display_name": self.display_name,
             "position_at_attempt": self.position_at_attempt,
+            "jersey_number": self.jersey_number,
         }
 
 
@@ -261,6 +266,12 @@ def concept_breakdown(quiz, responses) -> list[dict]:
                     player_name=attempt.player_name,
                     display_name=attempt.display_name,
                     position_at_attempt=attempt.position_at_attempt,
+                    # The Player `display_name` just resolved - no new load.
+                    jersey_number=(
+                        attempt.player.jersey_number
+                        if attempt.player_id is not None and attempt.player is not None
+                        else None
+                    ),
                 )
 
         if counts.incorrect > 0:

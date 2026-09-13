@@ -248,13 +248,37 @@ def active_status():
     result = []
     for code in active_codes:
         attempts = attempts_by_code[code.id]
+        roster_people = effective_roster_players(code)
+        # DISPLAY METADATA FOR THE ATTEMPT LISTS, from the roster already in
+        # hand rather than from `attempt.player` - these attempts were loaded
+        # without their Player, and reaching for it would be one query per
+        # row on a board that polls. This is a live board, so live roster
+        # values are the right ones. A canonical attempt whose player has
+        # since left this roster simply gets no jersey or position, and its
+        # name is shown plainly rather than with something invented.
+        roster_by_player_id = {
+            person["player_id"]: person
+            for person in roster_people
+            if person["player_id"] is not None
+        }
+
+        def attempt_summary(attempt, timestamp_key, timestamp, roster=roster_by_player_id):
+            person = roster.get(attempt.player_id, {})
+            return {
+                "player_name": attempt.player_name,
+                timestamp_key: timestamp.isoformat(),
+                "player_id": attempt.player_id,
+                "jersey_number": person.get("jersey_number"),
+                "position": person.get("position"),
+            }
+
         submitted = [
-            {"player_name": a.player_name, "submitted_at": a.submitted_at.isoformat()}
+            attempt_summary(a, "submitted_at", a.submitted_at)
             for a in attempts
             if a.status == AttemptStatus.SUBMITTED
         ]
         in_progress = [
-            {"player_name": a.player_name, "started_at": a.started_at.isoformat()}
+            attempt_summary(a, "started_at", a.started_at)
             for a in attempts
             if a.status == AttemptStatus.IN_PROGRESS
         ]
@@ -268,12 +292,24 @@ def active_status():
         # to remove both from this list, so a coach chasing the one who had not
         # started saw nobody. The attempts are already in hand here, so their
         # player_id costs no extra query.
-        roster_people = effective_roster_players(code)
         started = {identity_key(a.player_id, a.player_name) for a in attempts}
-        not_started = [
-            person["name"]
+        outstanding = [
+            person
             for person in roster_people
             if identity_key(person["player_id"], person["name"]) not in started
+        ]
+        # `not_started` stays a list of names for every existing consumer.
+        # `not_started_players` is the same people, in the same order, with
+        # what the board needs to tell two of them apart and key them by id.
+        not_started = [person["name"] for person in outstanding]
+        not_started_players = [
+            {
+                "player_id": person["player_id"],
+                "player_name": person["name"],
+                "jersey_number": person["jersey_number"],
+                "position": person["position"],
+            }
+            for person in outstanding
         ]
 
         result.append(
@@ -300,6 +336,7 @@ def active_status():
                 "submitted": submitted,
                 "in_progress": in_progress,
                 "not_started": not_started,
+                "not_started_players": not_started_players,
             }
         )
 

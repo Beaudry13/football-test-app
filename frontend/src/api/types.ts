@@ -525,6 +525,9 @@ export interface PlayerResponse {
    *  name instead. NULL on a legacy attempt that was never linked to a
    *  Player - there is no canonical person to reach in that case. */
   player_id?: number | null;
+  /** DISPLAY ONLY - tells two same-named players apart. Null for a legacy
+   *  attempt with no canonical Player. Never an identity. */
+  jersey_number?: string | null;
   submitted_at: string;
   answers?: Answer[];
   /** What THIS attempt received, snapshot-backed. Present on the coach's
@@ -709,6 +712,8 @@ export interface ConceptMissingPlayer {
    *  which is every attempt older than Phase A - shown as nothing, never
    *  substituted with the roster's current value. */
   position_at_attempt: string | null;
+  /** DISPLAY ONLY - tells two same-named players apart. */
+  jersey_number?: string | null;
 }
 
 /** Who a retest round can be aimed at. The same shape the create-retest
@@ -765,6 +770,11 @@ export interface PlayerHistoryEntry {
 
 export interface ActiveAttemptSummary {
   player_name: string;
+  /** Canonical identity; null for a free-text join. */
+  player_id?: number | null;
+  /** DISPLAY ONLY, from the live roster. */
+  jersey_number?: string | null;
+  position?: string | null;
   /** Present on `submitted`, absent on `in_progress` entries. */
   submitted_at?: string;
   /** Present on `in_progress`, absent on `submitted` entries. */
@@ -786,6 +796,16 @@ export interface ActiveQuizStatus {
   submitted: ActiveAttemptSummary[];
   in_progress: ActiveAttemptSummary[];
   not_started: string[];
+  /** The same people as `not_started`, in the same order, with what the board
+   *  needs to key them by id and tell two same-named players apart. */
+  not_started_players?: ActiveRosterPerson[];
+}
+
+export interface ActiveRosterPerson {
+  player_id: number | null;
+  player_name: string;
+  jersey_number: string | null;
+  position: string | null;
 }
 
 /** One eligible player at join time, canonical-identity-aware. `player_id`

@@ -19,6 +19,7 @@ import * as competitionApi from '../../api/competition';
 import type { CompetitionLobby } from '../../api/competition';
 import { CompetitionShell } from './CompetitionShell';
 import { clearSeat, seatFor, writeSeat } from './competitionSeat';
+import { playerLabels } from '../../utils/playerDisplayLabel';
 import styles from './Competition.module.css';
 
 export function CompetitionJoinPage() {
@@ -169,6 +170,21 @@ export function CompetitionJoinPage() {
 
   // --- Identity picker ----------------------------------------------------
 
+  // TWO JOHN SMITHS MUST NOT BE TWO IDENTICAL BUTTONS. Tapping the wrong one
+  // takes the other person's seat, and `taken` then locks the right one out.
+  // Jersey and position appear only beside a name that collides, and only as
+  // something to READ - each button still sends its own player_id.
+  const labels = playerLabels(
+    lobby.roster,
+    (entry) => ({
+      name: entry.display_name,
+      jerseyNumber: entry.jersey_number,
+      position: entry.position,
+      identity: entry.player_id,
+    }),
+    'roster',
+  );
+
   return (
     <CompetitionShell live>
       <div className={styles.waitingRoom}>
@@ -190,15 +206,20 @@ export function CompetitionJoinPage() {
         {lobby.roster.length === 0 && (
           <div className={styles.notice}>No players are on the roster for this competition yet.</div>
         )}
-        {lobby.roster.map((entry) => (
+        {lobby.roster.map((entry, index) => (
           <button
             key={entry.player_id}
             type="button"
             className={styles.identityButton}
-            onClick={() => choose(entry.player_id, entry.display_name)}
+            onClick={() => choose(entry.player_id, labels[index].text)}
             disabled={entry.taken || joining !== null}
           >
-            <span>{entry.display_name}</span>
+            <span className={styles.identityName}>
+              <span>{entry.display_name}</span>
+              {labels[index].detail && (
+                <span className={styles.identityDetail}>{labels[index].detail}</span>
+              )}
+            </span>
             {entry.taken ? (
               <span className={styles.takenTag}>Already in</span>
             ) : (

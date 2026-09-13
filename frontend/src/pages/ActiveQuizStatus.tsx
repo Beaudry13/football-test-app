@@ -4,7 +4,13 @@ import { Link } from 'react-router-dom';
 import { getQuizDashboard } from '../api/grading';
 import { useActiveStatus, ACTIVE_STATUS_POLL_MS } from '../hooks/useActiveStatus';
 import { usePolling } from '../hooks/usePolling';
-import type { ActiveQuizStatus as ActiveQuizStatusEntry, QuestionBreakdown } from '../api/types';
+import type {
+  ActiveAttemptSummary,
+  ActiveQuizStatus as ActiveQuizStatusEntry,
+  ActiveRosterPerson,
+  QuestionBreakdown,
+} from '../api/types';
+import { playerLabels } from '../utils/playerDisplayLabel';
 import { Icon } from '../components/ui/Icon';
 import { LoadingState } from '../components/ui/LoadingState';
 import nb from '../styles/notebook.module.css';
@@ -53,8 +59,43 @@ function QuestionBreakdownTable({ breakdown }: { breakdown: QuestionBreakdown[] 
   );
 }
 
+type BoardPerson = ActiveAttemptSummary | ActiveRosterPerson;
+
+/** A React key that is the PERSON, not the name. Two same-named players used to
+ *  share a key here. The timestamp separates one player's repeat attempts
+ *  (practice allows them); a free-text entry has no id, so its name stands in,
+ *  which is unique within these lists because the server dedupes it. */
+function personKey(person: BoardPerson, stamp?: string): string {
+  const who = person.player_id != null ? `player:${person.player_id}` : `name:${person.player_name}`;
+  return stamp ? `${who}:${stamp}` : who;
+}
+
 function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
   const pendingCount = entry.in_progress.length + entry.not_started.length;
+  // Older payloads carried names only; render those exactly as before.
+  const notStarted: ActiveRosterPerson[] =
+    entry.not_started_players ??
+    entry.not_started.map((name) => ({
+      player_id: null,
+      player_name: name,
+      jersey_number: null,
+      position: null,
+    }));
+  // ONE CARD IS ONE LIST. A coach reads Submitted, Started and Not started
+  // side by side, so a John Smith in one column and a John Smith in another
+  // are exactly the ambiguity this resolves. Live board, so live metadata.
+  const people: BoardPerson[] = [...entry.submitted, ...entry.in_progress, ...notStarted];
+  const labelTexts = playerLabels(
+    people,
+    (person) => ({
+      name: person.player_name,
+      jerseyNumber: person.jersey_number,
+      position: person.position,
+      identity: person.player_id ?? `name:${person.player_name}`,
+    }),
+    'roster',
+  ).map((label) => label.text);
+  const labelOf = new Map<BoardPerson, string>(people.map((person, i) => [person, labelTexts[i]]));
   // Practice has unlimited retakes, so "pending against the roster" is not a
   // meaningful completion state - a player who has practised three times and
   // one who never will both sit outside "submitted". The counts are relabelled
@@ -141,7 +182,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
               ) : (
                 <ul className={styles.nameList}>
                   {entry.submitted.map((p) => (
-                    <li key={p.player_name}>{p.player_name}</li>
+                    <li key={personKey(p, p.submitted_at)}>{labelOf.get(p)}</li>
                   ))}
                 </ul>
               )}
@@ -158,17 +199,17 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
                       <div className={styles.subLabel}>Started, not submitted</div>
                       <ul className={styles.nameList}>
                         {entry.in_progress.map((p) => (
-                          <li key={p.player_name}>{p.player_name}</li>
+                          <li key={personKey(p, p.started_at)}>{labelOf.get(p)}</li>
                         ))}
                       </ul>
                     </>
                   )}
-                  {entry.not_started.length > 0 && (
+                  {notStarted.length > 0 && (
                     <>
                       <div className={styles.subLabel}>Not started</div>
                       <ul className={styles.nameList}>
-                        {entry.not_started.map((name) => (
-                          <li key={name}>{name}</li>
+                        {notStarted.map((p) => (
+                          <li key={personKey(p)}>{labelOf.get(p)}</li>
                         ))}
                       </ul>
                     </>

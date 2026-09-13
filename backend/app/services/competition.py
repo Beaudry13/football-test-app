@@ -177,8 +177,20 @@ def eligible_players(session: CompetitionSession) -> list[dict]:
     seen: dict[int, Player] = {}
     for player in query.all():
         seen[player.id] = player
+    # jersey_number and position are DISPLAY ONLY - they let a player tell two
+    # same-named roster rows apart before tapping one. They come from the
+    # Players already loaded above, so this costs no query. This is a LIVE
+    # pre-game roster, which is why live values are right here and would be
+    # wrong on a leaderboard or podium: those read the participant's
+    # display_name snapshot and must not start changing after the event.
+    # Identity is still player_id, and so is `taken`.
     return [
-        {"player_id": p.id, "display_name": p.full_name}
+        {
+            "player_id": p.id,
+            "display_name": p.full_name,
+            "jersey_number": p.jersey_number,
+            "position": p.position,
+        }
         for p in sorted(seen.values(), key=lambda p: (p.last_name.lower(), p.first_name.lower()))
     ]
 

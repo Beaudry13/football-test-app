@@ -14,6 +14,7 @@ import {
   type GradeQuestion,
   type GradeTarget,
 } from './gradingQueue';
+import { playerLabels } from '../../utils/playerDisplayLabel';
 import nb from '../../styles/notebook.module.css';
 import styles from './GradeResponsesPage.module.css';
 
@@ -205,10 +206,21 @@ export function GradeResponsesPage() {
       </header>
 
       <ol className={styles.responses}>
-        {current.targets.map((target) => (
+        {/* The answers to ONE question are the list a coach reads together,
+            so that is where two John Smiths collide. Attempt mode. */}
+        {playerLabels(
+          current.targets,
+          (t) => ({
+            name: t.playerName,
+            jerseyNumber: t.jerseyNumber,
+            identity: t.playerId ?? `name:${t.playerName}`,
+          }),
+          'attempt',
+        ).map((label, i) => ({ target: current.targets[i], label })).map(({ target, label }) => (
           <GradeRow
             key={target.answerId}
             target={target}
+            playerLabel={label.text}
             questionType={current.questionType}
             questionText={current.questionText}
             busy={saving.has(target.answerId)}
@@ -247,12 +259,15 @@ export function GradeResponsesPage() {
  */
 function GradeRow({
   target,
+  playerLabel,
   questionType,
   questionText,
   busy,
   onGrade,
 }: {
   target: GradeTarget;
+  /** Display only. The grade is written against `target.answerId`. */
+  playerLabel: string;
   questionType: string;
   questionText: string;
   busy: boolean;
@@ -269,7 +284,7 @@ function GradeRow({
         target.isCorrect === false ? styles.rowIncorrect : ''
       }`}
     >
-      <p className={styles.player}>{target.playerName}</p>
+      <p className={styles.player}>{playerLabel}</p>
 
       {isDrawing ? (
         target.drawing && image ? (
@@ -277,7 +292,7 @@ function GradeRow({
             <DrawingViewer
               imageUrl={resolveMediaUrl(image.image_url)}
               document={target.drawing.document as DrawingDocument}
-              alt={`Drawing by ${target.playerName} for: ${questionText}`}
+              alt={`Drawing by ${playerLabel} for: ${questionText}`}
             />
           </div>
         ) : (

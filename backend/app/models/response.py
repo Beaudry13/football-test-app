@@ -175,6 +175,17 @@ class PlayerAttempt(db.Model):
             "player_name": self.player_name,
             "display_name": self.display_name,
             "player_id": self.player_id,
+            #: DISPLAY ONLY - tells two same-named players apart on Results and
+            #: the grading screen. Read through the same `player` relationship
+            #: `display_name` already loads, so it costs no extra query. None
+            #: for a legacy attempt with no canonical Player. Deliberately NOT
+            #: joined by the player's live position: this is an attempt, and
+            #: its position is `position_at_attempt` below.
+            "jersey_number": (
+                self.player.jersey_number
+                if self.player_id is not None and self.player is not None
+                else None
+            ),
             "status": self.status.value,
             #: Their position WHEN THEY ANSWERED. Results reads this rather
             #: than the roster's current value, so moving a player between

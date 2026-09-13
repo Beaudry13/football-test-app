@@ -52,6 +52,9 @@ def test_export_csv_has_one_row_per_player_per_question(client, coach_headers):
         "Answer",
         "Correct",
         "Coach Feedback",
+        # Appended for duplicate-name disambiguation. LAST, so every column
+        # above keeps the position a coach's saved spreadsheet expects.
+        "Player Jersey",
     ]
     data_rows = rows[1:]
     assert len(data_rows) == 2  # one response x two questions

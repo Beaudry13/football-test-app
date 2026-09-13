@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ConceptBreakdown } from '../../api/types';
 import { RetestAction } from './RetestAction';
+import { playerLabels } from '../../utils/playerDisplayLabel';
 import styles from './WeakestConcepts.module.css';
 
 /** "What should I teach next?", above everything else on Results.
@@ -55,6 +56,20 @@ export function WeakestConcepts({
      hidden, and keying the toggle off that made it disappear at exactly the
      moment the coach needed it to collapse again. */
   const canToggle = weakest.players_missed.length > PLAYERS_BEFORE_FOLD;
+  /* Worked out over the FULL list, like the retest, so expanding "and N more"
+     can never change how a name already on screen reads. `shownPlayers` is a
+     prefix of it, so indexes line up. Attempt mode: jersey only - the position
+     beside each name is `position_at_attempt`, and live roster position must
+     not be mixed into it. */
+  const missedLabels = playerLabels(
+    weakest.players_missed,
+    (p) => ({
+      name: p.display_name,
+      jerseyNumber: p.jersey_number,
+      identity: p.player_id ?? `name:${p.player_name}`,
+    }),
+    'attempt',
+  );
 
   return (
     <section className={styles.wrap} aria-labelledby="teach-next">
@@ -116,9 +131,13 @@ export function WeakestConcepts({
           <div className={styles.players}>
             <div className={styles.playersLabel}>Who missed it</div>
             <ul className={styles.playerList}>
-              {shownPlayers.map((player) => (
-                <li key={player.player_name} className={styles.player}>
-                  {player.display_name}
+              {shownPlayers.map((player, index) => (
+                <li
+                  // THE PERSON, not the name: two same-named players shared a key.
+                  key={player.player_id != null ? `player:${player.player_id}` : `name:${player.player_name}`}
+                  className={styles.player}
+                >
+                  {missedLabels[index].text}
                   {/* Their position WHEN THEY ANSWERED. Absent rather than
                       guessed when it was never recorded. */}
                   {player.position_at_attempt && (

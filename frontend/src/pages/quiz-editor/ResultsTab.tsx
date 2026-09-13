@@ -22,6 +22,7 @@ import { ExcludeQuestionDialog } from './ExcludeQuestionDialog';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { downloadBlob } from '../../utils/download';
 import { ResponseRow } from './ResponseRow';
+import { playerLabels } from '../../utils/playerDisplayLabel';
 import { needsManualGrading } from './gradingQueue';
 import nb from '../../styles/notebook.module.css';
 import { RetestVerification } from './RetestVerification';
@@ -442,11 +443,22 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
         <EmptyState message="No responses yet. Share the access code to start collecting them." />
       ) : (
         <div className={styles.responseList}>
-          {responses.map((response) => (
+          {/* Labels are worked out over the WHOLE list, because a collision
+              is only visible from there. Attempt mode: jersey only. */}
+          {playerLabels(
+            responses,
+            (r) => ({
+              name: r.display_name,
+              jerseyNumber: r.jersey_number,
+              identity: r.player_id ?? `name:${r.player_name}`,
+            }),
+            'attempt',
+          ).map((label, index) => ({ response: responses[index], label })).map(({ response, label }) => (
             <ResponseRow
               key={response.id}
               quiz={quiz}
               response={response}
+              displayLabel={label.text}
               exclusionsByQuestion={exclusionsByQuestion}
               assignments={assignmentsById}
               onChanged={load}
