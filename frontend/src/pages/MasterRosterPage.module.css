@@ -164,3 +164,17 @@
     min-height: 44px;
   }
 }
+
+/* "N active players don't have a PIN yet." Quiet on purpose: a notice with one
+   action, not an alarm - in Phase 1 nothing is blocked by a missing PIN. */
+.pinBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em 1em;
+  margin: 0 0 1em;
+  padding: 0.6em 0.9em;
+  border: 1px solid var(--nb-border);
+  border-radius: 8px;
+}

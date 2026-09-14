@@ -95,6 +95,16 @@ class PlayerAttempt(db.Model):
     #: that player has no position recorded. Historical analysis must read
     #: THIS, never players.position.
     position_at_attempt = db.Column(db.String(10), nullable=True)
+
+    #: THE PER-ATTEMPT TOKEN - PHASE 2. Not read or written by anything yet;
+    #: added with the credential table so the security work needs one
+    #: migration rather than two. `token_hash` is SHA-256 of a random token
+    #: (never the token itself), and `token_pin_version` is the player's
+    #: `pin_version` when it was issued, so a PIN reset invalidates it.
+    #: Deliberately absent from to_dict().
+    token_hash = db.Column(db.String(64), nullable=True)
+    token_pin_version = db.Column(db.Integer, nullable=True)
+    token_issued_at = db.Column(db.DateTime(timezone=True), nullable=True)
     started_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=db.func.now())
     submitted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 

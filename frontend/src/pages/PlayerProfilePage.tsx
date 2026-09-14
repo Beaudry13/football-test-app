@@ -4,9 +4,13 @@ import {
   deactivatePlayer,
   getPlayerHistory,
   reactivatePlayer,
+  resetPlayerPin,
   updatePlayer,
   uploadPlayerPhoto,
+  type IssuedPin,
 } from '../api/players';
+import { PinSheetDialog } from '../components/pins/PinSheetDialog';
+import { PinStatusBadge } from '../components/pins/PinStatusBadge';
 import { getErrorMessage } from '../api/client';
 import type { Group, PlayerHistory } from '../api/types';
 import { listGroups } from '../api/groups';
@@ -34,6 +38,9 @@ export function PlayerProfilePage() {
      player is NOT in as well as the ones they are. Loaded once; membership
      itself always comes from the profile payload. */
   const [groups, setGroups] = useState<Group[]>([]);
+  /** A PIN just issued, held ONLY while its one-time sheet is open. */
+  const [pinSheet, setPinSheet] = useState<IssuedPin[] | null>(null);
+  const [isIssuingPin, setIsIssuingPin] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -94,6 +101,36 @@ export function PlayerProfilePage() {
     }
   }
 
+  /** "I forgot my PIN" is answered here: a new PIN, shown once. Peira cannot
+   *  look up the old one - it only ever stored a hash of it.
+   *
+   *  A first PIN needs no confirmation; replacing one does, because the old
+   *  PIN stops working the moment this runs. */
+  async function handleIssuePin() {
+    if (!history) return;
+    setError(null);
+    try {
+      if (history.pin_status !== 'missing') {
+        const { full_name, jersey_number } = history.player;
+        const who = jersey_number ? `${full_name} (#${jersey_number})` : full_name;
+        const confirmed = await confirm({
+          title: 'Reset PIN?',
+          body: `${who}'s current PIN will stop working. Their quizzes and results aren't affected.`,
+          confirmLabel: 'Reset PIN',
+        });
+        if (!confirmed) return;
+      }
+      setIsIssuingPin(true);
+      const { issued } = await resetPlayerPin(id);
+      setPinSheet([issued]);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsIssuingPin(false);
+    }
+  }
+
   async function handleReactivate() {
     try {
       await reactivatePlayer(id);
@@ -122,6 +159,7 @@ export function PlayerProfilePage() {
   return (
     <div>
       {dialog}
+      {pinSheet && <PinSheetDialog pins={pinSheet} onClosed={() => setPinSheet(null)} />}
       <Link to="/roster" className={styles.backLink}>
           <Icon name="back" size={14} /> Master Roster
         </Link>
@@ -163,6 +201,12 @@ export function PlayerProfilePage() {
                         · <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
                       </>
                     )}
+                    {history.pin_status && (
+                      <>
+                        {' '}
+                        · <PinStatusBadge status={history.pin_status} />
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -170,6 +214,15 @@ export function PlayerProfilePage() {
                 <button className={nb.btnSm} onClick={() => setIsEditing((v) => !v)}>
                   {isEditing ? 'Cancel' : 'Edit'}
                 </button>
+                {history.pin_status && (
+                  <button className={nb.btnSm} onClick={handleIssuePin} disabled={isIssuingPin}>
+                    {isIssuingPin
+                      ? 'Working…'
+                      : history.pin_status === 'missing'
+                        ? 'Create PIN'
+                        : 'Reset PIN'}
+                  </button>
+                )}
                 {history.player.is_active ? (
                   <button className={nb.btnSm} onClick={handleDeactivate}>
                     Deactivate

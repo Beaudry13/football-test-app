@@ -1,0 +1,81 @@
+/* The one-time PIN sheet. Screen styles use the coach tokens the Modal
+   backdrop provides; the print block below deliberately does not - paper is
+   white, and a clipboard sheet must read in black ink. */
+
+.sheet {
+  text-align: left;
+}
+
+.title {
+  margin: 0 0 0.35em;
+}
+
+.intro {
+  margin: 0 0 1em;
+  color: var(--nb-text-muted);
+  line-height: 1.45;
+}
+
+.tableScroll {
+  /* A 120-player sheet scrolls inside the dialog rather than past the screen. */
+  max-height: 55vh;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+}
+
+.pin {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5em;
+  margin-top: 1em;
+}
+
+/* PRINT ONLY THE SHEET. The sheet lives in a portal on top of the whole app,
+   so hiding everything and re-showing just this subtree is the one approach
+   that works regardless of where the dialog was opened from. */
+@media print {
+  :global(body *) {
+    visibility: hidden !important;
+  }
+
+  .sheet,
+  .sheet * {
+    visibility: visible !important;
+  }
+
+  .sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+    background: #fff;
+  }
+
+  .sheet .tableScroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .sheet th,
+  .sheet td {
+    color: #000;
+    border-color: #999;
+  }
+
+  [data-print-hide] {
+    display: none !important;
+  }
+}

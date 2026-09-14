@@ -139,6 +139,14 @@ class BaseConfig:
 
     ACCESS_CODE_TTL_HOURS = int(os.environ.get("ACCESS_CODE_TTL_HOURS", "24"))
 
+    #: bcrypt cost for player PINs - deliberately NOT the coach password cost
+    #: (Flask-Bcrypt's 12). Measured locally: cost 12 = ~380ms per check, cost
+    #: 10 = ~92ms. A PIN is checked when a whole team starts a quiz in the same
+    #: minute, on a server that queues requests behind each other, so 12 would
+    #: stack into tens of seconds. At 10 a stolen hash of a 6-digit PIN still
+    #: costs about a day of CPU to reverse.
+    PIN_BCRYPT_ROUNDS = int(os.environ.get("PIN_BCRYPT_ROUNDS", "10"))
+
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
@@ -163,6 +171,10 @@ class TestingConfig(BaseConfig):
     # legitimately call register/login/submit more times per minute than a
     # real abuser would be allowed to.
     RATELIMIT_ENABLED = False
+    # bcrypt's minimum. The suite issues many PINs, and the cost being tested
+    # is that a hash is stored, not how slow it is; the production default of
+    # 10 is asserted separately against BaseConfig.
+    PIN_BCRYPT_ROUNDS = 4
 
 
 class ProductionConfig(BaseConfig):

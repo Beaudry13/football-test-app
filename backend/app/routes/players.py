@@ -22,6 +22,7 @@ from app.schemas.player import (
     PlayerCreateSchema,
     PlayerUpdateSchema,
 )
+from app.services import player_credentials
 from app.services.attempt_scope import official_only
 from app.services.export import build_cumulative_performance_pdf
 from app.services.file_storage import get_file_storage
@@ -70,7 +71,11 @@ def list_players():
         )
 
     players = query.order_by(Player.last_name, Player.first_name).all()
-    return jsonify([p.to_dict() for p in players])
+    # STATUS ONLY - "set", "missing" or "locked". Added beside to_dict() rather
+    # than inside it, so the many other payloads that reuse Player.to_dict()
+    # cannot start carrying credential state.
+    statuses = player_credentials.statuses_for([p.id for p in players])
+    return jsonify([{**p.to_dict(), "pin_status": statuses[p.id]} for p in players])
 
 
 @players_bp.post("")
@@ -127,7 +132,48 @@ def get_player_history(player_id: int):
     org-wide, name-based legacy history endpoint.
     """
     player = get_org_player(player_id)
-    return jsonify(build_player_history(current_coach(), player, organization_wide=False))
+    payload = build_player_history(current_coach(), player, organization_wide=False)
+    payload["pin_status"] = player_credentials.statuses_for([player.id])[player.id]
+    return jsonify(payload)
+
+
+def _one_time(payload: dict, status: int = 200):
+    """A response carrying a raw PIN. It must never be cached anywhere - not by
+    the browser, not by a proxy - because the PIN in it cannot be shown again
+    and must not be recoverable from a cache either."""
+    response = jsonify(payload)
+    response.status_code = status
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+@players_bp.post("/pins/generate-missing")
+@jwt_required()
+def generate_missing_pins():
+    """Issue PINs to active players who have none, one batch at a time.
+
+    Never replaces an existing PIN. Returns the newly issued PINs ONCE, and how
+    many players still have none, so the coach's browser can keep asking until
+    that reaches zero. Scoped to the caller's organization - the same boundary
+    as every other player-management route.
+    """
+    issued, remaining = player_credentials.generate_missing(current_coach())
+    return _one_time({"issued": issued, "remaining": remaining})
+
+
+@players_bp.post("/<int:player_id>/pin/reset")
+@jwt_required()
+def reset_player_pin(player_id: int):
+    """Give one player a new PIN - or their first one.
+
+    The old PIN stops working, any lock is cleared, and nothing about the
+    player's attempts or results changes. `get_org_player` makes another
+    organization's player indistinguishable from one that does not exist.
+    """
+    player = get_org_player(player_id)
+    issued, version = player_credentials.reset_pin(player, current_coach())
+    return _one_time({"issued": issued, "pin_version": version})
 
 
 def build_player_history(

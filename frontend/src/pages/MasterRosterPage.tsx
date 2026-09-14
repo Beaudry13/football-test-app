@@ -4,10 +4,15 @@ import {
   createPlayer,
   deactivatePlayer,
   downloadPerformanceReport,
+  generateMissingPins,
   listPlayers,
   reactivatePlayer,
+  resetPlayerPin,
+  type IssuedPin,
   type PlayerInput,
 } from '../api/players';
+import { PinSheetDialog } from '../components/pins/PinSheetDialog';
+import { PinStatusBadge } from '../components/pins/PinStatusBadge';
 import { getErrorMessage } from '../api/client';
 import type { Player } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -41,6 +46,9 @@ export function MasterRosterPage() {
   // of somebody's record selected.
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isGenerating, setIsGenerating] = useState(false);
+  /** PINs just issued, held ONLY while their one-time sheet is open. */
+  const [pinSheet, setPinSheet] = useState<IssuedPin[] | null>(null);
+  const [isIssuingPins, setIsIssuingPins] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -72,13 +80,52 @@ export function MasterRosterPage() {
     setIsCreating(true);
     setError(null);
     try {
-      await createPlayer(form);
+      const created = await createPlayer(form);
       setForm(EMPTY_FORM);
+      // EVERY NEW PLAYER GETS A PIN, SHOWN ONCE. A second request rather than
+      // part of creating the player, so creating a player behaves exactly as
+      // it always has: if this part fails the player still exists, simply
+      // shows "No PIN", and "Generate missing PINs" picks them up.
+      try {
+        const { issued } = await resetPlayerPin(created.id);
+        setPinSheet([issued]);
+      } catch (pinError) {
+        setError(
+          `Player added, but their PIN couldn't be created (${getErrorMessage(pinError)}). ` +
+            'Use "Generate missing PINs" to give them one.',
+        );
+      }
       await load();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setIsCreating(false);
+    }
+  }
+
+  /** Issue PINs to every active player who has none, in the server's batches.
+   *
+   *  Whatever was issued is SHOWN, even if a later batch fails - a PIN the
+   *  coach never saw is a PIN nobody can ever use, and the only fix for it
+   *  would be a reset. */
+  async function handleGenerateMissingPins() {
+    setIsIssuingPins(true);
+    setError(null);
+    const issuedSoFar: IssuedPin[] = [];
+    try {
+      // Bounded: 50 batches of 25 is far beyond any roster, so a server that
+      // somehow kept reporting "remaining" could not loop forever.
+      for (let batch = 0; batch < 50; batch += 1) {
+        const { issued, remaining } = await generateMissingPins();
+        issuedSoFar.push(...issued);
+        if (remaining === 0 || issued.length === 0) break;
+      }
+    } catch (err) {
+      setError(`${getErrorMessage(err)} Some players may still need a PIN - try again for the rest.`);
+    } finally {
+      if (issuedSoFar.length > 0) setPinSheet(issuedSoFar);
+      setIsIssuingPins(false);
+      await load();
     }
   }
 
@@ -166,6 +213,12 @@ export function MasterRosterPage() {
 
   const positions = Array.from(new Set((players ?? []).map((p) => p.position).filter(Boolean))) as string[];
 
+  // Active players only: an inactive player cannot start a quiz, and gets
+  // picked up here again if they are reactivated.
+  const missingPinCount = (players ?? []).filter(
+    (p) => p.is_active && p.pin_status === 'missing',
+  ).length;
+
   return (
     <div>
       {dialog}
@@ -182,6 +235,25 @@ export function MasterRosterPage() {
         </p>
 
         <ErrorBanner message={error} />
+
+        {missingPinCount > 0 && (
+          <div className={styles.pinBanner} role="status">
+            <span>
+              {missingPinCount} active player{missingPinCount === 1 ? " doesn't" : "s don't"} have a
+              PIN yet.
+            </span>
+            <button
+              type="button"
+              className={nb.btnSm}
+              onClick={handleGenerateMissingPins}
+              disabled={isIssuingPins}
+            >
+              {isIssuingPins ? 'Generating…' : 'Generate missing PINs'}
+            </button>
+          </div>
+        )}
+
+        {pinSheet && <PinSheetDialog pins={pinSheet} onClosed={() => setPinSheet(null)} />}
 
         <div className={styles.toolbar}>
           <input
@@ -331,6 +403,7 @@ export function MasterRosterPage() {
                 <th>#</th>
                 <th>Position</th>
                 <th>Status</th>
+                <th>PIN</th>
                 <th></th>
               </tr>
             </thead>
@@ -374,6 +447,9 @@ export function MasterRosterPage() {
                     ) : (
                       <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
                     )}
+                  </td>
+                  <td>
+                    <PinStatusBadge status={player.pin_status} />
                   </td>
                   <td>
                     {player.is_active ? (

@@ -361,7 +361,13 @@ export interface Player {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  /** Present on the roster list only. Whether the player has a PIN - never the
+   *  PIN itself. Absent from the many other payloads that reuse a Player. */
+  pin_status?: PinStatus;
 }
+
+/** A player's PIN state. The PIN itself is shown once, when it is issued. */
+export type PinStatus = 'set' | 'missing' | 'locked';
 
 export interface RosterPlayer {
   id: number;
@@ -408,6 +414,8 @@ export interface PlayerHistory {
   completion_percent: number | null;
   average_score_percent: number | null;
   recent_results: PlayerHistoryResult[];
+  /** Coach profile only. */
+  pin_status?: PinStatus;
 }
 
 export interface ImportPreviewRow {

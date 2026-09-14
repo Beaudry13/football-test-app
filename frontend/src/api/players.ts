@@ -62,6 +62,30 @@ export function deletePlayer(playerId: number): Promise<void> {
   return api.delete<void>(`/players/${playerId}`);
 }
 
+/** A PIN exactly as issued - the ONLY payload that ever carries one. It exists
+ *  in memory for as long as the PIN sheet is open and nowhere else. */
+export interface IssuedPin {
+  player_id: number;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  jersey_number: string | null;
+  position: string | null;
+  pin: string;
+}
+
+/** One batch of PINs for active players who have none. Never replaces a PIN.
+ *  Call again until `remaining` is 0 - see MasterRosterPage. */
+export function generateMissingPins(): Promise<{ issued: IssuedPin[]; remaining: number }> {
+  return api.post<{ issued: IssuedPin[]; remaining: number }>('/players/pins/generate-missing');
+}
+
+/** A new PIN for one player (or their first). The old one stops working;
+ *  nothing about their quizzes or results changes. */
+export function resetPlayerPin(playerId: number): Promise<{ issued: IssuedPin; pin_version: number }> {
+  return api.post<{ issued: IssuedPin; pin_version: number }>(`/players/${playerId}/pin/reset`);
+}
+
 export function previewImport(
   rawText: string,
   columnMapping?: Record<string, string | null>,

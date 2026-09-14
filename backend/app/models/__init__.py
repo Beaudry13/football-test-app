@@ -8,6 +8,7 @@ from app.models.coach import Coach, CoachRole
 from app.models.folder import Folder
 from app.models.concept import Concept
 from app.models.player import Player
+from app.models.player_credential import PlayerCredential
 from app.models.group import Group, GroupPlayer
 from app.models.quiz import Quiz
 from app.models.question import Question, QuestionOption, QuestionType
@@ -43,6 +44,7 @@ __all__ = [
     "CoachRole",
     "Folder",
     "Player",
+    "PlayerCredential",
     "Group",
     "GroupPlayer",
     "Quiz",
