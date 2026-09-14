@@ -47,6 +47,7 @@ from app.services.signed_media import (
 )
 from app.schemas.play import (
     CheckAnswerSchema,
+    ClaimAttemptSchema,
     PlayerResultsSchema,
     SaveAnswerSchema,
     SaveDrawingSchema,
@@ -74,6 +75,7 @@ from app.services.attempts import (
     upsert_answer,
     upsert_drawing,
 )
+from app.services import attempt_tokens, player_credentials
 from app.services.drawing_documents import validate_document
 from app.services.delivered_questions import (
     delivered_by_question_id,
@@ -481,7 +483,24 @@ def start_attempt():
     if reason is not None:
         raise _invalid_code_error(reason)
 
-    player_id = data.get("player_id")
+    attempt, created = _start_or_resume(access_code, data["player_name"], data.get("player_id"))
+    if created:
+        return jsonify(_attempt_state(attempt)), 201
+    return jsonify(_attempt_state(attempt))
+
+
+def _start_or_resume(
+    access_code: AccessCode, player_name: str, player_id: int | None
+) -> tuple[PlayerAttempt, bool]:
+    """Resume this player's attempt under this code, or begin one.
+
+    Returns (attempt, created). ONE implementation of every rule a start obeys -
+    resume before eligibility, live eligibility and an active player for a new
+    start, the canonical safety net, no zero-question attempts, snapshots in the
+    same transaction, and convergence on a double-tap - shared by /start and
+    /claim so the two can never disagree about who may begin. Moved here
+    verbatim from /start; the only change is returning instead of responding.
+    """
     # AN ATTEMPT ALREADY UNDERWAY IS ITS OWN AUTHORITY.
     #
     # Looked up BEFORE eligibility, because current group membership answers
@@ -499,7 +518,7 @@ def start_attempt():
     # Nothing here writes. Resuming returns the attempt as it stands: a legacy
     # attempt is not upgraded, no player_name snapshot moves, and no id is
     # guessed - the safety net below still runs only when creating.
-    existing = find_attempt(access_code.id, data["player_name"], player_id)
+    existing = find_attempt(access_code.id, player_name, player_id)
     if existing is None and player_id is not None:
         # Never trust a client-supplied player_id as proof of eligibility on
         # its own - it must actually be one of this activation's effective
@@ -511,7 +530,7 @@ def start_attempt():
             raise ApiError("Player is not on this quiz's roster", status_code=422)
     elif existing is None:
         roster_names = set(effective_roster_names(access_code))
-        if data["player_name"] not in roster_names:
+        if player_name not in roster_names:
             raise ApiError("Player name is not on this quiz's roster", status_code=422)
 
     # SAFETY NET. If this activation's roster knows the chosen name as
@@ -526,7 +545,7 @@ def start_attempt():
     # matching two of them is left alone rather than resolved - picking one
     # would attribute a real player's score to someone else.
     if existing is None and player_id is None:
-        wanted = data["player_name"].strip().casefold()
+        wanted = player_name.strip().casefold()
         canonical = [
             entry["player_id"]
             for entry in effective_roster_players(access_code)
@@ -538,7 +557,7 @@ def start_attempt():
             # The resolved id can see an attempt the name-only lookup above
             # could not: a canonical player renamed since they started no
             # longer matches their own attempt's player_name snapshot.
-            existing = find_attempt(access_code.id, data["player_name"], player_id)
+            existing = find_attempt(access_code.id, player_name, player_id)
 
     # A DEACTIVATED PLAYER MAY NOT BEGIN, BUT IS NEVER STRANDED MID-QUIZ.
     # Checked once identity is settled and only when there is no attempt to
@@ -557,7 +576,7 @@ def start_attempt():
             if not access_code.is_practice:
                 raise ApiError(ALREADY_SUBMITTED, status_code=409)
         else:
-            return jsonify(_attempt_state(existing))
+            return existing, False
 
     # NO ZERO-QUESTION ATTEMPTS. Placed deliberately AFTER the resume branch
     # above: an attempt already underway is never affected by retirement, so it
@@ -583,7 +602,7 @@ def start_attempt():
     attempt = PlayerAttempt(
         quiz_id=access_code.quiz_id,
         access_code_id=access_code.id,
-        player_name=data["player_name"],
+        player_name=player_name,
         player_id=player_id,
         # THE POSITION AS IT IS RIGHT NOW, frozen for good. Read through the
         # linked Player, so a legacy free-text name simply records NULL rather
@@ -617,12 +636,12 @@ def start_attempt():
         # (e.g. a fast double-tap), not a genuine conflict - converge to
         # whichever one won instead of erroring.
         db.session.rollback()
-        existing = find_attempt(access_code.id, data["player_name"], player_id)
+        existing = find_attempt(access_code.id, player_name, player_id)
         if existing is None:
             raise
         if existing.status == AttemptStatus.SUBMITTED:
             raise ApiError(ALREADY_SUBMITTED, status_code=409) from None
-        return jsonify(_attempt_state(existing))
+        return existing, False
     except Exception as exc:
         # A NEW attempt must never become "legacy" because a write failed.
         # There is no backfill for a missing snapshot - a partially recorded
@@ -636,7 +655,136 @@ def start_attempt():
             reason="attempt_not_recorded",
         ) from exc
 
-    return jsonify(_attempt_state(attempt)), 201
+    return attempt, True
+
+
+#: What a player is told when their PIN is not accepted. Short and plain: a
+#: player reading this is standing in a locker room, not debugging an API.
+_PIN_REFUSALS = {
+    player_credentials.PIN_WRONG: (401, "pin_incorrect", "That PIN didn't match."),
+    player_credentials.PIN_COOLDOWN: (
+        429, "pin_cooldown", "Too many tries. Wait a moment, then try again.",
+    ),
+    player_credentials.PIN_HARD_LOCKED: (
+        423, "pin_locked", "Too many tries. Ask your coach to reset your PIN.",
+    ),
+    player_credentials.PIN_NOT_SET: (
+        403, "pin_not_set", "You don't have a PIN yet. Ask your coach.",
+    ),
+}
+
+
+def _no_store(response):
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+def _pin_refusal(check: "player_credentials.PinCheck"):
+    status, reason, message = _PIN_REFUSALS[check.outcome]
+    body = {"error": message, "reason": reason}
+    if check.retry_after_seconds:
+        body["retry_after_seconds"] = check.retry_after_seconds
+    response = jsonify(body)
+    response.status_code = status
+    if check.retry_after_seconds:
+        response.headers["Retry-After"] = str(check.retry_after_seconds)
+    return _no_store(response)
+
+
+def _claimed(player: Player, attempt: PlayerAttempt, token: str, *, created: bool, include_state: bool):
+    """The ONE response that ever carries a raw attempt token."""
+    response = jsonify(
+        {
+            "attempt_token": token,
+            "token_header": attempt_tokens.TOKEN_HEADER,
+            "player": {"player_id": player.id, "name": player.full_name},
+            # True whenever an attempt already existed - on this device or
+            # another. A reclaim rotates the token, signing any other device out.
+            "reclaimed": not created,
+            "attempt": (
+                _attempt_state(attempt)
+                if include_state
+                else {"attempt_id": attempt.id, "status": attempt.status.value}
+            ),
+        }
+    )
+    response.status_code = 201 if created else 200
+    return _no_store(response)
+
+
+@play_bp.post("/claim")
+# NO @limiter here, on purpose. Every limiter in this file keys on the client
+# IP, and a PIN must never be throttled by address - a whole team shares one on
+# facility Wi-Fi. Wrong PINs are throttled per player, in verify_player_pin.
+def claim_attempt():
+    """PHASE 2 - A canonical player proves who they are, and gets a token.
+
+    NOTHING REQUIRES THIS YET. /start, /answers, /drawing, /submit and /results
+    all still work exactly as before without a PIN or a token. This is the
+    foundation Phase 3 will enforce.
+
+    player_id + PIN, then:
+      * no attempt yet            -> start one (every /start rule applies)   201
+      * an attempt in progress    -> resume it, rotating the token            200
+      * a graded attempt submitted -> a token for its results; no content    200
+      * a practice attempt done   -> a fresh retake                           201
+    Every success issues a NEW token and replaces the attempt's old one, so a
+    reclaim on a new device signs the previous device out.
+
+    The PIN is checked BEFORE anything about the player's attempts is looked at,
+    so a wrong PIN learns nothing about whether they have started or submitted.
+    """
+    data = load_json_body(ClaimAttemptSchema())
+
+    access_code = db.session.get(AccessCode, data["access_code_id"])
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        raise _invalid_code_error(reason)
+
+    player = db.session.get(Player, data["player_id"])
+    # Another organization's player is indistinguishable from no player - and,
+    # crucially, is refused BEFORE any PIN is tried, so a code from one team
+    # cannot be used to guess a PIN in another.
+    if player is None or player.organization_id != access_code.quiz.organization_id:
+        raise ApiError("Player is not on this quiz's roster", status_code=422)
+
+    check = player_credentials.verify_player_pin(player.id, data["pin"])
+    if not check.ok:
+        return _pin_refusal(check)
+
+    # By player_id ONLY - never the name fallback. A token belongs to a
+    # canonical player's attempt, and must never be attached to a legacy
+    # free-text attempt that merely shares their name.
+    existing = (
+        PlayerAttempt.query.filter_by(access_code_id=access_code.id, player_id=player.id)
+        .order_by(PlayerAttempt.id.desc())
+        .first()
+    )
+    if (
+        existing is not None
+        and existing.status == AttemptStatus.SUBMITTED
+        and not access_code.is_practice
+    ):
+        # Results access, not a second go: the submitted attempt is unchanged
+        # apart from which token may read it.
+        token = attempt_tokens.issue_token(existing, check.pin_version)
+        db.session.commit()
+        return _claimed(player, existing, token, created=False, include_state=False)
+
+    attempt, created = _start_or_resume(access_code, player.full_name, player.id)
+    if attempt.player_id is None:
+        # _start_or_resume's lookup can fall back to a legacy attempt started
+        # under this player's name before they were linked. Tokens never apply
+        # to one of those; it stays on today's behaviour, untouched.
+        raise ApiError(
+            "This attempt was started before PINs existed. Continue without a PIN for now.",
+            status_code=409,
+            reason="legacy_attempt",
+        )
+    token = attempt_tokens.issue_token(attempt, check.pin_version)
+    db.session.commit()
+    return _claimed(player, attempt, token, created=created, include_state=True)
 
 
 @play_bp.post("/answers")

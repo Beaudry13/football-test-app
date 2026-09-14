@@ -8,6 +8,33 @@ import type {
 } from './types';
 import type { DrawingDocument } from '../components/drawing/types';
 
+/** PHASE 2 - what a correct PIN returns. Not used by any screen yet. */
+export interface ClaimAttemptResponse {
+  /** The ONLY place a raw attempt token ever appears. Keep it with
+   *  saveAttemptToken; never put it in a URL. */
+  attempt_token: string;
+  token_header: string;
+  player: { player_id: number; name: string };
+  /** True when an attempt already existed. Claiming again rotates the token,
+   *  which signs any other device out of this attempt. */
+  reclaimed: boolean;
+  /** The full attempt state for a quiz to play; just its id and status for a
+   *  graded attempt that is already submitted. */
+  attempt: AttemptState | { attempt_id: number; status: string };
+}
+
+/** PHASE 2 - prove identity with a PIN and receive an attempt token.
+ *
+ *  NOTHING CALLS THIS YET. The PIN is sent in the body of this one request and
+ *  is not stored anywhere by this function. */
+export function claimAttempt(input: {
+  access_code_id: number;
+  player_id: number;
+  pin: string;
+}): Promise<ClaimAttemptResponse> {
+  return api.post<ClaimAttemptResponse>('/play/claim', input, { auth: false });
+}
+
 export function validateCode(code: string): Promise<ValidateCodeResponse> {
   return api.post<ValidateCodeResponse>('/play/validate-code', { code }, { auth: false });
 }

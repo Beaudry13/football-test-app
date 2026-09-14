@@ -23,8 +23,10 @@ guesses. That is Phase 2, and it will wrap `pin_matches` rather than expose it.
 
 from __future__ import annotations
 
+import math
 import secrets
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 from flask import current_app
 from sqlalchemy.dialects.postgresql import insert
@@ -95,6 +97,167 @@ def pin_matches(pin_hash: str, pin: str) -> bool:
     verification must go through a throttled wrapper, never call this directly.
     """
     return bcrypt.check_password_hash(pin_hash, pin)
+
+
+# ---------------------------------------------------------------------------
+# Verifying a player's PIN, with throttling (Phase 2)
+# ---------------------------------------------------------------------------
+#
+# PER PLAYER, NEVER PER IP. A whole team shares one address on facility Wi-Fi,
+# and behind Render's proxy the address is not reliably the player's anyway.
+# Every counter lives on the player's own credential row.
+#
+# THE RULES (locked in the design addendum):
+#   * the first 5 wrong PINs cost nothing;
+#   * each further wrong PIN makes the NEXT check wait - 1 minute, doubling, to
+#     at most 15 minutes;
+#   * an hour with no wrong PIN clears the run;
+#   * 50 wrong PINs within the credential's CURRENT 24-hour failure window
+#     lock it until a coach resets it (see HARD_LOCK_WINDOW - a FIXED window);
+#   * during a wait, even the CORRECT PIN is refused - otherwise the refusal
+#     itself would tell a guesser when they had found it;
+#   * a device already holding a valid attempt token never reaches this.
+#
+# NO NEW COLUMNS. `next_attempt_at` is always "last wrong PIN + the wait that
+# failure earned" (the wait is zero for the free ones), so the time of the last
+# failure is recoverable from it exactly. That is what "an hour with no
+# failures" and "free failures age out" are measured from.
+
+FREE_FAILURES = 5
+#: Free failures stop counting once this long has passed since the last one.
+FREE_FAILURE_WINDOW = timedelta(minutes=15)
+FIRST_WAIT = timedelta(minutes=1)
+MAX_WAIT = timedelta(minutes=15)
+#: An hour with no wrong PIN clears the whole run, cooldowns included.
+QUIET_RESET = timedelta(hours=1)
+HARD_LOCK_FAILURES = 50
+#: THE HARD LOCK USES A FIXED WINDOW, AND THAT IS A V1 DECISION.
+#: A window opens with the first counted wrong PIN after the previous window
+#: has expired, and lasts 24 hours from that failure. It is NOT a rolling
+#: 24 hours and is not equivalent to "any 24-hour period": 49 wrong PINs at
+#: the end of one window and a 50th just after it land in different windows
+#: and do not lock. Exact rolling history would need a row per failure; the
+#: owner chose not to add that schema for V1.
+HARD_LOCK_WINDOW = timedelta(hours=24)
+
+PIN_OK = "ok"
+PIN_WRONG = "wrong"
+PIN_COOLDOWN = "cooldown"
+PIN_HARD_LOCKED = "locked"
+PIN_NOT_SET = "not_set"
+
+
+@dataclass(frozen=True)
+class PinCheck:
+    outcome: str
+    #: Set only on success: the version any token issued now must carry.
+    pin_version: int | None = None
+    #: Seconds until the next check will be evaluated, when there is a wait.
+    retry_after_seconds: int | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.outcome == PIN_OK
+
+
+def wait_after(consecutive_failures: int) -> timedelta:
+    """The wait earned by the Nth wrong PIN in a run: none for the first five,
+    then 1, 2, 4, 8 minutes, capped at 15."""
+    if consecutive_failures <= FREE_FAILURES:
+        return timedelta(0)
+    # The exponent is bounded BEFORE doubling. Doubling first and capping after
+    # overflows timedelta once a persistent guesser passes ~40 wrong PINs, which
+    # would turn a 15-minute wait into a 500. Anything past 2**4 minutes is
+    # already over the cap, so 10 leaves ample headroom.
+    doublings = min(consecutive_failures - FREE_FAILURES - 1, 10)
+    return min(FIRST_WAIT * (2**doublings), MAX_WAIT)
+
+
+def _last_failure_at(credential: PlayerCredential) -> datetime | None:
+    if credential.next_attempt_at is None:
+        return None
+    return credential.next_attempt_at - wait_after(credential.consecutive_failures)
+
+
+def _age_out(credential: PlayerCredential, now: datetime) -> None:
+    """Forget what time has forgiven, before judging this attempt."""
+    last = _last_failure_at(credential)
+    if last is not None:
+        quiet_for = now - last
+        if quiet_for >= QUIET_RESET or (
+            credential.consecutive_failures <= FREE_FAILURES and quiet_for >= FREE_FAILURE_WINDOW
+        ):
+            credential.consecutive_failures = 0
+            credential.next_attempt_at = None
+    # The current fixed failure window has run its 24 hours: close it. The
+    # next COUNTED wrong PIN opens a new one. (A hard lock is checked before
+    # this runs, so an expiring window never unlocks a credential.)
+    if credential.window_started_at is not None and now - credential.window_started_at >= HARD_LOCK_WINDOW:
+        credential.failures_in_window = 0
+        credential.window_started_at = None
+
+
+def _seconds_until(moment: datetime, now: datetime) -> int:
+    return max(1, math.ceil((moment - now).total_seconds()))
+
+
+def verify_player_pin(player_id: int, pin: str, now: datetime | None = None) -> PinCheck:
+    """Check a PIN for one player, applying and recording the throttle.
+
+    Takes a row lock on the credential so two simultaneous guesses cannot both
+    slip through the same allowance, and commits its own bookkeeping - a wrong
+    PIN must be counted even if the caller goes on to raise.
+
+    `now` is injectable for tests; production always uses the server clock.
+    """
+    now = now or datetime.now(timezone.utc)
+    credential = (
+        PlayerCredential.query.filter_by(player_id=player_id)
+        .with_for_update()
+        .populate_existing()
+        .one_or_none()
+    )
+    if credential is None:
+        db.session.rollback()
+        return PinCheck(PIN_NOT_SET)
+    if credential.locked_at is not None:
+        db.session.rollback()
+        return PinCheck(PIN_HARD_LOCKED)
+
+    _age_out(credential, now)
+
+    if credential.next_attempt_at is not None and now < credential.next_attempt_at:
+        # Refused WITHOUT evaluating the PIN and without counting it: a guess
+        # made during a wait is not a guess at all.
+        retry = _seconds_until(credential.next_attempt_at, now)
+        db.session.commit()
+        return PinCheck(PIN_COOLDOWN, retry_after_seconds=retry)
+
+    if pin_matches(credential.pin_hash, pin):
+        # A correct PIN ends the run of typos. It deliberately does NOT clear
+        # the current failure window's count: success must not hand a guesser
+        # a fresh budget.
+        credential.consecutive_failures = 0
+        credential.next_attempt_at = None
+        version = credential.pin_version
+        db.session.commit()
+        return PinCheck(PIN_OK, pin_version=version)
+
+    credential.consecutive_failures += 1
+    credential.next_attempt_at = now + wait_after(credential.consecutive_failures)
+    # This is the first counted wrong PIN since the last window closed, so it
+    # opens the current fixed failure window.
+    if credential.window_started_at is None:
+        credential.window_started_at = now
+    credential.failures_in_window += 1
+    locked = credential.failures_in_window >= HARD_LOCK_FAILURES
+    if locked:
+        credential.locked_at = now
+    wait = credential.next_attempt_at - now
+    db.session.commit()
+    if locked:
+        return PinCheck(PIN_HARD_LOCKED)
+    return PinCheck(PIN_WRONG, retry_after_seconds=_seconds_until(now + wait, now) if wait else None)
 
 
 def status_of(credential: PlayerCredential | None) -> str:

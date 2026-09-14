@@ -36,6 +36,20 @@ class SubmitQuizSchema(Schema):
     )
 
 
+class ClaimAttemptSchema(Schema):
+    """PHASE 2: a canonical player proving who they are with their PIN.
+
+    player_id is REQUIRED and there is no player_name: a PIN belongs to a
+    canonical Player, and a name is not an identity. The PIN's SHAPE is
+    validated here, before the throttle is consulted, so a malformed value is
+    a plain 422 that neither counts as a wrong guess nor reveals anything.
+    """
+
+    access_code_id = fields.Int(required=True)
+    player_id = fields.Int(required=True)
+    pin = fields.Str(required=True, validate=validate.Regexp(r"^\d{6}$"))
+
+
 class StartAttemptSchema(Schema):
     access_code_id = fields.Int(required=True)
     player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
