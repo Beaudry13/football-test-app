@@ -27,7 +27,7 @@ from app.services.export import (
     _pdf_styles,
     _SUMMARY_COL_WIDTHS,
 )
-from tests.test_play_and_grading import build_ready_quiz, start_and_submit
+from tests.test_play_and_grading import build_ready_quiz, start_and_submit, stored_answer_id
 
 
 def _pdf_text(pdf_bytes: bytes) -> str:
@@ -364,7 +364,7 @@ def test_special_characters_in_answers_do_not_break_pdf_generation(client, coach
         "Jordan Smith",
         [{"question_id": question["id"], "answer_text": "AT&T <blitz> stunt, Will & Sam"}],
     )
-    answer_id = submit_response.get_json()["answers"][0]["id"]
+    answer_id = stored_answer_id(submit_response.get_json()["attempt_id"], question["id"])
     client.patch(
         f"/api/answers/{answer_id}/grade",
         json={"is_correct": True, "coach_feedback": "Good call on the A&B gap <read>."},

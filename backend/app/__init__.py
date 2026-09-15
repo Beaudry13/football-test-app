@@ -17,6 +17,7 @@ def create_app(env_name: str | None = None) -> Flask:
     app.config.from_object(get_config(resolved_env))
     _validate_production_secrets(app, resolved_env)
     _validate_storage_config(app)
+    _validate_player_pin_config(app)
 
     if app.config["STORAGE_BACKEND"] == "local":
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
@@ -116,3 +117,13 @@ def _init_extensions(app: Flask) -> None:
 
     # Import models so Flask-Migrate can see them for autogeneration.
     from app import models  # noqa: F401
+
+
+def _validate_player_pin_config(app: Flask) -> None:
+    """Refuse to start with player PIN enforcement on and a cutover that cannot
+    be trusted - missing or naive dates, a window that ends before it starts, or
+    one longer than the allowed maximum. With enforcement off this reads nothing.
+    """
+    from app.services.player_enforcement import validate_config
+
+    validate_config(app.config)

@@ -98,6 +98,26 @@ def find_attempt(
     )
 
 
+def lock_attempt(attempt_id: int) -> PlayerAttempt:
+    """Row-lock one attempt for the rest of this transaction, re-read fresh.
+
+    PLAYER PIN ENFORCEMENT (Phase 3a). What closes the gap between checking an
+    attempt token and writing with it: a PIN reclaim rotates the token under
+    this same lock, so the two serialize - a write either finishes before the
+    rotation or sees the rotated token. `populate_existing` matters: without it
+    the session would hand back the copy it loaded BEFORE waiting on the lock.
+
+    Lives beside `find_attempt` for the same reason that one does: it is the
+    player's own attempt, practice included, never a reporting query.
+    """
+    return (
+        PlayerAttempt.query.filter_by(id=attempt_id)
+        .with_for_update()
+        .populate_existing()
+        .one()
+    )
+
+
 def upsert_answer(
     attempt: PlayerAttempt,
     question_id: int,

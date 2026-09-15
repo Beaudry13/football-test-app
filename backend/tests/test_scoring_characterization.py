@@ -169,7 +169,10 @@ def scored(app, client, coach_headers):
         },
     )
     assert submitted.status_code == 201, submitted.get_json()
-    attempt_id = submitted.get_json()["id"]
+    attempt_id = submitted.get_json()["attempt_id"]
+    # Ownership from the STORED row, not the response: this fixture exists to
+    # characterize the player profile, which only sees canonical attempts.
+    assert db.session.get(PlayerAttempt, attempt_id).player_id == player["id"]
 
     # Grade exactly ONE of the two written answers, leaving the other pending.
     with app.app_context():

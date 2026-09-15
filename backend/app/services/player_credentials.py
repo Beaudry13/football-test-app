@@ -201,7 +201,9 @@ def _seconds_until(moment: datetime, now: datetime) -> int:
     return max(1, math.ceil((moment - now).total_seconds()))
 
 
-def verify_player_pin(player_id: int, pin: str, now: datetime | None = None) -> PinCheck:
+def verify_player_pin(
+    player_id: int, pin: str, now: datetime | None = None, *, commit_on_success: bool = True
+) -> PinCheck:
     """Check a PIN for one player, applying and recording the throttle.
 
     Takes a row lock on the credential so two simultaneous guesses cannot both
@@ -209,6 +211,13 @@ def verify_player_pin(player_id: int, pin: str, now: datetime | None = None) -> 
     PIN must be counted even if the caller goes on to raise.
 
     `now` is injectable for tests; production always uses the server clock.
+
+    `commit_on_success=False` is for /claim: a CORRECT PIN then leaves the
+    transaction open with the credential row still locked, so finding or
+    creating the attempt and issuing its token happen in the same transaction
+    - and a claim that fails after the PIN leaves nothing half-done. A WRONG
+    PIN always commits its bookkeeping immediately, whatever the caller does
+    next.
     """
     now = now or datetime.now(timezone.utc)
     credential = (
@@ -240,7 +249,8 @@ def verify_player_pin(player_id: int, pin: str, now: datetime | None = None) -> 
         credential.consecutive_failures = 0
         credential.next_attempt_at = None
         version = credential.pin_version
-        db.session.commit()
+        if commit_on_success:
+            db.session.commit()
         return PinCheck(PIN_OK, pin_version=version)
 
     credential.consecutive_failures += 1

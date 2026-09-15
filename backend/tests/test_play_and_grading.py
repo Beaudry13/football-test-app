@@ -55,6 +55,16 @@ def start_and_submit(client, access_code_id, player_name, answers):
     )
 
 
+def stored_answer_id(attempt_id, question_id):
+    """The id of the Answer row a submit STORED for one question.
+
+    Read from the database, not the submit response: /play/submit returns only
+    the player-safe {attempt_id, status, submitted_at, mode} contract, so a
+    coach-side test that needs an answer to grade takes its id from what was
+    actually written."""
+    return Answer.query.filter_by(attempt_id=attempt_id, question_id=question_id).one().id
+
+
 def test_validate_code_returns_quiz_without_correct_answers(client, coach_headers):
     _, tf_question, _, access_code = build_ready_quiz(client, coach_headers)
 
@@ -279,9 +289,14 @@ def test_submit_quiz_auto_grades_true_false_and_leaves_written_ungraded(client, 
     )
 
     assert response.status_code == 201
-    answers = {a["question_id"]: a for a in response.get_json()["answers"]}
-    assert answers[tf_question["id"]]["is_correct"] is True
-    assert answers[written_question["id"]]["is_correct"] is None
+    # Asserted from the STORED answers. The submit response is the player-safe
+    # contract and carries no verdicts (test_player_enforcement pins that), so
+    # this checks what grading actually wrote rather than what was echoed.
+    attempt_id = response.get_json()["attempt_id"]
+    stored = {a.question_id: a for a in Answer.query.filter_by(attempt_id=attempt_id)}
+    assert set(stored) == {tf_question["id"], written_question["id"]}
+    assert stored[tf_question["id"]].is_correct is True
+    assert stored[written_question["id"]].is_correct is None
 
 
 def test_start_rejects_player_not_on_roster(client, coach_headers):
@@ -564,9 +579,7 @@ def test_coach_can_grade_written_answer_and_leave_feedback(client, coach_headers
             {"question_id": written_question["id"], "answer_text": "I set the edge."},
         ],
     ).get_json()
-    written_answer_id = next(
-        a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]
-    )
+    written_answer_id = stored_answer_id(submit_response["attempt_id"], written_question["id"])
 
     response = client.patch(
         f"/api/answers/{written_answer_id}/grade",
@@ -595,9 +608,7 @@ def _grade_written_answer(client, coach_headers, is_correct=True, feedback="Nice
             {"question_id": written_question["id"], "answer_text": "I set the edge."},
         ],
     ).get_json()
-    answer_id = next(
-        a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]
-    )
+    answer_id = stored_answer_id(submit_response["attempt_id"], written_question["id"])
     client.patch(
         f"/api/answers/{answer_id}/grade",
         json={"is_correct": is_correct, "coach_feedback": feedback},
@@ -974,9 +985,7 @@ def test_player_results_reflect_grading_done_after_submission(client, coach_head
             {"question_id": written_question["id"], "answer_text": "I set the edge."},
         ],
     ).get_json()
-    written_answer_id = next(
-        a["id"] for a in submit_response["answers"] if a["question_id"] == written_question["id"]
-    )
+    written_answer_id = stored_answer_id(submit_response["attempt_id"], written_question["id"])
 
     before = client.post(
         "/api/play/results", json={"code": access_code["code"], "player_name": "Jordan Smith"}

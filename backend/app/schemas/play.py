@@ -47,7 +47,12 @@ class ClaimAttemptSchema(Schema):
 
     access_code_id = fields.Int(required=True)
     player_id = fields.Int(required=True)
-    pin = fields.Str(required=True, validate=validate.Regexp(r"^\d{6}$"))
+    #: Optional since Phase 3a: a device holding a valid X-Attempt-Token may
+    #: claim with that instead. When a PIN IS sent its shape is still checked
+    #: here, before the throttle. Neither PIN nor token is 401 pin_required.
+    pin = fields.Str(
+        required=False, allow_none=True, load_default=None, validate=validate.Regexp(r"^\d{6}$")
+    )
 
 
 class StartAttemptSchema(Schema):

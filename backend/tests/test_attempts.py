@@ -316,7 +316,7 @@ def test_coach_can_reset_an_attempt_and_the_player_can_start_fresh(client, coach
     submit_response = start_and_submit(
         client, access_code["id"], "Jordan Smith", [{"question_id": tf_question["id"]}]
     ).get_json()
-    attempt_id = submit_response["id"]
+    attempt_id = submit_response["attempt_id"]
 
     reset_response = client.delete(
         f"/api/quizzes/{quiz['id']}/attempts/{attempt_id}", headers=coach_headers
@@ -341,7 +341,7 @@ def test_reset_attempt_requires_the_quizs_creator_or_an_org_admin(client, coach_
     _, _, teammate_headers = invite_teammate(coach_headers)
 
     response = client.delete(
-        f"/api/quizzes/{quiz['id']}/attempts/{submit_response['id']}", headers=teammate_headers
+        f"/api/quizzes/{quiz['id']}/attempts/{submit_response['attempt_id']}", headers=teammate_headers
     )
     # 404 now, not 403. A teammate cannot see this quiz at all, so telling
     # them "forbidden" would confirm the id exists. Was 403 when every quiz
@@ -358,7 +358,7 @@ def test_reset_attempt_404s_for_an_attempt_belonging_to_a_different_quiz(client,
     ).get_json()
 
     response = client.delete(
-        f"/api/quizzes/{quiz_b['id']}/attempts/{submit_response['id']}", headers=coach_headers
+        f"/api/quizzes/{quiz_b['id']}/attempts/{submit_response['attempt_id']}", headers=coach_headers
     )
     assert response.status_code == 404
 

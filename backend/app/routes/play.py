@@ -75,7 +75,7 @@ from app.services.attempts import (
     upsert_answer,
     upsert_drawing,
 )
-from app.services import attempt_tokens, player_credentials
+from app.services import attempt_tokens, player_credentials, player_enforcement
 from app.services.drawing_documents import validate_document
 from app.services.delivered_questions import (
     delivered_by_question_id,
@@ -490,7 +490,7 @@ def start_attempt():
 
 
 def _start_or_resume(
-    access_code: AccessCode, player_name: str, player_id: int | None
+    access_code: AccessCode, player_name: str, player_id: int | None, *, commit: bool = True
 ) -> tuple[PlayerAttempt, bool]:
     """Resume this player's attempt under this code, or begin one.
 
@@ -500,6 +500,10 @@ def _start_or_resume(
     same transaction, and convergence on a double-tap - shared by /start and
     /claim so the two can never disagree about who may begin. Moved here
     verbatim from /start; the only change is returning instead of responding.
+
+    `commit=False` (Phase 3a, used by /claim) leaves a new attempt flushed but
+    uncommitted, so the caller can issue its token and commit ONCE while still
+    holding the player's credential lock.
     """
     # AN ATTEMPT ALREADY UNDERWAY IS ITS OWN AUTHORITY.
     #
@@ -527,11 +531,11 @@ def _start_or_resume(
         # unrelated player_id and one belonging to another organization.
         canonical_ids = {p["player_id"] for p in effective_roster_players(access_code) if p["player_id"]}
         if player_id not in canonical_ids:
-            raise ApiError("Player is not on this quiz's roster", status_code=422)
+            raise ApiError("Player is not on this quiz's roster", status_code=422, reason="not_eligible")
     elif existing is None:
         roster_names = set(effective_roster_names(access_code))
         if player_name not in roster_names:
-            raise ApiError("Player name is not on this quiz's roster", status_code=422)
+            raise ApiError("Player name is not on this quiz's roster", status_code=422, reason="not_eligible")
 
     # SAFETY NET. If this activation's roster knows the chosen name as
     # exactly one canonical player, the attempt must carry that id - even
@@ -566,7 +570,7 @@ def _start_or_resume(
     if existing is None and player_id is not None:
         player = db.session.get(Player, player_id)
         if player is not None and not player.is_active:
-            raise ApiError("Player is not on this quiz's roster", status_code=422)
+            raise ApiError("Player is not on this quiz's roster", status_code=422, reason="not_eligible")
     if existing is not None:
         if existing.status == AttemptStatus.SUBMITTED:
             # Practice is unlimited: a finished practice attempt is history,
@@ -574,7 +578,7 @@ def _start_or_resume(
             # still refuses, and the database still enforces that through the
             # partial unique indexes.
             if not access_code.is_practice:
-                raise ApiError(ALREADY_SUBMITTED, status_code=409)
+                raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted")
         else:
             return existing, False
 
@@ -623,24 +627,31 @@ def _start_or_resume(
             randomize=access_code.is_practice and access_code.randomize_questions,
         ),
     )
-    db.session.add(attempt)
     try:
         # Flushed, not committed, so the snapshot rows below join the SAME
         # transaction as the attempt they describe. Starting an attempt and
         # recording what it was delivered are one operation or neither.
-        db.session.flush()
-        capture_attempt_snapshots(attempt)
-        db.session.commit()
+        #
+        # Inside a SAVEPOINT, so a double-tap collision undoes only this insert.
+        # /claim calls this within a transaction that already holds the player's
+        # credential lock, and a full rollback would drop that lock mid-claim.
+        with db.session.begin_nested():
+            db.session.add(attempt)
+            db.session.flush()
+            capture_attempt_snapshots(attempt)
+        if commit:
+            db.session.commit()
     except IntegrityError:
         # Two concurrent "start" calls for the same name is a benign race
         # (e.g. a fast double-tap), not a genuine conflict - converge to
         # whichever one won instead of erroring.
-        db.session.rollback()
+        if commit:
+            db.session.rollback()
         existing = find_attempt(access_code.id, player_name, player_id)
         if existing is None:
             raise
         if existing.status == AttemptStatus.SUBMITTED:
-            raise ApiError(ALREADY_SUBMITTED, status_code=409) from None
+            raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted") from None
         return existing, False
     except Exception as exc:
         # A NEW attempt must never become "legacy" because a write failed.
@@ -713,27 +724,73 @@ def _claimed(player: Player, attempt: PlayerAttempt, token: str, *, created: boo
     return _no_store(response)
 
 
+def _newest_attempt_for(access_code_id: int, player_id: int, *, lock: bool) -> PlayerAttempt | None:
+    """This player's newest attempt under this code.
+
+    By player_id ONLY - never the name fallback - so a token can never reach a
+    legacy free-text attempt that merely shares the player's name. `lock` takes
+    the row lock that serializes a claim against a submit or another claim.
+    """
+    query = PlayerAttempt.query.filter_by(
+        access_code_id=access_code_id, player_id=player_id
+    ).order_by(PlayerAttempt.id.desc())
+    if lock:
+        query = query.with_for_update().populate_existing()
+    return query.first()
+
+
+def _continued(player: Player, attempt: PlayerAttempt, *, include_state: bool):
+    """A token-authenticated continuation. The device keeps the token it already
+    holds, so none is returned and none is rotated."""
+    response = jsonify(
+        {
+            "attempt_token": None,
+            "token_header": attempt_tokens.TOKEN_HEADER,
+            "player": {"player_id": player.id, "name": player.full_name},
+            "reclaimed": True,
+            "attempt": (
+                _attempt_state(attempt)
+                if include_state
+                else {"attempt_id": attempt.id, "status": attempt.status.value}
+            ),
+        }
+    )
+    response.status_code = 200
+    return _no_store(response)
+
+
+_LEGACY_ATTEMPT_MESSAGE = (
+    "This attempt was started before PINs existed. Continue without a PIN for now."
+)
+
+
 @play_bp.post("/claim")
 # NO @limiter here, on purpose. Every limiter in this file keys on the client
 # IP, and a PIN must never be throttled by address - a whole team shares one on
 # facility Wi-Fi. Wrong PINs are throttled per player, in verify_player_pin.
 def claim_attempt():
-    """PHASE 2 - A canonical player proves who they are, and gets a token.
+    """A canonical player proves who they are - with a PIN, or with the attempt
+    token this device already holds.
 
-    NOTHING REQUIRES THIS YET. /start, /answers, /drawing, /submit and /results
-    all still work exactly as before without a PIN or a token. This is the
-    foundation Phase 3 will enforce.
+    NOTHING REQUIRES THIS WITH ENFORCEMENT OFF. /start, /answers, /drawing,
+    /submit and /results still work without a PIN or token then.
 
-    player_id + PIN, then:
-      * no attempt yet            -> start one (every /start rule applies)   201
-      * an attempt in progress    -> resume it, rotating the token            200
-      * a graded attempt submitted -> a token for its results; no content    200
-      * a practice attempt done   -> a fresh retake                           201
-    Every success issues a NEW token and replaces the attempt's old one, so a
-    reclaim on a new device signs the previous device out.
+    WITH A PIN (player_id + PIN), in ONE transaction:
+      * no attempt yet             -> start one (every /start rule applies)  201
+      * an attempt in progress     -> resume it and ROTATE the token          200
+      * a graded attempt submitted -> a results token; no content             200
+      * a practice attempt done    -> a fresh retake                          201
+    The PIN is checked BEFORE anything about the player's attempts is looked at.
 
-    The PIN is checked BEFORE anything about the player's attempts is looked at,
-    so a wrong PIN learns nothing about whether they have started or submitted.
+    WITH X-Attempt-Token and NO PIN, against the player's newest attempt under
+    THIS code:
+      * in progress                -> continue; the token is NOT rotated       200
+      * graded, submitted          -> its id and status; no token change       200
+      * practice, finished         -> a retake, with a new token for it        201
+    A token for another attempt, player or code is token_invalid; a token whose
+    PIN was since reset is token_revoked.
+
+    Neither: 401 pin_required.
     """
     data = load_json_body(ClaimAttemptSchema())
 
@@ -744,47 +801,105 @@ def claim_attempt():
 
     player = db.session.get(Player, data["player_id"])
     # Another organization's player is indistinguishable from no player - and,
-    # crucially, is refused BEFORE any PIN is tried, so a code from one team
-    # cannot be used to guess a PIN in another.
+    # crucially, is refused BEFORE any PIN or token is tried, so a code from one
+    # team cannot be used to guess a PIN in another.
     if player is None or player.organization_id != access_code.quiz.organization_id:
-        raise ApiError("Player is not on this quiz's roster", status_code=422)
+        raise ApiError("Player is not on this quiz's roster", status_code=422, reason="not_eligible")
 
-    check = player_credentials.verify_player_pin(player.id, data["pin"])
+    # A TYPED PIN WINS over any token the device also sends. The PIN is the
+    # stronger proof, and a player re-entering it - typically right after
+    # token_revoked - must never be refused because of the stale token their
+    # device is still attaching. A wrong PIN is a wrong PIN, token or not.
+    if data["pin"] is not None:
+        return _claim_with_pin(access_code, player, data["pin"])
+    raw_token = attempt_tokens.token_from_request()
+    if raw_token is not None:
+        return _claim_with_token(access_code, player, raw_token)
+    raise player_enforcement.auth_error(player_enforcement.PIN_REQUIRED)
+
+
+def _claim_with_pin(access_code: AccessCode, player: Player, pin: str):
+    """ONE TRANSACTION from PIN to token.
+
+    1. lock the credential row and apply the throttle (verify_player_pin);
+    2. verify the PIN - a WRONG PIN commits its bookkeeping and stops here;
+    3. lock the player's newest attempt under this code;
+    4. find, resume or create the attempt under the existing assignment rules;
+    5. issue or rotate its token;
+    6. commit once.
+    Two correct PINs at the same moment therefore serialize on the credential
+    lock: the first creates or resumes, the second resumes and rotates, and the
+    last to commit holds the only valid token. Anything that fails after the PIN
+    rolls the whole claim back, including the throttle's success bookkeeping.
+    """
+    check = player_credentials.verify_player_pin(player.id, pin, commit_on_success=False)
     if not check.ok:
         return _pin_refusal(check)
 
-    # By player_id ONLY - never the name fallback. A token belongs to a
-    # canonical player's attempt, and must never be attached to a legacy
-    # free-text attempt that merely shares their name.
-    existing = (
-        PlayerAttempt.query.filter_by(access_code_id=access_code.id, player_id=player.id)
-        .order_by(PlayerAttempt.id.desc())
-        .first()
-    )
-    if (
-        existing is not None
-        and existing.status == AttemptStatus.SUBMITTED
-        and not access_code.is_practice
-    ):
-        # Results access, not a second go: the submitted attempt is unchanged
-        # apart from which token may read it.
-        token = attempt_tokens.issue_token(existing, check.pin_version)
-        db.session.commit()
-        return _claimed(player, existing, token, created=False, include_state=False)
+    try:
+        existing = _newest_attempt_for(access_code.id, player.id, lock=True)
+        if (
+            existing is not None
+            and existing.status == AttemptStatus.SUBMITTED
+            and not access_code.is_practice
+        ):
+            # Results access, not a second go: the submitted attempt is
+            # unchanged apart from which token may read it.
+            token = attempt_tokens.issue_token(existing, check.pin_version)
+            db.session.commit()
+            return _claimed(player, existing, token, created=False, include_state=False)
 
-    attempt, created = _start_or_resume(access_code, player.full_name, player.id)
-    if attempt.player_id is None:
-        # _start_or_resume's lookup can fall back to a legacy attempt started
-        # under this player's name before they were linked. Tokens never apply
-        # to one of those; it stays on today's behaviour, untouched.
-        raise ApiError(
-            "This attempt was started before PINs existed. Continue without a PIN for now.",
-            status_code=409,
-            reason="legacy_attempt",
-        )
-    token = attempt_tokens.issue_token(attempt, check.pin_version)
-    db.session.commit()
+        attempt, created = _start_or_resume(access_code, player.full_name, player.id, commit=False)
+        if attempt.player_id is None:
+            # _start_or_resume's lookup can fall back to a legacy attempt
+            # started under this player's name before they were linked. Tokens
+            # never apply to one of those; it stays on today's behaviour.
+            raise ApiError(_LEGACY_ATTEMPT_MESSAGE, status_code=409, reason="legacy_attempt")
+        if not created and (existing is None or attempt.id != existing.id):
+            # Converged on an attempt this claim did not lock up front.
+            attempt = player_enforcement.lock_attempt(attempt.id)
+        token = attempt_tokens.issue_token(attempt, check.pin_version)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
     return _claimed(player, attempt, token, created=created, include_state=True)
+
+
+def _claim_with_token(access_code: AccessCode, player: Player, raw_token: str):
+    """Continue with the token this device already holds. Never rotates it.
+
+    Checked against the player's newest attempt under THIS code, locked, so a
+    token can only ever authenticate the exact attempt it was issued for.
+    """
+    try:
+        attempt = _newest_attempt_for(access_code.id, player.id, lock=True)
+        if attempt is None:
+            raise player_enforcement.auth_error(player_enforcement.TOKEN_INVALID)
+        check = attempt_tokens.check_token(attempt, raw_token, player.id)
+        if not check.ok:
+            raise player_enforcement.token_refusal(check)
+
+        if attempt.status != AttemptStatus.SUBMITTED:
+            db.session.commit()
+            return _continued(player, attempt, include_state=True)
+        if not access_code.is_practice:
+            db.session.commit()
+            return _continued(player, attempt, include_state=False)
+
+        # A finished practice run: the retake is a NEW attempt with its own
+        # token. The finished attempt keeps its token, which reads only it.
+        retake, created = _start_or_resume(access_code, player.full_name, player.id, commit=False)
+        if retake.player_id is None:
+            raise ApiError(_LEGACY_ATTEMPT_MESSAGE, status_code=409, reason="legacy_attempt")
+        if not created:
+            retake = player_enforcement.lock_attempt(retake.id)
+        token = attempt_tokens.issue_token(retake, attempt.token_pin_version)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return _claimed(player, retake, token, created=created, include_state=True)
 
 
 @play_bp.post("/answers")
@@ -808,10 +923,13 @@ def save_answer():
 
     attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
     if attempt is None:
-        raise ApiError("Start the quiz before saving an answer", status_code=404)
+        raise ApiError("Start the quiz before saving an answer", status_code=404, reason="attempt_not_found")
+    # PHASE 3A: with enforcement on, a canonical attempt is row-locked here and
+    # its X-Attempt-Token checked against the locked row. Off: unchanged.
+    attempt = player_enforcement.authorize_player_write(access_code, attempt)
     if attempt.status == AttemptStatus.SUBMITTED:
         # The hard lock: once submitted, no further edits.
-        raise ApiError("This attempt has already been submitted", status_code=409)
+        raise ApiError("This attempt has already been submitted", status_code=409, reason="already_submitted")
 
     if attempt.is_practice and is_checked(attempt, data["question_id"]):
         # PRACTICE LOCK, enforced here rather than in the client. The player
@@ -862,13 +980,16 @@ def check_answer():
 
     attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
     if attempt is None:
-        raise ApiError("Start the quiz before checking an answer", status_code=404)
+        raise ApiError("Start the quiz before checking an answer", status_code=404, reason="attempt_not_found")
+    # PHASE 3A: with enforcement on, a canonical attempt is row-locked here and
+    # its X-Attempt-Token checked against the locked row. Off: unchanged.
+    attempt = player_enforcement.authorize_player_write(access_code, attempt)
     if not attempt.is_practice:
         # The attempt's frozen mode decides, not the code's current one. There
         # is no path from a graded attempt to a correct-answer reveal.
         raise ApiError("This quiz is graded - answers are checked by your coach", status_code=422)
     if attempt.status == AttemptStatus.SUBMITTED:
-        raise ApiError("This attempt has already been submitted", status_code=409)
+        raise ApiError("This attempt has already been submitted", status_code=409, reason="already_submitted")
 
     answer = mark_checked(attempt, data["question_id"])
     db.session.commit()
@@ -936,9 +1057,12 @@ def save_drawing():
     # /play route follows.
     attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
     if attempt is None:
-        raise ApiError("Start the quiz before saving a drawing", status_code=404)
+        raise ApiError("Start the quiz before saving a drawing", status_code=404, reason="attempt_not_found")
+    # PHASE 3A: with enforcement on, a canonical attempt is row-locked here and
+    # its X-Attempt-Token checked against the locked row. Off: unchanged.
+    attempt = player_enforcement.authorize_player_write(access_code, attempt)
     if attempt.status == AttemptStatus.SUBMITTED:
-        raise ApiError("This attempt has already been submitted", status_code=409)
+        raise ApiError("This attempt has already been submitted", status_code=409, reason="already_submitted")
     if attempt.is_practice and is_checked(attempt, data["question_id"]):
         # Same lock as a text answer. A drawing autosaves continuously, so
         # without this a player could keep editing after reading the
@@ -983,9 +1107,12 @@ def submit_quiz():
 
     attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
     if attempt is None:
-        raise ApiError("Start the quiz before submitting", status_code=404)
+        raise ApiError("Start the quiz before submitting", status_code=404, reason="attempt_not_found")
+    # PHASE 3A: with enforcement on, a canonical attempt is row-locked here and
+    # its X-Attempt-Token checked against the locked row. Off: unchanged.
+    attempt = player_enforcement.authorize_player_write(access_code, attempt)
     if attempt.status == AttemptStatus.SUBMITTED:
-        raise ApiError(ALREADY_SUBMITTED, status_code=409)
+        raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted")
 
     submitted_question_ids = [a["question_id"] for a in data["answers"]]
     if len(submitted_question_ids) != len(set(submitted_question_ids)):
@@ -1089,26 +1216,35 @@ def submit_quiz():
         if result.rowcount == 0:
             # Lost the race to a concurrent submit between the status
             # check above and this update.
-            raise ApiError(ALREADY_SUBMITTED, status_code=409)
+            raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted")
 
         db.session.commit()
     except IntegrityError as exc:
         db.session.rollback()
-        raise ApiError(ALREADY_SUBMITTED, status_code=409) from exc
+        raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted") from exc
     except Exception:
         db.session.rollback()
         raise
 
-    # Reloaded with the answers' SELECTION SETS attached. Answer.to_dict emits
-    # them, and without the eager load it lazy-loads once per answer - on the
-    # request an entire squad fires within the same minute.
-    attempt = (
-        PlayerAttempt.query.populate_existing()
-        .options(selectinload(PlayerAttempt.answers).joinedload(Answer.selected_options))
-        .filter(PlayerAttempt.id == attempt.id)
-        .one()
-    )
-    return jsonify(attempt.to_dict(include_answers=True)), 201
+    # THE PLAYER-SAFE SUBMIT RESPONSE (Phase 3a). Built, not filtered - the same
+    # discipline as _attempt_state and to_player_payload. This used to return
+    # PlayerAttempt.to_dict(include_answers=True), the COACH serializer: player
+    # identity, every answer, is_correct, coach_feedback and grader names, on a
+    # route that is still unauthenticated with enforcement off. The player app
+    # only awaits this call, so nothing a player needs is lost. What was stored
+    # is unchanged; only what is echoed back is narrowed.
+    #
+    # Re-read, because the conditional UPDATE above wrote status/submitted_at in
+    # SQL and the instance in this session still holds the values from before.
+    attempt = PlayerAttempt.query.populate_existing().filter(PlayerAttempt.id == attempt.id).one()
+    return jsonify(
+        {
+            "attempt_id": attempt.id,
+            "status": attempt.status.value,
+            "submitted_at": attempt.submitted_at.isoformat(),
+            "mode": attempt.mode,
+        }
+    ), 201
 
 
 @play_bp.get("/quiz-by-code/<code>")
@@ -1158,6 +1294,11 @@ def player_results():
         query = query.filter(
             db.func.lower(PlayerAttempt.player_name) == data["player_name"].strip().lower()
         )
+    # NEWEST SUBMITTED ATTEMPT FIRST. A practice code can hold several submitted
+    # attempts for one player, and an unordered .first() returned whichever row
+    # Postgres happened to produce - so a player could be shown last week's run.
+    # submitted_at, then id to break a tie deterministically.
+    query = query.order_by(PlayerAttempt.submitted_at.desc(), PlayerAttempt.id.desc())
     attempt = query.options(
         # `question_snapshots` is what delivered_questions() reads, and
         # `answers.selected_option` is the compatibility fallback in

@@ -15,7 +15,7 @@ from pypdf import PdfReader
 from app.extensions import db
 from app.models import Answer, AttemptStatus, PlayerAttempt
 from tests.conftest import make_image_file
-from tests.test_play_and_grading import build_ready_quiz, start_and_submit
+from tests.test_play_and_grading import build_ready_quiz, start_and_submit, stored_answer_id
 
 
 # --- helpers ----------------------------------------------------------------
@@ -240,7 +240,7 @@ def test_export_does_not_change_any_recorded_field(client, coach_headers, app):
             {"question_id": written["id"], "answer_text": "I set the edge."},
         ],
     )
-    answer_id = next(a["id"] for a in submit_response.get_json()["answers"] if a["question_id"] == written["id"])
+    answer_id = stored_answer_id(submit_response.get_json()["attempt_id"], written["id"])
     _grade(client, coach_headers, answer_id, True, "Nice detail.")
 
     before = _snapshot(app)
@@ -414,7 +414,7 @@ def test_reset_attempt_is_excluded_from_the_export(client, coach_headers):
         "Jordan Smith",
         [{"question_id": tf["id"], "selected_option_id": None}, {"question_id": written["id"], "answer_text": "x"}],
     )
-    attempt_id = submit_response.get_json()["id"]
+    attempt_id = submit_response.get_json()["attempt_id"]
     client.delete(f"/api/quizzes/{quiz['id']}/attempts/{attempt_id}", headers=coach_headers)
 
     response = client.get(f"/api/quizzes/{quiz['id']}/export-detailed.pdf", headers=coach_headers)

@@ -147,6 +147,21 @@ class BaseConfig:
     #: costs about a day of CPU to reverse.
     PIN_BCRYPT_ROUNDS = int(os.environ.get("PIN_BCRYPT_ROUNDS", "10"))
 
+    #: PLAYER PIN ENFORCEMENT - a TEMPORARY cutover switch, OFF by default.
+    #: Off means player routes behave exactly as they did before enforcement
+    #: existed. On requires both dates below, validated at startup (see
+    #: services/player_enforcement). Removed in Phase 4 once hard cutover is
+    #: proven - it is not a permanent way to run without player security.
+    PLAYER_PIN_ENFORCEMENT = os.environ.get("PLAYER_PIN_ENFORCEMENT", "false").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+    #: Timezone-aware ISO 8601. Codes activated at or after this are secured.
+    PLAYER_PIN_CUTOVER_AT = os.environ.get("PLAYER_PIN_CUTOVER_AT") or None
+    #: Timezone-aware ISO 8601, after CUTOVER_AT and at most 14 days later.
+    #: From this moment every code is secured, however far its expiry was
+    #: extended.
+    PLAYER_PIN_COMPAT_UNTIL = os.environ.get("PLAYER_PIN_COMPAT_UNTIL") or None
+
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
@@ -175,6 +190,11 @@ class TestingConfig(BaseConfig):
     # is that a hash is stored, not how slow it is; the production default of
     # 10 is asserted separately against BaseConfig.
     PIN_BCRYPT_ROUNDS = 4
+    # Off unless a test turns it on: the existing suite is the proof that
+    # enforcement-off behaves exactly as before.
+    PLAYER_PIN_ENFORCEMENT = False
+    PLAYER_PIN_CUTOVER_AT = None
+    PLAYER_PIN_COMPAT_UNTIL = None
 
 
 class ProductionConfig(BaseConfig):

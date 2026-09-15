@@ -5,6 +5,9 @@ the same roster must keep working exactly as before, untouched."""
 
 import pytest
 
+from app.extensions import db
+from app.models import PlayerAttempt
+
 
 @pytest.fixture
 def quiz_with_question(client, coach_headers):
@@ -199,8 +202,12 @@ def test_legacy_name_only_attempt_still_works_unaffected(client, coach_headers, 
         },
     )
     assert submit.status_code == 201
-    assert submit.get_json()["player_id"] is None
-    assert submit.get_json()["player_name"] == "Jordan Legacy"
+    # The legacy identity is asserted from the STORED attempt row. /play/submit
+    # returns only the player-safe contract and never echoes player_id or
+    # player_name, so the row is where "stayed a name-only attempt" is proven.
+    attempt = db.session.get(PlayerAttempt, submit.get_json()["attempt_id"])
+    assert attempt.player_id is None
+    assert attempt.player_name == "Jordan Legacy"
 
 
 def test_client_supplied_player_id_is_rejected_if_not_actually_on_the_roster(
@@ -340,7 +347,7 @@ def test_results_display_name_reflects_a_canonical_players_current_name(
         client, access_code, quiz_with_question["id"], coach_headers, "Chris Smith", player["id"]
     )
     assert submit.status_code == 201
-    attempt_id = submit.get_json()["id"]
+    attempt_id = submit.get_json()["attempt_id"]
 
     # Before the rename: display_name and the historical snapshot agree.
     before = client.get(

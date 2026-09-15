@@ -258,7 +258,7 @@ def test_list_quizzes_completed_count_excludes_reset_and_in_progress_attempts_fo
         client, access_code["id"], "Sam Rivera",
         [{"question_id": tf_question["id"], "selected_option_id": correct_option["id"]}],
     ).get_json()
-    client.delete(f"/api/quizzes/{quiz['id']}/attempts/{submitted['id']}", headers=coach_headers)
+    client.delete(f"/api/quizzes/{quiz['id']}/attempts/{submitted['attempt_id']}", headers=coach_headers)
 
     listed = next(q for q in client.get("/api/quizzes", headers=coach_headers).get_json() if q["id"] == quiz["id"])
     assert listed["completed_count"] == 0
