@@ -201,10 +201,11 @@ is a verified, byte-exact export of the Claude desktop browser pane's
 `http://localhost:5180` localStorage (3 keys; SHA-256 per key recorded in the
 file and re-checked after saving). It holds 8 plays and 1 look, created
 16 Sep 2026 08:56–10:23 — the same window the prototype source was last
-edited, so these are most likely development/verification plays.
+edited. **They are development/test data** (owner-confirmed, 16 Sep 2026),
+kept because they are useful fixtures, not because they hold coaching work.
 
-**The owner's own play may live in a different browser.** It is not assumed
-to be backed up until an export from that browser is verified.
+The play the owner built by hand was never saved and does not need
+preserving (owner decision, 16 Sep 2026). Nothing else is outstanding.
 
 ### Coverage by behaviour
 
@@ -228,7 +229,7 @@ to be backed up until an export from that browser is verified.
 
 ### Recommended fixture set for P1
 
-Keep it small: the preserved plays above, the owner's play once exported, and
+Keep it small: the preserved plays above, and
 **at most six small purpose-built plays** for the gaps — or fewer, combined
 where one play can exercise two behaviours without making a failure hard to
 read (e.g. pre-snap motion + pitch; engage → release + delayed timing;
