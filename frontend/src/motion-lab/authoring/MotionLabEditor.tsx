@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FieldMarkings } from '../view/FieldMarkings'
-import { VIEWBOX, U, FIELD_WIDTH, clampToField, fromView, toView } from '../engine/field'
+import { OverheadBoard } from '../view/OverheadBoard'
+import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
 import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
 import { cumulativeLength, simplify, type EndBehavior, type Pt } from '../engine/geometry'
 import { buildSchedule, posAt, resolveEnd } from '../engine/timeline'
@@ -19,7 +19,6 @@ type View = 'overhead' | 'coach' | 'player'
 // shape survives, large enough that hand jitter doesn't become a handle.
 const ANCHOR_EPS = 0.45
 const MIN_SAMPLE_GAP = 0.15
-const PLAYER_R = 0.85 * U
 const TAIL = 0.4
 /** A catch-point click further than this from the route is ignored. */
 const CATCH_PICK_RADIUS = 3
@@ -129,14 +128,6 @@ function InlineName({ value, onCommit, onCancel, placeholder }: { value: string;
     />
   )
 }
-
-const pointsAttr = (pts: Pt[]) =>
-  pts
-    .map((q) => {
-      const v = toView(q)
-      return `${v.x},${v.y}`
-    })
-    .join(' ')
 
 const fmtWhen = (t: number) => {
   const d = new Date(t)
@@ -1111,9 +1102,6 @@ export function MotionLabEditor({ repository }: { repository: PlayRepository }) 
     .filter((d) => d.valid && d.time !== null && time >= d.time && (d.until === null || time < d.until))
     .map((d) => ({ id: d.id, a: positionAt(players.find((p) => p.id === d.a)!, time), b: positionAt(players.find((p) => p.id === d.b)!, time), since: time - d.time! }))
 
-  const ballV = toView(ballFrame.pos)
-  const ballScale = 1 + 0.8 * ballFrame.lift
-  const catchMarker = ballTimeline.catchPoint
   const ballNote = ballTimeline.warning && ball ? (
     <><b>Ball:</b> {ballTimeline.warning}</>
   ) : ballTimeline.qbHold > 0.25 && ball ? (
@@ -1494,212 +1482,38 @@ export function MotionLabEditor({ repository }: { repository: PlayRepository }) 
             snapped={time >= snapAt}
           />
         ) : (
-        <svg
-          ref={svgRef}
+        <OverheadBoard
+          svgRef={svgRef}
           className={`board mode-${mode}${setup ? ' setup' : ''}${present ? ' present' : ''}${telestrating ? ' tele' : ''}`}
-          viewBox={VIEWBOX}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
           onPointerLeave={() => setHoverCatch(null)}
-        >
-          <defs>
-            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" />
-            </marker>
-          </defs>
-
-          <FieldMarkings losYard={situation.losYard} lineToGain={lineToGain} />
-
-          {/* Paths: unselected first, selected / catch-target on top */}
-          {players
-            .filter((p) => schedule.has(p.id) && schedule.get(p.id)!.drawnLength < schedule.get(p.id)!.length && pathVisible(p))
-            .map((p) => (
-              <polyline
-                key={`ext-${p.id}`}
-                points={pointsAttr(schedule.get(p.id)!.pts.slice(-2))}
-                fill="none"
-                stroke={p.id === selectedId ? 'var(--accent)' : p.side === 'offense' ? 'rgba(242,242,238,0.75)' : 'rgba(226,87,58,0.85)'}
-                strokeWidth={2.5}
-                strokeDasharray="4 6"
-                opacity={0.6}
-              />
-            ))}
-          {players
-            .filter((p) => p.id !== selectedId && p.id !== catchTargetId && schedule.has(p.id) && pathVisible(p))
-            .map((p) => (
-              <polyline
-                key={`path-${p.id}`}
-                points={pointsAttr(drawnSchedule.get(p.id)!.pts)}
-                fill="none"
-                stroke={p.side === 'offense' ? 'rgba(242,242,238,0.75)' : 'rgba(226,87,58,0.85)'}
-                strokeWidth={3}
-                strokeDasharray={p.timing === 'pre-snap' ? '2 7' : undefined}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                markerEnd="url(#arrow)"
-                opacity={catchTargetId ? 0.25 : 1}
-              />
-            ))}
-          {(catchTargetId ?? selectedId) && schedule.has(catchTargetId ?? selectedId!) && (
-            <polyline
-              points={pointsAttr(drawnSchedule.get(catchTargetId ?? selectedId!)!.pts)}
-              fill="none"
-              stroke="var(--accent)"
-              strokeWidth={4.5}
-              strokeDasharray={players.find((p) => p.id === (catchTargetId ?? selectedId))?.timing === 'pre-snap' ? '2 8' : undefined}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              markerEnd="url(#arrow)"
-            />
-          )}
-          {draft && (
-            <polyline points={pointsAttr(draft)} fill="none" stroke="var(--accent)" strokeWidth={4} strokeDasharray="8 6" strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
-          )}
-
-          {/* Where the coach asked for the catch, when the ball ends up elsewhere */}
-          {!present && ballTimeline.catchAdjusted && ballTimeline.requestedCatch && catchMarker && !catchTargetId && (() => {
-            const a = toView(ballTimeline.requestedCatch)
-            const b = toView(catchMarker)
-            return (
-              <g pointerEvents="none" opacity={0.7}>
-                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="var(--accent)" strokeWidth={1.5} strokeDasharray="3 4" />
-                <circle cx={a.x} cy={a.y} r={7} fill="none" stroke="var(--accent)" strokeWidth={1.5} strokeDasharray="3 3" />
-              </g>
-            )
-          })()}
-          {/* Catch point: where the ball arrives */}
-          {catchMarker && !catchTargetId && (() => {
-            const v = toView(catchMarker)
-            return (
-              <g key={`catch-${adjustedKey}`} className={`catch-marker${ballTimeline.catchAdjusted ? ' adjusted' : ''}`} transform={`translate(${v.x} ${v.y})`} pointerEvents="none">
-                <circle className="pulse" r={9} fill="none" stroke="var(--accent)" strokeWidth={2.5} opacity={0.9} />
-                <circle r={3} fill="var(--accent)" />
-              </g>
-            )
-          })()}
-          {/* Throw point: a small diamond on the QB's path */}
-          {!present && ballTimeline.releasePoint && qbHasPath && !catchTargetId && (() => {
-            const v = toView(ballTimeline.releasePoint)
-            return (
-              <g className="throw-point" transform={`translate(${v.x} ${v.y}) rotate(45)`}>
-                <title>{hasReleaseOverride ? 'Throw point (set by you)' : ballTimeline.qbEarly > 0.05 ? 'Throw point (derived: early, on the drop)' : ballTimeline.qbHold > 0.05 ? 'Throw point (derived: holds at the top of the drop)' : 'Throw point (derived: top of the drop)'}</title>
-                <rect x={-6} y={-6} width={12} height={12} fill={hasReleaseOverride ? '#4da3ff' : 'var(--bg)'} stroke={hasReleaseOverride ? '#0f1012' : '#4da3ff'} strokeWidth={2} />
-              </g>
-            )
-          })()}
-          {hoverCatch && (() => {
-            const v = toView(hoverCatch)
-            return (
-              <g transform={`translate(${v.x} ${v.y})`} pointerEvents="none">
-                <circle r={11} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeDasharray="4 3" />
-                <circle r={3} fill="var(--accent)" />
-              </g>
-            )
-          })()}
-
-          {/* Players */}
-          {players.map((p) => {
-            const pos = toView(positionAt(p, time))
-            const isSel = p.id === selectedId
-            const isOff = p.side === 'offense'
-            const canPick = pickable(p)
-            const dim = !!setup && (catchTargetId ? p.id !== catchTargetId && p.id !== qbId : !canPick && p.id !== qbId && setup.step !== 'copy-to')
-            const holding = ballFrame.carrierId === p.id && time >= snapAt
-            return (
-              <g key={p.id} data-player={p.id} className={`player${canPick ? ' pickable' : ''}`} transform={`translate(${pos.x} ${pos.y})`} opacity={dim ? 0.45 : 1}>
-                {isSel && <circle r={PLAYER_R + 6} fill="none" stroke="var(--accent)" strokeWidth={3} opacity={0.9} />}
-                {canPick && <circle r={PLAYER_R + 6} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeDasharray="5 4" opacity={0.9} />}
-                <circle r={PLAYER_R} fill={isOff ? 'var(--offense)' : 'var(--defense)'} stroke={holding ? 'var(--accent)' : isOff ? '#6b6b66' : '#7a2412'} strokeWidth={holding ? 3 : 2} />
-                {showLabels && (
-                  <text textAnchor="middle" dominantBaseline="central" fontSize={p.label.length > 2 ? 11 : 13} fontWeight={800} fontFamily="Inter, system-ui, sans-serif" fill={isOff ? '#111' : '#fff'}>
-                    {p.label}
-                  </text>
-                )}
-              </g>
-            )
-          })}
-
-          {/* Football — drawn above the players so it never hides under a marker */}
-          <g data-ball data-phase={ballFrame.phase} transform={`translate(${ballV.x} ${ballV.y})`} pointerEvents="none">
-            {ballFrame.lift > 0 && <ellipse cy={6 * ballScale} rx={0.5 * U * ballScale} ry={0.28 * U * ballScale} fill="rgba(0,0,0,0.35)" />}
-            <g transform={`scale(${ballScale})`}>
-              <ellipse rx={0.5 * U} ry={0.3 * U} fill="#8a4b1d" stroke="#2c1608" strokeWidth={1.5} />
-              <line x1={-0.22 * U} x2={0.22 * U} y1={0} y2={0} stroke="#fff" strokeWidth={1.5} />
-              <line x1={-0.1 * U} x2={-0.1 * U} y1={-2} y2={2} stroke="#fff" strokeWidth={1} />
-              <line x1={0.1 * U} x2={0.1 * U} y1={-2} y2={2} stroke="#fff" strokeWidth={1} />
-            </g>
-          </g>
-
-          {/* Engagements: the coach's point (draggable), and the link once they meet */}
-          {engagedNow.map((l) => {
-            const a = toView(l.a)
-            const b = toView(l.b)
-            return (
-              <g key={`link-${l.id}`} pointerEvents="none">
-                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ff8c42" strokeWidth={6} strokeLinecap="round" opacity={0.9} />
-                {l.since < 0.5 && <circle cx={(a.x + b.x) / 2} cy={(a.y + b.y) / 2} r={10 + l.since * 40} fill="none" stroke="#ff8c42" strokeWidth={3} opacity={1 - l.since * 2} />}
-              </g>
-            )
-          })}
-          {!present &&
-            engagements.map((en) => {
-              const d = engaged.find((x) => x.id === en.id)
-              const v = toView(en.point)
-              const bad = !d?.valid
-              const mine = selected && (en.a === selected.id || en.b === selected.id)
-              return (
-                <g key={en.id} data-engage={en.id} className="engage-marker" transform={`translate(${v.x} ${v.y})`} opacity={mine || !selected ? 1 : 0.55}>
-                  <circle r={14} fill="transparent" />
-                  <circle r={8} fill="var(--bg)" stroke={bad ? '#e2573a' : '#ff8c42'} strokeWidth={2.5} />
-                  {bad ? (
-                    <text textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={900} fill="#e2573a" fontFamily="Inter, system-ui, sans-serif">!</text>
-                  ) : (
-                    <>
-                      <line x1={-3.5} y1={-3.5} x2={3.5} y2={3.5} stroke="#ff8c42" strokeWidth={2} />
-                      <line x1={-3.5} y1={3.5} x2={3.5} y2={-3.5} stroke="#ff8c42" strokeWidth={2} />
-                    </>
-                  )}
-                </g>
-              )
-            })}
-
-          {/* Body (thick stub) and look (thin line + dot) for the selected player only */}
-          {!present && selected && (() => {
-            const o = orientNow.get(selected.id)!
-            const pos = positionAt(selected, time)
-            const g = toView(pos)
-            const b = toView({ x: pos.x + o.body.x * 1.6, y: pos.y + o.body.y * 1.6 })
-            const l = toView({ x: pos.x + o.look.x * 3.2, y: pos.y + o.look.y * 3.2 })
-            return (
-              <g pointerEvents="none">
-                <line x1={g.x} y1={g.y} x2={b.x} y2={b.y} stroke={selected.side === 'offense' ? '#f2f2ee' : '#e2573a'} strokeWidth={5} strokeLinecap="round" opacity={0.9} />
-                <line x1={g.x} y1={g.y} x2={l.x} y2={l.y} stroke="var(--accent)" strokeWidth={2} strokeDasharray="4 3" />
-                <circle cx={l.x} cy={l.y} r={3.5} fill="var(--accent)" />
-              </g>
-            )
-          })()}
-
-          {/* Edit Path handles: the anchors, minus the start (that's the player) */}
-          {!present &&
-            mode === 'edit' &&
-            selected &&
-            selected.path.slice(1).map((a, i) => {
-              const v = toView(a)
-              return (
-                <g key={`anchor-${i + 1}`} data-anchor={i + 1} className="anchor" transform={`translate(${v.x} ${v.y})`}>
-                  <circle r={14} fill="transparent" />
-                  <circle r={7} fill="var(--bg)" stroke="var(--accent)" strokeWidth={3} />
-                </g>
-              )
-            })}
-
-          {/* Teaching marks */}
-          {[...strokes, ...(teleDraft ? [teleDraft] : [])].map((s, i) => (
-            <polyline key={`tele-${i}`} points={pointsAttr(s)} fill="none" stroke="#fff27a" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" opacity={0.95} pointerEvents="none" />
-          ))}
-        </svg>
+          players={players}
+          ball={ball}
+          engagements={engagements}
+          losYard={situation.losYard}
+          lineToGain={lineToGain}
+          schedule={schedule}
+          drawnSchedule={drawnSchedule}
+          snapAt={snapAt}
+          ballTimeline={ballTimeline}
+          engaged={engaged}
+          orientation={orientation}
+          time={time}
+          showLabels={showLabels}
+          pathVisible={pathVisible}
+          selectedId={selectedId}
+          present={present}
+          strokes={strokes}
+          editingPath={mode === 'edit'}
+          draft={draft}
+          teleDraft={teleDraft}
+          hoverCatch={hoverCatch}
+          catchTargetId={catchTargetId}
+          isPickable={pickable}
+          isDimmed={(p) => !!setup && (catchTargetId ? p.id !== catchTargetId && p.id !== qbId : !pickable(p) && p.id !== qbId && setup.step !== 'copy-to')}
+        />
         )}
       </div>
 
