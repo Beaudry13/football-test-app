@@ -23,6 +23,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.whats_new import whats_new_bp
     from app.routes.owner import owner_bp
     from app.routes.competition import competition_bp
+    from app.routes.motion_lab import motion_lab_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -51,3 +52,6 @@ def register_blueprints(app: Flask) -> None:
     # Coach and player routes share one prefix because they drive one state
     # machine; the coach half is @jwt_required, the player half is public.
     app.register_blueprint(competition_bp, url_prefix="/api/competition")
+    # Motion Lab plays and looks. Every route passes require_motion_lab_coach
+    # (platform owner only during the P2 pilot) - see routes/motion_lab.py.
+    app.register_blueprint(motion_lab_bp, url_prefix="/api/motion-lab")

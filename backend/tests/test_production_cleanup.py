@@ -118,6 +118,34 @@ def build_quiz_with_content(client, token, *, title="Install"):
     return quiz
 
 
+def add_motion_lab_content(org_id, *, with_folder):
+    from app.models import Folder, MotionLook, MotionPlay
+
+    folder_id = None
+    if with_folder:
+        folder = Folder(organization_id=org_id, name="Opponent", area="motion")
+        db.session.add(folder)
+        db.session.flush()
+        folder_id = folder.id
+    document = {"players": [{"id": "O0", "x": 1.0, "y": 1.0}]}
+    original = MotionPlay(
+        organization_id=org_id, name="Mesh", document=document, schema_version=1, folder_id=folder_id
+    )
+    db.session.add(original)
+    db.session.flush()
+    db.session.add(
+        MotionPlay(
+            organization_id=org_id,
+            name="Mesh (copy)",
+            document=document,
+            schema_version=1,
+            copied_from_play_id=original.id,
+        )
+    )
+    db.session.add(MotionLook(organization_id=org_id, name="Trips", document=document, schema_version=1))
+    db.session.commit()
+
+
 @pytest.fixture
 def world(client, tool):
     """Two protected organizations and three throwaway ones, all synthetic.
@@ -137,6 +165,11 @@ def world(client, tool):
     for entry in junk:
         build_quiz_with_content(client, entry["access_token"], title="Junk Install")
     db.session.commit()
+    # Motion Lab content in every doomed organization (a play filed in a motion
+    # folder, a copy of it, a look) and a play + look in a protected one.
+    for i in range(3):
+        add_motion_lab_content(org_id_of(f"junk{i}@example.com"), with_folder=True)
+    add_motion_lab_content(org_id_of(REAL_A), with_folder=False)
 
     protected = {org_id_of(REAL_A), org_id_of(REAL_B)}
     doomed = {org_id_of(f"junk{i}@example.com") for i in range(3)}
@@ -381,6 +414,9 @@ class TestTheApprovedPlan:
             ("document_pages", "source_documents"),
             ("coaches", "organizations"),
             ("players", "organizations"),
+            ("motion_plays", "organizations"),
+            ("motion_looks", "organizations"),
+            ("motion_plays", "coaches"),
         ]
         for child, parent in pairs:
             assert order.index(child) < order.index(parent), f"{child} must precede {parent}"
@@ -440,6 +476,15 @@ class TestExecution:
             ).scalar()
         assert after == before == 1
         assert attempts == 1
+        with app.app_context():
+            motion = db.session.execute(
+                sa.text(
+                    "SELECT (SELECT count(*) FROM motion_plays WHERE organization_id=:o),"
+                    " (SELECT count(*) FROM motion_looks WHERE organization_id=:o)"
+                ),
+                {"o": real_org},
+            ).one()
+        assert tuple(motion) == (2, 1)
 
     def test_no_orphan_rows_survive_for_a_deleted_organization(self, app, client, world, tool):
         doomed = sorted(world["doomed"])
@@ -449,7 +494,7 @@ class TestExecution:
             db.session.rollback()
             db.session.remove()
             db.engine.dispose()
-            for table in ("coaches", "players", "groups", "folders", "quizzes"):
+            for table in ("coaches", "players", "groups", "folders", "quizzes", "motion_plays", "motion_looks"):
                 left = db.session.execute(
                     sa.text(f"SELECT count(*) FROM {table} WHERE organization_id = ANY(:ids)"),  # noqa: S608
                     {"ids": doomed},

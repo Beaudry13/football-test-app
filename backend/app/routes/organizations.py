@@ -15,6 +15,7 @@ from app.extensions import db, limiter
 from sqlalchemy.orm import selectinload
 
 from app.models import Coach, CoachRole, Folder, OrganizationInvite, Quiz
+from app.models.folder import FOLDER_AREA_QUIZZES
 from app.schemas.auth import RequestStaffInviteSchema
 from app.schemas.organization import (
     MemberRoleUpdateSchema,
@@ -342,8 +343,10 @@ def list_organization_quizzes():
     # Sized for the real case: hundreds of quizzes and tens of folders is a
     # small JSON document. If an organization ever outgrows that, the server
     # already accepts coach_id and q to narrow it.
+    # QUIZ folders only. Admin View is the Quizzes tree; Motion Lab folders are
+    # a separate tree (models/folder.py) and would be empty branches here.
     folders = (
-        Folder.query.filter_by(organization_id=admin.organization_id)
+        Folder.query.filter_by(organization_id=admin.organization_id, area=FOLDER_AREA_QUIZZES)
         .order_by(Folder.name)
         .all()
     )

@@ -47,7 +47,7 @@ from app.extensions import db
 from app.models import Coach, CoachRole, Organization
 from app.models.organization_merge import OrganizationMerge
 
-#: The SEVEN organization-owned tables that are re-pointed. The remaining
+#: The organization-owned tables that are re-pointed. The remaining
 #: table carrying organization_id - organization_invites - is deleted instead,
 #: not moved (see INVITES_TABLE). Order is irrelevant to correctness, since these
 #: are independent UPDATEs inside one transaction, but it is fixed so the
@@ -81,6 +81,12 @@ ORG_OWNED_TABLES = (
     # into the destination's concept BEFORE this UPDATE runs, leaving nothing
     # here to collide.
     "concepts",
+    # Motion Lab plays and looks are organization-owned coaching content. They
+    # move whole, with the folders that file them (also moved above), so a
+    # play keeps its folder. copied_from_play_id stays valid because both ends
+    # move together.
+    "motion_plays",
+    "motion_looks",
 )
 
 #: Counted for the preview but NOT re-pointed - unused invitations to a
@@ -110,6 +116,8 @@ COUNT_QUERIES = {
     ),
     "groups": "SELECT count(*) FROM groups WHERE organization_id=:o",
     "folders": "SELECT count(*) FROM folders WHERE organization_id=:o",
+    "motion_plays": "SELECT count(*) FROM motion_plays WHERE organization_id=:o",
+    "motion_looks": "SELECT count(*) FROM motion_looks WHERE organization_id=:o",
     "playbooks": "SELECT count(*) FROM source_documents WHERE organization_id=:o",
     "invitations": "SELECT count(*) FROM organization_invites WHERE organization_id=:o",
     "questions": (

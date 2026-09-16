@@ -3,11 +3,36 @@
 from app.extensions import db
 from app.models.mixins import TimestampMixin
 
+#: Which part of PEIRA a folder belongs to. ONE folder system, two separate
+#: trees: a quiz folder is only ever seen by Quizzes and holds quizzes; a
+#: motion folder is only ever seen by Motion Lab and holds plays. Every
+#: pre-existing folder is "quizzes" (the migration's server default), and the
+#: quiz routes read that area only - so quiz folders behave exactly as before.
+#:
+#: Kept apart on purpose rather than one mixed tree: visible_folders decides a
+#: coach's quiz folders from the quizzes they own, so a folder holding only
+#: plays would vanish from their view. Merging the trees later is easy;
+#: splitting a mixed one is not.
+FOLDER_AREA_QUIZZES = "quizzes"
+FOLDER_AREA_MOTION = "motion"
+FOLDER_AREAS = (FOLDER_AREA_QUIZZES, FOLDER_AREA_MOTION)
+
 
 class Folder(TimestampMixin, db.Model):
     __tablename__ = "folders"
+    __table_args__ = (
+        # varchar + CHECK rather than a native enum - see CLAUDE.md #8.
+        db.CheckConstraint("area IN ('quizzes', 'motion')", name="ck_folders_area"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
+    area = db.Column(
+        db.String(16),
+        nullable=False,
+        default=FOLDER_AREA_QUIZZES,
+        server_default=FOLDER_AREA_QUIZZES,
+        index=True,
+    )
     # Folders are org-shared: organization_id scopes visibility *and* editing
     # (any member can rename/delete). coach_id is creator attribution only.
     organization_id = db.Column(
@@ -53,6 +78,7 @@ class Folder(TimestampMixin, db.Model):
             "coach_id": self.coach_id,
             "name": self.name,
             "parent_folder_id": self.parent_folder_id,
+            "area": self.area,
             # No quiz_count/subfolder_count here on purpose. They used to be
             # serialised and were read by nothing: both counted DIRECT
             # children only, and quiz_count counted the whole organization's

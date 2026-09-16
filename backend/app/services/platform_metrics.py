@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 
 from app.extensions import db
+from app.models.folder import FOLDER_AREA_QUIZZES
 from app.models import (
     AccessCode,
     Answer,
@@ -281,8 +282,12 @@ def _feature_organization_ids() -> dict[str, set[int]]:
         "groups": ids(select(Group.organization_id).distinct()),
         # A folder inside another folder - the nesting feature, as opposed to
         # merely having folders at all.
+        # Quiz folders: this adoption signal predates Motion Lab and means the
+        # quiz-organizing feature. Motion Lab folders must not inflate it.
         "nested_folders": ids(
-            select(Folder.organization_id).where(Folder.parent_folder_id.isnot(None)).distinct()
+            select(Folder.organization_id)
+            .where(Folder.parent_folder_id.isnot(None), Folder.area == FOLDER_AREA_QUIZZES)
+            .distinct()
         ),
     }
 
@@ -480,7 +485,11 @@ def organization_detail(organization: Organization) -> dict:
         ),
         "players": count(select(func.count(Player.id)).where(Player.organization_id == org_id)),
         "groups": count(select(func.count(Group.id)).where(Group.organization_id == org_id)),
-        "folders": count(select(func.count(Folder.id)).where(Folder.organization_id == org_id)),
+        "folders": count(
+            select(func.count(Folder.id)).where(
+                Folder.organization_id == org_id, Folder.area == FOLDER_AREA_QUIZZES
+            )
+        ),
         "quizzes": count(select(func.count(Quiz.id)).where(Quiz.organization_id == org_id)),
         "documents": count(
             select(func.count(SourceDocument.id)).where(SourceDocument.organization_id == org_id)

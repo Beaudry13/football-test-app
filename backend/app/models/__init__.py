@@ -27,6 +27,7 @@ from app.models.attempt_question_snapshot import AttemptQuestionSnapshot
 from app.models.question_exclusion import QuestionExclusion
 from app.models.grade_audit_log import GradeAuditLog
 from app.models.organization_merge import OrganizationMerge
+from app.models.motion_lab import MotionLook, MotionPlay
 from app.models.competition import (
     CompetitionAnswer,
     CompetitionParticipant,
@@ -68,6 +69,8 @@ __all__ = [
     "QuestionExclusion",
     "GradeAuditLog",
     "OrganizationMerge",
+    "MotionPlay",
+    "MotionLook",
     "CompetitionSession",
     "CompetitionParticipant",
     "CompetitionAnswer",

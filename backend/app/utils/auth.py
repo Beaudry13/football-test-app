@@ -23,7 +23,8 @@ from flask_jwt_extended import get_jwt_identity
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Coach, Folder, Group, Player, Quiz
+from app.models import Coach, Folder, Group, MotionLook, MotionPlay, Player, Quiz
+from app.models.folder import FOLDER_AREA_MOTION, FOLDER_AREA_QUIZZES
 
 
 def current_coach() -> Coach:
@@ -152,3 +153,77 @@ def get_org_player(player_id: int) -> Player:
     if player is None or player.organization_id != coach.organization_id:
         raise ApiError("Player not found", status_code=404)
     return player
+
+
+def get_org_quiz_folder(folder_id: int) -> Folder:
+    """A QUIZ folder in the caller's organization - what a quiz may be filed in.
+
+    A Motion Lab folder answers "not found" here: the two folder trees never
+    mix, and a quiz filed into a play folder would vanish from Quizzes.
+    """
+    folder = get_org_folder(folder_id)
+    if folder.area != FOLDER_AREA_QUIZZES:
+        raise ApiError("Folder not found", status_code=404)
+    return folder
+
+
+# ---------------------------------------------------------------------------
+# Motion Lab
+# ---------------------------------------------------------------------------
+
+
+def require_motion_lab_coach() -> Coach:
+    """The authenticated coach, who may use Motion Lab.
+
+    P2 PILOT GATE - PLATFORM OWNER ONLY, and TEMPORARY. Motion Lab content is
+    organization-owned and collaborative (see models/motion_lab.py); this check
+    is not that permission model, it is the pilot's visibility boundary until
+    Motion Lab opens to coaches. Opening it later means changing THIS function,
+    and nothing else - every Motion Lab route and the motion folder routes call
+    it.
+
+    404, like require_platform_owner: a coach outside the pilot must not learn
+    the area exists from the error.
+    """
+    return require_platform_owner()
+
+
+def get_org_motion_play(play_id: int, coach: Coach, *, for_update: bool = False) -> MotionPlay:
+    """A play in the coach's organization. Org-owned: any coach there may edit.
+
+    `for_update` locks the row, so a revision check and the write it guards
+    cannot interleave with a teammate's save.
+    """
+    query = MotionPlay.query.filter_by(id=play_id, organization_id=coach.organization_id)
+    if for_update:
+        query = query.with_for_update()
+    play = query.one_or_none()
+    if play is None:
+        raise ApiError("Play not found", status_code=404)
+    return play
+
+
+def get_org_motion_look(look_id: int, coach: Coach, *, for_update: bool = False) -> MotionLook:
+    """A look in the coach's organization. Org-owned, like plays."""
+    query = MotionLook.query.filter_by(id=look_id, organization_id=coach.organization_id)
+    if for_update:
+        query = query.with_for_update()
+    look = query.one_or_none()
+    if look is None:
+        raise ApiError("Look not found", status_code=404)
+    return look
+
+
+def get_org_motion_folder(folder_id: int, coach: Coach) -> Folder:
+    """A MOTION LAB folder in the coach's organization - what a play may be filed in.
+
+    A quiz folder answers "not found", the mirror of get_org_quiz_folder.
+    """
+    folder = db.session.get(Folder, folder_id)
+    if (
+        folder is None
+        or folder.organization_id != coach.organization_id
+        or folder.area != FOLDER_AREA_MOTION
+    ):
+        raise ApiError("Folder not found", status_code=404)
+    return folder

@@ -161,6 +161,10 @@ DELETION_PLAN = [
     ("document_pages", f"DELETE FROM document_pages WHERE source_document_id IN ({ORG_DOCS})"),
     ("source_documents", "DELETE FROM source_documents WHERE organization_id = ANY(:ids)"),
     ("players", "DELETE FROM players WHERE organization_id = ANY(:ids)"),
+    # Motion Lab: organization-owned, with FKs to organizations (and SET NULL
+    # FKs to coaches and folders), so they must go before those rows.
+    ("motion_plays", "DELETE FROM motion_plays WHERE organization_id = ANY(:ids)"),
+    ("motion_looks", "DELETE FROM motion_looks WHERE organization_id = ANY(:ids)"),
     # folders handled separately - parent_folder_id is RESTRICT, so they must
     # be removed deepest-first rather than in one statement.
     ("organization_invites", "DELETE FROM organization_invites WHERE organization_id = ANY(:ids)"),
@@ -459,7 +463,7 @@ def verify_after(ids):
 
     # No orphan rows anywhere referencing a deleted organization.
     for table in ("coaches", "players", "groups", "folders", "quizzes", "source_documents",
-                  "organization_invites"):
+                  "motion_plays", "motion_looks", "organization_invites"):
         left = scalar(
             f"SELECT count(*) FROM {table} WHERE organization_id = ANY(:ids)",  # noqa: S608
             ids=list(ids),
