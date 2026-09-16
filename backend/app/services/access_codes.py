@@ -152,6 +152,36 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
     return result
 
 
+def canonical_player_ids_matching_name(access_code: AccessCode, player_name: str) -> list[int]:
+    """The canonical players on this activation's effective roster whom a typed
+    NAME could mean, in roster order, each once.
+
+    PLAYER PIN ENFORCEMENT (Phase 3b) - the name-only fence. A canonical entry
+    matches by its Player's CURRENT full name OR by the name snapshot on its
+    group/roster row. The snapshot matters: renaming a player does not rewrite
+    `group_players.player_name` / `roster_players.player_name`, and
+    `effective_roster_names` still admits that old name at /start - so matching
+    current names alone would let the old name begin an unprotected legacy
+    attempt for a player who has a PIN.
+
+    Same normalisation as the /start safety net: strip, then casefold.
+    """
+    wanted = player_name.strip().casefold()
+    if access_code.groups:
+        entries = [entry for group in access_code.groups for entry in group.players]
+    else:
+        quiz = access_code.quiz
+        entries = list(quiz.roster.players) if quiz.roster else []
+    matches: list[int] = []
+    for entry in entries:
+        if entry.player_id is None or entry.player is None:
+            continue
+        names = {entry.player.full_name.strip().casefold(), entry.player_name.strip().casefold()}
+        if wanted in names and entry.player_id not in matches:
+            matches.append(entry.player_id)
+    return matches
+
+
 def selectable_players_for_code(access_code: AccessCode) -> list[dict]:
     """WHO MAY IDENTIFY THEMSELVES against this code, for the name picker.
 

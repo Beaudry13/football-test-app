@@ -115,6 +115,19 @@ class PlayerResultsSchema(Schema):
     # "Chris Smith"s apart and would resolve to whichever row the query
     # happens to return first. See routes/play.py::player_results.
     player_id = fields.Int(required=False, allow_none=True, load_default=None)
+    #: PHASE 3B. A canonical player's PIN, for a device holding no valid attempt
+    #: token. Needs player_id (checked in the route: a name is never an
+    #: identity). Shape checked here, before the throttle is consulted, so a
+    #: malformed value is a plain 422 that is never counted as a guess.
+    pin = fields.Str(
+        required=False, allow_none=True, load_default=None, validate=validate.Regexp(r"^\d{6}$")
+    )
+
+
+class ResultsIdentitiesSchema(Schema):
+    """PHASE 3B: who has results under a code - identifiers only."""
+
+    code = fields.Str(required=True, validate=validate.Length(min=1, max=16))
 
 
 class SaveDrawingSchema(Schema):

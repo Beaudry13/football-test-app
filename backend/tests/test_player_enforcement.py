@@ -611,8 +611,11 @@ class TestCompatibilityWindow:
 
     def test_a_player_with_a_pin_on_an_old_code_needs_the_token(self, client, coach_headers, enforce):
         env = build(client, coach_headers, with_drawing=False)
-        self.old_code_window(enforce, env.code["id"])
+        # Started BEFORE enforcement is on. Since Phase 3b, /start itself refuses
+        # a player with a PIN on a protected code, so this is how a never-tokened
+        # attempt of such a player comes to exist.
         assert client.post("/api/play/start", json=env.who).status_code == 201  # never tokened
+        self.old_code_window(enforce, env.code["id"])
         r = send(client, "answers", env)
         assert (r.status_code, reason(r)) == (401, "token_missing")
 
@@ -756,13 +759,16 @@ class TestResultsOrdering:
         db.session.commit()
         assert self.results(client, env)["answers"][0]["your_answer"] == "False"
 
-    def test_results_stay_unauthenticated_even_with_enforcement_on(self, client, coach_headers, secured):
+    def test_secured_results_need_the_token_since_phase_3b(self, client, coach_headers, secured):
+        """Phase 3a left results open; Phase 3b closed them. The full coverage is
+        tests/test_results_auth_and_name_fences.py - this keeps the ordering
+        class honest about the rule it now runs under."""
         env = build(client, coach_headers, with_drawing=False)
         token, _id, _ = claimed(client, env)
         send(client, "submit", SimpleNamespace(**{**env.__dict__, "draw": None}), token)
-        r = client.post("/api/play/results", json={
-            "code": env.code["code"], "player_name": env.player["full_name"], "player_id": env.player["id"]})
-        assert r.status_code == 200
+        body = {"code": env.code["code"], "player_name": env.player["full_name"], "player_id": env.player["id"]}
+        assert client.post("/api/play/results", json=body).status_code == 401
+        assert client.post("/api/play/results", json=body, headers=token_headers(token)).status_code == 200
 
 
 # ---------------------------------------------------------------------------

@@ -46,7 +46,7 @@ from app.services import attempt_tokens
 
 # The attempt row lock lives with the other /play attempt lookups in
 # services/attempts.py, and is re-exported here for the routes that authorize.
-from app.services.attempts import lock_attempt  # noqa: F401
+from app.services.attempts import attempt_token_ever_issued, lock_attempt  # noqa: F401
 
 #: The longest compatibility window the configuration will accept. Old codes
 #: must not keep an open-ended exemption.
@@ -223,3 +223,57 @@ def authorize_player_write(access_code, attempt: PlayerAttempt) -> PlayerAttempt
         db.session.rollback()
         raise token_refusal(check)
     return locked
+
+
+# ---------------------------------------------------------------------------
+# PHASE 3B - who must prove who they are before a start or their results
+# ---------------------------------------------------------------------------
+
+PICK_PLAYER = "pick_player"
+
+
+def canonical_access_protected(
+    access_code, player_id: int, *, settings: EnforcementSettings | None = None
+) -> bool:
+    """Must this canonical player authenticate (PIN or token) before a NEW
+    start, or before reading results, under this code?
+
+    Enforcement on AND any of:
+      * the code is secured;
+      * the player has a PIN;
+      * the player has EVER been issued a token under this code.
+    The last two are the compatibility window's rules from Phase 3a, applied to
+    the player rather than to one attempt. Decided WITHOUT looking at whether
+    anything is submitted, so a refusal built on it reveals nothing about that.
+    """
+    settings = settings or current_settings()
+    if not settings.enabled:
+        return False
+    if is_code_secured(access_code, settings=settings):
+        return True
+    if _player_has_credential(player_id):
+        return True
+    return attempt_token_ever_issued(access_code.id, player_id)
+
+
+def pin_required_for(player_id: int) -> ApiError:
+    """401 pin_required from /start, carrying the ONE identifier the client
+    needs to send the player to /claim: which canonical player the request
+    resolved to. Never whether they have a PIN, an attempt or a submission -
+    and a player_id is already public in the roster validate-code serves."""
+    return ApiError(
+        _AUTH_MESSAGES[PIN_REQUIRED],
+        status_code=401,
+        details={"player_id": player_id},
+        reason=PIN_REQUIRED,
+    )
+
+
+def pick_player_error() -> ApiError:
+    """409 pick_player: a typed name matches more than one canonical player.
+    No candidates are listed - the client already holds the roster picker."""
+    return ApiError(
+        "More than one player has that name. Pick your name from the list.",
+        status_code=409,
+        reason=PICK_PLAYER,
+    )
