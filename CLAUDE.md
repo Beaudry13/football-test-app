@@ -500,6 +500,25 @@ attempt keeps the version it was delivered.
 - Coach wording is "Stop sending it" / "Start sending it again". "Retire"
   stays in the code and out of the UI.
 
+**Motion Lab** — the validated play-animation prototype, integrated in P1
+(branch `feature/motion-lab-p1-integration`). Read
+`docs/MOTION-LAB-BASELINE.md` first.
+
+- **The engine is the prototype's, byte for byte.** `frontend/src/motion-lab/engine/`
+  is pinned to `prototypes/motion-lab/src` by `engineIsVerbatim.test.ts`, and its
+  behaviour by characterization goldens that can only be regenerated from the
+  PROTOTYPE engine. A behaviour diff is a bug to explain, never a golden to update.
+- **Store coach intent, derive football.** Plays persist players, paths, timing,
+  ball action, engagements and situation - never schedules, frames, orientation
+  or playback state.
+- **Everything Motion Lab styles sits under `.motion-lab-root`.** Its stylesheet
+  stays loaded after a coach leaves the route, so an unscoped rule would restyle
+  all of PEIRA (#1 above). `motionLabCss.test.ts` enforces it.
+- **Plays live in the browser in P1**, so `/motion-lab` is platform-owner only
+  with no nav entry. Do not open it to coaches before server persistence (P2).
+- The known football limitations (label-based QB/C, college hashes, 17-yard
+  window) are recorded, not bugs to fix in passing.
+
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 
 - Read `docs/DESIGN-draw-on-image.md` first — product decisions are locked in

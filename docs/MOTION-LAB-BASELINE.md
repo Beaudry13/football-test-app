@@ -252,3 +252,45 @@ every 0.1 s to `duration`, and `duration`:
 
 Compare with a small tolerance (1e-6 yd / rad / s). A difference is a
 behaviour change and must be explained, not re-baselined.
+
+---
+
+## 7. P1 — integrated into PEIRA (feature/motion-lab-p1-integration)
+
+What "moved without changing" means, and what did change.
+
+**Unchanged, and enforced by tests**
+- `frontend/src/motion-lab/engine/` — the nine engine files, byte-identical to
+  `prototypes/motion-lab/src` (`engineIsVerbatim.test.ts`).
+- Behaviour — every fixture above derives exactly what the preserved
+  prototype derived (`__characterization__/characterization.test.ts`; goldens
+  can only be regenerated from the PROTOTYPE engine). The six P0 gaps are
+  covered by three intent-only plays in `__characterization__/gapFixtures.ts`.
+- The overhead field's markup — 21 editor states pinned before extraction
+  (`authoring/overheadMarkup.test.tsx`), reproduced by the extracted
+  `view/OverheadBoard.tsx`, including standalone (`OverheadBoard.test.tsx`).
+- Stored format — same `peira.motionlab.*` keys, envelope and sanitizing.
+
+**Integration adaptations (the complete list)**
+1. `view/FieldMarkings.tsx`, `view/FieldView.tsx`: import paths only.
+2. `authoring/MotionLabEditor.tsx` = prototype `App.tsx` with: import paths;
+   a `repository` prop instead of the storage module; `OverheadBoard` in place
+   of the inline SVG; an `exit` slot ("← Peira"); shortcuts limited by
+   `keyboardScope.ts`; a save flush on unmount (in-app navigation fires no
+   `pagehide`).
+3. `storage/` — `PlayRepository` (synchronous, the nine calls the editor
+   makes) and `LocalPlayRepository` (the prototype's storage.ts, Storage
+   injected).
+4. `motionLab.css` — the prototype stylesheet with every selector under
+   `.motion-lab-root`, keyframes renamed `motion-lab-*`, and the root made a
+   fixed full-viewport container. Declarations otherwise identical
+   (`motionLabCss.test.ts`).
+5. Route `/motion-lab` (`MotionLabRoute.tsx`): inside ProtectedRoute, outside
+   NotebookLayout, **platform owner only**, lazy chunk, no navigation entry.
+
+**Browser storage is per origin.** Plays saved by the standalone prototype
+(`localhost:5180`) do not appear inside PEIRA. Nothing is imported in P1.
+
+**Still unchanged on purpose:** every limitation in §5 except #5 (global CSS,
+now scoped) and #7 (global shortcuts, now scoped). Saving is still
+synchronous — making it async belongs to P2, where there is a network.
