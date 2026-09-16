@@ -110,6 +110,16 @@ describe('Motion Lab editor persistence', () => {
     expect(repo.currentPlayId()).toBe(b.id)
   })
 
+  it('an edit inside the quiet period survives leaving Motion Lab for another PEIRA page', () => {
+    // Navigating within the app unmounts the editor without any pagehide.
+    const [a] = gapPlays()
+    seed([a], a.id)
+    const { unmount } = render(<MotionLabEditor repository={repo} />)
+    drag(a, 'O8', 0, -3)
+    unmount()
+    expect(stored(a.id)!.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(a.players.find((p) => p.id === 'O8')!.y - 3, 6)
+  })
+
   it('autosaves an edit after the quiet period, and a reload shows it', () => {
     const [a] = gapPlays()
     seed([a], a.id)

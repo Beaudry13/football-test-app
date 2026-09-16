@@ -1,0 +1,727 @@
+/* MOTION LAB STYLES, SCOPED.
+ *
+ * The validated prototype's styles.css (preserve/motion-lab-prototype,
+ * prototypes/motion-lab/src/styles.css) with EVERY rule placed under
+ * .motion-lab-root. Declarations are unchanged. Three adaptations, only these:
+ *
+ *   1. Selectors. :root and body became .motion-lab-root; * became the root
+ *      and its descendants; every other selector gained a .motion-lab-root
+ *      prefix. That adds the same specificity (0,1,0) to every rule, so the
+ *      prototype's own cascade resolves exactly as before - and nothing here
+ *      can match an element outside the root, however long this stylesheet
+ *      stays loaded.
+ *   2. Keyframe names are global in CSS: toast-in and catch-pulse became
+ *      motion-lab-toast-in and motion-lab-catch-pulse.
+ *   3. The root is a fixed, full-viewport container (see its rule below).
+ *
+ * WHY: a stylesheet a route imports stays in the document for the rest of the
+ * session. Unscoped, the prototype's bare button and universal rules would
+ * restyle every PEIRA page a coach visited after Motion Lab - CLAUDE.md
+ * "Things that will bite you" #1. motionLabCss.test.ts enforces the scoping.
+ *
+ * Two PEIRA globals still reach inside on purpose: index.css's :focus-visible
+ * ring and its prefers-reduced-motion rule. Both are accessibility baselines
+ * meant for every surface.
+ */
+
+.motion-lab-root {
+  --bg: #0f1012;
+  --panel: #17191c;
+  --border: #2a2d32;
+  --text: #e8e8e6;
+  --muted: #8b8f96;
+  --accent: #f7c948;
+  --accent-ink: #1a1400;
+  --offense: #f2f2ee;
+  --defense: #e2573a;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+
+.motion-lab-root,
+.motion-lab-root * {
+  box-sizing: border-box;
+}
+
+/* Was the prototype's `body` rule. Motion Lab no longer owns the page, so
+   the root takes the whole viewport itself instead of styling PEIRA's <body>.
+   INTEGRATION: position and inset are the only declarations added. */
+.motion-lab-root {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.motion-lab-root .app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  /* One column that is exactly the viewport: a bar full of nowrap items
+     must shrink its flexible parts, never widen the page. */
+  grid-template-columns: minmax(0, 1fr);
+  height: 100vh;
+  width: 100vw;
+}
+.motion-lab-root .bar {
+  min-width: 0;
+}
+
+.motion-lab-root .bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.motion-lab-root .bar.bottom {
+  border-bottom: 0;
+  border-top: 1px solid var(--border);
+}
+
+.motion-lab-root .brand {
+  white-space: nowrap;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.motion-lab-root .brand span {
+  color: var(--accent);
+}
+
+.motion-lab-root .spacer {
+  flex: 1;
+}
+
+.motion-lab-root .hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+.motion-lab-root .hint b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.motion-lab-root button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: #222529;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.motion-lab-root button:hover {
+  background: #2b2f34;
+}
+.motion-lab-root button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.motion-lab-root button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.motion-lab-root button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  min-width: 90px;
+}
+.motion-lab-root button.primary:hover {
+  background: #ffd966;
+}
+.motion-lab-root button .key {
+  opacity: 0.55;
+  font-weight: 500;
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.motion-lab-root .stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  min-height: 0;
+}
+
+.motion-lab-root svg.board {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--border), 0 20px 60px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  user-select: none;
+}
+.motion-lab-root svg.board.mode-draw {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board .player {
+  cursor: grab;
+}
+.motion-lab-root svg.board.mode-draw .player {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board .player.dragging {
+  cursor: grabbing;
+}
+.motion-lab-root svg.board text {
+  pointer-events: none;
+}
+
+.motion-lab-root input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 120px;
+}
+
+.motion-lab-root .time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 90px;
+  text-align: right;
+}
+
+/* ---- iteration 2 ---- */
+
+.motion-lab-root .app {
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.motion-lab-root .group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.motion-lab-root .bar.context {
+  padding-block: 8px;
+  min-height: 50px;
+  background: #131518;
+}
+
+.motion-lab-root .lbl {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.motion-lab-root .seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.motion-lab-root .seg button {
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+}
+.motion-lab-root .seg button:last-child {
+  border-right: 0;
+}
+.motion-lab-root .seg-sm button {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.motion-lab-root .chip {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.motion-lab-root .chip.offense {
+  background: var(--offense);
+  color: #111;
+}
+.motion-lab-root .chip.defense {
+  background: var(--defense);
+  color: #fff;
+}
+
+.motion-lab-root .divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+}
+
+.motion-lab-root .delay {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.motion-lab-root .delay input {
+  font: inherit;
+  width: 64px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #222529;
+  color: var(--text);
+}
+
+.motion-lab-root svg.board.mode-edit .anchor {
+  cursor: grab;
+}
+
+.motion-lab-root .scrub {
+  flex: 1;
+  position: relative;
+  min-width: 140px;
+  padding-top: 12px;
+}
+.motion-lab-root .scrub input {
+  width: 100%;
+  margin: 0;
+}
+.motion-lab-root .snap-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #4da3ff;
+  pointer-events: none;
+}
+.motion-lab-root .snap-mark span {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #4da3ff;
+  line-height: 1;
+}
+
+/* The hint changes with every selection; it must never reflow the field. */
+.motion-lab-root .top-hint {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bars never change height: the field must not move under the coach's
+   cursor when a selection changes what the bar contains. Bars never clip
+   either - popovers hang below them - so the flexible items (hint, ball
+   summary, play name) shrink instead of the bar scrolling. */
+.motion-lab-root .bar:not(.bottom) {
+  flex-wrap: nowrap;
+  overflow: visible;
+  gap: 8px;
+}
+.motion-lab-root .bar.context {
+  height: 50px;
+}
+
+.motion-lab-root button {
+  white-space: nowrap;
+}
+
+/* ---- iteration 3: the ball ---- */
+
+.motion-lab-root .bar {
+  position: relative;
+  overflow: visible;
+}
+.motion-lab-root .ball-menu {
+  position: relative;
+}
+.motion-lab-root .ball-btn.has-action {
+  border-color: #6b5a1f;
+  background: #2a2412;
+}
+.motion-lab-root .ball-btn .warn {
+  display: inline-block;
+  margin-left: 6px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+.motion-lab-root .popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 2px;
+  background: #1d2024;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.motion-lab-root .popover button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+.motion-lab-root .popover button:hover {
+  background: #2b2f34;
+}
+.motion-lab-root .popover .pop-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px 2px;
+}
+.motion-lab-root .popover .pop-clear {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: #e88;
+}
+
+.motion-lab-root .chip.ball {
+  background: #2a2412;
+  border-color: #6b5a1f;
+}
+.motion-lab-root .instruction {
+  font-size: 14px;
+  color: var(--text);
+}
+.motion-lab-root .instruction b {
+  color: var(--accent);
+}
+
+.motion-lab-root svg.board.setup {
+  cursor: pointer;
+}
+.motion-lab-root svg.board.setup .player {
+  cursor: default;
+}
+.motion-lab-root svg.board.setup .player.pickable {
+  cursor: pointer;
+}
+
+/* ---- iteration 4: throw point ---- */
+
+.motion-lab-root .stage {
+  position: relative;
+}
+.motion-lab-root .toast {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: motion-lab-toast-in 0.2s ease-out;
+  pointer-events: none;
+}
+@keyframes motion-lab-toast-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.motion-lab-root .catch-marker.adjusted .pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: motion-lab-catch-pulse 0.8s ease-out 3;
+}
+@keyframes motion-lab-catch-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.motion-lab-root .throw-point {
+  cursor: help;
+}
+
+/* ---- iteration 5: field view ---- */
+.motion-lab-root svg.board.field-view {
+  cursor: default;
+}
+
+/* ---- iteration 6: coach + player views ---- */
+.motion-lab-root .viewer-pop {
+  left: 0;
+  right: auto;
+  min-width: 0;
+  gap: 6px;
+}
+.motion-lab-root .viewer-row {
+  display: flex;
+  gap: 4px;
+}
+.motion-lab-root .viewer-chip {
+  padding: 5px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  min-width: 36px;
+  text-align: center;
+}
+.motion-lab-root .viewer-chip.offense {
+  background: #3a3a37;
+}
+.motion-lab-root .viewer-chip.defense {
+  background: #4a2018;
+}
+.motion-lab-root .viewer-chip.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---- iteration 8: engage ---- */
+.motion-lab-root .engage-marker {
+  cursor: grab;
+}
+.motion-lab-root .engaged-with {
+  font-weight: 700;
+  color: #ff8c42;
+}
+.motion-lab-root .context .warn {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: help;
+}
+
+.motion-lab-root .release-note {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.motion-lab-root .then-note {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ---- Authoring V1 ---- */
+
+.motion-lab-root .play-btn {
+  max-width: 260px;
+  font-weight: 700;
+}
+.motion-lab-root .play-btn .play-name {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.motion-lab-root .saved {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 52px;
+}
+.motion-lab-root .saved.failed {
+  color: #e2573a;
+  font-weight: 700;
+}
+.motion-lab-root .inline-name {
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: #222529;
+  color: var(--text);
+  min-width: 200px;
+}
+.motion-lab-root .popover.play-pop {
+  left: 0;
+  right: auto;
+  min-width: 300px;
+}
+.motion-lab-root .popover.play-pop-left {
+  left: 0;
+  right: auto;
+}
+.motion-lab-root .play-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.motion-lab-root .play-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.motion-lab-root .play-row.active {
+  background: #2a2412;
+  color: var(--accent);
+}
+.motion-lab-root .play-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motion-lab-root .play-row-when {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.motion-lab-root .look-pop {
+  min-width: 340px;
+}
+.motion-lab-root .look-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+}
+.motion-lab-root .look-row .play-row-name {
+  flex: 1;
+  font-weight: 600;
+}
+.motion-lab-root .look-row button {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: #222529;
+}
+.motion-lab-root .look-row .pop-clear {
+  margin-top: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.motion-lab-root .chip-btn {
+  cursor: pointer;
+}
+.motion-lab-root .sit-chip {
+  font-weight: 700;
+  border-radius: 999px;
+  background: #1a2230;
+  border-color: #2c3d57;
+  color: #a9c8ff;
+}
+.motion-lab-root .sit-pop {
+  left: 0;
+  right: auto;
+  min-width: 320px;
+  gap: 8px;
+}
+.motion-lab-root .sit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px;
+}
+.motion-lab-root .sit-row .lbl {
+  min-width: 64px;
+}
+.motion-lab-root .sit-row input[type='number'] {
+  font: inherit;
+  width: 64px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #222529;
+  color: var(--text);
+}
+.motion-lab-root .sit-row .seg button:not(.active),
+.motion-lab-root .sit-row > button:not(.active) {
+  border: 1px solid var(--border);
+  background: #222529;
+}
+.motion-lab-root .sit-row .seg button:not(.active) {
+  border: 0;
+  border-right: 1px solid var(--border);
+}
+
+/* Present: the authoring chrome steps back, the field steps forward. */
+.motion-lab-root .app.present .bar {
+  background: #0f1012;
+}
+.motion-lab-root .app.present .bar.context {
+  background: #0f1012;
+  border-bottom-color: #1a1c20;
+}
+.motion-lab-root .app.present .stage {
+  padding: 6px 12px;
+}
+.motion-lab-root svg.board.present {
+  cursor: default;
+}
+.motion-lab-root svg.board.present .player {
+  cursor: pointer;
+}
+.motion-lab-root svg.board.tele {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board.tele .player {
+  cursor: crosshair;
+}
+
+/* Keep the top bar inside a laptop width: the variable-length items truncate. */
+.motion-lab-root .ball-btn {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.motion-lab-root .play-btn {
+  max-width: 200px;
+}
+.motion-lab-root .play-btn .play-name {
+  max-width: 160px;
+}
+.motion-lab-root .saved {
+  min-width: 0;
+}
+.motion-lab-root .saved:empty {
+  display: none;
+}
+.motion-lab-root .bar.context .hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Segments inside a popover keep their selected state (the popover's
+   flat-button rule would otherwise wash it out). */
+.motion-lab-root .popover button.active,
+.motion-lab-root .popover button.active:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}

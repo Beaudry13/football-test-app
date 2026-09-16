@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { OverheadBoard } from '../view/OverheadBoard'
 import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
 import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
@@ -11,6 +11,7 @@ import { buildOrientation, orientationAt } from '../engine/orientation'
 import { applyEngagements, type Engagement } from '../engine/interactions'
 import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
 import type { PlayRepository } from '../storage/playRepository'
+import { isEditorKeystroke } from './keyboardScope'
 
 type Mode = 'move' | 'draw' | 'edit'
 type View = 'overhead' | 'coach' | 'player'
@@ -141,8 +142,11 @@ const fmtWhen = (t: number) => {
  * `repository` is the ONLY way it reaches storage. Pass one stable instance
  * for the editor's lifetime: a different instance means a different library,
  * so the editor reloads from it.
+ *
+ * `exit` is rendered at the start of the top bar - PEIRA's way back out. The
+ * prototype had nowhere to go back to.
  */
-export function MotionLabEditor({ repository }: { repository: PlayRepository }) {
+export function MotionLabEditor({ repository, exit }: { repository: PlayRepository; exit?: ReactNode }) {
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
   const [playName, setPlayName] = useState('Untitled Play')
@@ -188,6 +192,7 @@ export function MotionLabEditor({ repository }: { repository: PlayRepository }) 
   const [teleDraft, setTeleDraft] = useState<Pt[] | null>(null)
 
   const svgRef = useRef<SVGSVGElement>(null)
+  const appRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   const draftRef = useRef<Pt[] | null>(null)
   const rafRef = useRef(0)
@@ -341,6 +346,10 @@ export function MotionLabEditor({ repository }: { repository: PlayRepository }) 
       window.removeEventListener('beforeunload', flushSave)
       window.removeEventListener('pagehide', flushSave)
       document.removeEventListener('visibilitychange', onHide)
+      // INTEGRATION: inside PEIRA the editor can also go away without the
+      // page going away - the coach navigates back into the app. No
+      // pagehide fires for that, so the pending edit is flushed here.
+      flushSave()
     }
   }, [flushSave])
 
@@ -915,7 +924,11 @@ export function MotionLabEditor({ repository }: { repository: PlayRepository }) 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT') return
+      // INTEGRATION: the shortcuts belong to the field. The prototype owned
+      // the whole page and skipped only INPUT; inside PEIRA they must also
+      // leave every other text control alone, and anything outside the
+      // editor (a portaled PEIRA dialog, for one).
+      if (!isEditorKeystroke(e.target, appRef.current)) return
       const meta = e.ctrlKey || e.metaKey
       if (meta && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault()
@@ -1148,8 +1161,9 @@ export function MotionLabEditor({ repository }: { repository: PlayRepository }) 
   )
 
   return (
-    <div className={`app${present ? ' present' : ''}`}>
+    <div ref={appRef} className={`app${present ? ' present' : ''}`}>
       <div className="bar">
+        {exit}
         <div className="brand">
           Peira <span>Motion Lab</span>
         </div>

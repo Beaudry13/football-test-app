@@ -39,6 +39,7 @@ import { CompetitionJoinPage } from './pages/compete/CompetitionJoinPage';
 import { WaitingRoomPage } from './pages/compete/WaitingRoomPage';
 import { HostLobbyPage } from './pages/compete/HostLobbyPage';
 import { CompetitionSetupPage } from './pages/compete/CompetitionSetupPage';
+import { MotionLabRoute } from './motion-lab/MotionLabRoute';
 
 function App() {
   return (
@@ -167,6 +168,13 @@ function App() {
               path="/quizzes/:quizId/questions/:questionId/annotate"
               element={<AnnotationPage />}
             />
+
+            {/* MOTION LAB - a full-screen tool like annotation, outside
+                NotebookLayout so the field keeps the screen. PLATFORM-OWNER
+                ONLY while plays are saved in the browser (P1): there is no
+                navigation entry, and MotionLabRoute sends anyone else to the
+                dashboard without loading the editor. */}
+            <Route path="/motion-lab" element={<MotionLabRoute />} />
           </Route>
 
           <Route path="*" element={<NotFoundRedirect />} />
