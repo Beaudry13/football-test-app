@@ -1,0 +1,921 @@
+[
+  {
+    "v": 1,
+    "id": "fx_motion_pitch",
+    "name": "Fixture — Z jet motion, toss to RB",
+    "createdAt": 1789560000000,
+    "updatedAt": 1789560000000,
+    "players": [
+      {
+        "id": "O0",
+        "side": "offense",
+        "label": "LT",
+        "x": 23.064999999999998,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O1",
+        "side": "offense",
+        "label": "LG",
+        "x": 24.865,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O2",
+        "side": "offense",
+        "label": "C",
+        "x": 26.665,
+        "y": -0.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O3",
+        "side": "offense",
+        "label": "RG",
+        "x": 28.465,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O4",
+        "side": "offense",
+        "label": "RT",
+        "x": 30.265,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O5",
+        "side": "offense",
+        "label": "Y",
+        "x": 32.265,
+        "y": -0.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O6",
+        "side": "offense",
+        "label": "QB",
+        "x": 26.665,
+        "y": -2.4,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O7",
+        "side": "offense",
+        "label": "RB",
+        "x": 24.665,
+        "y": -5.5,
+        "path": [
+          {
+            "x": 24.665,
+            "y": -5.5
+          },
+          {
+            "x": 30,
+            "y": -6.2
+          },
+          {
+            "x": 38,
+            "y": -5
+          },
+          {
+            "x": 44,
+            "y": 1
+          }
+        ],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O8",
+        "side": "offense",
+        "label": "X",
+        "x": 8,
+        "y": -0.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "O9",
+        "side": "offense",
+        "label": "H",
+        "x": 38,
+        "y": -1.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "O10",
+        "side": "offense",
+        "label": "Z",
+        "x": 46,
+        "y": -1.6,
+        "path": [
+          {
+            "x": 46,
+            "y": -1.6
+          },
+          {
+            "x": 38,
+            "y": -2.6
+          },
+          {
+            "x": 31,
+            "y": -3.2
+          }
+        ],
+        "timing": "pre-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D0",
+        "side": "defense",
+        "label": "DE",
+        "x": 21.665,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D1",
+        "side": "defense",
+        "label": "DT",
+        "x": 24.064999999999998,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "D2",
+        "side": "defense",
+        "label": "NT",
+        "x": 27.564999999999998,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "D3",
+        "side": "defense",
+        "label": "DE",
+        "x": 31.265,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D4",
+        "side": "defense",
+        "label": "LB",
+        "x": 24.165,
+        "y": 4.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D5",
+        "side": "defense",
+        "label": "LB",
+        "x": 28.665,
+        "y": 4.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D6",
+        "side": "defense",
+        "label": "NB",
+        "x": 38.5,
+        "y": 4.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D7",
+        "side": "defense",
+        "label": "CB",
+        "x": 8,
+        "y": 6.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D8",
+        "side": "defense",
+        "label": "CB",
+        "x": 46,
+        "y": 6.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D9",
+        "side": "defense",
+        "label": "FS",
+        "x": 25.665,
+        "y": 13,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D10",
+        "side": "defense",
+        "label": "SS",
+        "x": 36,
+        "y": 10,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      }
+    ],
+    "ball": {
+      "kind": "pitch",
+      "targetId": "O7"
+    },
+    "ballThen": null,
+    "engagements": [],
+    "situation": {
+      "losYard": 35,
+      "hash": "middle",
+      "down": 1,
+      "distance": 10,
+      "show": true
+    },
+    "filter": "all"
+  },
+  {
+    "v": 1,
+    "id": "fx_engage_release_delayed",
+    "name": "Fixture — Y chip & release, delayed RB handoff",
+    "createdAt": 1789560000000,
+    "updatedAt": 1789560000000,
+    "players": [
+      {
+        "id": "O0",
+        "side": "offense",
+        "label": "LT",
+        "x": 23.064999999999998,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O1",
+        "side": "offense",
+        "label": "LG",
+        "x": 24.865,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O2",
+        "side": "offense",
+        "label": "C",
+        "x": 26.665,
+        "y": -0.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O3",
+        "side": "offense",
+        "label": "RG",
+        "x": 28.465,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O4",
+        "side": "offense",
+        "label": "RT",
+        "x": 30.265,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O5",
+        "side": "offense",
+        "label": "Y",
+        "x": 32.265,
+        "y": -0.8,
+        "path": [
+          {
+            "x": 32.265,
+            "y": -0.8
+          },
+          {
+            "x": 32.4,
+            "y": 0.4
+          },
+          {
+            "x": 34.5,
+            "y": 5
+          },
+          {
+            "x": 40,
+            "y": 9
+          }
+        ],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O6",
+        "side": "offense",
+        "label": "QB",
+        "x": 26.665,
+        "y": -2.4,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O7",
+        "side": "offense",
+        "label": "RB",
+        "x": 24.665,
+        "y": -5.5,
+        "path": [
+          {
+            "x": 24.665,
+            "y": -5.5
+          },
+          {
+            "x": 25.8,
+            "y": -3
+          },
+          {
+            "x": 26.5,
+            "y": 2
+          },
+          {
+            "x": 27,
+            "y": 8
+          }
+        ],
+        "timing": "delayed",
+        "delay": 0.8,
+        "speed": "normal"
+      },
+      {
+        "id": "O8",
+        "side": "offense",
+        "label": "X",
+        "x": 8,
+        "y": -0.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "O9",
+        "side": "offense",
+        "label": "H",
+        "x": 38,
+        "y": -1.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "O10",
+        "side": "offense",
+        "label": "Z",
+        "x": 46,
+        "y": -1.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D0",
+        "side": "defense",
+        "label": "DE",
+        "x": 21.665,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D1",
+        "side": "defense",
+        "label": "DT",
+        "x": 24.064999999999998,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "D2",
+        "side": "defense",
+        "label": "NT",
+        "x": 27.564999999999998,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "D3",
+        "side": "defense",
+        "label": "DE",
+        "x": 31.265,
+        "y": 1.2,
+        "path": [
+          {
+            "x": 31.265,
+            "y": 1.2
+          },
+          {
+            "x": 31.8,
+            "y": 0.2
+          },
+          {
+            "x": 30.5,
+            "y": -3
+          },
+          {
+            "x": 28,
+            "y": -5
+          }
+        ],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D4",
+        "side": "defense",
+        "label": "LB",
+        "x": 24.165,
+        "y": 4.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D5",
+        "side": "defense",
+        "label": "LB",
+        "x": 28.665,
+        "y": 4.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D6",
+        "side": "defense",
+        "label": "NB",
+        "x": 38.5,
+        "y": 4.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D7",
+        "side": "defense",
+        "label": "CB",
+        "x": 8,
+        "y": 6.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D8",
+        "side": "defense",
+        "label": "CB",
+        "x": 46,
+        "y": 6.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D9",
+        "side": "defense",
+        "label": "FS",
+        "x": 25.665,
+        "y": 13,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D10",
+        "side": "defense",
+        "label": "SS",
+        "x": 36,
+        "y": 10,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      }
+    ],
+    "ball": {
+      "kind": "handoff",
+      "carrierId": "O7"
+    },
+    "ballThen": null,
+    "engagements": [
+      {
+        "id": "fx_e1",
+        "kind": "engage",
+        "a": "O5",
+        "b": "D3",
+        "point": {
+          "x": 32.1,
+          "y": 0.3
+        },
+        "release": "O5"
+      }
+    ],
+    "situation": {
+      "losYard": 35,
+      "hash": "middle",
+      "down": 1,
+      "distance": 10,
+      "show": true
+    },
+    "filter": "all"
+  },
+  {
+    "v": 1,
+    "id": "fx_settle_throw_from_here",
+    "name": "Fixture — X curl (Settle), Throw From Here",
+    "createdAt": 1789560000000,
+    "updatedAt": 1789560000000,
+    "players": [
+      {
+        "id": "O0",
+        "side": "offense",
+        "label": "LT",
+        "x": 23.064999999999998,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O1",
+        "side": "offense",
+        "label": "LG",
+        "x": 24.865,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O2",
+        "side": "offense",
+        "label": "C",
+        "x": 26.665,
+        "y": -0.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O3",
+        "side": "offense",
+        "label": "RG",
+        "x": 28.465,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O4",
+        "side": "offense",
+        "label": "RT",
+        "x": 30.265,
+        "y": -0.7,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "O5",
+        "side": "offense",
+        "label": "Y",
+        "x": 32.265,
+        "y": -0.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O6",
+        "side": "offense",
+        "label": "QB",
+        "x": 26.665,
+        "y": -2.4,
+        "path": [
+          {
+            "x": 26.665,
+            "y": -2.4
+          },
+          {
+            "x": 26.665,
+            "y": -7.4
+          }
+        ],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O7",
+        "side": "offense",
+        "label": "RB",
+        "x": 24.665,
+        "y": -5.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "O8",
+        "side": "offense",
+        "label": "X",
+        "x": 8,
+        "y": -0.8,
+        "path": [
+          {
+            "x": 8,
+            "y": -0.8
+          },
+          {
+            "x": 8,
+            "y": 11
+          },
+          {
+            "x": 9.5,
+            "y": 9
+          }
+        ],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast",
+        "endBehavior": "settle"
+      },
+      {
+        "id": "O9",
+        "side": "offense",
+        "label": "H",
+        "x": 38,
+        "y": -1.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "O10",
+        "side": "offense",
+        "label": "Z",
+        "x": 46,
+        "y": -1.6,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D0",
+        "side": "defense",
+        "label": "DE",
+        "x": 21.665,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D1",
+        "side": "defense",
+        "label": "DT",
+        "x": 24.064999999999998,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "D2",
+        "side": "defense",
+        "label": "NT",
+        "x": 27.564999999999998,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "controlled"
+      },
+      {
+        "id": "D3",
+        "side": "defense",
+        "label": "DE",
+        "x": 31.265,
+        "y": 1.2,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D4",
+        "side": "defense",
+        "label": "LB",
+        "x": 24.165,
+        "y": 4.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D5",
+        "side": "defense",
+        "label": "LB",
+        "x": 28.665,
+        "y": 4.8,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "normal"
+      },
+      {
+        "id": "D6",
+        "side": "defense",
+        "label": "NB",
+        "x": 38.5,
+        "y": 4.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D7",
+        "side": "defense",
+        "label": "CB",
+        "x": 8,
+        "y": 6.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D8",
+        "side": "defense",
+        "label": "CB",
+        "x": 46,
+        "y": 6.5,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D9",
+        "side": "defense",
+        "label": "FS",
+        "x": 25.665,
+        "y": 13,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      },
+      {
+        "id": "D10",
+        "side": "defense",
+        "label": "SS",
+        "x": 36,
+        "y": 10,
+        "path": [],
+        "timing": "on-snap",
+        "delay": 0.5,
+        "speed": "fast"
+      }
+    ],
+    "ball": {
+      "kind": "pass",
+      "targetId": "O8",
+      "catchPoint": {
+        "x": 9.5,
+        "y": 9
+      },
+      "releasePoint": {
+        "x": 26.665,
+        "y": -6
+      }
+    },
+    "ballThen": null,
+    "engagements": [],
+    "situation": {
+      "losYard": 35,
+      "hash": "middle",
+      "down": 1,
+      "distance": 10,
+      "show": true
+    },
+    "filter": "all"
+  }
+]
