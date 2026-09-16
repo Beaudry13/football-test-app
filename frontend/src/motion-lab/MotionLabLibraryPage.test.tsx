@@ -128,7 +128,7 @@ describe('Motion Lab Library', () => {
   it('a look starts a new play from its alignment', async () => {
     vi.mocked(motionApi.createMotionPlay).mockResolvedValue(play(98, 'Trips Rt — new play'))
     renderAt('/motion-lab')
-    await userEvent.click(within(await screen.findByLabelText('Saved looks')).getByRole('button', { name: 'New play' }))
+    await userEvent.click(within(await screen.findByLabelText('Saved looks')).getByRole('button', { name: 'New play from Trips Rt' }))
     await waitFor(() => expect(lastPath).toBe('/motion-lab/plays/98'))
     const body = vi.mocked(motionApi.createMotionPlay).mock.calls[0][0]
     expect(body.name).toBe('Trips Rt — new play')
@@ -148,6 +148,7 @@ describe('Motion Lab Library', () => {
     vi.mocked(motionApi.updateMotionPlay).mockResolvedValue(play(10, 'x'))
     vi.mocked(motionApi.copyMotionPlay).mockResolvedValue(play(13, 'Inside Zone (copy)'))
     vi.mocked(motionApi.deleteMotionPlay).mockResolvedValue(undefined)
+    vi.mocked(motionApi.listMotionFolders).mockResolvedValue([...FOLDERS].reverse())
     renderAt('/motion-lab')
 
     await user.click(await screen.findByRole('button', { name: 'Play options for Inside Zone' }))
@@ -163,6 +164,14 @@ describe('Motion Lab Library', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Play options for Inside Zone' }))
     await user.click(screen.getByRole('menuitem', { name: 'Move to folder…' }))
+    // Listed by path, so a folder sits under its parent however the server ordered them.
+    expect(within(screen.getByLabelText('Move Inside Zone to folder')).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Top of the Library',
+      'Defense',
+      'Defense / Coverages',
+      'Defense / Coverages / Cover 3',
+      'Offense',
+    ])
     await user.selectOptions(screen.getByLabelText('Move Inside Zone to folder'), 'Defense / Coverages / Cover 3')
     expect(motionApi.updateMotionPlay).toHaveBeenCalledWith(10, { folder_id: 3 })
 
@@ -191,6 +200,8 @@ describe('Motion Lab Library', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Folder options for Offense' }))
     await user.click(screen.getByRole('menuitem', { name: 'Delete folder' }))
+    // The server puts the plays at the top level (folder_id SET NULL), and the dialog says so.
+    expect(screen.getByText(/they move to the top of the Library/)).toBeInTheDocument()
     await acceptConfirm(user, 'Delete Folder')
     expect(foldersApi.deleteFolder).toHaveBeenCalledWith(4)
   })
@@ -208,6 +219,14 @@ describe('Motion Lab Library', () => {
   it('says so when a folder is not in this Motion Lab', async () => {
     renderAt('/motion-lab/folders/404')
     expect(await screen.findByText(/This folder isn't in your Motion Lab/)).toBeInTheDocument()
+  })
+
+  it('does not claim the Library is empty when every play is filed in a folder', async () => {
+    vi.mocked(motionApi.listMotionPlays).mockResolvedValue([play(11, 'Cover 3 vs Mesh', 3)])
+    renderAt('/motion-lab')
+    expect(await screen.findByRole('link', { name: /Defense\s*1/ })).toBeInTheDocument()
+    expect(screen.queryByText('No plays yet. Start one with New play.')).toBeNull()
+    expect(screen.queryByLabelText('Plays')).toBeNull()
   })
 
   it('an empty Library says how to start', async () => {

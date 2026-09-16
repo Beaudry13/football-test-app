@@ -258,7 +258,9 @@ export function MotionLabLibraryPage() {
                     onSelect={() =>
                       confirm({
                         title: 'Delete folder?',
-                        body: `"${sub.name}" will be deleted. Its plays are not deleted - they move to ${folder ? `"${folder.name}"` : 'the top of the Library'}.`,
+                        // The plays go to the Library's top level, not to this
+                        // folder: MotionPlay.folder_id is ON DELETE SET NULL.
+                        body: `"${sub.name}" will be deleted. Its plays are not deleted - they move to the top of the Library.`,
                         confirmLabel: 'Delete Folder',
                         action: () => run(() => deleteFolder(sub.id)),
                       }).catch(() => undefined)
@@ -274,7 +276,13 @@ export function MotionLabLibraryPage() {
       )}
 
       {here.length === 0 ? (
-        <EmptyState message={folder ? 'No plays in this folder yet.' : 'No plays yet. Start one with New play.'} />
+        // At the top level, plays filed in folders still count: "No plays yet"
+        // under a "3 Plays" badge would contradict itself.
+        folder ? (
+          <EmptyState message="No plays in this folder yet." />
+        ) : plays.length === 0 ? (
+          <EmptyState message="No plays yet. Start one with New play." />
+        ) : null
       ) : (
         <div className={dashboardStyles.folderList} aria-label="Plays">
           {here.map((play) => (
@@ -304,11 +312,14 @@ export function MotionLabLibraryPage() {
                     }}
                   >
                     <option value="">Top of the Library</option>
-                    {folders.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {folderPath(f)}
-                      </option>
-                    ))}
+                    {folders
+                      .map((f) => ({ id: f.id, path: folderPath(f) }))
+                      .sort((a, b) => a.path.localeCompare(b.path))
+                      .map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.path}
+                        </option>
+                      ))}
                   </select>
                   <button className={nb.btnSm} onClick={() => setMoving(null)}>
                     Cancel
@@ -360,7 +371,12 @@ export function MotionLabLibraryPage() {
               {looks.map((look) => (
                 <div key={look.id} className={dashboardStyles.folderRow}>
                   <span className={styles.lookName}>{look.name}</span>
-                  <button className={nb.btnSm} disabled={busy} onClick={() => handleNewPlay(look)}>
+                  <button
+                    className={nb.btnSm}
+                    disabled={busy}
+                    onClick={() => handleNewPlay(look)}
+                    aria-label={`New play from ${look.name}`}
+                  >
                     New play
                   </button>
                   <MenuButton label={`Look options for ${look.name}`}>

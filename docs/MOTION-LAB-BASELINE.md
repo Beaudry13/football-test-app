@@ -294,3 +294,73 @@ What "moved without changing" means, and what did change.
 **Still unchanged on purpose:** every limitation in §5 except #5 (global CSS,
 now scoped) and #7 (global shortcuts, now scoped). Saving is still
 synchronous — making it async belongs to P2, where there is a network.
+
+---
+
+## 8. P2 — on PEIRA's server, with a Library (feature/motion-lab-p2-library)
+
+Plays and looks are now organization content in Postgres. The engine, the
+goldens and the overhead markup are untouched; the editor still talks to a
+synchronous `PlayRepository`, and the network sits behind it.
+
+**Tables** (migration `b3e8d51f7a26`, revises `e5b2c8a41f73`)
+- `motion_plays` — `organization_id` (NOT NULL), `created_by_coach_id` (SET
+  NULL), `name`, `document` JSONB, `schema_version`, `revision`, `folder_id`
+  (SET NULL), `copied_from_play_id` (SET NULL), timestamps.
+- `motion_looks` — the same without folder and copy.
+- `folders.area` — `quizzes` (default, and every pre-existing row) or `motion`,
+  CHECK-constrained. Two separate trees in one table: a subfolder must share its
+  parent's area, `GET /folders` defaults to quizzes, and `visible_folders` (the
+  Quizzes rule) is unchanged. Downgrade deletes motion folders leaf-first before
+  dropping the column, so quiz folders survive a rollback (rehearsed).
+
+**The document is coach intent only** — exactly what the prototype saved minus
+`id`/`name`/timestamps: `players`, `ball`, `ballThen`, `engagements`,
+`situation`, `filter`. `services/motion_documents.py` checks it STRUCTURALLY
+(known keys only, types, enums, finite numbers, size and count ceilings). It
+does not run football: the engine is TypeScript and stays the only engine;
+`sanitizePlay` still normalizes on read.
+
+**API** (`/api/motion-lab`, `routes/motion_lab.py`): plays list/create/get,
+`PUT` (autosave, needs `base_revision`), `PATCH` (rename or move), `DELETE`,
+`POST …/copy`; looks list/create/get/`PUT`/`DELETE`. Motion folders reuse
+`/api/folders` with `area=motion`.
+
+**Who.** Content is the ORGANIZATION's and collaborative: any coach who passes
+the gate edits any play; `created_by_coach_id` is a record, not a permission.
+Another organization's play is a 404. **The gate is `require_motion_lab_coach()`
+— today the platform owner only (404 for everyone else),** mirrored in the
+frontend by `mayUseMotionLab`. Opening Motion Lab to coaches is a change to
+those two functions, not to the routes.
+
+**Revisions.** Every content write names the revision it came from; the row is
+locked and a mismatch is a 409 `revision_conflict`, never a merge. Rename bumps
+the revision (it is visible content an open editor would otherwise overwrite);
+a folder move does not. The editor stops on a 409 and asks: "Keep mine as a
+copy" (saved as "… (my version)") or "Load the latest version". A 404 while
+editing offers "Keep mine as a new play" or "Close it".
+
+**Autosave** — the lifecycle is written once, at the top of
+`storage/apiPlayRepository.ts`: the editor's 400 ms debounce → cache →
+localStorage DRAFT (only while unconfirmed) → one request in flight per play,
+latest version queued → backoff retry on network/5xx → draft recovery on the
+next open, decided by revision, never by clock. Drafts are keyed
+`peira.motionlab.draft.v1:{org}:{coach}:{play}`.
+
+**Library** (`MotionLabLibraryPage.tsx`, `/motion-lab`, `/motion-lab/folders/:id`):
+nested Motion folders; plays open, rename, duplicate, move and delete; looks
+start a new play or are deleted. Deleting a folder puts its plays at the TOP of
+the Library (SET NULL), and the dialog says so. The editor is
+`/motion-lab/plays/:id`, outside NotebookLayout.
+
+**Navigation.** "Motion Lab" sits after Quizzes in the coach nav, filtered by
+`sectionLinksFor(coach)` — no one else sees it or can reach the route.
+
+**Not imported.** P1 kept plays in `peira.motionlab.*` localStorage on the
+integrated origin, but P1 never deployed and the only such plays were
+owner-confirmed test fixtures. P2 reads none of it and deletes none of it.
+`LocalPlayRepository` remains only as the storage the P1 editor tests use.
+
+**Merge and cleanup.** Both tables are in `ORG_OWNED_TABLES` and the merge
+counts; `tools/production_cleanup.py` deletes them (before folders and coaches)
+and checks for orphans. Motion folders ride on the existing folder handling.
