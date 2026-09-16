@@ -145,8 +145,23 @@ const fmtWhen = (t: number) => {
  *
  * `exit` is rendered at the start of the top bar - PEIRA's way back out. The
  * prototype had nowhere to go back to.
+ *
+ * `saveStatus` replaces the built-in "Saved" indicator when the repository
+ * saves over a network (P2): a synchronous repository can only report that a
+ * save was accepted locally, not that it reached the server. `notice` is shown
+ * over the field, for things the coach must decide (an edit conflict).
  */
-export function MotionLabEditor({ repository, exit }: { repository: PlayRepository; exit?: ReactNode }) {
+export function MotionLabEditor({
+  repository,
+  exit,
+  saveStatus,
+  notice,
+}: {
+  repository: PlayRepository
+  exit?: ReactNode
+  saveStatus?: ReactNode
+  notice?: ReactNode
+}) {
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
   const [playName, setPlayName] = useState('Untitled Play')
@@ -1196,11 +1211,12 @@ export function MotionLabEditor({ repository, exit }: { repository: PlayReposito
             </div>
           )}
         </div>
-        {!present && (
-          <span className={`saved${saveFailed ? ' failed' : ''}`} title={saveFailed ? 'Could not save to browser storage' : savedAt ? `Saved ${fmtWhen(savedAt)}` : ''}>
-            {saveFailed ? 'Not saved' : savedAt ? 'Saved' : ''}
-          </span>
-        )}
+        {!present &&
+          (saveStatus ?? (
+            <span className={`saved${saveFailed ? ' failed' : ''}`} title={saveFailed ? 'Could not save to browser storage' : savedAt ? `Saved ${fmtWhen(savedAt)}` : ''}>
+              {saveFailed ? 'Not saved' : savedAt ? 'Saved' : ''}
+            </span>
+          ))}
         {!present && (
           <div className="seg">
             <button disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)">↶</button>
@@ -1468,6 +1484,7 @@ export function MotionLabEditor({ repository, exit }: { repository: PlayReposito
       </div>
 
       <div className="stage">
+        {notice}
         {toast && <div className="toast">{toast}</div>}
         {watching ? (
           <FieldView

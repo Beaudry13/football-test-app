@@ -725,3 +725,35 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
+
+/* ==== PEIRA ADDITIONS ====================================================
+ * Everything below this marker is NOT in the prototype. motionLabCss.test.ts
+ * compares every rule above it with prototypes/motion-lab/src/styles.css and
+ * requires everything below it to be scoped too.
+ */
+
+/* P2: a decision the coach must make about this play (an edit conflict, a
+   recovered draft), over the top of the field like the toast - but it stays
+   until answered, and it holds buttons. */
+.motion-lab-root .ml-notice {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  max-width: min(760px, calc(100% - 32px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #1d2024;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.motion-lab-root .ml-notice b {
+  color: var(--accent);
+}

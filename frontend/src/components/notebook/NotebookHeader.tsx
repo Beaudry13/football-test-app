@@ -4,7 +4,7 @@ import { PeiraLogo } from '../brand/PeiraLogo';
 import { HelpMenu } from '../../help/HelpMenu';
 import { MenuButton, MenuItem, MenuLink } from '../ui/MenuButton';
 import { SectionBar } from './SectionBar';
-import { SECTION_LINKS } from './sections';
+import { sectionLinksFor } from './sections';
 import styles from '../../styles/notebook.module.css';
 
 
@@ -61,7 +61,7 @@ export function NotebookHeader() {
               destinations twice would spend the vertical space that
               arrangement exists to give back. */}
           <div className={styles.sectionLinks}>
-          {SECTION_LINKS.map((link) => (
+          {sectionLinksFor(coach).map((link) => (
             <Link
               key={link.to}
               to={link.to}

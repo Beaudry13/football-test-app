@@ -234,6 +234,9 @@ export interface Folder {
   /** Null = root folder. Fixed at creation - there is no route to change
    * it afterward, so nesting is arbitrarily deep but can never form a cycle. */
   parent_folder_id: number | null;
+  /** Which tree it belongs to: quizzes unless created as a Motion Lab folder.
+   *  The two trees never mix. Optional because older fixtures omit it. */
+  area?: 'quizzes' | 'motion';
   created_at: string;
   updated_at: string;
 }
@@ -956,6 +959,8 @@ export interface MergeOrganizationCounts {
   answers: number;
   answer_drawings: number;
   document_pages: number;
+  motion_plays: number;
+  motion_looks: number;
 }
 
 export interface MergeCoachPlan {

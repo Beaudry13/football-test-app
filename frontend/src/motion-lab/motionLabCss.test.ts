@@ -86,7 +86,13 @@ describe('motionLab.css scoping', () => {
 
   it('changes selectors only: every rule keeps the prototype\'s declarations, in order', () => {
     const proto = rules(PROTOTYPE)
-    expect(scoped).toHaveLength(proto.length)
+    // The prototype's rules come first; anything after them must sit below the
+    // PEIRA ADDITIONS marker, so an addition can never be mistaken for (or
+    // silently replace) a prototype rule.
+    const [prototypePart, additionsPart] = SCOPED.split('==== PEIRA ADDITIONS')
+    expect(additionsPart, 'the PEIRA ADDITIONS marker').toBeDefined()
+    expect(rules(prototypePart)).toHaveLength(proto.length)
+    expect(scoped.length).toBe(proto.length + rules(additionsPart.slice(additionsPart.indexOf('*/') + 2)).length)
     proto.forEach((p, i) => {
       const s = scoped[i]
       let expected = declarations(p.body)

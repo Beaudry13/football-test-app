@@ -1,0 +1,56 @@
+/* Motion Lab Library. Coach theme tokens (--nb-*, --peira-*) only: this page
+   lives inside NotebookLayout like Playbooks, and borrows the folder-row look
+   from DashboardPage/FolderPage rather than inventing another one. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+
+.updated {
+  margin-left: auto;
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta, 13px);
+  white-space: nowrap;
+}
+
+.moveLabel {
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta, 13px);
+}
+
+.looks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-4, 16px);
+}
+
+.lookName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0;
+  color: var(--nb-text-muted);
+}

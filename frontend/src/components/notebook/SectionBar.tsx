@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
-import { SECTION_LINKS } from './sections';
+import { useAuth } from '../../auth/AuthContext';
+import { sectionLinksFor } from './sections';
 import styles from './SectionBar.module.css';
 
 /** Peira's primary navigation on a phone, along the bottom of the screen.
@@ -25,10 +26,11 @@ import styles from './SectionBar.module.css';
  */
 export function SectionBar() {
   const location = useLocation();
+  const { coach } = useAuth();
 
   return (
     <nav className={styles.bar} aria-label="Sections" data-section-bar>
-      {SECTION_LINKS.map((link) => {
+      {(coach ? sectionLinksFor(coach) : []).map((link) => {
         const active = link.isActive(location.pathname);
         return (
           <Link
