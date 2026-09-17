@@ -14,7 +14,9 @@ What it keeps: legacy player_id IS NULL attempts resume and read by name as
 before; results survive expiry, deactivation and roster changes; and the
 compatibility window's exemptions are Phase 3a's, unchanged.
 
-Not here: the activation PIN gate (3c) and every player-facing screen (3d).
+The activation PIN gate (3c) is tested in test_activation_pin_gate.py. It means
+a secured code is normally activated only once its players have PINs, so tests
+that need a pinless player on a secured code build it while enforcement is off.
 """
 
 import logging
@@ -715,16 +717,23 @@ class TestStartFence:
         assert set(r.get_json()) == {"error", "reason", "details"}
         assert attempts_under(env.code) == 0
 
-    def test_it_holds_for_a_player_without_a_pin_on_a_secured_code(self, client, coach_headers, secured):
+    def test_it_holds_for_a_player_without_a_pin_on_a_secured_code(self, client, coach_headers, enforce):
+        # Built while OFF: with enforcement on, Phase 3c's activation gate would
+        # refuse this code outright. The state is still reachable - a player
+        # added to a group after activation - so the fence must hold on its own.
         env = build(client, coach_headers, with_drawing=False, pin=False)
+        switch_on(enforce)
         r = start(client, env)
         assert (r.status_code, reason(r)) == (401, "pin_required")
         assert attempts_under(env.code) == 0
 
-    def test_several_canonical_matches_is_pick_player(self, client, coach_headers, secured):
+    def test_several_canonical_matches_is_pick_player(self, client, coach_headers, enforce):
+        # The twin has no PIN, so the code is activated while OFF (the 3c gate
+        # would refuse it on) - one protected match is enough to fence.
         env = build(client, coach_headers, with_drawing=False)
         twin = make_player(client, coach_headers, "John", "Smith")
         code = new_code(client, coach_headers, env.quiz, [env.player["id"], twin["id"]], "Twins")
+        switch_on(enforce)
 
         r = client.post("/api/play/start", json={"access_code_id": code["id"], "player_name": "John Smith"})
 
