@@ -385,6 +385,23 @@ KNOWN-ISSUES.md.
 
 ## Work in flight
 
+**Player PIN security** — code complete on `security/player-pin-completion`,
+**enforcement OFF**. Read `docs/PLAYER-PIN-SECURITY.md` first.
+
+- **The frontend reads no flag.** It follows the server (`pin_required` → PIN
+  screen), so `PLAYER_PIN_ENFORCEMENT` flips behaviour without a deploy. Never
+  add a client-side "PINs on?" check.
+- **A stored attempt token is used only for the player a device remembers**,
+  via "Continue as" (`pages/play/playerSession.ts`). A name tapped in a list
+  never uses one - that is what stops a shared phone becoming an impersonation
+  tool.
+- **`/results/identities` is the roster, never "who has results".** Anything
+  read from an attempt there would disclose who has submitted.
+- **Activation and the /start fence share `roster_entries`.** Keep one answer
+  to "who is this code for".
+- Do not turn enforcement on, set cutover dates, or remove the switch without
+  being asked.
+
 **Delivered-question snapshots** — Phase 1 (WRITE + PRESERVE) is implemented.
 
 - `docs/DESIGN-delivered-question-snapshots.md` is the approved design; its

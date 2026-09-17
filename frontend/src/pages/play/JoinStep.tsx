@@ -14,12 +14,14 @@ export function JoinStep({
 }) {
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
+  const [expiredCode, setExpiredCode] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!code.trim()) return;
     setError(null);
+    setExpiredCode(null);
     setIsSubmitting(true);
     try {
       const trimmedCode = code.trim();
@@ -32,6 +34,8 @@ export function JoinStep({
       // would be actively unhelpful, since retrying can't fix it.
       if (err instanceof ApiError && err.reason === 'expired') {
         setError('This code has expired — ask your coach for a new one.');
+        // Results outlive the code, so the way to them is right here.
+        setExpiredCode(code.trim().toUpperCase());
       } else {
         setError(getErrorMessage(err));
       }
@@ -45,6 +49,11 @@ export function JoinStep({
       <h1>Join a Quiz</h1>
       <p>Enter the code your coach shared with you.</p>
       <ErrorBanner message={error} />
+      {expiredCode && (
+        <p>
+          Already played it? <a href={`/results?code=${encodeURIComponent(expiredCode)}`}>View your results</a>
+        </p>
+      )}
       <div className="field">
         <input
           className={styles.codeInput}

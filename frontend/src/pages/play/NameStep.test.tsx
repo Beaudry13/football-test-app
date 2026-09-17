@@ -2,9 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NameStep } from './NameStep';
-import * as playApi from '../../api/play';
 import { ApiError } from '../../api/client';
-import type { AttemptState, RosterPlayerOption } from '../../api/types';
+import type { RosterPlayerOption } from '../../api/types';
 
 const rosterPlayers: RosterPlayerOption[] = [
   { player_id: 501, name: 'Jordan Smith', jersey_number: '7', position: 'QB', photo_url: null },
@@ -16,127 +15,95 @@ const rosterPlayersWithPhotos: RosterPlayerOption[] = [
   { player_id: 502, name: 'Chris Smith', jersey_number: '9', position: 'WR', photo_url: null },
 ];
 
+/** "Choose your name". What happens after a choice - quiz, PIN or results - is
+ *  PlayPage's decision; this screen reports who was chosen, and HOW: a roster
+ *  tap is never `continuing`, so it can never use a stored token. */
 describe('NameStep', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('starts an attempt for the selected name and calls onStarted with the resumed state', async () => {
+  it('reports the chosen canonical player, not continuing', async () => {
     const user = userEvent.setup();
-    const attempt: AttemptState = {
-      attempt_id: 5,
-      status: 'in_progress',
-      mode: 'GRADED',
-      question_order: [],
-      feedback: [],
-      answers: [{ question_id: 1, selected_option_id: 10, answer_text: null, checked: false }],
-    };
-    const startSpy = vi.spyOn(playApi, 'startAttempt').mockResolvedValue(attempt);
-    const onStarted = vi.fn();
-    const onAlreadySubmitted = vi.fn();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    render(<NameStep quizTitle="Week 1 Prep" rosterPlayers={rosterPlayers} onChoose={onChoose} />);
 
-    render(
-      <NameStep
-        quizTitle="Week 1 Prep"
-        rosterPlayers={rosterPlayers}
-        accessCodeId={42}
-        onStarted={onStarted}
-        onAlreadySubmitted={onAlreadySubmitted}
-      />,
-    );
-
+    expect(screen.getByText('Choose your name.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() =>
-      expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Jordan Smith', player_id: 501 }),
+      expect(onChoose).toHaveBeenCalledWith(
+        { playerId: 501, name: 'Jordan Smith', jerseyNumber: '7', position: 'QB' },
+        false,
+      ),
     );
-    expect(onStarted).toHaveBeenCalledWith('Jordan Smith', 501, attempt);
-    expect(onAlreadySubmitted).not.toHaveBeenCalled();
   });
 
-  it('starts an attempt for a legacy (non-canonical) roster entry without a player_id', async () => {
+  it('reports a legacy (free-text) roster entry with no player id', async () => {
     const user = userEvent.setup();
-    const attempt: AttemptState = { attempt_id: 6, status: 'in_progress', mode: 'GRADED', question_order: [], feedback: [], answers: [] };
-    const startSpy = vi.spyOn(playApi, 'startAttempt').mockResolvedValue(attempt);
-    const onStarted = vi.fn();
-
-    render(
-      <NameStep
-        quizTitle="Week 1 Prep"
-        rosterPlayers={rosterPlayers}
-        accessCodeId={42}
-        onStarted={onStarted}
-        onAlreadySubmitted={vi.fn()}
-      />,
-    );
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    render(<NameStep quizTitle="Week 1 Prep" rosterPlayers={rosterPlayers} onChoose={onChoose} />);
 
     await user.click(screen.getByRole('button', { name: 'Alex Lee' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() =>
-      expect(startSpy).toHaveBeenCalledWith({ access_code_id: 42, player_name: 'Alex Lee', player_id: undefined }),
+      expect(onChoose).toHaveBeenCalledWith(
+        { playerId: null, name: 'Alex Lee', jerseyNumber: null, position: null },
+        false,
+      ),
     );
-    expect(onStarted).toHaveBeenCalledWith('Alex Lee', undefined, attempt);
   });
 
-  it('routes to onAlreadySubmitted on a 409 instead of showing an error', async () => {
+  it('shows an inline error and stays on this step when the choice fails', async () => {
     const user = userEvent.setup();
-    vi.spyOn(playApi, 'startAttempt').mockRejectedValue(
-      new ApiError('This player has already submitted this quiz', 409),
-    );
-    const onStarted = vi.fn();
-    const onAlreadySubmitted = vi.fn();
-
-    render(
-      <NameStep
-        quizTitle="Week 1 Prep"
-        rosterPlayers={rosterPlayers}
-        accessCodeId={42}
-        onStarted={onStarted}
-        onAlreadySubmitted={onAlreadySubmitted}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(onAlreadySubmitted).toHaveBeenCalledWith('Jordan Smith', 501));
-    expect(onStarted).not.toHaveBeenCalled();
-    expect(screen.queryByText(/already submitted/)).not.toBeInTheDocument();
-  });
-
-  it('shows an inline error and stays on this step for any other failure', async () => {
-    const user = userEvent.setup();
-    vi.spyOn(playApi, 'startAttempt').mockRejectedValue(new ApiError('Invalid or expired access code', 404));
-    const onStarted = vi.fn();
-
-    render(
-      <NameStep
-        quizTitle="Week 1 Prep"
-        rosterPlayers={rosterPlayers}
-        accessCodeId={42}
-        onStarted={onStarted}
-        onAlreadySubmitted={vi.fn()}
-      />,
-    );
+    const onChoose = vi.fn().mockRejectedValue(new ApiError('Invalid or expired access code', 404));
+    render(<NameStep quizTitle="Week 1 Prep" rosterPlayers={rosterPlayers} onChoose={onChoose} />);
 
     await user.click(screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByText('Invalid or expired access code')).toBeInTheDocument();
-    expect(onStarted).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
+  });
+
+  it('offers the remembered player as one tap, continuing, instead of the roster', async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn().mockResolvedValue(undefined);
+    const remembered = { playerId: 501, name: 'Jordan Smith', jerseyNumber: '7', position: 'QB' };
+    render(
+      <NameStep quizTitle="Week 1 Prep" rosterPlayers={rosterPlayers} remembered={remembered} onChoose={onChoose} />,
+    );
+
+    // The roster is not on screen, so a teammate cannot pick a name from here.
+    expect(screen.queryByRole('button', { name: 'Alex Lee' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue as Jordan Smith · #7 · QB' }));
+
+    await waitFor(() => expect(onChoose).toHaveBeenCalledWith(remembered, true));
+  });
+
+  it('"Not you?" hands back to the roster', async () => {
+    const user = userEvent.setup();
+    const onForget = vi.fn();
+    render(
+      <NameStep
+        quizTitle="Week 1 Prep"
+        rosterPlayers={rosterPlayers}
+        remembered={{ playerId: 501, name: 'Jordan Smith', jerseyNumber: '7', position: 'QB' }}
+        onChoose={vi.fn()}
+        onForgetRemembered={onForget}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Not you? Choose your name' }));
+
+    expect(onForget).toHaveBeenCalled();
   });
 
   it("shows a roster player's photo when set, and initials otherwise - helps tell same-name Players apart", () => {
     const { container } = render(
-      <NameStep
-        quizTitle="Week 1 Prep"
-        rosterPlayers={rosterPlayersWithPhotos}
-        accessCodeId={42}
-        onStarted={vi.fn()}
-        onAlreadySubmitted={vi.fn()}
-      />,
+      <NameStep quizTitle="Week 1 Prep" rosterPlayers={rosterPlayersWithPhotos} onChoose={vi.fn()} />,
     );
 
     const jordanButton = screen.getByRole('button', { name: 'Jordan Smith (#7 · QB)' });
@@ -147,15 +114,7 @@ describe('NameStep', () => {
   });
 
   it('disables the Continue button until a name is selected', () => {
-    render(
-      <NameStep
-        quizTitle="Week 1 Prep"
-        rosterPlayers={rosterPlayers}
-        accessCodeId={42}
-        onStarted={vi.fn()}
-        onAlreadySubmitted={vi.fn()}
-      />,
-    );
+    render(<NameStep quizTitle="Week 1 Prep" rosterPlayers={rosterPlayers} onChoose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
   });

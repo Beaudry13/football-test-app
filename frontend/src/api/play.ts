@@ -1,38 +1,55 @@
 import { api } from './client';
 import type {
+  AssessmentMode,
   AttemptState,
-  PlayerResponse,
   PlayerResultsResponse,
   PracticeFeedback,
   ValidateCodeResponse,
 } from './types';
 import type { DrawingDocument } from '../components/drawing/types';
+import { attemptTokenHeaders } from '../pages/play/attemptToken';
 
-/** PHASE 2 - what a correct PIN returns. Not used by any screen yet. */
+/** What proving who you are returns - with a PIN or with the token this device
+ *  already holds. */
 export interface ClaimAttemptResponse {
-  /** The ONLY place a raw attempt token ever appears. Keep it with
-   *  saveAttemptToken; never put it in a URL. */
-  attempt_token: string;
+  /** A NEW token, or null when the device's existing token was accepted and
+   *  kept. The ONLY place a raw attempt token ever appears: keep it with
+   *  saveAttemptToken, never in a URL. */
+  attempt_token: string | null;
   token_header: string;
   player: { player_id: number; name: string };
-  /** True when an attempt already existed. Claiming again rotates the token,
+  /** True when an attempt already existed. A PIN claim then rotates the token,
    *  which signs any other device out of this attempt. */
   reclaimed: boolean;
   /** The full attempt state for a quiz to play; just its id and status for a
    *  graded attempt that is already submitted. */
-  attempt: AttemptState | { attempt_id: number; status: string };
+  attempt: AttemptState | { attempt_id: number; status: 'submitted' | 'in_progress' };
 }
 
-/** PHASE 2 - prove identity with a PIN and receive an attempt token.
- *
- *  NOTHING CALLS THIS YET. The PIN is sent in the body of this one request and
- *  is not stored anywhere by this function. */
-export function claimAttempt(input: {
-  access_code_id: number;
-  player_id: number;
-  pin: string;
-}): Promise<ClaimAttemptResponse> {
-  return api.post<ClaimAttemptResponse>('/play/claim', input, { auth: false });
+/** A canonical player proves who they are - with their PIN, or (no PIN) with
+ *  the token this device holds for this code. The PIN travels in the body of
+ *  this one request and is stored nowhere. */
+export function claimAttempt(
+  input: { access_code_id: number; player_id: number; pin?: string },
+  token?: string | null,
+): Promise<ClaimAttemptResponse> {
+  return api.post<ClaimAttemptResponse>('/play/claim', input, {
+    auth: false,
+    headers: attemptTokenHeaders(input.pin ? null : token ?? null),
+  });
+}
+
+/** The roster a player picks their name from to open results. Identifiers
+ *  only - the same list whoever has or hasn't finished. */
+export interface ResultsIdentity {
+  player_id: number | null;
+  name: string;
+  jersey_number?: string | null;
+  position?: string | null;
+}
+
+export function getResultsIdentities(code: string): Promise<{ identities: ResultsIdentity[] }> {
+  return api.post<{ identities: ResultsIdentity[] }>('/play/results/identities', { code }, { auth: false });
 }
 
 export function validateCode(code: string): Promise<ValidateCodeResponse> {
@@ -71,8 +88,8 @@ export function saveAnswer(input: {
   /** Milliseconds the question was on screen before this first answer.
    *  Omitted where it cannot be measured honestly - see QuizStep. */
   time_to_answer_ms?: number;
-}): Promise<void> {
-  return api.post<void>('/play/answers', input, { auth: false });
+}, token?: string | null): Promise<void> {
+  return api.post<void>('/play/answers', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
 /** PRACTICE ONLY. "I'm done with this question - how did I do?"
@@ -87,8 +104,8 @@ export function checkAnswer(input: {
   player_name: string;
   player_id?: number;
   question_id: number;
-}): Promise<PracticeFeedback> {
-  return api.post<PracticeFeedback>('/play/check', input, { auth: false });
+}, token?: string | null): Promise<PracticeFeedback> {
+  return api.post<PracticeFeedback>('/play/check', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
 export interface SaveDrawingResult {
@@ -113,8 +130,8 @@ export function saveDrawing(input: {
   question_id: number;
   document: DrawingDocument;
   base_revision?: number | null;
-}): Promise<SaveDrawingResult> {
-  return api.put<SaveDrawingResult>('/play/drawing', input, { auth: false });
+}, token?: string | null): Promise<SaveDrawingResult> {
+  return api.put<SaveDrawingResult>('/play/drawing', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
 export interface AnswerSubmission {
@@ -130,13 +147,22 @@ export interface AnswerSubmission {
   drawing?: DrawingDocument | null;
 }
 
+/** What /submit echoes back: the player-safe shape, never the coach's view of
+ *  the attempt. */
+export interface SubmitQuizResponse {
+  attempt_id: number;
+  status: 'submitted';
+  submitted_at: string;
+  mode: AssessmentMode;
+}
+
 export function submitQuiz(input: {
   access_code_id: number;
   player_name: string;
   player_id?: number;
   answers: AnswerSubmission[];
-}): Promise<PlayerResponse> {
-  return api.post<PlayerResponse>('/play/submit', input, { auth: false });
+}, token?: string | null): Promise<SubmitQuizResponse> {
+  return api.post<SubmitQuizResponse>('/play/submit', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
 /** Title-only lookup for the browser tab title, fired before a player has
@@ -149,17 +175,28 @@ export function getQuizTitleByCode(code: string): Promise<{ quiz_title: string |
   });
 }
 
+/** A player's results. When a PIN opens them, the server issues this device a
+ *  token for next time - it arrives beside the results, never inside them. */
+export interface PlayerResultsWithAuth extends PlayerResultsResponse {
+  player_auth?: { attempt_token: string; token_header: string };
+}
+
 /** `playerId`, when known, disambiguates two same-name canonical Players -
  * a name-only lookup can't tell them apart and would return whichever
- * attempt the server happens to find first. */
+ * attempt the server happens to find first.
+ *
+ * `auth` proves who is asking, where that is required: the PIN the player just
+ * typed, or the token this device holds. A PIN wins over a token. */
 export function getPlayerResults(
   code: string,
   playerName: string,
   playerId?: number,
-): Promise<PlayerResultsResponse> {
-  return api.post<PlayerResultsResponse>(
-    '/play/results',
-    { code, player_name: playerName, player_id: playerId },
-    { auth: false },
-  );
+  auth?: { pin?: string; token?: string | null },
+): Promise<PlayerResultsWithAuth> {
+  const body: Record<string, unknown> = { code, player_name: playerName, player_id: playerId };
+  if (auth?.pin) body.pin = auth.pin;
+  return api.post<PlayerResultsWithAuth>('/play/results', body, {
+    auth: false,
+    headers: attemptTokenHeaders(auth?.pin ? null : auth?.token ?? null),
+  });
 }

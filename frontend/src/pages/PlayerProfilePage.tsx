@@ -115,7 +115,7 @@ export function PlayerProfilePage() {
         const who = jersey_number ? `${full_name} (#${jersey_number})` : full_name;
         const confirmed = await confirm({
           title: 'Reset PIN?',
-          body: `${who}'s current PIN will stop working. Their quizzes and results aren't affected.`,
+          body: `${who}'s current PIN will stop working, and any phone they're signed in on will ask for the new one. Their quizzes and results aren't affected.`,
           confirmLabel: 'Reset PIN',
         });
         if (!confirmed) return;

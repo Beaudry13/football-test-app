@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { startAttempt } from '../../api/play';
-import { ApiError, getErrorMessage } from '../../api/client';
-import type { AttemptState, RosterPlayerOption } from '../../api/types';
+import { getErrorMessage } from '../../api/client';
+import type { RosterPlayerOption } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { PlayerAvatar } from '../../components/PlayerAvatar';
+import { playerTag, type RememberedPlayer } from './playerSession';
 import styles from './PlayPage.module.css';
 
 /** Jersey and position, or nothing when neither was recorded. */
 function optionTag(option: RosterPlayerOption): string {
-  return [option.jersey_number ? `#${option.jersey_number}` : null, option.position]
-    .filter(Boolean)
-    .join(' · ');
+  return playerTag({ jerseyNumber: option.jersey_number, position: option.position });
 }
 
 /** THE ACCESSIBLE NAME, which is deliberately NOT what is drawn on screen.
@@ -27,28 +25,33 @@ function optionLabel(option: RosterPlayerOption): string {
   return tag ? `${option.name} (${tag})` : option.name;
 }
 
+function toRememberedPlayer(option: RosterPlayerOption): RememberedPlayer {
+  return {
+    playerId: option.player_id,
+    name: option.name,
+    jerseyNumber: option.jersey_number,
+    position: option.position,
+  };
+}
+
+/** "Choose your name". What happens next - the quiz, a PIN, results - is the
+ *  caller's decision (PlayPage, through playerEntry.ts); this screen only
+ *  collects who the player says they are, and shows what went wrong. */
 export function NameStep({
   quizTitle,
   rosterPlayers,
-  accessCodeId,
-  onStarted,
-  onAlreadySubmitted,
+  remembered,
+  onChoose,
+  onForgetRemembered,
 }: {
   quizTitle: string;
   rosterPlayers: RosterPlayerOption[];
-  accessCodeId: number;
-  /** Called once the attempt is created (fresh) or resumed (already in
-   * progress) - `attempt.answers` carries whatever was previously
-   * autosaved, letting the quiz step seed itself instead of starting blank.
-   * `playerId` is set when the selected entry is a canonical master-roster
-   * Player (undefined for a legacy, name-only one) - carried forward so
-   * every later /play call can submit it too, which is what lets two
-   * Players who share a display name (e.g. two "Chris Smith"s) never
-   * collide onto the same attempt. */
-  onStarted: (name: string, playerId: number | undefined, attempt: AttemptState) => void;
-  /** The server found this name already SUBMITTED for this activation -
-   * routes straight to results instead of a fresh/resumed quiz. */
-  onAlreadySubmitted: (name: string, playerId: number | undefined) => void;
+  /** The player this device last played this code as - offered as one tap. */
+  remembered?: RememberedPlayer | null;
+  /** `continuing` is true only for the "Continue as" tap: the one path that may
+   *  use a token this device already holds. */
+  onChoose: (player: RememberedPlayer, continuing: boolean) => Promise<void>;
+  onForgetRemembered?: () => void;
 }) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,70 +59,87 @@ export function NameStep({
 
   const selected = selectedIndex !== null ? rosterPlayers[selectedIndex] : null;
 
-  async function handleContinue() {
-    if (!selected) return;
+  async function choose(player: RememberedPlayer, continuing: boolean) {
     setError(null);
     setIsSubmitting(true);
     try {
-      const attempt = await startAttempt({
-        access_code_id: accessCodeId,
-        player_name: selected.name,
-        player_id: selected.player_id ?? undefined,
-      });
-      onStarted(selected.name, selected.player_id ?? undefined, attempt);
+      await onChoose(player, continuing);
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409) {
-        onAlreadySubmitted(selected.name, selected.player_id ?? undefined);
-        return;
-      }
       setError(getErrorMessage(err));
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  const rememberedTag = remembered ? playerTag(remembered) : '';
+
   return (
     <div className={`card ${styles.panel}`}>
       <h1>{quizTitle}</h1>
-      <p>Select your name from the roster.</p>
       <ErrorBanner message={error} />
-      <div className={styles.nameGrid}>
-        {rosterPlayers.map((option, index) => (
+      {remembered && (
+        <div className={styles.continueCard}>
           <button
-            key={option.player_id ?? `legacy:${option.name}`}
-            className={`${styles.nameButton} ${selectedIndex === index ? styles.nameButtonActive : ''}`}
-            onClick={() => setSelectedIndex(index)}
+            className="btn btn-primary"
             disabled={isSubmitting}
-            aria-label={optionLabel(option)}
-            aria-pressed={selectedIndex === index}
+            onClick={() => void choose(remembered, true)}
           >
-            {/* Neutral, not the default gold. A dozen of these are on screen
-                at once here - the roster is the whole page - and at that
-                count a gold disc per row stops being an accent and becomes
-                the background. A real photo is unaffected. */}
-            <PlayerAvatar
-              name={option.name}
-              photoUrl={option.photo_url}
-              size="sm"
-              tone="neutral"
-            />
-            <span className={styles.nameButtonText}>
-              <span className={styles.nameButtonName}>{option.name}</span>
-              {optionTag(option) && (
-                <span className={styles.nameButtonTag}>{optionTag(option)}</span>
-              )}
-            </span>
+            {isSubmitting
+              ? 'Loading…'
+              : `Continue as ${remembered.name}${rememberedTag ? ` · ${rememberedTag}` : ''}`}
           </button>
-        ))}
-      </div>
-      <button
-        className="btn btn-primary"
-        disabled={!selected || isSubmitting}
-        style={{ width: '100%' }}
-        onClick={handleContinue}
-      >
-        {isSubmitting ? 'Loading…' : 'Continue'}
-      </button>
+          <button
+            type="button"
+            className={styles.quietLink}
+            disabled={isSubmitting}
+            onClick={onForgetRemembered}
+          >
+            Not you? Choose your name
+          </button>
+        </div>
+      )}
+      {!remembered && (
+        <>
+          <p>Choose your name.</p>
+          <div className={styles.nameGrid}>
+            {rosterPlayers.map((option, index) => (
+              <button
+                key={option.player_id ?? `legacy:${option.name}`}
+                className={`${styles.nameButton} ${selectedIndex === index ? styles.nameButtonActive : ''}`}
+                onClick={() => setSelectedIndex(index)}
+                disabled={isSubmitting}
+                aria-label={optionLabel(option)}
+                aria-pressed={selectedIndex === index}
+              >
+                {/* Neutral, not the default gold. A dozen of these are on screen
+                    at once here - the roster is the whole page - and at that
+                    count a gold disc per row stops being an accent and becomes
+                    the background. A real photo is unaffected. */}
+                <PlayerAvatar
+                  name={option.name}
+                  photoUrl={option.photo_url}
+                  size="sm"
+                  tone="neutral"
+                />
+                <span className={styles.nameButtonText}>
+                  <span className={styles.nameButtonName}>{option.name}</span>
+                  {optionTag(option) && (
+                    <span className={styles.nameButtonTag}>{optionTag(option)}</span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            className="btn btn-primary"
+            disabled={!selected || isSubmitting}
+            style={{ width: '100%' }}
+            onClick={() => selected && void choose(toRememberedPlayer(selected), false)}
+          >
+            {isSubmitting ? 'Loading…' : 'Continue'}
+          </button>
+        </>
+      )}
     </div>
   );
 }

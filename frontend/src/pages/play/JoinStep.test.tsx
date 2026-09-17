@@ -24,6 +24,8 @@ describe('JoinStep', () => {
     expect(
       await screen.findByText('This code has expired — ask your coach for a new one.'),
     ).toBeInTheDocument();
+    // Results outlive the code: the way to them is offered right there.
+    expect(screen.getByRole('link', { name: 'View your results' })).toHaveAttribute('href', '/results?code=OLDCOD');
   });
 
   it('shows the generic server message for a not-found or deactivated code', async () => {

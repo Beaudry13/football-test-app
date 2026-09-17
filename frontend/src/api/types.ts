@@ -935,6 +935,8 @@ export interface ApiErrorBody {
   /** Machine-readable code (e.g. "expired") for a client that needs to
    * branch on the specific failure rather than just relay `error`. */
   reason?: string;
+  /** The player PIN throttle's wait, on a 429 or a wrong PIN that earned one. */
+  retry_after_seconds?: number;
 }
 
 // --- Organization merge --------------------------------------------------

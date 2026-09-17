@@ -770,3 +770,83 @@
   font-weight: 600;
   color: var(--peira-text-muted, #5c5c5c);
 }
+
+/* ==== PLAYER PIN (Phase 3d) ==== */
+
+/* Who the PIN is for, above the box - so a player who tapped the wrong name
+   sees it before typing their own PIN into somebody else's. */
+.pinWho {
+  display: flex;
+  align-items: center;
+  gap: 0.75em;
+  margin: 0.25em 0 1em;
+  padding: 0.7em 0.85em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+/* The code box's look, with room between digits so six of them read as a PIN
+   and a thumb can see which one it just typed. */
+.pinInput {
+  width: 100%;
+  min-height: 56px;
+  padding: 0.4em 0.5em;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: 1.8em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  letter-spacing: 0.45em;
+}
+
+.pinInput::placeholder {
+  color: var(--color-text-muted);
+  letter-spacing: 0.3em;
+}
+
+.pinInput:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.3);
+}
+
+/* "Not you?" and similar: a quiet way out, never competing with Continue. */
+.quietLink {
+  display: block;
+  margin: 0.9em auto 0;
+  padding: 0.5em 0.75em;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pinNotice {
+  margin: 0 0 0.75em;
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+
+/* "Continue as" - the remembered player, one tap back into their quiz. */
+.continueCard {
+  margin: 0 0 1.25em;
+}
+
+.continueCard :global(.btn) {
+  width: 100%;
+}
+
+.pinHelp {
+  margin: 0.4em 0 0;
+  font-size: 0.9em;
+  color: var(--color-text-muted);
+  text-align: center;
+}
