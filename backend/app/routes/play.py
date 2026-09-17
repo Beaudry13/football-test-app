@@ -60,6 +60,7 @@ from app.services.access_codes import (
     canonical_player_ids_matching_name,
     effective_roster_names,
     effective_roster_players,
+    identity_key,
     selectable_players_for_code,
     find_access_code_by_code,
     reason_for_invalid,
@@ -1384,62 +1385,69 @@ def quiz_by_code(code: str):
 # Same budget as /results: a squad opens this the moment everyone submits.
 @limiter.limit("200 per minute")
 def results_identities():
-    """WHO HAS RESULTS under a code - identifiers only, for the results picker.
+    """THE NAMES A PLAYER PICKS FROM to open their results - the code's ROSTER.
 
-    PHASE 3B. Uses the HISTORICAL code lookup, like /results, so it still
-    answers after the code has expired or been deactivated. Every identity with
-    at least one SUBMITTED attempt, once:
+    Uses the HISTORICAL code lookup, like /results, so it still answers after
+    the code has expired or been deactivated. One entry per person on the
+    roster this code was sent to (its linked groups, or the quiz's own roster):
       canonical  {player_id, name (current full name), jersey_number, position}
-      legacy     {player_id: null, name (the attempt's player_name snapshot)}
-    Two canonical players who share a name stay two entries; several practice
-    runs by one player are one entry; legacy names are merged the way /results
-    matches them, case-insensitively.
+      free text  {player_id: null, name (as the coach entered it)}
+    Two canonical players who share a name stay two entries.
 
-    Nothing about any attempt - no score, status, date, id, answers, feedback or
-    drawings - and nothing about credentials or tokens. It says who may ask for
-    results, never what they are or whether they are protected. Not gated on
-    enforcement: it reveals nothing the results themselves would not.
+    NOTHING HERE IS READ FROM AN ATTEMPT, AND THAT IS THE POINT. Phase 3b listed
+    only identities with a SUBMITTED attempt, which told anyone holding the code
+    exactly who had finished and who had not. The roster is the same list no
+    matter who has started, finished, set a PIN, been deactivated or been issued
+    a token - so the response cannot say any of those things. Whether a picked
+    player actually has results is answered by /results, and only after that
+    player has proved who they are when proof is required.
+
+    THE COST, ACCEPTED: a player removed from every linked group after
+    submitting is not on the list. The device they took the quiz on still opens
+    their results directly, a coach can add them back, and a free-text attempt
+    can still be looked up by typing its name.
     """
     data = load_json_body(ResultsIdentitiesSchema())
     access_code = find_access_code_by_code(data["code"])
     if access_code is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
-    rows = (
-        db.session.query(PlayerAttempt.player_id, PlayerAttempt.player_name)
-        .filter(
-            PlayerAttempt.access_code_id == access_code.id,
-            PlayerAttempt.status == AttemptStatus.SUBMITTED,
-        )
-        .distinct()
-        .all()
-    )
-    identities = []
-    canonical_ids = {player_id for player_id, _name in rows if player_id is not None}
-    if canonical_ids:
-        players = Player.query.filter(
+    entries = effective_roster_players(access_code)
+    # Belt and braces: a roster can only hold this organization's players, but
+    # an identity list served to anyone with a code must never be the place
+    # that assumption fails silently.
+    canonical_ids = {entry["player_id"] for entry in entries if entry["player_id"] is not None}
+    in_org = {
+        player_id
+        for (player_id,) in db.session.query(Player.id).filter(
             Player.id.in_(canonical_ids),
             Player.organization_id == access_code.quiz.organization_id,
-        ).all()
-        identities.extend(
-            {
-                "player_id": player.id,
-                "name": player.full_name,
-                "jersey_number": player.jersey_number,
-                "position": player.position,
-            }
-            for player in players
         )
-    legacy_names: dict[str, str] = {}
-    for player_id, player_name in rows:
-        if player_id is None:
-            key = player_name.strip().casefold()
-            # Deterministic representative when two casings of one name exist.
-            if key not in legacy_names or player_name < legacy_names[key]:
-                legacy_names[key] = player_name
-    identities.extend({"player_id": None, "name": name} for name in legacy_names.values())
-    identities.sort(key=lambda i: (i["name"].casefold(), i["player_id"] is None, i["player_id"] or 0))
-    return _no_store(jsonify({"identities": identities}))
+    } if canonical_ids else set()
+
+    identities: dict[str, dict] = {}
+    for entry in entries:
+        if entry["player_id"] is not None:
+            if entry["player_id"] not in in_org:
+                continue
+            identities.setdefault(
+                identity_key(entry["player_id"], entry["name"]),
+                {
+                    "player_id": entry["player_id"],
+                    "name": entry["name"],
+                    "jersey_number": entry["jersey_number"],
+                    "position": entry["position"],
+                },
+            )
+        else:
+            identities.setdefault(
+                identity_key(None, entry["name"]), {"player_id": None, "name": entry["name"]}
+            )
+    ordered = sorted(
+        identities.values(),
+        key=lambda i: (i["name"].casefold(), i["player_id"] is None, i["player_id"] or 0),
+    )
+    return _no_store(jsonify({"identities": ordered}))
 
 
 @play_bp.post("/results")

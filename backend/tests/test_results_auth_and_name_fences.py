@@ -581,65 +581,112 @@ class TestNameOnlyResults:
 
 
 class TestResultsIdentities:
+    """THE RESULTS PICKER IS THE ROSTER, AND SAYS NOTHING ELSE.
+
+    Phase 3b listed only the players who had SUBMITTED, which told anyone with
+    the code who had finished. These tests pin the replacement: the same list
+    whatever anybody has done, so it cannot disclose submission, progress, PIN,
+    token or activity status."""
+
     def squad(self, client, headers):
         quiz, tf, _ = make_quiz(client, headers, "Identities")
         wr = make_player(client, headers, "Chris", "Smith", jersey_number="2", position="WR")
         lb = make_player(client, headers, "Chris", "Smith", jersey_number="44", position="LB")
         waiting = make_player(client, headers, "Still", "Going")
-        gone = make_player(client, headers, "Dee", "Legacy")
-        code = new_code(client, headers, quiz, [wr["id"], lb["id"], waiting["id"], gone["id"]], "Squad", practice=True)
+        idle = make_player(client, headers, "Never", "Started")
+        code = new_code(client, headers, quiz, [wr["id"], lb["id"], waiting["id"], idle["id"]], "Squad", practice=True)
+        # A free-text entry on the same group, as older rosters hold them.
+        group_id = db.session.get(AccessCode, code["id"]).groups[0].id
+        db.session.add(GroupPlayer(group_id=group_id, player_name="Dee Legacy", player_id=None))
+        db.session.commit()
 
         def seen_as(player):
             return SimpleNamespace(tf=tf, quiz=quiz, draw=None, code=code, player=player, who={
                 "access_code_id": code["id"], "player_name": player["full_name"], "player_id": player["id"]})
 
-        started_and_submitted(client, seen_as(wr), 0)
-        started_and_submitted(client, seen_as(wr), 1)  # a second practice run
-        started_and_submitted(client, seen_as(lb), 0)
-        assert client.post("/api/play/start", json=seen_as(waiting).who).status_code == 201
-        legacy_id = started_and_submitted(client, seen_as(gone), 0)
-        change(PlayerAttempt, legacy_id, player_id=None)
-        return code, wr, lb
+        return SimpleNamespace(code=code, quiz=quiz, tf=tf, wr=wr, lb=lb, waiting=waiting, idle=idle, seen_as=seen_as)
 
     def identities(self, client, code):
         return client.post("/api/play/results/identities", json={"code": code["code"]})
 
-    def test_each_submitted_identity_once_and_nothing_else(self, client, coach_headers):
-        code, wr, lb = self.squad(client, coach_headers)
+    def expected(self, s):
+        return {"identities": [
+            {"player_id": s.wr["id"], "name": "Chris Smith", "jersey_number": "2", "position": "WR"},
+            {"player_id": s.lb["id"], "name": "Chris Smith", "jersey_number": "44", "position": "LB"},
+            {"player_id": None, "name": "Dee Legacy"},
+            {"player_id": s.idle["id"], "name": "Never Started", "jersey_number": None, "position": None},
+            {"player_id": s.waiting["id"], "name": "Still Going", "jersey_number": None, "position": None},
+        ]}
 
-        r = self.identities(client, code)
+    def test_it_is_the_roster_with_duplicate_names_kept_apart(self, client, coach_headers):
+        s = self.squad(client, coach_headers)
+
+        r = self.identities(client, s.code)
 
         assert r.status_code == 200, r.get_json()
         assert r.headers["Cache-Control"] == "no-store"
-        assert r.get_json() == {"identities": [
-            {"player_id": wr["id"], "name": "Chris Smith", "jersey_number": "2", "position": "WR"},
-            {"player_id": lb["id"], "name": "Chris Smith", "jersey_number": "44", "position": "LB"},
-            {"player_id": None, "name": "Dee Legacy"},
-        ]}
-        raw = r.get_data(as_text=True).lower()
+        assert r.get_json() == self.expected(s)
+
+    def test_nothing_anyone_does_changes_the_list(self, client, coach_headers, enforce):
+        """The whole privacy property in one test: identical bytes before and
+        after submissions, a run in progress, a legacy submission, a PIN, a
+        token, a lockout and a deactivation."""
+        s = self.squad(client, coach_headers)
+        before = self.identities(client, s.code).get_data()
+
+        started_and_submitted(client, s.seen_as(s.wr), 0)
+        started_and_submitted(client, s.seen_as(s.wr), 1)  # a second practice run
+        started_and_submitted(client, s.seen_as(s.lb), 0)
+        assert client.post("/api/play/start", json=s.seen_as(s.waiting).who).status_code == 201
+        legacy = client.post("/api/play/start", json={"access_code_id": s.code["id"], "player_name": "Dee Legacy"})
+        assert legacy.status_code == 201, legacy.get_json()
+        give_pin(client, coach_headers, s.lb["id"])
+        waiting_pin = give_pin(client, coach_headers, s.waiting["id"])
+        assert claim(client, s.code, s.waiting["id"], waiting_pin).status_code == 200  # a token issued
+        for _ in range(7):  # into a cooldown
+            claim(client, s.code, s.lb["id"], wrong_pin_for("000001"))
+        change(PlayerCredential, s.lb["id"], locked_at=datetime.now(timezone.utc))
+        assert client.post(f"/api/players/{s.idle['id']}/deactivate", headers=coach_headers).status_code == 200
+
+        assert self.identities(client, s.code).get_data() == before
+        switch_on(enforce)
+        assert self.identities(client, s.code).get_data() == before
+
+    def test_the_response_carries_no_state_words(self, client, coach_headers):
+        s = self.squad(client, coach_headers)
+        started_and_submitted(client, s.seen_as(s.wr), 0)
+        raw = self.identities(client, s.code).get_data(as_text=True).lower()
         for leak in ("attempt", "status", "submitted", "score", "answer", "correct", "feedback",
-                     "drawing", "token", "pin", "credential", "mode", "still going"):
+                     "drawing", "token", "pin", "credential", "mode", "active", "locked", "photo"):
             assert leak not in raw, f"identities leaked {leak!r}"
 
     def test_it_works_after_expiry_and_deactivation(self, client, coach_headers):
-        code, _wr, _lb = self.squad(client, coach_headers)
-        before = self.identities(client, code).get_json()
-        change(AccessCode, code["id"], expires_at=datetime.now(timezone.utc) - timedelta(minutes=1), is_active=False)
+        s = self.squad(client, coach_headers)
+        before = self.identities(client, s.code).get_json()
+        change(AccessCode, s.code["id"], expires_at=datetime.now(timezone.utc) - timedelta(minutes=1), is_active=False)
 
-        after = self.identities(client, code)
+        after = self.identities(client, s.code)
 
         assert after.status_code == 200 and after.get_json() == before
 
-    def test_it_is_identifiers_only_with_enforcement_on_too(self, client, coach_headers, enforce):
-        code, _wr, _lb = self.squad(client, coach_headers)
-        switch_on(enforce)
-        r = self.identities(client, code)
-        assert r.status_code == 200 and len(r.get_json()["identities"]) == 3
+    def test_someone_not_on_the_roster_is_not_listed_even_with_a_submission(self, client, coach_headers):
+        """Listing attempt holders would let the list reveal who has one."""
+        s = self.squad(client, coach_headers)
+        started_and_submitted(client, s.seen_as(s.wr), 0)
+        group = db.session.get(AccessCode, s.code["id"]).groups[0]
+        GroupPlayer.query.filter_by(group_id=group.id, player_id=s.wr["id"]).delete()
+        db.session.commit()
 
-    def test_nobody_finished_yet(self, client, coach_headers):
-        env = build(client, coach_headers, with_drawing=False, pin=False)
-        assert client.post("/api/play/start", json=env.who).status_code == 201
-        assert self.identities(client, env.code).get_json() == {"identities": []}
+        ids = [i["player_id"] for i in self.identities(client, s.code).get_json()["identities"]]
+
+        assert s.wr["id"] not in ids and s.lb["id"] in ids
+
+    def test_a_quiz_roster_code_lists_its_free_text_roster(self, client, coach_headers):
+        _quiz, _tf, _written, code = build_ready_quiz(client, coach_headers)
+        assert self.identities(client, code).get_json() == {"identities": [
+            {"player_id": None, "name": "Alex Lee"},
+            {"player_id": None, "name": "Jordan Smith"},
+        ]}
 
     def test_an_unknown_code(self, client):
         r = client.post("/api/play/results/identities", json={"code": "ZZZZZZ"})
