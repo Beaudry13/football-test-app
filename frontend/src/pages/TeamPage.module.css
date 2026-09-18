@@ -93,3 +93,17 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Player PIN Security: a state, a switch, and what it means - in that order. */
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.settingHint {
+  margin: 0 0 0.5rem;
+  font-size: 0.9em;
+  color: var(--nb-text-muted);
+}

@@ -161,6 +161,12 @@ export interface OrganizationMember {
 export interface Organization {
   id: number;
   name: string;
+  /** THE ORGANIZATION'S OWN CHOICE. Protection also needs the platform switch
+   *  (PLAYER_PIN_ENFORCEMENT), which no client is told about - the player app
+   *  learns what applies from the server's answers, never from a flag. */
+  player_pin_security_enabled: boolean;
+  /** Active players with no PIN yet. A count, never who or what. */
+  players_without_pins?: number;
   members: OrganizationMember[];
   created_at: string;
   updated_at: string;

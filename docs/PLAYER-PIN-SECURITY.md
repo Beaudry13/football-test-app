@@ -1,8 +1,8 @@
 # Player PIN security
 
-**Status:** code complete on `security/player-pin-completion`. **Enforcement is OFF**
-(`PLAYER_PIN_ENFORCEMENT` unset) and nothing in this document is live in production
-until the rollout below is deliberately run.
+**Status:** code complete on `security/player-pin-completion`. **Nothing is protected
+today:** the platform switch `PLAYER_PIN_ENFORCEMENT` is unset, and every organization's
+own setting is OFF. Both must be on before a single player is asked for a PIN.
 
 **The problem it solves:** without it, a player can pick a teammate's name and start,
 answer, submit or read results as that teammate.
@@ -17,10 +17,35 @@ answer, submit or read results as that teammate.
 | **Attempt token** | 32 random bytes, issued for ONE attempt when a PIN is proved. Only its SHA-256 is stored (`player_attempts.token_hash`). Sent by the player's device as `X-Attempt-Token`. Carries the PIN version it was issued under. |
 | **Reset** | New PIN, `pin_version + 1`, throttle cleared. Every token issued under the old version is refused (`token_revoked`). No attempt is touched. |
 | **Throttle** | Per player, never per IP. 5 free wrong PINs; then waits of 1, 2, 4, 8, 15 min (a correct PIN is refused during a wait); an hour without a wrong PIN clears the run; 50 wrong in the credential's fixed 24-hour window locks it until a coach resets. `/claim` and `/results` share it. |
-| **Secured code** | Enforcement on AND (`activated_at >= PLAYER_PIN_CUTOVER_AT` OR now `>= PLAYER_PIN_COMPAT_UNTIL`). Uses `activated_at`, never `expires_at`. |
+| **Secured code** | Protection active for the organization AND (`activated_at >= PLAYER_PIN_CUTOVER_AT` OR now `>= PLAYER_PIN_COMPAT_UNTIL`). Uses `activated_at`, never `expires_at`. |
 
-The switch is **temporary**: it exists for a controlled cutover and emergency rollback, and
-is removed (with the compatibility code) once hard cutover is proven.
+## 1a. Two switches, one answer
+
+PIN protection applies to an organization only when BOTH are true:
+
+| | What | Who owns it | Default |
+|---|---|---|---|
+| **Platform** | `PLAYER_PIN_ENFORCEMENT` + the cutover dates | Peira, per deploy | off |
+| **Organization** | `organizations.player_pin_security_enabled` | that organization's staff ADMIN | off |
+
+`services/player_enforcement.settings_for(organization_id)` is the ONE place they are
+combined, and `settings_for_code(access_code)` is the form every player route uses.
+Activation, attempt start, claim/resume, answers, practice checks, drawings, submit,
+results and the name fences all resolve through it, so they cannot disagree. Nothing
+else reads either switch.
+
+**The platform switch is the rollout gate and the kill switch.** Off, no organization
+is protected whatever it has chosen, and pulling it needs no database change. On, each
+organization decides for itself. Once hard cutover is proven the platform switch is
+removed and the organization setting remains the product control.
+
+**One organization's choice never reaches another**: the answer is always computed for
+the organization that owns the code in hand, and the admin route resolves the
+organization from the authenticated coach - there is no way to name another one.
+
+The setting is read fresh on every check, never cached, so turning it on or off takes
+effect on the next request.
+
 
 ## 2. What each phase built
 
@@ -33,8 +58,13 @@ is removed (with the compatibility code) once hard cutover is proven.
 | 3b review | de4ad33 | `/results/identities` returns the code's ROSTER - it no longer reveals who has submitted |
 | 3c | 45f560c | Activation PIN gate |
 | 3d | this branch | Player screens: PIN entry, Continue as, token headers, auth-aware saves, results login; coach activation blocker |
+| Org setting | this branch | `organizations.player_pin_security_enabled` (migration `f1a6c27b90d4`), the admin switch on Team, and one enforcement helper |
+| Manual PIN | this branch | `POST /players/<id>/pin` - a coach chooses the digits |
 
-**No migration after `e5b2c8a41f73`**, which is already in production.
+**Migrations:** `e5b2c8a41f73` (already in production) and `f1a6c27b90d4`, which adds
+`organizations.player_pin_security_enabled DEFAULT FALSE`. Additive only, so older code
+runs against the migrated database - and a downgrade simply drops the column, which
+FORGETS each organization's choice (they would all be off until set again).
 
 ## 3. Who may do what, with enforcement ON
 
@@ -51,6 +81,42 @@ is removed (with the compatibility code) once hard cutover is proven.
 "Protected" = enforcement on AND (secured code OR the player has a PIN OR the player was
 ever issued a token under this code). Cross-organization players and codes are refused
 before any PIN is evaluated.
+
+## 3a. Coach and admin controls
+
+**The setting** lives on Team -> Coaches, beside the organization's name:
+
+> **PLAYER PIN SECURITY** - Require players to enter a 6-digit PIN to protect their quiz
+> attempts and results.  `[Off / On]`
+
+- **Who:** a staff ADMIN (`CoachRole.ADMIN`, the existing role - `require_admin()`).
+  An ordinary coach SEES the policy, because it explains why their players are asked for
+  a PIN, and is told only an admin can change it. No new admin concept was invented.
+- **Turning it ON asks first**, and says how many active players still have no PIN
+  ("12 active players don't have a PIN yet - give them one from Team -> Players"). It
+  issues nothing: no player's PIN is created or changed by the switch.
+- **Turning it OFF is immediate and destroys nothing** - no credential, token, attempt,
+  answer or result - so turning it back on is safe.
+
+**PIN management** (Team -> Players, and a player's profile) is unchanged in who may use
+it: any coach in the organization, exactly as the existing "Generate missing PINs" and
+"Reset PIN" already worked. Three ways to give a player a PIN:
+
+| Action | What it does |
+|---|---|
+| **Generate missing PINs** | Bulk, batched, never replaces an existing PIN |
+| **Generate PIN / Reset PIN** | One player, Peira picks the digits |
+| **Set PIN manually** (new) | One player, the COACH picks the digits - `POST /players/<id>/pin` |
+
+A manual PIN must be exactly 6 digits and is refused if it is guessable (all one digit,
+123456, 121212 ...) - the same rule generated PINs obey. It is hashed by the same service,
+shown once on the same one-time sheet, never stored or logged in plaintext, and never
+readable afterwards. Setting one for a player who already has a PIN IS a reset: version
+bumped, old PIN dead, tokens revoked, throttle and lock cleared, attempts and results
+untouched - and the UI warns first ("Changing this PIN will sign <player> out on any
+device they're using. Their quiz attempts and results will not be deleted.").
+
+Coaches never see a hash, a token, or a credential version.
 
 ## 4. The player experience (frontend)
 
@@ -99,17 +165,22 @@ snapshot or grade is rewritten. A PIN or token only decides who may READ or WRIT
 
 ## 6. Rollout plan (not started)
 
-1. **Deploy the backend** (3b + 3c) with enforcement OFF. No migration. Players see nothing
-   different; results by name keep working.
-2. **Deploy the frontend** (3d). With enforcement off, players still never see a PIN screen;
-   the Results page gains the name picker.
+1. **Deploy the backend** with the platform switch OFF. Runs migration `f1a6c27b90d4`
+   (one additive column, default false). Every organization is off, so players see nothing
+   different and results by name keep working.
+2. **Deploy the frontend**. With the platform switch off, players still never see a PIN
+   screen; the Results page gains the name picker, and Team gains the setting (which
+   cannot protect anybody yet).
 3. **Measure** a PIN check on Render (bcrypt cost 10) under a burst.
 4. **Coaches issue PINs** (Team → Players → Generate missing PINs; print the sheet) and hand
    them out. Watch the "players don't have a PIN" banner reach zero.
 5. **Owner-approved production smoke plan** - see §9; decide the test identity first.
 6. **Set** `PLAYER_PIN_CUTOVER_AT` (a moment just before step 7) and `PLAYER_PIN_COMPAT_UNTIL`
    (cutover + 7 days, at most 14), then `PLAYER_PIN_ENFORCEMENT=true`. A bad configuration
-   fails startup loudly rather than booting half-secured.
+   fails startup loudly rather than booting half-secured. **Nothing changes for anybody
+   yet** - every organization is still off.
+6a. **One organization at a time turns it on** from Team -> Coaches, once its roster has
+   PINs. Start with the pilot staff; a problem stops at that organization.
 7. **Watch** the window: 401/423/429 rates on `/play/*`, coach resets, activation refusals.
 8. **After COMPAT_UNTIL**, read-only check that no pre-cutover code is still active, then a
    separate change removes the switch and the compatibility code.
@@ -118,13 +189,16 @@ snapshot or grade is rewritten. A PIN or token only decides who may READ or WRIT
 
 | Problem | Action |
 |---|---|
-| Enforcement causes trouble | Set `PLAYER_PIN_ENFORCEMENT=false` (Render restarts). Every route behaves as before; PINs and tokens are kept, unused. |
+| One organization is in trouble | Its admin turns the setting off - instant, no deploy, nothing deleted. |
+| Everyone is in trouble | Set `PLAYER_PIN_ENFORCEMENT=false` (Render restarts): the kill switch. Every route behaves as before; PINs, tokens and each organization's setting are kept, unused. |
 | Frontend problem, enforcement off | Roll back the frontend alone. |
 | Frontend problem, enforcement on | Turn enforcement off first, then roll back the frontend - the old frontend cannot enter a PIN. |
 | Backend problem | Turn enforcement off; roll back the frontend BEFORE rolling the backend back past 3b (the new Results page needs `/results/identities`). |
 | Abandon PINs entirely | Enforcement off is sufficient. Dropping the credential table is a separate, destructive decision. |
 
 ## 8. What changes the moment enforcement turns on
+
+Nothing at all until an ORGANIZATION also turns its setting on. For one that has:
 
 - New attempts on codes activated after cutover need a PIN (or a device token).
 - A player with a PIN needs it (or a token) on EVERY code, old ones included.
@@ -136,7 +210,7 @@ snapshot or grade is rewritten. A PIN or token only decides who may READ or WRIT
 - After `COMPAT_UNTIL`, every code is secured.
 
 Nothing about questions, grading, exports, coach screens, Competition or historical data
-changes.
+changes - and nothing changes at all for an organization whose setting is off.
 
 ## 9. Production smoke (decide before step 6)
 
@@ -166,6 +240,13 @@ organization, player and quiz to use, recorded before it runs.
 - **Unsaved drawings** across a PIN prompt rely on the device's drawing drafts, not the
   carry-over used for text and choices.
 - **No ProxyFix** (pre-existing): the IP-keyed limits may see Render's proxy address.
+- **A downgrade forgets the setting.** Rolling migration `f1a6c27b90d4` back drops the
+  column, so every organization would be off (unprotected) until it is set again. The
+  credentials themselves survive.
+- **The setting is read on every check** (one primary-key lookup, at most twice per player
+  request). Deliberate: a cached security answer could go stale after an admin changed it.
+- **An admin can turn protection on while players have no PIN.** They are warned and told
+  how many; those players cannot start until they get one, and activation refuses.
 - **Competition is separate** (§11).
 
 ## 11. Competition

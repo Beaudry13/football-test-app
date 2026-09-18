@@ -86,6 +86,19 @@ export function resetPlayerPin(playerId: number): Promise<{ issued: IssuedPin; p
   return api.post<{ issued: IssuedPin; pin_version: number }>(`/players/${playerId}/pin/reset`);
 }
 
+/** Set one player's PIN to digits the coach chose.
+ *
+ *  The PIN travels in this one request and comes back once so it can be handed
+ *  over. Peira stores only a hash: nothing can read it back afterwards, and a
+ *  player who already had a PIN is reset (their old PIN and any signed-in
+ *  device stop working; their attempts and results do not change). */
+export function setPlayerPin(
+  playerId: number,
+  pin: string,
+): Promise<{ issued: IssuedPin; pin_version: number }> {
+  return api.post<{ issued: IssuedPin; pin_version: number }>(`/players/${playerId}/pin`, { pin });
+}
+
 export function previewImport(
   rawText: string,
   columnMapping?: Record<string, string | null>,

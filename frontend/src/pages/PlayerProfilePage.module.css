@@ -111,3 +111,10 @@
 .tableScroll {
   overflow-x: auto;
 }
+
+/* Said beside the manual PIN box, where a coach is deciding what to type. */
+.pinHint {
+  flex-basis: 100%;
+  font-size: 0.85em;
+  color: var(--nb-text-muted);
+}

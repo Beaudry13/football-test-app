@@ -16,6 +16,15 @@ export function renameOrganization(input: { name: string }): Promise<Organizatio
   return api.patch<Organization>('/organizations', input);
 }
 
+/** Turn Player PIN Security on or off for YOUR organization. Admin only,
+ *  server-side; there is no way to name another organization.
+ *
+ *  It changes the setting and nothing else: no PIN is issued when it goes on,
+ *  and none is deleted when it goes off. */
+export function setPlayerPinSecurity(enabled: boolean): Promise<Organization> {
+  return api.patch<Organization>('/organizations/player-pin-security', { enabled });
+}
+
 /** Asks for one of your staff to be let into YOUR organization.
  *
  * Creates no invite and grants nothing - a person reviews it and, if they

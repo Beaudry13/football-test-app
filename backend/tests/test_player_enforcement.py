@@ -31,7 +31,7 @@ from app.config import BaseConfig, TestingConfig
 from app.extensions import db
 from app.models import Answer, AttemptStatus, PlayerAttempt, PlayerCredential
 from app.models.assessment_mode import PRACTICE
-from app.services import player_credentials
+from app.services import player_credentials, player_enforcement
 from app.services.attempt_tokens import TOKEN_HEADER, check_token, hash_token
 from app.services.player_enforcement import (
     MAX_COMPAT_WINDOW,
@@ -62,12 +62,21 @@ NOW = datetime.now(timezone.utc)
 
 @pytest.fixture
 def enforce(app, monkeypatch):
-    """Turn enforcement on for this test only, with the given window."""
+    """Turn enforcement on for this test only, with the given window.
+
+    BOTH SWITCHES. Protection needs the platform switch AND the organization's
+    own `player_pin_security_enabled`, so this turns the platform one on and
+    treats every organization as having chosen it - which is what the suites
+    below are about. The ORGANIZATION half, including its OFF default and the
+    combinations, is tested for real against the column in
+    test_player_pin_org_setting.py.
+    """
 
     def _set(cutover: datetime, compat: datetime):
         monkeypatch.setitem(app.config, "PLAYER_PIN_ENFORCEMENT", True)
         monkeypatch.setitem(app.config, "PLAYER_PIN_CUTOVER_AT", cutover.isoformat())
         monkeypatch.setitem(app.config, "PLAYER_PIN_COMPAT_UNTIL", compat.isoformat())
+        monkeypatch.setattr(player_enforcement, "organization_enabled", lambda organization_id: True)
 
     return _set
 

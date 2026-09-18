@@ -550,7 +550,7 @@ def _start_or_resume(
     #
     # PHASE 3B: with the fence up, legacy first, and a protected canonical
     # attempt is never handed back on a name or a bare id (_fenced_existing).
-    guard = player_enforcement.current_settings() if fenced else None
+    guard = player_enforcement.settings_for_code(access_code) if fenced else None
     if guard is not None and not guard.enabled:
         guard = None
     if guard is None:
@@ -1586,7 +1586,7 @@ def _newest_submitted_by_name(access_code: AccessCode, player_name: str) -> Play
     query = _newest_submitted_query(access_code.id).filter(
         db.func.lower(PlayerAttempt.player_name) == player_name.strip().lower()
     )
-    if player_enforcement.current_settings().enabled:
+    if player_enforcement.settings_for_code(access_code).enabled:
         # PHASE 3B - THE NAME-ONLY RESULTS FENCE. A name is never authentication
         # for a canonical player, so it reaches legacy attempts only. Off, the
         # manual results form keeps working for everyone exactly as today.

@@ -74,7 +74,7 @@ describe('a player without a PIN', () => {
     renderPage();
 
     expect(await screen.findByText('No PIN')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Create PIN' }));
+    await user.click(screen.getByRole('button', { name: 'Generate PIN' }));
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     const sheet = await screen.findByRole('dialog');

@@ -19,8 +19,10 @@ from app.schemas.auth import RequestStaffInviteSchema
 from app.schemas.organization import (
     MemberRoleUpdateSchema,
     OrganizationUpdateSchema,
+    PlayerPinSecuritySchema,
     QuizOwnerUpdateSchema,
 )
+from app.services import player_credentials
 from app.services import staff_invite_requests
 from app.services.invites import (
     INVITE_TTL_DAYS,
@@ -66,6 +68,11 @@ def get_organization():
         {
             **coach.organization.to_dict(),
             "members": [_member_dict(m) for m in members],
+            # HOW MANY PLAYERS ARE NOT READY for Player PIN Security - a count,
+            # never who or what their credential is. It is what the setting's
+            # card warns with before an admin turns protection on, and it is
+            # the same number the roster banner shows.
+            "players_without_pins": player_credentials.missing_count(coach.organization_id),
         }
     )
 
@@ -80,6 +87,34 @@ def rename_organization():
     coach.organization.name = data["name"]
     db.session.commit()
     return jsonify(coach.organization.to_dict())
+
+
+@organizations_bp.patch("/player-pin-security")
+@jwt_required()
+@limiter.limit("20 per minute")
+def set_player_pin_security():
+    """Turn Player PIN Security on or off FOR THIS ORGANIZATION.
+
+    Admin only, and the organization is the admin's own - like every route in
+    this file, there is no way to name another one, so one staff's choice can
+    never reach another's.
+
+    THE SETTING IS THE ONLY THING THAT CHANGES. Turning it ON issues no PINs
+    (the response says how many players still need one, so the admin can go and
+    make them); turning it OFF deletes no credential, token, attempt or result.
+    That is what makes turning it back on safe.
+    """
+    coach = require_admin()
+    data = load_json_body(PlayerPinSecuritySchema())
+
+    coach.organization.player_pin_security_enabled = data["enabled"]
+    db.session.commit()
+    return jsonify(
+        {
+            **coach.organization.to_dict(),
+            "players_without_pins": player_credentials.missing_count(coach.organization_id),
+        }
+    )
 
 
 @organizations_bp.get("/invites")

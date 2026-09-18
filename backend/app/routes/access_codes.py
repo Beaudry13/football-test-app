@@ -151,9 +151,10 @@ def activate_quiz(quiz_id: int):
     # changes: the currently active code stays active and no new one is minted.
     #
     # Asked of the exact roster /start will use (roster_entries), so activation
-    # and the start fence cannot disagree about who this quiz is for. OFF - as in
-    # production - activation is exactly what it was.
-    if player_enforcement.current_settings().enabled:
+    # and the start fence cannot disagree about who this quiz is for. Asked for
+    # THIS organization: another organization's choice cannot block this one.
+    # Off - the default everywhere - activation is exactly what it was.
+    if player_enforcement.settings_for(quiz.organization_id).enabled:
         missing = players_without_pins(quiz, groups)
         if missing:
             count = len(missing)

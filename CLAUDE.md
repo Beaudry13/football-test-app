@@ -386,11 +386,26 @@ KNOWN-ISSUES.md.
 ## Work in flight
 
 **Player PIN security** — code complete on `security/player-pin-completion`,
-**enforcement OFF**. Read `docs/PLAYER-PIN-SECURITY.md` first.
+**off everywhere**. Read `docs/PLAYER-PIN-SECURITY.md` first.
 
+- **TWO SWITCHES, ONE ANSWER.** Protection needs the platform's
+  `PLAYER_PIN_ENFORCEMENT` (rollout gate and kill switch) AND that
+  organization's `player_pin_security_enabled` (the product setting a staff
+  admin owns, default OFF). `player_enforcement.settings_for(org_id)` /
+  `settings_for_code(code)` is the ONLY place they are combined - every route
+  asks it, so activation, start, claim, writes and results cannot disagree.
+  Never read either switch anywhere else, and never cache the answer: it must
+  change the moment an admin does.
 - **The frontend reads no flag.** It follows the server (`pin_required` → PIN
-  screen), so `PLAYER_PIN_ENFORCEMENT` flips behaviour without a deploy. Never
-  add a client-side "PINs on?" check.
+  screen), so either switch flips behaviour without a deploy. Never add a
+  client-side "PINs on?" check.
+- **Turning the setting off destroys nothing** - no credential, token, attempt
+  or result - which is what makes turning it back on safe. Turning it on issues
+  no PINs.
+- **A coach may also SET a player's PIN** (`POST /players/<id>/pin`): six
+  digits, refused if guessable, hashed by the same service, shown once, and a
+  reset when one already exists. Plaintext is never stored, logged or readable
+  afterwards.
 - **A stored attempt token is used only for the player a device remembers**,
   via "Continue as" (`pages/play/playerSession.ts`). A name tapped in a list
   never uses one - that is what stops a shared phone becoming an impersonation
