@@ -174,18 +174,51 @@ def in_thread(app, fn):
     return thread, out
 
 
+#: What the poll below reads. `wait_event_type = 'Lock'` is a backend blocked on
+#: the lock manager - the row locks these tests are about (wait_event is
+#: 'transactionid' or 'tuple').
+_BLOCKED_BACKENDS = (
+    "SELECT count(*) FROM pg_stat_activity "
+    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+)
+
+
 def wait_for_lock_waiters(count, timeout=15.0):
+    """Block until `count` backends are waiting on a lock in this database.
+
+    EVERY SAMPLE IS ITS OWN TRANSACTION, and that is the whole point.
+    PostgreSQL serves pg_stat_* from a snapshot that is CACHED FOR THE
+    TRANSACTION (`stats_fetch_consistency = cache`, the default since 15). A
+    poll loop inside one transaction therefore re-reads the FIRST sample it ever
+    took, forever. This helper is called immediately after the threads start, so
+    that first sample is normally taken BEFORE they reach the lock - and the
+    loop then spun for the full timeout while the backends sat blocked in plain
+    sight. It failed only when thread startup lost the race, which is why it
+    looked like flakiness in the tests rather than a bug in the observer.
+
+    AUTOCOMMIT gives each statement its own transaction and so its own snapshot;
+    the condition is then seen within one 50ms tick of becoming true. Measured
+    against this database: a transactional poller NEVER observes a backend that
+    blocks after its first sample, an autocommitting one always does.
+
+    The timeout is only a failure guard now, not part of how the wait works.
+    """
     deadline = time.monotonic() + timeout
-    with db.engine.connect() as conn:
+    with db.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         while time.monotonic() < deadline:
-            waiting = conn.execute(text(
-                "SELECT count(*) FROM pg_stat_activity "
-                "WHERE datname = current_database() AND wait_event_type = 'Lock'"
-            )).scalar()
-            if waiting >= count:
+            if conn.execute(text(_BLOCKED_BACKENDS)).scalar() >= count:
                 return
             time.sleep(0.05)
-    raise AssertionError(f"expected {count} request(s) blocked on a row lock; none arrived")
+        # Say what the database actually looked like, so a real failure here is
+        # diagnosable instead of a bare timeout.
+        activity = conn.execute(text(
+            "SELECT pid, state, wait_event_type, wait_event, left(query, 60) AS query "
+            "FROM pg_stat_activity WHERE datname = current_database() ORDER BY pid"
+        )).mappings().all()
+    raise AssertionError(
+        f"expected {count} request(s) blocked on a row lock; none arrived. "
+        f"Backends: {[dict(row) for row in activity]}"
+    )
 
 
 # ---------------------------------------------------------------------------
