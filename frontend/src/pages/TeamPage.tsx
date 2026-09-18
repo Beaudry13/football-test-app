@@ -238,8 +238,8 @@ export function TeamPage() {
             <>
               {' '}
               <strong>
-                {org.players_without_pins} player{org.players_without_pins === 1 ? '' : 's'} don&apos;t have a
-                PIN yet.
+                {org.players_without_pins} player{org.players_without_pins === 1 ? '' : 's'}{' '}
+                {org.players_without_pins === 1 ? 'doesn' : 'don'}&apos;t have a PIN yet.
               </strong>{' '}
               <Link to="/team">Manage PINs</Link>
             </>

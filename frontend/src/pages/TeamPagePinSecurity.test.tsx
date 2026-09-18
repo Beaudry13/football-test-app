@@ -72,6 +72,14 @@ describe('Player PIN Security setting', () => {
     expect(screen.getByText(/join with the access code and their name/)).toBeInTheDocument();
   });
 
+  it('counts one player in the singular', async () => {
+    mockAuth(adminCoach);
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org({ players_without_pins: 1 }));
+    renderTeam();
+
+    expect(await screen.findByText("1 player doesn't have a PIN yet.")).toBeInTheDocument();
+  });
+
   it('warns how many players still need a PIN before turning it on', async () => {
     const user = userEvent.setup();
     mockAuth(adminCoach);
