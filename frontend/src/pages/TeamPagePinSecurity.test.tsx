@@ -37,10 +37,8 @@ const org = (over: Partial<Organization> = {}): Organization => ({
 function mockAuth(coach: Coach) {
   vi.spyOn(authContext, 'useAuth').mockReturnValue({
     coach,
-    token: 't',
     isLoading: false,
     login: vi.fn(),
-    register: vi.fn(),
     registerWithInvite: vi.fn(),
     registerWithBetaInvite: vi.fn(),
     logout: vi.fn(),
