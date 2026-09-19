@@ -174,7 +174,23 @@ describe('overhead board markup', () => {
     await snap('continuation-t0')
   })
 
+  // ML-UX-1: the route handle is now the gesture a coach reaches for, so the
+  // snapshots are taken from it. The keyboard route in still has to produce
+  // the same draft, which the variant below asserts against these same files.
   it('a draft route while drawing', async () => {
+    const play = pane('Inside Zone Rt')
+    open(play)
+    const y = play.players.find((p) => p.label === 'Y')!
+    clickPlayer(play, y.id)
+    pointer(board().querySelector(`[data-handle="${y.id}"]`)!, 'pointerDown', y.x, y.y)
+    pointer(board(), 'pointerMove', y.x + 1, y.y + 3)
+    pointer(board(), 'pointerMove', y.x + 3, y.y + 6)
+    await snap('draw-draft')
+    pointer(board(), 'pointerUp', y.x + 3, y.y + 6)
+    await snap('draw-committed')
+  })
+
+  it('the same draft, armed with D and started on the marker', async () => {
     const play = pane('Inside Zone Rt')
     open(play)
     const y = play.players.find((p) => p.label === 'Y')!

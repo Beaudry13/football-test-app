@@ -14,7 +14,7 @@
 
 import type { PointerEventHandler, Ref } from 'react'
 import { FieldMarkings } from './FieldMarkings'
-import { VIEWBOX, U, toView } from '../engine/field'
+import { VIEWBOX, U, Y_MAX, toView } from '../engine/field'
 import type { Player } from '../engine/formation'
 import type { Pt } from '../engine/geometry'
 import { posAt, type ScheduleMap } from '../engine/timeline'
@@ -23,6 +23,47 @@ import { orientationAt, type OrientationMap } from '../engine/orientation'
 import type { DerivedEngagement, Engagement } from '../engine/interactions'
 
 const PLAYER_R = 0.85 * U
+
+/**
+ * THE GOLD ROUTE HANDLE - "drag me and I'll draw this man's assignment".
+ *
+ * Measured from the marker's centre, in viewBox units (U = 20 per yard):
+ *
+ *   17  the marker's edge
+ *   23  the selection ring (stroke 3, so it ends at 24.5)
+ *   28  the stub starts - clear of the ring, so the two never touch
+ *   44  the stub ends and the arrowhead begins
+ *   58  the point
+ *
+ * The design put the stub at 19, which would have run straight through the
+ * selection ring; moving that one number out to 28 is the whole adjustment.
+ * The stub is thinner than the marker's own stroke and carries no label, so
+ * it reads as something attached to the man rather than a second man.
+ */
+const HANDLE = { stub: 28, head: 44, tip: 58, hit: 26, halfWidth: 14, headHalf: 7 }
+
+/**
+ * Which way the handle points: downfield, which is up the screen.
+ *
+ * Flipped back toward the offense for a man standing within 2.5 yd of the top
+ * of the coaching window, where a downfield handle would hang off the board.
+ * Both sides of the ball get the same default, per SPEC §5.2 and its §17.1
+ * note to revisit it after coaches have used it.
+ */
+const handlePointsBack = (y: number) => y > Y_MAX - 2.5
+
+function RouteHandle({ id, y }: { id: string; y: number }) {
+  const back = handlePointsBack(y)
+  return (
+    <g data-handle={id} className="route-handle" transform={back ? 'scale(1 -1)' : undefined}>
+      {/* Hit area first, and invisible: generous to grab, never drawn. */}
+      <rect x={-HANDLE.halfWidth} y={-HANDLE.tip} width={HANDLE.halfWidth * 2} height={HANDLE.tip - HANDLE.hit} fill="transparent" />
+      <circle cy={-HANDLE.tip} r={HANDLE.headHalf} fill="transparent" />
+      <line x1={0} y1={-HANDLE.stub} x2={0} y2={-HANDLE.head} stroke="var(--accent)" strokeWidth={4} strokeLinecap="round" />
+      <path d={`M ${-HANDLE.headHalf} ${-HANDLE.head} L ${HANDLE.headHalf} ${-HANDLE.head} L 0 ${-HANDLE.tip} Z`} fill="var(--accent)" />
+    </g>
+  )
+}
 
 const pointsAttr = (pts: Pt[]) =>
   pts
@@ -71,6 +112,12 @@ export interface OverheadBoardProps {
   onPointerLeave?: PointerEventHandler<SVGSVGElement>
   /** Edit Path handles are drawn for the selected player. */
   editingPath?: boolean
+  /**
+   * Draw the selected player's gold route handle - the grab point that starts
+   * his assignment. Authoring only: a read-only board omits it and gets the
+   * same field it always drew.
+   */
+  showRouteHandle?: boolean
   /** A route being drawn right now. */
   draft?: Pt[] | null
   /** An in-progress telestration mark. */
@@ -112,6 +159,7 @@ export function OverheadBoard({
   onPointerUp,
   onPointerLeave,
   editingPath = false,
+  showRouteHandle = false,
   draft = null,
   teleDraft = null,
   hoverCatch = null,
@@ -260,6 +308,7 @@ export function OverheadBoard({
                     {p.label}
                   </text>
                 )}
+                {isSel && showRouteHandle && !present && <RouteHandle id={p.id} y={positionAt(p, time).y} />}
               </g>
             )
           })}

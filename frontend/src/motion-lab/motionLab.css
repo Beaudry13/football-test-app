@@ -162,13 +162,15 @@
   touch-action: none;
   user-select: none;
 }
-.motion-lab-root svg.board.mode-draw {
+.motion-lab-root svg.board.board-draw-armed,
+.motion-lab-root svg.board.board-drawing {
   cursor: crosshair;
 }
 .motion-lab-root svg.board .player {
   cursor: grab;
 }
-.motion-lab-root svg.board.mode-draw .player {
+.motion-lab-root svg.board.board-draw-armed .player,
+.motion-lab-root svg.board.board-drawing .player {
   cursor: crosshair;
 }
 .motion-lab-root svg.board .player.dragging {
@@ -756,4 +758,41 @@
 }
 .motion-lab-root .ml-notice b {
   color: var(--accent);
+}
+
+/* ML-UX-1: the gold route handle, and the one toolbar button left that arms
+   drawing. The handle is a grab point on the selected player - crosshair,
+   because dragging it draws rather than moves. */
+.motion-lab-root svg.board .route-handle {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board .route-handle line,
+.motion-lab-root svg.board .route-handle path {
+  pointer-events: none;
+}
+/* Until the first route of this page load is drawn, the handle breathes so a
+   coach meeting the new gesture can find it. The class that switches this off
+   sits on .app, outside the board, so the SVG markup the snapshots pin never
+   depends on whether anyone has drawn yet. */
+.motion-lab-root .app:not(.drew-once) svg.board .route-handle {
+  animation: motion-lab-handle-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-lab-root .app:not(.drew-once) svg.board .route-handle {
+    animation: none;
+  }
+}
+@keyframes motion-lab-handle-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.motion-lab-root .draw-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }

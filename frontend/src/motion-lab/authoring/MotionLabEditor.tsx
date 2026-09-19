@@ -13,8 +13,38 @@ import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, situationLabel, ty
 import type { PlayRepository } from '../storage/playRepository'
 import { isEditorKeystroke } from './keyboardScope'
 
-type Mode = 'move' | 'draw' | 'edit'
+/**
+ * WHAT THE COACH IS DOING RIGHT NOW.
+ *
+ * This replaces the old `mode: 'move' | 'draw' | 'edit'`. The difference is
+ * not the spelling: there is no longer a mode that decides what a drag MEANS.
+ * The pointer's target decides - a marker moves its player, the gold route
+ * handle draws his assignment - and `interaction` only records the states a
+ * target cannot express on its own: drawing armed from a button or a key, a
+ * stroke in flight, and anchor editing.
+ *
+ * The design's state model (SPEC §3.1) also lists `moving`, `dragging-anchor`,
+ * `dragging-meet-point` and `picking`. Those are deliberately NOT values here:
+ * `dragRef` already holds which drag is in flight (as a ref, because it is
+ * read on every pointermove) and `setup` already holds which pick is running,
+ * with the ids each needs. Copying them into React state would mean two
+ * sources of truth for one fact, and drift between them is exactly the class
+ * of bug this slice exists to remove.
+ */
+type Interaction = 'idle' | 'draw-armed' | 'drawing' | 'adjusting'
 type View = 'overhead' | 'coach' | 'player'
+
+/**
+ * Has anyone drawn a route since this page loaded?
+ *
+ * The route handle pulses until the first successful draw, then stays still -
+ * a discoverability hint, not application data, so it is a module variable and
+ * never reaches localStorage, sessionStorage or the server. Per page load is
+ * the intended lifetime. The class that reads it sits on `.app`, OUTSIDE the
+ * board's SVG, so the pulse can never make the overhead markup (and the
+ * snapshots that pin it) depend on the order tests run in.
+ */
+let drewOnce = false
 
 // Free-draw → anchors. Tolerance is in yards; small enough that the coach's
 // shape survives, large enough that hand jitter doesn't become a handle.
@@ -183,7 +213,9 @@ export function MotionLabEditor({
 
   // ---- authoring UI ----------------------------------------------------
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [mode, setMode] = useState<Mode>('move')
+  const [interaction, setInteraction] = useState<Interaction>('idle')
+  /** Mirrors `drewOnce` so the first draw re-renders the board and stops the pulse. */
+  const [pulseHandle, setPulseHandle] = useState(!drewOnce)
   const [draft, setDraft] = useState<Pt[] | null>(null)
   const [setup, setSetup] = useState<Setup | null>(null)
   const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'players' | 'look' | 'situation' | 'assignment' | 'player' | 'viewer'>(null)
@@ -210,6 +242,15 @@ export function MotionLabEditor({
   const appRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   const draftRef = useRef<Pt[] | null>(null)
+  /**
+   * Whose assignment the stroke in flight belongs to.
+   *
+   * Held beside the draft rather than read back from `selectedId` at commit
+   * time: an armed stroke that starts on a DIFFERENT man re-targets to him,
+   * and the commit must reach that man whether or not React has flushed the
+   * selection yet.
+   */
+  const drawTargetRef = useRef<string | null>(null)
   const rafRef = useRef(0)
   const lastTsRef = useRef(0)
 
@@ -280,7 +321,7 @@ export function MotionLabEditor({
       setHistoryTick((t) => t + 1)
       setSelectedId(null)
       setSetup(null)
-      setMode('move')
+      setInteraction('idle')
       setMenuOpen(null)
       setRenaming(null)
       setPlaying(false)
@@ -515,6 +556,40 @@ export function MotionLabEditor({
 
   // ---- player edits ---------------------------------------------------
 
+  /**
+   * Stop drawing without committing anything.
+   *
+   * A stroke in flight is thrown away and the player's previous assignment is
+   * left exactly as it was: an interrupted draw must never half-write a route.
+   * Safe to call in any state, so every "something else is happening now" path
+   * - Esc, a menu, a view change, Present, undo, the window losing focus -
+   * can call it without first asking what the coach was doing.
+   *
+   * Pointer capture is not released here because it cannot be: releasing needs
+   * the pointerId, and a cancel can arrive from a key or the window. It does
+   * not need to be. With the draft gone the later pointermove and pointerup do
+   * nothing, and the browser releases capture implicitly on pointerup.
+   */
+  const cancelDrawing = useCallback(() => {
+    draftRef.current = null
+    drawTargetRef.current = null
+    setDraft(null)
+    setInteraction((i) => (i === 'draw-armed' || i === 'drawing' ? 'idle' : i))
+  }, [])
+
+  /**
+   * Arm drawing for the selected player: the next drag on the field draws.
+   *
+   * The one way in that is not a gesture, shared by D and the Draw assignment
+   * button so the two cannot drift. Editing happens at pre-snap, so the clock
+   * goes back to the spot; a menu and anchor editing both stand down.
+   */
+  const armDrawing = useCallback(() => {
+    setMenuOpen(null)
+    reset()
+    setInteraction('draw-armed')
+  }, [reset])
+
   const updatePlayer = useCallback((id: string | null, patch: Partial<Player>) => {
     if (!id) return
     setPlayers((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
@@ -523,14 +598,14 @@ export function MotionLabEditor({
   const clearPath = useCallback(
     (id: string | null) => {
       updatePlayer(id, { path: [] })
-      setMode((m) => (m === 'edit' ? 'move' : m))
+      setInteraction((i) => (i === 'adjusting' ? 'idle' : i))
     },
     [updatePlayer],
   )
 
   const clearAllPaths = useCallback(() => {
     setPlayers((ps) => ps.map((p) => ({ ...p, path: [] })))
-    setMode((m) => (m === 'edit' ? 'move' : m))
+    setInteraction((i) => (i === 'adjusting' ? 'idle' : i))
   }, [])
 
   const qbId = players.find((p) => p.side === 'offense' && p.label === 'QB')?.id
@@ -613,7 +688,7 @@ export function MotionLabEditor({
 
   const startSetup = (kind: BallAction['kind'], then = false) => {
     setMenuOpen(null)
-    setMode('move')
+    cancelDrawing()
     reset()
     // Changing the first action changes who ends up with the ball, so a
     // second action authored against the old carrier is cleared, not guessed.
@@ -641,7 +716,8 @@ export function MotionLabEditor({
     setMenuOpen(null)
     if (v !== 'overhead') {
       cancelSetup()
-      setMode('move')
+      cancelDrawing()
+      setInteraction('idle')
       setTelestrating(false)
     }
     // Player view: the selected player is the obvious answer; otherwise the
@@ -657,7 +733,8 @@ export function MotionLabEditor({
   const enterPresent = () => {
     cancelSetup()
     setMenuOpen(null)
-    setMode('move')
+    cancelDrawing()
+    setInteraction('idle')
     setRenaming(null)
     setPlaying(false)
     setPresent(true)
@@ -801,7 +878,7 @@ export function MotionLabEditor({
     }
 
     // Edit Path handles sit above everything else.
-    if (mode === 'edit' && selectedId) {
+    if (interaction === 'adjusting' && selectedId) {
       const idx = hitAttr(e.target, 'data-anchor')
       if (idx !== null) {
         const p = players.find((pl) => pl.id === selectedId)!
@@ -812,17 +889,33 @@ export function MotionLabEditor({
       }
     }
 
-    if (mode === 'draw') {
-      let startId = selectedId
-      if (hit) {
+    // THE ROUTE HANDLE, BEFORE THE MARKER IT LIVES IN.
+    //
+    // The handle is rendered inside its player's <g data-player> so it travels
+    // with him, and `hitAttr` walks up with closest() - so a hit on the handle
+    // answers to data-player too. Asking about the handle first is what makes
+    // "grab the man, move him; grab his handle, draw" two different gestures
+    // rather than one that always moves.
+    const handleId = hitAttr(e.target, 'data-handle')
+
+    // Drawing: from the handle, or from anywhere on the field once armed.
+    //
+    // Armed deliberately outranks the marker rule. A coach who has just
+    // pressed D and puts the pointer down on the man he selected means to
+    // draw from him, not to nudge him half a yard.
+    if (handleId || interaction === 'draw-armed') {
+      let startId = handleId ?? selectedId
+      if (!handleId && hit) {
         startId = hit
         setSelectedId(hit)
       }
       if (!startId) return
       const start = players.find((p) => p.id === startId)!
+      drawTargetRef.current = startId
       // The path is always anchored at the player, wherever the pointer went down.
       draftRef.current = [{ x: start.x, y: start.y }, pos]
       setDraft(draftRef.current)
+      setInteraction('drawing')
       svgRef.current!.setPointerCapture(e.pointerId)
       return
     }
@@ -831,8 +924,8 @@ export function MotionLabEditor({
       const p = players.find((pl) => pl.id === hit)!
       setSelectedId(hit)
       setRenaming(null)
-      // Edit mode only means something for a player with a path.
-      if (mode === 'edit' && p.path.length < 2) setMode('move')
+      // Adjusting only means something for a player with a path.
+      if (interaction === 'adjusting' && p.path.length < 2) setInteraction('idle')
       dragRef.current = { kind: 'player', id: hit, index: 0, dx: p.x - pos.x, dy: p.y - pos.y }
       svgRef.current!.setPointerCapture(e.pointerId)
     } else {
@@ -922,13 +1015,19 @@ export function MotionLabEditor({
     }
     const d = draftRef.current
     if (d) {
+      const drawnFor = drawTargetRef.current
       draftRef.current = null
+      drawTargetRef.current = null
       setDraft(null)
+      setInteraction('idle')
       svgRef.current?.releasePointerCapture(e.pointerId)
       // A bare click (no real movement) selects without drawing.
       const cum = cumulativeLength(d)
       if (cum[cum.length - 1] < 1) return
-      updatePlayer(selectedId, { path: simplify(d, ANCHOR_EPS) })
+      updatePlayer(drawnFor, { path: simplify(d, ANCHOR_EPS) })
+      // The handle has been found; it no longer needs to wave.
+      drewOnce = true
+      setPulseHandle(false)
     }
   }
 
@@ -959,29 +1058,33 @@ export function MotionLabEditor({
       }
       if (meta) return
       switch (e.code === 'Space' ? ' ' : e.key) {
-        case 'v':
-        case 'V':
-          if (!present) setMode('move')
-          break
+        // V is gone with the Move/Draw segment: there is no mode to go back to.
         case 'd':
         case 'D':
-          if (selectedId && !setup && !watching && !present) setMode('draw')
+          if (selectedId && !setup && !watching && !present) armDrawing()
           break
         case 'e':
         case 'E':
-          if (hasPath && !setup && !watching && !present) setMode((m) => (m === 'edit' ? 'move' : 'edit'))
+          if (hasPath && !setup && !watching && !present) {
+            cancelDrawing()
+            setInteraction((i) => (i === 'adjusting' ? 'idle' : 'adjusting'))
+          }
           break
         case 'b':
         case 'B':
           if (!setup && !watching && !present) setMenuOpen((o) => (o === 'ball' ? null : 'ball'))
           break
         case 'Escape':
+          // First match wins. Drawing comes before arming, and both before
+          // anything that would merely change the selection: Esc mid-stroke
+          // has to reach the stroke, not the man it belongs to.
           if (menuOpen) setMenuOpen(null)
           else if (renaming) setRenaming(null)
           else if (telestrating) setTelestrating(false)
           else if (pickingViewer) setView('overhead')
           else if (setup) cancelSetup()
-          else if (mode !== 'move') setMode('move')
+          else if (interaction === 'drawing' || interaction === 'draw-armed') cancelDrawing()
+          else if (interaction === 'adjusting') setInteraction('idle')
           else setSelectedId(null)
           break
         case ' ':
@@ -1000,12 +1103,30 @@ export function MotionLabEditor({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, hasPath, mode, setup, menuOpen, renaming, telestrating, pickingViewer, watching, present, togglePlay, reset, clearPath, cancelSetup, undo, redo])
+  }, [selectedId, hasPath, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, present, togglePlay, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, undo, redo])
 
-  // Leaving the selection empties draw/edit mode of meaning.
+  // Leaving the selection empties arming and anchor editing of meaning.
   useEffect(() => {
-    if (!selectedId && mode !== 'move') setMode('move')
-  }, [selectedId, mode])
+    if (!selectedId && interaction !== 'idle') {
+      draftRef.current = null
+      drawTargetRef.current = null
+      setDraft(null)
+      setInteraction('idle')
+    }
+  }, [selectedId, interaction])
+
+  /**
+   * A stroke must not survive the coach looking away.
+   *
+   * Losing focus mid-drag means the pointerup lands somewhere else and never
+   * reaches us, which would leave a half-drawn route following the mouse.
+   * Throw it away instead: the previous assignment is untouched.
+   */
+  useEffect(() => {
+    const onBlur = () => cancelDrawing()
+    window.addEventListener('blur', onBlur)
+    return () => window.removeEventListener('blur', onBlur)
+  }, [cancelDrawing])
 
   // ---- render ---------------------------------------------------------
 
@@ -1024,7 +1145,7 @@ export function MotionLabEditor({
   const startPickRelease = () => {
     if (!qbId) return
     setMenuOpen(null)
-    setMode('move')
+    cancelDrawing()
     setSelectedId(null)
     reset()
     setSetup({ step: 'pick-release', targetId: qbId })
@@ -1036,7 +1157,7 @@ export function MotionLabEditor({
   const startCopy = (mirror: boolean) => {
     if (!selected) return
     setMenuOpen(null)
-    setMode('move')
+    cancelDrawing()
     reset()
     setSetup({ step: 'copy-to', sourceId: selected.id, mirror })
   }
@@ -1047,16 +1168,27 @@ export function MotionLabEditor({
     return `${r < 0 ? '−' : '+'}${Math.abs(r).toFixed(1)}s`
   }
 
+  /**
+   * Show the gold route handle?
+   *
+   * It is an invitation to draw, so it appears only where a drag would draw:
+   * resting on a selected man, or already armed. While a stroke is in flight,
+   * while anchors are being edited, and during a ball pick it would be a
+   * second gold thing competing for the same pointer.
+   */
+  const showRouteHandle = !setup && (interaction === 'idle' || interaction === 'draw-armed')
+
   const hint = (() => {
     if (present) return telestrating ? <>Draw on the field while paused. <b>Esc</b> to stop drawing.</> : <>Teaching. Click a player to highlight him.</>
     if (pickingViewer) return <>Player view — <b>click the player</b> to watch from.</>
     if (watching) return <>{view === 'coach' ? 'Coach' : 'Player'} view is for watching. Switch to <b>Overhead</b> to edit.</>
     if (setup) return <>{setup.step === 'copy-to' ? 'Copying an assignment' : 'Setting the ball action'} — <b>Esc</b> to cancel.</>
-    if (mode === 'draw') return <>Draw <b>{selected?.label}</b>'s path on the field. Drawing again replaces it. <b>Esc</b> to finish.</>
-    if (mode === 'edit') return <>Drag a handle to adjust <b>{selected?.label}</b>'s path. Hard breaks stay sharp. <b>Esc</b> to finish.</>
-    if (!selected) return <>Drag any player. Click one, then <b>Draw Path</b> (D). Then set the <b>Ball</b>.</>
-    if (!hasPath) return <><b>{selected.label}</b> selected — press <b>D</b> and draw their path.</>
-    return <><b>{selected.label}</b> — <b>D</b> redraw · <b>E</b> edit path · <b>Delete</b> clear.</>
+    if (interaction === 'drawing') return <>Drawing <b>{selected?.label}</b>'s assignment. Let go to finish. <b>Esc</b> to cancel.</>
+    if (interaction === 'draw-armed') return <>Draw <b>{selected?.label}</b>'s assignment: drag on the field. <b>Esc</b> to cancel.</>
+    if (interaction === 'adjusting') return <>Drag a handle to adjust <b>{selected?.label}</b>'s path. Hard breaks stay sharp. <b>Esc</b> to finish.</>
+    if (!selected) return <>Drag any player to move him. Click one to draw his assignment. Then set the <b>Ball</b>.</>
+    if (!hasPath) return <><b>{selected.label}</b> selected — drag the <b>gold arrow</b> to draw his assignment, or press <b>D</b>.</>
+    return <><b>{selected.label}</b> — drag the <b>gold arrow</b> to redraw · <b>E</b> edit path · <b>Delete</b> clear.</>
   })()
 
   const instruction = (() => {
@@ -1116,7 +1248,7 @@ export function MotionLabEditor({
     ) : (
       <button
         onClick={() => {
-          setMode('move')
+          cancelDrawing()
           reset()
           setSetup({ step: 'pick-partner', forId: selected.id })
         }}
@@ -1176,7 +1308,7 @@ export function MotionLabEditor({
   )
 
   return (
-    <div ref={appRef} className={`app${present ? ' present' : ''}`}>
+    <div ref={appRef} className={`app${present ? ' present' : ''}${pulseHandle ? '' : ' drew-once'}`}>
       <div className="bar">
         {exit}
         <div className="brand">
@@ -1244,14 +1376,23 @@ export function MotionLabEditor({
           </>
         ) : (
           <>
-            <div className="seg">
-              <button className={mode === 'move' && !setup && !watching ? 'active' : ''} disabled={!!setup || watching} onClick={() => setMode('move')}>
-                Move<span className="key">V</span>
-              </button>
-              <button className={mode === 'draw' ? 'active' : ''} disabled={!selected || !!setup || watching} onClick={() => setMode('draw')}>
-                Draw<span className="key">D</span>
-              </button>
-            </div>
+            {/*
+              TEMPORARY, AND DELIBERATELY SO (ML-UX-1).
+              The mode segment is gone - the pointer's target decides what a
+              drag means now. This button remains only so a coach with a mouse
+              never loses an obvious way to start a route while the gold
+              handle is still new to him; it ARMS drawing, exactly as D does.
+              ML-UX-4 moves the primary action into the selected-player strip
+              and this goes with it.
+            */}
+            <button
+              className={`draw-btn${interaction === 'draw-armed' || interaction === 'drawing' ? ' active' : ''}`}
+              disabled={!selected || !!setup || watching}
+              onClick={armDrawing}
+              title="Arm drawing for the selected player (D)"
+            >
+              {hasPath ? 'Redraw' : 'Draw assignment'}<span className="key">D</span>
+            </button>
             <div className="ball-menu">
               <button className={`ball-btn${ball ? ' has-action' : ''}${menuOpen === 'ball' ? ' active' : ''}`} disabled={!!setup || watching} onClick={() => toggleMenu('ball')}>
                 🏈 {summarize(ball, players)}
@@ -1412,8 +1553,8 @@ export function MotionLabEditor({
               </button>
               {menuOpen === 'assignment' && (
                 <div className="popover play-pop-left">
-                  <button onClick={() => { setMenuOpen(null); setMode('draw') }}>Draw path <span className="key">D</span></button>
-                  <button disabled={!hasPath} onClick={() => { setMenuOpen(null); setMode('edit') }}>Edit path <span className="key">E</span></button>
+                  <button onClick={armDrawing}>{hasPath ? 'Redraw path' : 'Draw path'} <span className="key">D</span></button>
+                  <button disabled={!hasPath} onClick={() => { setMenuOpen(null); cancelDrawing(); setInteraction('adjusting') }}>Edit path <span className="key">E</span></button>
                   <button disabled={!hasPath} onClick={() => startCopy(false)}>Copy to…</button>
                   <button disabled={!hasPath} onClick={() => startCopy(true)}>Mirror to…</button>
                   <button className="pop-clear" disabled={!hasPath} onClick={() => { setMenuOpen(null); clearPath(selected.id) }}>Clear assignment <span className="key">⌫</span></button>
@@ -1515,7 +1656,7 @@ export function MotionLabEditor({
         ) : (
         <OverheadBoard
           svgRef={svgRef}
-          className={`board mode-${mode}${setup ? ' setup' : ''}${present ? ' present' : ''}${telestrating ? ' tele' : ''}`}
+          className={`board board-${interaction}${setup ? ' setup' : ''}${present ? ' present' : ''}${telestrating ? ' tele' : ''}`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -1537,7 +1678,8 @@ export function MotionLabEditor({
           selectedId={selectedId}
           present={present}
           strokes={strokes}
-          editingPath={mode === 'edit'}
+          editingPath={interaction === 'adjusting'}
+          showRouteHandle={showRouteHandle}
           draft={draft}
           teleDraft={teleDraft}
           hoverCatch={hoverCatch}

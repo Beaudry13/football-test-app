@@ -60,3 +60,30 @@ export function dragPlayer(play: Play, id: string, dx: number, dy: number) {
   fireEvent.pointerMove(board(), { pointerId: 1, ...client(p.x + dx, p.y + dy) })
   fireEvent.pointerUp(board(), { pointerId: 1, ...client(p.x + dx, p.y + dy) })
 }
+
+export const playerMarker = (id: string) => board().querySelector(`[data-player="${id}"]`)!
+export const routeHandle = (id: string) => board().querySelector(`[data-handle="${id}"]`)
+
+/**
+ * Draw a route, from wherever the gesture starts.
+ *
+ * ML-UX-1 gave drawing two ways in - the gold handle, and arming with D or the
+ * Draw button and then dragging anywhere - so a test says which it means by
+ * passing the element the pointer goes down on. `finish: false` leaves the
+ * stroke in flight, for the tests about interrupting one.
+ */
+export function stroke(from: Element, points: [number, number][], { finish = true } = {}) {
+  const [[x0, y0], ...rest] = points
+  fireEvent.pointerDown(from, { button: 0, pointerId: 1, ...client(x0, y0) })
+  for (const [x, y] of rest) fireEvent.pointerMove(board(), { pointerId: 1, ...client(x, y) })
+  const [lx, ly] = points[points.length - 1]
+  if (finish) fireEvent.pointerUp(board(), { pointerId: 1, ...client(lx, ly) })
+}
+
+/** Draw the selected player's assignment by dragging his gold route handle. */
+export function drawFromHandle(play: Play, id: string, points: [number, number][], opts?: { finish?: boolean }) {
+  const p = play.players.find((pl) => pl.id === id)!
+  const handle = routeHandle(id)
+  if (!handle) throw new Error(`no route handle for ${id} - is he selected, and is the board resting?`)
+  stroke(handle, [[p.x, p.y], ...points], opts)
+}

@@ -23,7 +23,7 @@ function readOnlyBoard(play: Play, time: number) {
   const { container } = render(
     <OverheadBoard
       // The editor's resting class; the read-only default is plain "board".
-      className="board mode-move"
+      className="board board-idle"
       players={play.players}
       ball={play.ball}
       engagements={play.engagements}

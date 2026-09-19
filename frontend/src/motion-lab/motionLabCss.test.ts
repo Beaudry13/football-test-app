@@ -27,7 +27,14 @@ interface Rule {
   body: string
 }
 
-/** Top-level rules; an @keyframes block is one rule with its body intact. */
+/**
+ * Top-level rules; an @keyframes block is one rule with its body intact.
+ *
+ * A conditional group (@media, @supports) is flattened to the rules INSIDE it.
+ * ML-UX-1 added the first @media block this stylesheet has ever had, and
+ * without this the scoping check would step straight over it - a media query
+ * would have been a hole big enough to leak an unscoped selector through.
+ */
 function rules(css: string): Rule[] {
   const text = css.replace(/\/\*[\s\S]*?\*\//g, '')
   const out: Rule[] = []
@@ -41,7 +48,10 @@ function rules(css: string): Rule[] {
       if (text[end] === '{') depth++
       else if (text[end] === '}' && --depth === 0) break
     }
-    out.push({ prelude: text.slice(i, open).trim(), body: text.slice(open + 1, end).trim() })
+    const prelude = text.slice(i, open).trim()
+    const body = text.slice(open + 1, end).trim()
+    if (prelude.startsWith('@media') || prelude.startsWith('@supports')) out.push(...rules(body))
+    else out.push({ prelude, body })
     i = end + 1
   }
   return out
@@ -79,8 +89,12 @@ describe('motionLab.css scoping', () => {
 
   it('names its keyframes motion-lab-* and only animates with those', () => {
     const names = scoped.filter((r) => r.prelude.startsWith('@keyframes')).map((r) => r.prelude.split(/\s+/)[1])
-    expect(names).toEqual(['motion-lab-toast-in', 'motion-lab-catch-pulse'])
-    const used = [...SCOPED.matchAll(/animation:\s*([\w-]+)/g)].map((m) => m[1])
+    // ML-UX-1 added the route handle's first-draw pulse. New keyframes are
+    // expected to land here deliberately, named motion-lab-*, never silently.
+    expect(names).toEqual(['motion-lab-toast-in', 'motion-lab-catch-pulse', 'motion-lab-handle-pulse'])
+    // `animation: none` names no keyframe - it is how the reduced-motion
+    // block switches the handle's pulse off.
+    const used = [...SCOPED.matchAll(/animation:\s*([\w-]+)/g)].map((m) => m[1]).filter((n) => n !== 'none')
     expect(used.every((n) => names.includes(n))).toBe(true)
   })
 
