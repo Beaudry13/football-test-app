@@ -72,25 +72,42 @@ describe('Player PIN Security setting', () => {
     expect(screen.getByText(/join with the access code and their name/)).toBeInTheDocument();
   });
 
-  it('counts one player in the singular', async () => {
+  it('says nothing about missing PINs while it is off', async () => {
+    // PINs are optional: an organization that has not chosen them is not told
+    // its roster is incomplete. The same rule as Team -> Players.
     mockAuth(adminCoach);
-    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org({ players_without_pins: 1 }));
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org({ players_without_pins: 12 }));
+    renderTeam();
+
+    expect(await screen.findByRole('heading', { name: 'Player PIN Security' })).toBeInTheDocument();
+    expect(screen.queryByText(/have a PIN yet/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Manage PINs' })).not.toBeInTheDocument();
+  });
+
+  it('once it is on, it says who still needs a PIN - in the singular for one', async () => {
+    mockAuth(adminCoach);
+    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(
+      org({ player_pin_security_enabled: true, players_without_pins: 1 }),
+    );
     renderTeam();
 
     expect(await screen.findByText("1 player doesn't have a PIN yet.")).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage PINs' })).toBeInTheDocument();
   });
 
   it('warns how many players still need a PIN before turning it on', async () => {
     const user = userEvent.setup();
     mockAuth(adminCoach);
-    vi.spyOn(orgApi, 'getOrganization').mockResolvedValue(org({ players_without_pins: 12 }));
+    vi.spyOn(orgApi, 'getOrganization')
+      .mockResolvedValueOnce(org({ players_without_pins: 12 }))
+      // The page re-reads the organization after saving, as it does live.
+      .mockResolvedValue(org({ player_pin_security_enabled: true, players_without_pins: 12 }));
     const save = vi
       .spyOn(orgApi, 'setPlayerPinSecurity')
       .mockResolvedValue(org({ player_pin_security_enabled: true, players_without_pins: 12 }));
     renderTeam();
 
-    expect(await screen.findByText(/12 players don't have a PIN yet\./)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Turn on' }));
+    await user.click(await screen.findByRole('button', { name: 'Turn on' }));
 
     const dialog = await findConfirmDialog();
     expect(dialog).toHaveTextContent("12 active players don't have a PIN yet");
@@ -98,6 +115,8 @@ describe('Player PIN Security setting', () => {
     await acceptConfirm(user, 'Turn on');
 
     await waitFor(() => expect(save).toHaveBeenCalledWith(true));
+    // Only now, with the organization opted in, is the shortfall worth saying.
+    expect(await screen.findByText(/12 players don't have a PIN yet\./)).toBeInTheDocument();
   });
 
   it('can be cancelled, and then nothing is sent', async () => {

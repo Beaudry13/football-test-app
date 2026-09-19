@@ -234,7 +234,7 @@ export function TeamPage() {
           ) : (
             <>Players join with the access code and their name, as they do now.</>
           )}
-          {(org.players_without_pins ?? 0) > 0 && (
+          {org.player_pin_security_enabled && (org.players_without_pins ?? 0) > 0 && (
             <>
               {' '}
               <strong>

@@ -10,6 +10,7 @@ import {
   uploadPlayerPhoto,
   type IssuedPin,
 } from '../api/players';
+import { usePinSecurity } from '../hooks/usePinSecurity';
 import { PinSheetDialog } from '../components/pins/PinSheetDialog';
 import { PinStatusBadge } from '../components/pins/PinStatusBadge';
 import { getErrorMessage } from '../api/client';
@@ -44,6 +45,9 @@ export function PlayerProfilePage() {
   const [isIssuingPin, setIsIssuingPin] = useState(false);
   /** The "set it myself" box, open only while the coach is typing digits. */
   const [manualPin, setManualPin] = useState<string | null>(null);
+  /** Whether this organization uses Player PIN Security. It decides whether a
+   *  missing PIN is WORTH FLAGGING - not whether a coach may manage one. */
+  const { enabled: pinSecurity } = usePinSecurity();
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -235,7 +239,12 @@ export function PlayerProfilePage() {
                         · <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
                       </>
                     )}
-                    {history.pin_status && (
+                    {/* NOT A WARNING WHERE PINS ARE OPTIONAL. With the
+                        organization's setting off, "No PIN" beside a player's
+                        name says something is wrong when nothing is; the PIN
+                        actions below stay available for a staff getting ready
+                        to turn it on. */}
+                    {pinSecurity && history.pin_status && (
                       <>
                         {' '}
                         · <PinStatusBadge status={history.pin_status} />

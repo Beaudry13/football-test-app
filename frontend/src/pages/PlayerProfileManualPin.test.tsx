@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerProfilePage } from './PlayerProfilePage';
 import * as playersApi from '../api/players';
 import * as groupsApi from '../api/groups';
+import * as orgApi from '../api/organizations';
 import { ApiError } from '../api/client';
 import { acceptConfirm, cancelConfirm, findConfirmDialog } from '../test/confirmDialog';
 import type { IssuedPin } from '../api/players';
@@ -66,6 +67,9 @@ beforeEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
   vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+  // Setting a PIN by hand stays available either way; these tests do not
+  // depend on the organization's setting.
+  vi.spyOn(orgApi, 'getOrganization').mockRejectedValue(new Error('not needed here'));
 });
 
 describe('setting a PIN by hand', () => {
