@@ -150,9 +150,10 @@ describe('overhead board markup', () => {
   it('ball setup: pick rings and dimming, then the catch target', async () => {
     const play = pane('Trips Out')
     open(play)
+    // ML-UX-3 moved the ball control into the dock and renamed its items
+    // (SPEC §6.3). Same states, same board: only the way in changed.
     fireEvent.click(screen.getAllByRole('button').find((b) => b.textContent?.startsWith('🏈'))!)
-    // "Pass…" appears twice once a pass exists: the first action, then "Then…".
-    fireEvent.click(screen.getAllByRole('button', { name: 'Pass…' })[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Pass to…' }))
     await snap('setup-pick-target')
     const receiver = play.players.find((p) => p.side === 'offense' && p.label === 'H')!
     clickPlayer(play, receiver.id)

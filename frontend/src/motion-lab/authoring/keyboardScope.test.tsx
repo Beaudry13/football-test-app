@@ -13,7 +13,7 @@ import { createLocalPlayRepository } from '../storage/localPlayRepository'
  * is visible.
  */
 
-const ballMenuOpen = () => screen.queryByRole('button', { name: 'QB Keep' }) !== null
+const ballMenuOpen = () => screen.queryByRole('button', { name: 'QB keeps it' }) !== null
 
 beforeEach(() => {
   localStorage.clear()

@@ -908,3 +908,123 @@
   }
 }
 
+/* ---- ML-UX-3: the ball in the dock ---------------------------------------
+ *
+ * Additive, like the ML-UX-2 layout above: `.ball-btn`, `.warn`, `.popover`,
+ * `.pop-title` and `.pop-clear` are all prototype-derived and their
+ * declarations are pinned by motionLabCss.test.ts. Everything here either
+ * introduces a NEW class or re-states an existing selector below the marker so
+ * the cascade does the work and the characterization stays untouched.
+ */
+
+/* The ball sits first in the dock, then a hairline, then the transport. */
+.motion-lab-root .bar.bottom .ball-menu {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.motion-lab-root .dock-divider {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+/* The sentence gives way before any control does, and says the whole thing in
+   its tooltip when it has been cut short. */
+.motion-lab-root .bar.bottom .ball-btn {
+  max-width: 240px;
+}
+/* The button is a row: football, sentence, badge, key. Only the sentence
+   gives way. The prototype's `.ball-btn` is an inline-block whose children
+   simply overflowed and were clipped - with a badge and a key hint after the
+   sentence, that clipped the sentence rather than shortening it. */
+.motion-lab-root .bar.bottom .ball-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.motion-lab-root .ball-sentence {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1300px) {
+  .motion-lab-root .bar.bottom .ball-btn {
+    max-width: 160px;
+  }
+}
+
+/* Nothing set yet: an invitation, outlined rather than filled, so it reads as
+   the one thing still to do without shouting as loudly as Play. */
+.motion-lab-root .ball-btn.gold-line {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+
+/* The menu is a question when nothing is set and a statement once something
+   is; either way it needs room for a sentence. */
+.motion-lab-root .ball-pop {
+  min-width: 320px;
+  max-width: 420px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.motion-lab-root .now-card {
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #1d2024;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.motion-lab-root .now-card b {
+  color: var(--accent);
+}
+.motion-lab-root .now-note {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+/* The dot marks which of the five the play is on now. It holds its width when
+   empty so the labels stay in one column. */
+.motion-lab-root .now-dot {
+  display: inline-block;
+  width: 12px;
+  color: var(--accent);
+}
+
+/* Advanced: shut until asked for. */
+.motion-lab-root .adv-toggle {
+  text-align: left;
+}
+.motion-lab-root .adv-body {
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+/* The banner's icon, shared by a drawing and a ball pick. */
+.motion-lab-root .banner-icon {
+  margin-right: 2px;
+}
+
+/* THE BALL MENU HANGS FROM THE LEFT EDGE OF ITS BUTTON.
+ *
+ * The prototype's `.popover` is right-aligned (`right: 0`), which was correct
+ * when every popover sat on the right-hand side of a bar. The ball is now the
+ * FIRST thing in the dock, 16 px from the window edge, so a 320 px menu
+ * right-aligned to it starts at -174 px and half of it is off-screen. Align it
+ * to the button's left edge instead - the same clamp-to-viewport rule, applied
+ * to the other side. Rate and Display still hang from the right, where they
+ * belong. Found in the browser; jsdom has no layout and cannot see this.
+ */
+.motion-lab-root .bar.bottom .ball-menu .popover {
+  right: auto;
+  left: 0;
+}
+

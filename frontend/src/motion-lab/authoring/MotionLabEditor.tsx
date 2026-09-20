@@ -4,7 +4,8 @@ import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
 import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
 import { cumulativeLength, simplify, type EndBehavior, type Pt } from '../engine/geometry'
 import { buildSchedule, posAt, resolveEnd } from '../engine/timeline'
-import { ballTargetOf, deriveBall, isPass, projectOntoPath, summarize, THEN_KINDS, type BallAction } from '../engine/ball'
+import { ballTargetOf, deriveBall, isPass, projectOntoPath, THEN_KINDS, type BallAction } from '../engine/ball'
+import { catchDepth, fullBallSentence } from './ballSentence'
 import { FieldView } from '../view/FieldView'
 import { COACH_CAMERA, playerCamera } from '../engine/perspective'
 import { buildOrientation, orientationAt } from '../engine/orientation'
@@ -45,6 +46,15 @@ type View = 'overhead' | 'coach' | 'player'
  * snapshots that pin it) depend on the order tests run in.
  */
 let drewOnce = false
+
+/**
+ * Has the coach opened the ball menu's Advanced disclosure on this page load?
+ *
+ * A preference about a menu, not anything about the play: it never reaches
+ * localStorage, sessionStorage, the play document or the server. Same
+ * reasoning, and the same mechanism, as `drewOnce` above.
+ */
+let advancedOpenMemo = false
 
 // Free-draw → anchors. Tolerance is in yards; small enough that the coach's
 // shape survives, large enough that hand jitter doesn't become a handle.
@@ -90,6 +100,16 @@ const FILTERS: { value: PathFilter; label: string }[] = [
   { value: 'none', label: 'None' },
 ]
 const RATES = [0.5, 1, 1.5]
+/** The five things that can happen with the ball, in the design's order (§6.3).
+ *  `long` is the invitation shown when nothing is set; `short` is the same
+ *  choice offered as a change to something that already exists. */
+const BALL_CHOICES: { kind: BallAction['kind']; long: string; short: string }[] = [
+  { kind: 'keep', long: 'QB keeps it', short: 'QB keeps it' },
+  { kind: 'handoff', long: 'Handoff to…', short: 'Handoff to…' },
+  { kind: 'pitch', long: 'Pitch to…', short: 'Pitch to…' },
+  { kind: 'pass', long: 'Pass to…', short: 'Pass to…' },
+  { kind: 'play-action', long: 'Play action: fake, then pass…', short: 'Play action…' },
+]
 const VIEWS: { value: View; label: string }[] = [
   { value: 'overhead', label: 'Overhead' },
   { value: 'coach', label: 'Coach' },
@@ -216,6 +236,8 @@ export function MotionLabEditor({
   const [interaction, setInteraction] = useState<Interaction>('idle')
   /** Mirrors `drewOnce` so the first draw re-renders the board and stops the pulse. */
   const [pulseHandle, setPulseHandle] = useState(!drewOnce)
+  /** Mirrors `advancedOpenMemo` so opening the disclosure re-renders the menu. */
+  const [advancedOpen, setAdvancedOpen] = useState(advancedOpenMemo)
   const [draft, setDraft] = useState<Pt[] | null>(null)
   const [setup, setSetup] = useState<Setup | null>(null)
   const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'players' | 'look' | 'situation' | 'assignment' | 'player' | 'viewer' | 'rate' | 'display'>(null)
@@ -728,6 +750,15 @@ export function MotionLabEditor({
     setMenuOpen(null)
     cancelDrawing()
     reset()
+    // SPEC §6.8: the menu is in the dock, so it opens from Coach and Player
+    // view too - but every pick happens ON THE BOARD. Go there first, then
+    // show the banner, rather than refusing the coach the menu he just used.
+    // "QB keeps it" and "Clear the ball" need no pick and no switch; they
+    // return below without reaching this.
+    if (kind !== 'keep' && view !== 'overhead') {
+      setView('overhead')
+      setTelestrating(false)
+    }
     // Changing the first action changes who ends up with the ball, so a
     // second action authored against the old carrier is cleared, not guessed.
     if (!then && ballThen) {
@@ -827,8 +858,13 @@ export function MotionLabEditor({
         break
       case 'pick-target':
         if (schedule.has(id)) setSetup({ step: 'pick-catch', fakeId: setup.fakeId, targetId: id, then: setup.then })
-        // A receiver with no route is caught where they stand — nothing to pick.
-        else finishPass({ step: 'pick-catch', fakeId: setup.fakeId, targetId: id, then: setup.then }, { x: p.x, y: p.y })
+        else {
+          // A receiver with no route is caught where they stand - nothing to
+          // pick. Say so, because the coach asked for a catch point and did
+          // not get to choose one; there is no lasting "needs a route" state.
+          finishPass({ step: 'pick-catch', fakeId: setup.fakeId, targetId: id, then: setup.then }, { x: p.x, y: p.y })
+          showToast(`${p.label} has no route, so he catches it where he stands. Draw his route, then set the catch point again.`)
+        }
         break
     }
   }
@@ -1127,6 +1163,12 @@ export function MotionLabEditor({
           break
         case ' ':
           e.preventDefault()
+          // SPEC §10: Space "cancels draw-armed or a pick first". Watching the
+          // play while the field is still asking a question would leave the
+          // banner up over a play in motion - and §6.5 counts Play among the
+          // ways out of a pick, which must leave the ball as it was.
+          if (setup) cancelSetup()
+          cancelDrawing()
           togglePlay()
           break
         case 'r':
@@ -1238,27 +1280,46 @@ export function MotionLabEditor({
     return <><b>{selected.label}</b> — drag the <b>gold arrow</b> to redraw · <b>E</b> edit path · <b>Delete</b> clear.</>
   })()
 
+  /**
+   * THE WAITING SENTENCE for a field pick (SPEC §11.2).
+   *
+   * One sentence per step, saying what the coach is being asked for, in the
+   * same banner row a drawing uses. The bold half is the instruction: a coach
+   * glancing up should be able to read only the bold and know what to click.
+   */
   const instruction = (() => {
     if (!setup) return null
+    const carrier = () => name(ballTimeline.chain?.carrierId ?? qbId ?? '')
     switch (setup.step) {
-      case 'pick-carrier': {
-        const who = setup.then ? name(ballTimeline.chain?.carrierId ?? qbId ?? '') : 'QB'
-        return setup.kind === 'pitch' ? <>{setup.then ? <>Then <b>{who}</b> pitches — </> : <>Pitch — </>}<b>click who gets the pitch</b>.</> : <>{setup.then ? <>Then <b>{who}</b> hands off — </> : <>Handoff — </>}<b>click the ball carrier</b>.</>
-      }
+      case 'pick-carrier':
+        return setup.then ? (
+          <>Then <b>{carrier()}</b> {setup.kind === 'pitch' ? 'pitches' : 'hands off'}. <b>Choose who gets it.</b></>
+        ) : (
+          <>{setup.kind === 'pitch' ? 'Pitch' : 'Handoff'}. <b>Choose who gets the ball.</b></>
+        )
       case 'pick-fake':
-        return <>Play action — <b>click the back to fake to</b>.</>
+        return <>Play action. <b>Choose who the QB fakes to.</b></>
       case 'pick-target':
-        return <>{setup.fakeId ? <>Faking to <b>{name(setup.fakeId)}</b>. Now </> : setup.then ? <>Then <b>{name(ballTimeline.chain?.carrierId ?? qbId ?? '')}</b> throws — </> : <>Pass — </>}<b>click the receiver</b>.</>
+        if (setup.fakeId) return <>Faking to <b>{name(setup.fakeId)}</b>. Now <b>choose the receiver.</b></>
+        return setup.then ? (
+          <>Then <b>{carrier()}</b> throws. <b>Choose the receiver.</b></>
+        ) : (
+          <>Pass. <b>Choose the receiver.</b></>
+        )
       case 'pick-catch':
-        return <>Click on <b>{name(setup.targetId)}</b>'s route where the ball should arrive.</>
+        return setup.then ? (
+          <>Then <b>{carrier()}</b> throws to <b>{name(setup.targetId)}</b>. <b>Click where on his route the ball arrives.</b></>
+        ) : (
+          <>Pass to <b>{name(setup.targetId)}</b>. <b>Click where on his route the ball arrives.</b></>
+        )
       case 'pick-release':
-        return <>Click on the <b>QB</b>'s path where he throws from.</>
+        return <><b>Click where on the QB's path he throws from.</b></>
       case 'pick-partner':
-        return <>Engage — <b>click who {name(setup.forId)} engages</b>.</>
+        return <><b>Choose who {name(setup.forId)} engages.</b></>
       case 'pick-engage-point':
-        return <><b>{name(setup.forId)}</b> ↔ <b>{name(setup.partnerId)}</b>: click <b>where they meet</b>.</>
+        return <><b>Click where {name(setup.forId)} and {name(setup.partnerId)} meet.</b></>
       case 'copy-to':
-        return <>{setup.mirror ? 'Mirror' : 'Copy'} <b>{name(setup.sourceId)}</b>'s assignment — <b>click the player</b> who gets it.</>
+        return <>{setup.mirror ? 'Mirror' : 'Copy'} <b>{name(setup.sourceId)}</b>'s assignment. <b>Click the player who gets it.</b></>
     }
   })()
 
@@ -1316,6 +1377,105 @@ export function MotionLabEditor({
   ) : ballTimeline.qbEarly > 0.25 && ball ? (
     <><b>Ball:</b> {ballTimeline.passer} lets it go {ballTimeline.qbEarly.toFixed(1)}s before the top of his drop for {isPass(ballThen) ? name(ballThen.targetId) : isPass(ball) ? name(ball.targetId) : ''}'s timing.</>
   ) : null
+
+  /**
+   * THE BALL, AT THE FAR LEFT OF THE DOCK (SPEC §6.1, §6.3).
+   *
+   * One control that says what happens with the ball in a sentence, and opens
+   * a menu that reads as a question when nothing is set and as a statement
+   * once something is. It used to be a button in the top bar whose label was a
+   * summary of the stored object.
+   */
+  const ballText = fullBallSentence(ball, ballThen, players)
+  const ballWarning = ball ? ballTimeline.warning : null
+  const nowDepth = catchDepth(ball)
+  const canAdvanced = isPass(ball) && qbHasPath
+
+  const ballControl = (
+    <div className="ball-menu">
+      <button
+        className={`ball-btn${ball ? ' has-action' : ' gold-line'}${menuOpen === 'ball' ? ' active' : ''}`}
+        disabled={!!setup || interaction === 'drawing' || present}
+        onClick={() => toggleMenu('ball')}
+        aria-expanded={menuOpen === 'ball'}
+        title={ballText}
+      >
+        🏈 <span className="ball-sentence">{ballText}</span>
+        {ballWarning && <span className="warn" title={ballWarning}>!</span>}
+        <span className="key">B</span>
+      </button>
+      {menuOpen === 'ball' && (
+        <div className="popover ball-pop">
+          {ball ? (
+            <>
+              {/* NOW: what the play currently does, and anything the engine
+                  wants to say about whether it can. */}
+              <div className="now-card">
+                <b>Now:</b> {ballText}
+                {nowDepth ? `, ${nowDepth}` : ''}.
+                {ballNote && <div className="now-note">{ballNote}</div>}
+              </div>
+              <div className="pop-title">Change to</div>
+            </>
+          ) : (
+            <div className="pop-title">What happens with the ball?</div>
+          )}
+          {BALL_CHOICES.map((c) => (
+            <button key={c.kind} onClick={() => startSetup(c.kind)}>
+              <span className={`now-dot${ball?.kind === c.kind ? ' on' : ''}`} aria-hidden="true">
+                {ball?.kind === c.kind ? '●' : ''}
+              </span>
+              {ball ? c.short : c.long}
+            </button>
+          ))}
+          {ball && ball.kind !== 'keep' && (
+            <>
+              <div className="pop-title">Then…</div>
+              {THEN_KINDS.map((k) => (
+                <button key={k} onClick={() => startSetup(k, true)}>
+                  {k === 'handoff' ? 'Then hand off to…' : k === 'pitch' ? 'Then pitch to…' : 'Then throw to…'}
+                </button>
+              ))}
+              {ballThen && (
+                <button className="pop-clear" onClick={() => { setBallThen(null); setMenuOpen(null); reset() }}>
+                  Clear the second action
+                </button>
+              )}
+            </>
+          )}
+          {canAdvanced && (
+            <>
+              {/* A disclosure, shut until asked for: the throw point is a
+                  detail most plays never touch. Its state is remembered for
+                  the page load only - it is a preference about a menu, not
+                  anything about the play. */}
+              <button
+                className={`adv-toggle${advancedOpen ? ' open' : ''}`}
+                onClick={() => { advancedOpenMemo = !advancedOpen; setAdvancedOpen(advancedOpenMemo) }}
+                aria-expanded={advancedOpen}
+              >
+                Advanced <span className="key">{advancedOpen ? '▾' : '▸'}</span>
+              </button>
+              {advancedOpen && (
+                <div className="adv-body">
+                  <div className="pop-title">
+                    Throw point: {hasReleaseOverride ? 'set by you' : 'end of drop'}
+                  </div>
+                  <button onClick={startPickRelease}>Set on field…</button>
+                  {hasReleaseOverride && <button onClick={useDefaultRelease}>Use end of drop</button>}
+                </div>
+              )}
+            </>
+          )}
+          {ball && (
+            <button className="pop-clear" onClick={() => { setBall(null); setBallThen(null); setMenuOpen(null); reset() }}>
+              Clear the ball
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
 
   const situationChip = (
     <div className="ball-menu">
@@ -1445,51 +1605,6 @@ export function MotionLabEditor({
             >
               {hasPath ? 'Redraw' : 'Draw assignment'}<span className="key">D</span>
             </button>
-            <div className="ball-menu">
-              <button className={`ball-btn${ball ? ' has-action' : ''}${menuOpen === 'ball' ? ' active' : ''}`} disabled={!!setup || watching} onClick={() => toggleMenu('ball')}>
-                🏈 {summarize(ball, players)}
-                {ballThen && <span className="then-note"> · then {summarize(ballThen, players).replace('Ball: ', '')}</span>}
-                {ballTimeline.warning && ball && <span className="warn" title={ballTimeline.warning}>!</span>}
-                <span className="key">B</span>
-              </button>
-              {menuOpen === 'ball' && (
-                <div className="popover">
-                  {ball && <div className="pop-title">Change to</div>}
-                  <button onClick={() => startSetup('keep')}>QB Keep</button>
-                  <button onClick={() => startSetup('handoff')}>Handoff…</button>
-                  <button onClick={() => startSetup('pitch')}>Pitch…</button>
-                  <button onClick={() => startSetup('pass')}>Pass…</button>
-                  <button onClick={() => startSetup('play-action')}>Play Action…</button>
-                  {isPass(ball) && qbHasPath && (
-                    <>
-                      <div className="pop-title">Throw point</div>
-                      <button onClick={startPickRelease}>Throw from here…</button>
-                      {hasReleaseOverride && <button onClick={useDefaultRelease}>Use default (end of QB path)</button>}
-                    </>
-                  )}
-                  {ball && ball.kind !== 'keep' && (
-                    <>
-                      <div className="pop-title">{ballThen ? 'Then (change)' : 'Then…'}</div>
-                      {THEN_KINDS.map((k) => (
-                        <button key={k} onClick={() => startSetup(k, true)}>
-                          {k === 'handoff' ? 'Handoff…' : k === 'pitch' ? 'Pitch…' : 'Pass…'}
-                        </button>
-                      ))}
-                      {ballThen && (
-                        <button className="pop-clear" onClick={() => { setBallThen(null); setMenuOpen(null); reset() }}>
-                          Clear second action
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {ball && (
-                    <button className="pop-clear" onClick={() => { setBall(null); setBallThen(null); setMenuOpen(null); reset() }}>
-                      Clear ball action
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
             <button className="primary" onClick={enterPresent} title="Hide the authoring tools and teach">
               Present
             </button>
@@ -1503,7 +1618,9 @@ export function MotionLabEditor({
           <>
             {situationChip}
             {selected && <div className={`chip ${selected.side}`}>{selected.label}</div>}
-            <span className="hint">{ballNote ?? (ball ? summarize(ball, players).replace('Ball: ', '') + (ballThen ? ` · then ${summarize(ballThen, players).replace('Ball: ', '')}` : '') : '')}</span>
+            {/* Present still carries a ball note; removing it is ML-UX-8's
+                call, not this slice's. Only the grammar changes here. */}
+            <span className="hint">{ballNote ?? (ball ? ballText : '')}</span>
           </>
         ) : interaction === 'draw-armed' || interaction === 'drawing' || interaction === 'adjusting' ? (
           /*
@@ -1521,6 +1638,7 @@ export function MotionLabEditor({
             <div className="spacer" />
             <button
               onClick={clicked(() => (interaction === 'adjusting' ? setInteraction('idle') : cancelDrawing()))}
+              title="Cancel · Esc"
             >
               {interaction === 'adjusting' ? 'Done' : 'Cancel'}
               <span className="key">Esc</span>
@@ -1560,11 +1678,17 @@ export function MotionLabEditor({
         ) : watching ? (
           <span className="hint">Elevated coaching view. Play, scrub and change views freely; switch to <b>Overhead</b> to edit the play.</span>
         ) : setup ? (
+          /* A pick is a waiting state, so it wears the same banner a drawing
+             does (SPEC §11.2). This branch stays BELOW the drawing one above:
+             the two cannot both be true, and keeping the order explicit is
+             what makes that safe to rely on. */
           <>
-            <div className="chip ball">{setup.step === 'copy-to' ? '⧉' : '🏈'}</div>
-            <span className="instruction">{instruction}</span>
+            <span className="banner">
+              <span className="banner-icon">{setup.step === 'copy-to' ? '⧉' : '🏈'}</span>
+              {instruction}
+            </span>
             <div className="spacer" />
-            <button onClick={cancelSetup}>Cancel<span className="key">Esc</span></button>
+            <button onClick={cancelSetup} title="Cancel · Esc">Cancel<span className="key">Esc</span></button>
           </>
         ) : selected ? (
           <>
@@ -1764,11 +1888,14 @@ export function MotionLabEditor({
       </div>
 
       {/*
-        THE DOCK (ML-UX-2). Watch the play, then choose how the field is
-        displayed - in that order, left to right. Reset and Restart used to be
-        two buttons a coach had to choose between; ⟲ is one.
+        THE DOCK. What happens with the ball, then watch the play, then how the
+        field is displayed - in that order, left to right (ML-UX-2, ML-UX-3).
+        Reset and Restart used to be two buttons a coach had to choose between;
+        ⟲ is one.
       */}
       <div className="bar bottom">
+        {ballControl}
+        <span className="dock-divider" />
         <button className="icon-btn" onClick={clicked(restart)} disabled={!canPlay} title="Restart · R" aria-label="Restart">
           ⟲
         </button>
