@@ -218,7 +218,7 @@ export function MotionLabEditor({
   const [pulseHandle, setPulseHandle] = useState(!drewOnce)
   const [draft, setDraft] = useState<Pt[] | null>(null)
   const [setup, setSetup] = useState<Setup | null>(null)
-  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'players' | 'look' | 'situation' | 'assignment' | 'player' | 'viewer'>(null)
+  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'players' | 'look' | 'situation' | 'assignment' | 'player' | 'viewer' | 'rate' | 'display'>(null)
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look'>(null)
@@ -548,11 +548,49 @@ export function MotionLabEditor({
     setPlaying(true)
   }, [duration, playing, time])
 
+  /**
+   * The dock's one transport reset (⟲), and what R does.
+   *
+   * Back to the spot, CARRYING ON AS YOU WERE: stopped stays stopped, playing
+   * keeps playing, so a coach showing a play to a room can start it over
+   * without the field going still first. It used to be two buttons - Reset
+   * (stop at 0) and Restart (play from 0) - and a coach had to know which.
+   *
+   * This is the BUTTON's meaning only. `reset()` above is a different thing
+   * that happens to look similar: the rule that any edit returns the board to
+   * pre-snap. Every editing path still calls that one.
+   */
   const restart = useCallback(() => {
     if (duration === 0) return
     setTime(0)
-    setPlaying(true)
   }, [duration])
+
+  /**
+   * Step the clock by a fixed amount, for picking a frame apart.
+   *
+   * Stepping is looking, not watching, so it pauses first - otherwise the
+   * playback loop would move the clock back out from under the coach. Clamped
+   * to the play, and rounded, because 0.1 added ten times is not 1 in binary.
+   */
+  const step = useCallback(
+    (by: number) => {
+      if (duration === 0) return
+      setPlaying(false)
+      setTime((t) => Math.max(0, Math.min(duration, Number((t + by).toFixed(3)))))
+    },
+    [duration],
+  )
+
+  /**
+   * Run a toolbar button's action and take the focus ring off it.
+   *
+   * Without this, the button a coach just clicked keeps focus and Space - the
+   * play/pause key - would also activate it again.
+   */
+  const clicked = (fn: () => void) => (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.blur()
+    fn()
+  }
 
   // ---- player edits ---------------------------------------------------
 
@@ -1093,7 +1131,16 @@ export function MotionLabEditor({
           break
         case 'r':
         case 'R':
-          reset()
+          // The key the ⟲ button is labelled with, so the two agree.
+          restart()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          step(e.shiftKey ? -0.5 : -0.1)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          step(e.shiftKey ? 0.5 : 0.1)
           break
         case 'Delete':
         case 'Backspace':
@@ -1103,7 +1150,7 @@ export function MotionLabEditor({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, hasPath, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, present, togglePlay, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, undo, redo])
+  }, [selectedId, hasPath, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, present, togglePlay, restart, step, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, undo, redo])
 
   // Leaving the selection empties arming and anchor editing of meaning.
   useEffect(() => {
@@ -1356,7 +1403,12 @@ export function MotionLabEditor({
           </div>
         )}
 
-        <div className="hint top-hint">{hint}</div>
+        {/*
+          ML-UX-2: the running instruction used to sit here, between the play's
+          name and the view controls, which made the top bar two things at once.
+          It belongs with the man it is talking about, so it moved to the strip.
+        */}
+        <div className="spacer" />
 
         <Seg value={view} options={VIEWS} onChange={switchView} />
 
@@ -1452,6 +1504,27 @@ export function MotionLabEditor({
             {situationChip}
             {selected && <div className={`chip ${selected.side}`}>{selected.label}</div>}
             <span className="hint">{ballNote ?? (ball ? summarize(ball, players).replace('Ball: ', '') + (ballThen ? ` · then ${summarize(ballThen, players).replace('Ball: ', '')}` : '') : '')}</span>
+          </>
+        ) : interaction === 'draw-armed' || interaction === 'drawing' || interaction === 'adjusting' ? (
+          /*
+            THE WAITING ROW (SPEC §2). While the coach is part-way through
+            something the strip says so and offers the way out, instead of
+            showing controls for a man whose route is mid-flight.
+
+            Adjust is included, which the design does not ask for: until
+            ML-UX-4 builds the strip's Adjust toggle there is nothing else on
+            screen that says anchor editing is on, and the instruction it
+            replaced has just left the top bar.
+          */
+          <>
+            <span className="banner">{hint}</span>
+            <div className="spacer" />
+            <button
+              onClick={clicked(() => (interaction === 'adjusting' ? setInteraction('idle') : cancelDrawing()))}
+            >
+              {interaction === 'adjusting' ? 'Done' : 'Cancel'}
+              <span className="key">Esc</span>
+            </button>
           </>
         ) : pickingViewer ? (
           <>
@@ -1690,15 +1763,23 @@ export function MotionLabEditor({
         )}
       </div>
 
+      {/*
+        THE DOCK (ML-UX-2). Watch the play, then choose how the field is
+        displayed - in that order, left to right. Reset and Restart used to be
+        two buttons a coach had to choose between; ⟲ is one.
+      */}
       <div className="bar bottom">
-        <button onClick={reset} disabled={time === 0 && !playing}>
-          Reset<span className="key">R</span>
+        <button className="icon-btn" onClick={clicked(restart)} disabled={!canPlay} title="Restart · R" aria-label="Restart">
+          ⟲
         </button>
-        <button className="primary" onClick={togglePlay} disabled={!canPlay}>
+        <button className="primary play-toggle" onClick={clicked(togglePlay)} disabled={!canPlay}>
           {playing ? '❚❚ Pause' : '▶ Play'}<span className="key">Space</span>
         </button>
-        <button onClick={restart} disabled={!canPlay}>
-          Restart
+        <button className="icon-btn" onClick={clicked(() => step(-0.1))} disabled={!canPlay} title="Back 0.1 s · ←" aria-label="Back 0.1 seconds">
+          ◁
+        </button>
+        <button className="icon-btn" onClick={clicked(() => step(0.1))} disabled={!canPlay} title="Forward 0.1 s · →" aria-label="Forward 0.1 seconds">
+          ▷
         </button>
         <div className="scrub">
           <input
@@ -1719,18 +1800,54 @@ export function MotionLabEditor({
             </div>
           )}
         </div>
-        <div className="time">{canPlay ? `${fmtRel(time)} / ${fmtRel(duration)}` : '—'}</div>
-        <span className="group">
-          <label className="lbl">Speed</label>
-          <Seg value={rate} options={RATES.map((r) => ({ value: r, label: `${r}×` }))} onChange={setRate} size="sm" />
-        </span>
-        <span className="group">
-          <label className="lbl">Paths</label>
-          <Seg value={filter} options={FILTERS} onChange={setFilter} size="sm" />
-        </span>
-        <button className={`labels-btn${showLabels ? ' active' : ''}`} onClick={() => setShowLabels((s) => !s)} title="Show or hide position labels">
-          Labels
-        </button>
+        {/* Where the clock is, relative to the snap. The play's length is on
+            the scrub already, so it does not need saying twice. */}
+        <div className="time">{canPlay ? fmtRel(time) : '—'}</div>
+        <div className="ball-menu">
+          <button
+            className={`rate-pill${menuOpen === 'rate' ? ' active' : ''}`}
+            onClick={() => toggleMenu('rate')}
+            aria-expanded={menuOpen === 'rate'}
+            title="Playback rate"
+          >
+            {rate}× <span className="key">▾</span>
+          </button>
+          {menuOpen === 'rate' && (
+            <div className="popover rate-pop">
+              {RATES.map((r) => (
+                <button key={r} className={r === rate ? 'active' : ''} onClick={() => { setRate(r); setMenuOpen(null) }}>
+                  {r}×
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* HOW THE FIELD IS DISPLAYED, in one place. Paths belongs to the play
+            and is saved with it; Labels is this screen, this session. */}
+        <div className="ball-menu">
+          <button
+            className={menuOpen === 'display' ? 'active' : ''}
+            onClick={() => toggleMenu('display')}
+            aria-expanded={menuOpen === 'display'}
+            title="What the field shows"
+          >
+            Display <span className="key">▾</span>
+          </button>
+          {menuOpen === 'display' && (
+            <div className="popover display-pop">
+              <div className="sit-row">
+                <label className="lbl">Paths</label>
+                <Seg value={filter} options={FILTERS} onChange={setFilter} size="sm" />
+              </div>
+              <div className="sit-row">
+                <label className="lbl">Labels</label>
+                <button className={`labels-btn${showLabels ? ' active' : ''}`} onClick={() => setShowLabels((v) => !v)} title="Show or hide position labels">
+                  {showLabels ? 'Shown' : 'Hidden'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -796,3 +796,115 @@
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+
+/* ---- ML-UX-2: three zones and the dock -----------------------------------
+ *
+ * THESE RULES DELIBERATELY OVERRIDE PROTOTYPE RULES ABOVE.
+ *
+ * `.bar`, `.bar.bottom` and `.bar.context` are prototype-derived, and
+ * motionLabCss.test.ts pins every prototype rule's declarations, in order, so
+ * that the P1 scoping work cannot have quietly restyled anything. Editing
+ * those rules in place would break that guarantee for a layout change it was
+ * never meant to police. Re-stating the selectors down here, after the marker,
+ * changes the layout by the cascade and leaves the guarantee intact - at the
+ * cost of two rules per selector, which is why this note exists.
+ *
+ * The prototype let the bars WRAP. That is what made the editor's height move
+ * when a selection changed, and it is what a fixed-height dock cannot allow.
+ */
+.motion-lab-root .bar {
+  flex-wrap: nowrap;
+  height: 44px;
+  padding: 0 16px;
+  gap: 8px;
+}
+.motion-lab-root .bar.context {
+  height: 44px;
+  min-height: 0;
+  padding: 0 16px;
+}
+.motion-lab-root .bar.bottom {
+  height: 56px;
+  gap: 10px;
+}
+
+/* Anything that can be long gives way first; nothing ever pushes a control
+   off the end of a bar. */
+.motion-lab-root .bar .hint,
+.motion-lab-root .bar .banner,
+.motion-lab-root .bar .instruction,
+.motion-lab-root .bar .play-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motion-lab-root .bar .play-name {
+  display: inline-block;
+  max-width: 200px;
+}
+
+/* The waiting row: one sentence, and the way out. */
+.motion-lab-root .bar.context .banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Transport. The only large gold thing in the dock is Play/Pause. */
+.motion-lab-root .bar.bottom .icon-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+.motion-lab-root .bar.bottom .play-toggle {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 18px;
+}
+.motion-lab-root .bar.bottom .scrub {
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+.motion-lab-root .bar.bottom .time {
+  flex: 0 0 auto;
+  width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.motion-lab-root .bar.bottom .rate-pill {
+  flex: 0 0 auto;
+  min-width: 58px;
+}
+
+/* Display and rate open upward: they live on the bottom edge. */
+.motion-lab-root .bar.bottom .popover {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.motion-lab-root .display-pop {
+  min-width: 260px;
+}
+.motion-lab-root .display-pop .sit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.motion-lab-root .rate-pop {
+  min-width: 96px;
+}
+
+/* The top bar's VIEW label is the first thing to go on a narrow laptop. */
+@media (max-width: 1300px) {
+  .motion-lab-root .bar .lbl.view-label {
+    display: none;
+  }
+}
+

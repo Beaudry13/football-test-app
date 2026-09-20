@@ -97,6 +97,24 @@ describe('the editor\'s shortcuts in PEIRA', () => {
     expect(ballMenuOpen()).toBe(false)
   })
 
+  it('the arrow keys belong to the field, not to a number field', () => {
+    // ML-UX-2 gave the arrows to the clock. A coach setting "3rd & 7" uses
+    // them to move the caret inside the box, and must keep them.
+    mountEditor()
+    fireEvent.click(document.querySelector('.sit-chip')!)
+    const distance = document.querySelector('.sit-pop input[type=number]') as HTMLInputElement
+    const scrub = () => document.querySelector('.scrub input[type=range]') as HTMLInputElement
+    const before = scrub().value
+
+    for (const shiftKey of [false, true]) {
+      fireEvent.keyDown(distance, { key: 'ArrowLeft', code: 'ArrowLeft', shiftKey })
+      fireEvent.keyDown(distance, { key: 'ArrowRight', code: 'ArrowRight', shiftKey })
+    }
+    fireEvent.keyDown(distance, { key: 'r' })
+
+    expect(scrub().value).toBe(before)
+  })
+
   it('stops listening when the editor is gone', () => {
     const { unmount } = mountEditor()
     unmount()
