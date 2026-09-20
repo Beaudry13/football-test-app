@@ -21,6 +21,7 @@ from app.schemas.player import (
     PlayerBulkCreateSchema,
     PlayerCreateSchema,
     PlayerUpdateSchema,
+    SetPlayerPinSchema,
 )
 from app.services import player_credentials
 from app.services.attempt_scope import official_only
@@ -160,6 +161,33 @@ def generate_missing_pins():
     """
     issued, remaining = player_credentials.generate_missing(current_coach())
     return _one_time({"issued": issued, "remaining": remaining})
+
+
+@players_bp.post("/<int:player_id>/pin")
+@jwt_required()
+def set_player_pin(player_id: int):
+    """Set one player's PIN to a value the coach chose.
+
+    The plaintext arrives here, is bcrypt-hashed by the credential service and
+    echoed back ONCE in this no-store response so it can be handed over. It is
+    never stored, never logged, and no later request can read it back.
+
+    A player who already had a PIN is reset: their old PIN stops working, every
+    token issued under it is revoked, any lock is cleared - and their attempts,
+    answers and results are untouched.
+
+    SAME PERMISSION AS RESET, deliberately: `get_org_player` scopes it to the
+    caller's organization, which is the boundary every player-management route
+    in this file already uses. This adds a way to choose the digits, not a new
+    class of coach who may manage credentials.
+    """
+    player = get_org_player(player_id)
+    data = load_json_body(SetPlayerPinSchema())
+    try:
+        issued, version = player_credentials.set_pin(player, current_coach(), data["pin"])
+    except player_credentials.WeakPinError as exc:
+        raise ApiError(str(exc), status_code=422, reason="weak_pin") from exc
+    return _one_time({"issued": issued, "pin_version": version})
 
 
 @players_bp.post("/<int:player_id>/pin/reset")

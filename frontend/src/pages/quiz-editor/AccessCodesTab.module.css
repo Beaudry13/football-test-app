@@ -151,3 +151,20 @@
   font-size: 0.9em;
   color: var(--color-danger);
 }
+
+/* PINs enforced, and some players on this roster have none (Phase 3c). Said
+   above the activation controls, where the coach just clicked. */
+.pinBlocker {
+  margin-bottom: 1rem;
+  border-color: var(--color-warning, var(--nb-card-border));
+}
+
+.pinBlockerTitle {
+  margin: 0 0 0.5em;
+  font-weight: 600;
+}
+
+.pinBlockerList {
+  margin: 0 0 0.5em;
+  padding-left: 1.2em;
+}

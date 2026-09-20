@@ -24,6 +24,8 @@ const memberCoach: Coach = { ...adminCoach, id: 2, username: 'assistant', role: 
 const org: Organization = {
   id: 1,
   name: 'Wildcats',
+  player_pin_security_enabled: false,
+  players_without_pins: 0,
   members: [
     { id: 1, username: 'coach1', email: 'coach1@example.com', role: 'admin' },
     { id: 2, username: 'assistant', email: 'assistant@example.com', role: 'member' },

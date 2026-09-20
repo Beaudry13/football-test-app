@@ -49,6 +49,7 @@ from app.schemas.play import (
     CheckAnswerSchema,
     ClaimAttemptSchema,
     PlayerResultsSchema,
+    ResultsIdentitiesSchema,
     SaveAnswerSchema,
     SaveDrawingSchema,
     StartAttemptSchema,
@@ -56,8 +57,10 @@ from app.schemas.play import (
     ValidateCodeSchema,
 )
 from app.services.access_codes import (
+    canonical_player_ids_matching_name,
     effective_roster_names,
     effective_roster_players,
+    identity_key,
     selectable_players_for_code,
     find_access_code_by_code,
     reason_for_invalid,
@@ -483,14 +486,24 @@ def start_attempt():
     if reason is not None:
         raise _invalid_code_error(reason)
 
-    attempt, created = _start_or_resume(access_code, data["player_name"], data.get("player_id"))
+    # fenced=True: with player PIN enforcement on, a request that carries only a
+    # name - or a bare player_id - may not reach or begin a protected canonical
+    # attempt. /claim, which has already authenticated the player, does not fence.
+    attempt, created = _start_or_resume(
+        access_code, data["player_name"], data.get("player_id"), fenced=True
+    )
     if created:
         return jsonify(_attempt_state(attempt)), 201
     return jsonify(_attempt_state(attempt))
 
 
 def _start_or_resume(
-    access_code: AccessCode, player_name: str, player_id: int | None, *, commit: bool = True
+    access_code: AccessCode,
+    player_name: str,
+    player_id: int | None,
+    *,
+    commit: bool = True,
+    fenced: bool = False,
 ) -> tuple[PlayerAttempt, bool]:
     """Resume this player's attempt under this code, or begin one.
 
@@ -504,6 +517,18 @@ def _start_or_resume(
     `commit=False` (Phase 3a, used by /claim) leaves a new attempt flushed but
     uncommitted, so the caller can issue its token and commit ONCE while still
     holding the player's credential lock.
+
+    `fenced=True` (Phase 3b, used by /start) applies the player PIN fences when
+    enforcement is on. They GATE this function; they change none of its rules:
+      * an existing legacy (player_id IS NULL) attempt under this exact name is
+        looked up FIRST and resumes as it always has;
+      * a canonical attempt reached by id or by name resumes only while the
+        compatibility rules exempt it, else 401 pin_required;
+      * a NEW attempt for a protected canonical player - by id, by an
+        unambiguous name, or by an ambiguous one - is refused with
+        pin_required / pick_player, and no player_id IS NULL attempt is ever
+        created in its place.
+    With enforcement off, or fenced=False, this is exactly Phase 3a.
     """
     # AN ATTEMPT ALREADY UNDERWAY IS ITS OWN AUTHORITY.
     #
@@ -522,7 +547,16 @@ def _start_or_resume(
     # Nothing here writes. Resuming returns the attempt as it stands: a legacy
     # attempt is not upgraded, no player_name snapshot moves, and no id is
     # guessed - the safety net below still runs only when creating.
-    existing = find_attempt(access_code.id, player_name, player_id)
+    #
+    # PHASE 3B: with the fence up, legacy first, and a protected canonical
+    # attempt is never handed back on a name or a bare id (_fenced_existing).
+    guard = player_enforcement.settings_for_code(access_code) if fenced else None
+    if guard is not None and not guard.enabled:
+        guard = None
+    if guard is None:
+        existing = find_attempt(access_code.id, player_name, player_id)
+    else:
+        existing = _fenced_existing(access_code, player_name, player_id, guard)
     if existing is None and player_id is not None:
         # Never trust a client-supplied player_id as proof of eligibility on
         # its own - it must actually be one of this activation's effective
@@ -548,6 +582,12 @@ def _start_or_resume(
     # large: the candidates come from `effective_roster_players`, and a name
     # matching two of them is left alone rather than resolved - picking one
     # would attribute a real player's score to someone else.
+    if guard is not None and existing is None and player_id is None:
+        # PHASE 3B. BEFORE the safety net may attach a canonical id and resume
+        # that player's attempt: a name that could mean a protected canonical
+        # player is sent to /claim instead. An exempt one falls through to the
+        # safety net exactly as today.
+        _fence_name_only_start(access_code, player_name, guard)
     if existing is None and player_id is None:
         wanted = player_name.strip().casefold()
         canonical = [
@@ -581,6 +621,18 @@ def _start_or_resume(
                 raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted")
         else:
             return existing, False
+
+    # PHASE 3B - NEW CREATION IS FENCED HERE, the one place every new attempt
+    # passes: a first start, and a practice retake after a finished run - which
+    # is how an OLD legacy attempt could otherwise open a NEW one for a canonical
+    # name. Placed after eligibility, so "may this player begin at all" still
+    # answers first; nothing has been written yet.
+    if guard is not None:
+        if player_id is not None:
+            if player_enforcement.canonical_access_protected(access_code, player_id, settings=guard):
+                raise player_enforcement.pin_required_for(player_id)
+        else:
+            _fence_name_only_start(access_code, player_name, guard)
 
     # NO ZERO-QUESTION ATTEMPTS. Placed deliberately AFTER the resume branch
     # above: an attempt already underway is never affected by retirement, so it
@@ -647,9 +699,22 @@ def _start_or_resume(
         # whichever one won instead of erroring.
         if commit:
             db.session.rollback()
-        existing = find_attempt(access_code.id, player_name, player_id)
+        existing = find_attempt(
+            access_code.id,
+            player_name,
+            player_id,
+            # A fenced name-only insert can only have collided with another
+            # legacy row; never converge it onto a canonical attempt.
+            legacy_only=guard is not None and player_id is None,
+        )
         if existing is None:
             raise
+        if (
+            guard is not None
+            and existing.player_id is not None
+            and player_enforcement.token_required(access_code, existing, settings=guard)
+        ):
+            raise player_enforcement.pin_required_for(existing.player_id) from None
         if existing.status == AttemptStatus.SUBMITTED:
             raise ApiError(ALREADY_SUBMITTED, status_code=409, reason="already_submitted") from None
         return existing, False
@@ -667,6 +732,55 @@ def _start_or_resume(
         ) from exc
 
     return attempt, True
+
+
+def _fenced_existing(
+    access_code: AccessCode, player_name: str, player_id: int | None, settings
+) -> PlayerAttempt | None:
+    """PHASE 3B - the attempt a fenced /start may hand back, enforcement on.
+
+    LEGACY FIRST. An existing player_id IS NULL attempt under this exact code
+    and name resumes exactly as before - even when a canonical player with that
+    name exists now. It is not re-owned, rewritten or stranded.
+
+    A CANONICAL attempt reached here - by player_id, or by its player_name
+    snapshot on a name-only request - resumes only while the compatibility rules
+    exempt it (Phase 3a's token_required). Otherwise 401 pin_required, raised
+    BEFORE anything could reveal whether that attempt is submitted.
+    """
+    if player_id is None:
+        legacy = find_attempt(access_code.id, player_name, None, legacy_only=True)
+        if legacy is not None:
+            return legacy
+    existing = find_attempt(access_code.id, player_name, player_id)
+    if existing is not None and existing.player_id is not None:
+        if player_enforcement.token_required(access_code, existing, settings=settings):
+            raise player_enforcement.pin_required_for(existing.player_id)
+    return existing
+
+
+def _fence_name_only_start(access_code: AccessCode, player_name: str, settings) -> None:
+    """PHASE 3B - may this NAME begin an attempt without a canonical identity?
+
+    Compared with the canonical players on this activation's effective roster,
+    by current name AND roster snapshot name:
+      no match       -> a genuine free-text name: carry on, as today
+      exactly one    -> 401 pin_required with that player_id, if protected
+      more than one  -> 409 pick_player, if any of them is protected
+    Never attached automatically, and never a player_id IS NULL attempt in its
+    place. A canonical player the compatibility rules still exempt keeps today's
+    behaviour: the safety net attaches an unambiguous current-name match, and an
+    ambiguous name is left alone - which is Phase 3a, unchanged.
+    """
+    matches = canonical_player_ids_matching_name(access_code, player_name)
+    if not any(
+        player_enforcement.canonical_access_protected(access_code, match, settings=settings)
+        for match in matches
+    ):
+        return
+    if len(matches) == 1:
+        raise player_enforcement.pin_required_for(matches[0])
+    raise player_enforcement.pick_player_error()
 
 
 #: What a player is told when their PIN is not accepted. Short and plain: a
@@ -1267,39 +1381,221 @@ def quiz_by_code(code: str):
     return jsonify({"quiz_title": access_code.quiz.title})
 
 
+@play_bp.post("/results/identities")
+# Same budget as /results: a squad opens this the moment everyone submits.
+@limiter.limit("200 per minute")
+def results_identities():
+    """THE NAMES A PLAYER PICKS FROM to open their results - the code's ROSTER.
+
+    Uses the HISTORICAL code lookup, like /results, so it still answers after
+    the code has expired or been deactivated. One entry per person on the
+    roster this code was sent to (its linked groups, or the quiz's own roster):
+      canonical  {player_id, name (current full name), jersey_number, position}
+      free text  {player_id: null, name (as the coach entered it)}
+    Two canonical players who share a name stay two entries.
+
+    NOTHING HERE IS READ FROM AN ATTEMPT, AND THAT IS THE POINT. Phase 3b listed
+    only identities with a SUBMITTED attempt, which told anyone holding the code
+    exactly who had finished and who had not. The roster is the same list no
+    matter who has started, finished, set a PIN, been deactivated or been issued
+    a token - so the response cannot say any of those things. Whether a picked
+    player actually has results is answered by /results, and only after that
+    player has proved who they are when proof is required.
+
+    THE COST, ACCEPTED: a player removed from every linked group after
+    submitting is not on the list. The device they took the quiz on still opens
+    their results directly, a coach can add them back, and a free-text attempt
+    can still be looked up by typing its name.
+    """
+    data = load_json_body(ResultsIdentitiesSchema())
+    access_code = find_access_code_by_code(data["code"])
+    if access_code is None:
+        raise ApiError(NO_RESULTS_FOUND, status_code=404)
+
+    entries = effective_roster_players(access_code)
+    # Belt and braces: a roster can only hold this organization's players, but
+    # an identity list served to anyone with a code must never be the place
+    # that assumption fails silently.
+    canonical_ids = {entry["player_id"] for entry in entries if entry["player_id"] is not None}
+    in_org = {
+        player_id
+        for (player_id,) in db.session.query(Player.id).filter(
+            Player.id.in_(canonical_ids),
+            Player.organization_id == access_code.quiz.organization_id,
+        )
+    } if canonical_ids else set()
+
+    identities: dict[str, dict] = {}
+    for entry in entries:
+        if entry["player_id"] is not None:
+            if entry["player_id"] not in in_org:
+                continue
+            identities.setdefault(
+                identity_key(entry["player_id"], entry["name"]),
+                {
+                    "player_id": entry["player_id"],
+                    "name": entry["name"],
+                    "jersey_number": entry["jersey_number"],
+                    "position": entry["position"],
+                },
+            )
+        else:
+            identities.setdefault(
+                identity_key(None, entry["name"]), {"player_id": None, "name": entry["name"]}
+            )
+    ordered = sorted(
+        identities.values(),
+        key=lambda i: (i["name"].casefold(), i["player_id"] is None, i["player_id"] or 0),
+    )
+    return _no_store(jsonify({"identities": ordered}))
+
+
 @play_bp.post("/results")
 # See validate-code's comment - a whole team may check results within the
 # same short window right after everyone submits.
 @limiter.limit("200 per minute")
 def player_results():
-    """A player's own graded results - revisitable after the code expires,
-    since grading (especially of written answers) can happen well after."""
+    """A player's own results - revisitable after the code expires, since
+    grading (especially of written answers) can happen well after.
+
+    HISTORICAL, NOT LIVE. The code is looked up without expiry or activation
+    checks, and nothing consults current eligibility: an expired or deactivated
+    code, a deactivated player, a player moved out of the group and a changed
+    roster all leave results readable to whoever may read them.
+
+    PHASE 3B - WHO MAY READ THEM. The order of checks is the anti-oracle:
+      1. the code (unknown -> generic not-found);
+      2. NAME ONLY (no player_id): legacy player_id IS NULL attempts only, once
+         enforcement is on. A name never reaches a canonical attempt. A PIN
+         without a player_id is refused (422) - a name is not an identity;
+      3. the canonical player (unknown, or another organisation's -> the same
+         generic not-found, before any PIN is evaluated);
+      4. a PIN, when sent - it wins over any token: throttle and verify FIRST,
+         and only a correct PIN learns whether anything is submitted. Success
+         re-issues the token for the returned attempt (R3);
+      5. else a token, when sent: checked against the attempt that would be
+         returned - nothing submitted is token_invalid, never a not-found;
+      6. else, when the player is protected (enforcement on and a secured code,
+         a PIN, or a token ever issued under this code): 401 pin_required,
+         decided without looking at submissions;
+      7. else - enforcement off, or the compatibility exemption - results as
+         before.
+    A PIN or token that is sent is always verified, whether or not one was
+    needed, exactly as /claim does.
+
+    The returned attempt is ALWAYS the newest submitted one (submitted_at, then
+    id), and every check above is made against that same row.
+    """
     data = load_json_body(PlayerResultsSchema())
 
     access_code = find_access_code_by_code(data["code"])
     if access_code is None:
         raise ApiError(NO_RESULTS_FOUND, status_code=404)
 
-    query = PlayerAttempt.query.filter(
-        PlayerAttempt.access_code_id == access_code.id,
-        PlayerAttempt.status == AttemptStatus.SUBMITTED,
-    )
     player_id = data.get("player_id")
-    if player_id is not None:
-        # Disambiguates two same-name canonical Players - a name-only match
-        # below can't tell them apart and would silently return whichever
-        # row the query happens to find first. See PlayerResultsSchema.
-        query = query.filter(PlayerAttempt.player_id == player_id)
-    else:
-        query = query.filter(
-            db.func.lower(PlayerAttempt.player_name) == data["player_name"].strip().lower()
+    if player_id is None:
+        if data["pin"] is not None:
+            raise ApiError(
+                "Pick your name before entering a PIN.", status_code=422, reason="player_required"
+            )
+        attempt = _newest_submitted_by_name(access_code, data["player_name"])
+        if attempt is None:
+            raise ApiError(NO_RESULTS_FOUND, status_code=404)
+        return _results_response(access_code, attempt)
+
+    player = db.session.get(Player, player_id)
+    if player is None or player.organization_id != access_code.quiz.organization_id:
+        raise ApiError(NO_RESULTS_FOUND, status_code=404)
+
+    if data["pin"] is not None:
+        return _results_with_pin(access_code, player, data["pin"])
+
+    raw_token = attempt_tokens.token_from_request()
+    if raw_token is not None:
+        attempt = _newest_submitted_query(access_code.id).filter(PlayerAttempt.player_id == player.id)
+        attempt = attempt.options(*_results_loaders()).first()
+        if attempt is None:
+            raise player_enforcement.auth_error(player_enforcement.TOKEN_INVALID)
+        check = attempt_tokens.check_token(attempt, raw_token, player.id)
+        if not check.ok:
+            raise player_enforcement.token_refusal(check)
+        return _results_response(access_code, attempt)
+
+    if player_enforcement.canonical_access_protected(access_code, player.id):
+        raise player_enforcement.auth_error(player_enforcement.PIN_REQUIRED)
+
+    attempt = (
+        _newest_submitted_query(access_code.id)
+        .filter(PlayerAttempt.player_id == player.id)
+        .options(*_results_loaders())
+        .first()
+    )
+    if attempt is None:
+        raise ApiError(NO_RESULTS_FOUND, status_code=404)
+    return _results_response(access_code, attempt)
+
+
+def _results_with_pin(access_code: AccessCode, player: Player, pin: str):
+    """Results by PIN, which re-issue the token (R3). ONE TRANSACTION, in the
+    lock order /claim uses:
+
+    1. lock the credential, apply the throttle, verify the PIN - a wrong PIN
+       commits its bookkeeping and stops here;
+    2. lock the NEWEST SUBMITTED attempt - the one that will be returned;
+    3. none: roll back (nothing half-done) and answer the generic not-found;
+    4. issue the token onto that attempt, replacing any other device's;
+    5. commit once, then build the page from that same attempt.
+    Two devices, or a /claim, arriving together serialize on the credential
+    lock, so the last to commit holds the one valid token. A coach resetting
+    the PIN takes the same row: if the reset lands first the old PIN is simply
+    wrong; if it lands after, the token just issued is revoked with the rest.
+    """
+    check = player_credentials.verify_player_pin(player.id, pin, commit_on_success=False)
+    if not check.ok:
+        return _pin_refusal(check)
+    try:
+        attempt = (
+            _newest_submitted_query(access_code.id)
+            .filter(PlayerAttempt.player_id == player.id)
+            .with_for_update()
+            .populate_existing()
+            .first()
         )
+        if attempt is None:
+            raise ApiError(NO_RESULTS_FOUND, status_code=404)
+        token = attempt_tokens.issue_token(attempt, check.pin_version)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return _results_response(access_code, attempt, issued_token=token)
+
+
+def _newest_submitted_query(access_code_id: int):
     # NEWEST SUBMITTED ATTEMPT FIRST. A practice code can hold several submitted
     # attempts for one player, and an unordered .first() returned whichever row
     # Postgres happened to produce - so a player could be shown last week's run.
     # submitted_at, then id to break a tie deterministically.
-    query = query.order_by(PlayerAttempt.submitted_at.desc(), PlayerAttempt.id.desc())
-    attempt = query.options(
+    return PlayerAttempt.query.filter(
+        PlayerAttempt.access_code_id == access_code_id,
+        PlayerAttempt.status == AttemptStatus.SUBMITTED,
+    ).order_by(PlayerAttempt.submitted_at.desc(), PlayerAttempt.id.desc())
+
+
+def _newest_submitted_by_name(access_code: AccessCode, player_name: str) -> PlayerAttempt | None:
+    query = _newest_submitted_query(access_code.id).filter(
+        db.func.lower(PlayerAttempt.player_name) == player_name.strip().lower()
+    )
+    if player_enforcement.settings_for_code(access_code).enabled:
+        # PHASE 3B - THE NAME-ONLY RESULTS FENCE. A name is never authentication
+        # for a canonical player, so it reaches legacy attempts only. Off, the
+        # manual results form keeps working for everyone exactly as today.
+        query = query.filter(PlayerAttempt.player_id.is_(None))
+    return query.options(*_results_loaders()).first()
+
+
+def _results_loaders() -> tuple:
+    return (
         # `question_snapshots` is what delivered_questions() reads, and
         # `answers.selected_option` is the compatibility fallback in
         # _resolve_answer_text - both would otherwise lazy-load per question
@@ -1317,10 +1613,35 @@ def player_results():
         # page a whole squad opens the moment they finish.
         selectinload(PlayerAttempt.answers).selectinload(Answer.drawing),
         selectinload(PlayerAttempt.question_snapshots),
-    ).first()
-    if attempt is None:
-        raise ApiError(NO_RESULTS_FOUND, status_code=404)
+    )
 
+
+def _results_response(access_code: AccessCode, attempt: PlayerAttempt, *, issued_token: str | None = None):
+    """The player's results page, never cached.
+
+    A token issued by a PIN travels in a SEPARATE top-level `player_auth`
+    object, never inside the results payload, so nothing that reuses the
+    payload can pick up a credential by accident.
+    """
+    if issued_token is not None:
+        # Re-read WITH the loaders: the row was locked and rotated without them.
+        attempt = (
+            PlayerAttempt.query.options(*_results_loaders())
+            .populate_existing()
+            .filter(PlayerAttempt.id == attempt.id)
+            .one()
+        )
+    body = _results_payload(access_code, attempt)
+    if issued_token is not None:
+        body["player_auth"] = {
+            "attempt_token": issued_token,
+            "token_header": attempt_tokens.TOKEN_HEADER,
+        }
+    return _no_store(jsonify(body))
+
+
+def _results_payload(access_code: AccessCode, attempt: PlayerAttempt) -> dict:
+    """What a player is shown about one submitted attempt. Unchanged content."""
     quiz = access_code.quiz
     answers_by_question = {a.question_id: a for a in attempt.answers}
     exclusions = load_for_quizzes([quiz.id])
@@ -1385,11 +1706,9 @@ def player_results():
             }
         )
 
-    return jsonify(
-        {
-            "quiz_title": quiz.title,
-            "player_name": attempt.player_name,
-            "submitted_at": attempt.submitted_at.isoformat(),
-            "answers": answer_details,
-        }
-    )
+    return {
+        "quiz_title": quiz.title,
+        "player_name": attempt.player_name,
+        "submitted_at": attempt.submitted_at.isoformat(),
+        "answers": answer_details,
+    }

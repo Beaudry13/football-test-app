@@ -1,9 +1,10 @@
-/** Where a player's device keeps its attempt token. PHASE 2: STORED, NOT SENT.
+/** Where a player's device keeps its attempt token.
  *
  * A correct PIN earns a token for ONE attempt, so the same device can carry on
  * without being asked again - through a refresh, a closed tab, a phone that
- * locked mid-quiz. Nothing reads it back for authorization yet; Phase 3 sends
- * it as the `X-Attempt-Token` header.
+ * locked mid-quiz. It is sent as the `X-Attempt-Token` header, and read back
+ * ONLY for the player this device remembers for the code (playerSession.ts) -
+ * never because somebody tapped a name in a list.
  *
  * localStorage, matching the drawing drafts next to this file: sessionStorage
  * dies with the tab, and "I closed Safari and reopened it" is exactly the case
@@ -58,8 +59,25 @@ export function clearAttemptToken(code: string, playerId: number): void {
   }
 }
 
-/** The header a player request will carry in Phase 3. Empty when there is no
- *  token, so a caller can spread it unconditionally. */
+/** Every token this device holds for a code, except one player's. A shared
+ *  phone must never keep a teammate's token around to be picked up later. */
+export function clearOtherAttemptTokens(code: string, keepPlayerId: number | null): void {
+  if (!code.trim()) return;
+  const prefix = `${TOKEN_PREFIX}:${code.trim().toUpperCase()}:`;
+  try {
+    const doomed: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(prefix) && key !== `${prefix}${keepPlayerId}`) doomed.push(key);
+    }
+    doomed.forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    /* storage unavailable: nothing was kept either */
+  }
+}
+
+/** The header a player request carries. Empty when there is no token, so a
+ *  caller can spread it unconditionally. */
 export function attemptTokenHeaders(token: string | null): Record<string, string> {
   return token ? { [ATTEMPT_TOKEN_HEADER]: token } : {};
 }

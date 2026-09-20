@@ -383,14 +383,48 @@ def generate_missing(coach, limit: int = GENERATE_BATCH_LIMIT) -> tuple[list[dic
     return issued, missing_count(coach.organization_id)
 
 
-def reset_pin(player: Player, coach) -> tuple[dict, int]:
-    """Issue a new PIN for one player, creating their credential if needed.
+class WeakPinError(ValueError):
+    """A hand-picked PIN a teammate would try first."""
 
-    One atomic upsert: a new hash, `pin_version + 1`, the throttle cleared, and
-    the issuer recorded. Attempts are not touched - see the module docstring.
-    Returns the one-time PIN payload and the new version.
+
+def set_pin(player: Player, coach, pin: str) -> tuple[dict, int]:
+    """Set a player's PIN to one a coach chose, hashed exactly like a generated
+    one.
+
+    THE PLAINTEXT NEVER LANDS ANYWHERE. It arrives in one request, is hashed
+    here, and is echoed back once in the no-store response so the coach can hand
+    it over - the same one-time shape `generate_missing` and `reset_pin` return.
+    Nothing writes it to a column or a log, and no later read can produce it.
+
+    A player who already had a PIN is treated as a RESET, because that is what
+    it is: `pin_version + 1` (which revokes their tokens), the throttle cleared,
+    and not one attempt, answer or result touched.
+
+    Refuses a weak PIN with the same rule generated ones are held to - a coach
+    typing 123456 for a whole roster would undo the credential.
     """
-    pin = generate_pin()
+    if is_weak_pin(pin):
+        raise WeakPinError(
+            "Pick a different 6-digit PIN - not all one digit, a run like 123456, "
+            "or a repeated pair."
+        )
+    return _store_pin(player, coach, pin)
+
+
+def reset_pin(player: Player, coach) -> tuple[dict, int]:
+    """Issue a NEW, generated PIN for one player. See `_store_pin`."""
+    return _store_pin(player, coach, generate_pin())
+
+
+def _store_pin(player: Player, coach, pin: str) -> tuple[dict, int]:
+    """Store one PIN - generated or chosen - and return it once.
+
+    One atomic upsert: a new hash, `pin_version + 1` when a credential already
+    existed, the throttle cleared, and the issuer recorded. Attempts are not
+    touched - see the module docstring. The version bump is what revokes every
+    token issued under the previous PIN, so a hand-set PIN signs old devices out
+    exactly as a generated one does.
+    """
     now = datetime.now(timezone.utc)
     statement = insert(PlayerCredential).values(
         player_id=player.id,

@@ -46,7 +46,11 @@ def identities_with_attempts(access_code_id: int) -> list[tuple[int | None, str]
 
 
 def find_attempt(
-    access_code_id: int, player_name: str, player_id: int | None = None
+    access_code_id: int,
+    player_name: str,
+    player_id: int | None = None,
+    *,
+    legacy_only: bool = False,
 ) -> PlayerAttempt | None:
     """The attempt for this (access_code, player) pair, if one exists.
 
@@ -67,6 +71,18 @@ def find_attempt(
     an unordered `.first()` would resume whichever row Postgres happened to
     return, dropping the player back into an attempt they finished last week.
     """
+    if legacy_only:
+        # PHASE 3B. Only an unlinked legacy attempt (player_id IS NULL) under
+        # this exact name - never a canonical attempt that merely carries the
+        # same player_name snapshot. What a name-only request may reach once
+        # player PIN enforcement is on.
+        return (
+            PlayerAttempt.query.filter_by(
+                access_code_id=access_code_id, player_name=player_name, player_id=None
+            )
+            .order_by(PlayerAttempt.id.desc())
+            .first()
+        )
     if player_id is not None:
         by_id = (
             PlayerAttempt.query.filter_by(access_code_id=access_code_id, player_id=player_id)
@@ -116,6 +132,23 @@ def lock_attempt(attempt_id: int) -> PlayerAttempt:
         .populate_existing()
         .one()
     )
+
+
+def attempt_token_ever_issued(access_code_id: int, player_id: int) -> bool:
+    """Has this player ever been issued an attempt token under this code?
+
+    PLAYER PIN ENFORCEMENT (Phase 3b). "Once tokened, always tokened" at the
+    level of the PLAYER, not one attempt: a practice player whose earlier run
+    was protected must not start or read an unprotected one by name. A token
+    hash is replaced on reissue and never cleared, so this cannot go false.
+    """
+    return db.session.query(
+        db.exists().where(
+            PlayerAttempt.access_code_id == access_code_id,
+            PlayerAttempt.player_id == player_id,
+            PlayerAttempt.token_hash.isnot(None),
+        )
+    ).scalar()
 
 
 def upsert_answer(

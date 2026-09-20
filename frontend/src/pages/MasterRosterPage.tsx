@@ -11,6 +11,7 @@ import {
   type IssuedPin,
   type PlayerInput,
 } from '../api/players';
+import { usePinSecurity } from '../hooks/usePinSecurity';
 import { PinSheetDialog } from '../components/pins/PinSheetDialog';
 import { PinStatusBadge } from '../components/pins/PinStatusBadge';
 import { getErrorMessage } from '../api/client';
@@ -49,6 +50,11 @@ export function MasterRosterPage() {
   /** PINs just issued, held ONLY while their one-time sheet is open. */
   const [pinSheet, setPinSheet] = useState<IssuedPin[] | null>(null);
   const [isIssuingPins, setIsIssuingPins] = useState(false);
+  /** PIN MANAGEMENT IS DRAWN ONLY WHERE IT IS WANTED. Player PIN Security is
+   *  each organization's choice (Team → Coaches) and off by default; until it
+   *  is on, this page looks exactly as it did before PINs existed. Nothing
+   *  here decides whether a PIN is REQUIRED - that is the server's answer. */
+  const { enabled: pinSecurity } = usePinSecurity();
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -82,18 +88,24 @@ export function MasterRosterPage() {
     try {
       const created = await createPlayer(form);
       setForm(EMPTY_FORM);
-      // EVERY NEW PLAYER GETS A PIN, SHOWN ONCE. A second request rather than
-      // part of creating the player, so creating a player behaves exactly as
-      // it always has: if this part fails the player still exists, simply
-      // shows "No PIN", and "Generate missing PINs" picks them up.
-      try {
-        const { issued } = await resetPlayerPin(created.id);
-        setPinSheet([issued]);
-      } catch (pinError) {
-        setError(
-          `Player added, but their PIN couldn't be created (${getErrorMessage(pinError)}). ` +
-            'Use "Generate missing PINs" to give them one.',
-        );
+      // A NEW PLAYER GETS A PIN ONLY WHERE PINS ARE USED. With the setting off,
+      // adding a player is exactly what it was before PINs existed - no
+      // credential is created and no sheet appears.
+      //
+      // When it is on: a second request rather than part of creating the
+      // player, so creating one still behaves as it always has - if this part
+      // fails the player still exists, simply shows "No PIN", and "Generate
+      // missing PINs" picks them up.
+      if (pinSecurity) {
+        try {
+          const { issued } = await resetPlayerPin(created.id);
+          setPinSheet([issued]);
+        } catch (pinError) {
+          setError(
+            `Player added, but their PIN couldn't be created (${getErrorMessage(pinError)}). ` +
+              'Use "Generate missing PINs" to give them one.',
+          );
+        }
       }
       await load();
     } catch (err) {
@@ -218,6 +230,7 @@ export function MasterRosterPage() {
   const missingPinCount = (players ?? []).filter(
     (p) => p.is_active && p.pin_status === 'missing',
   ).length;
+  const showPinReadiness = pinSecurity && missingPinCount > 0;
 
   return (
     <div>
@@ -236,7 +249,7 @@ export function MasterRosterPage() {
 
         <ErrorBanner message={error} />
 
-        {missingPinCount > 0 && (
+        {showPinReadiness && (
           <div className={styles.pinBanner} role="status">
             <span>
               {missingPinCount} active player{missingPinCount === 1 ? " doesn't" : "s don't"} have a
@@ -403,7 +416,7 @@ export function MasterRosterPage() {
                 <th>#</th>
                 <th>Position</th>
                 <th>Status</th>
-                <th>PIN</th>
+                {pinSecurity && <th>PIN</th>}
                 <th></th>
               </tr>
             </thead>
@@ -448,9 +461,11 @@ export function MasterRosterPage() {
                       <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
                     )}
                   </td>
-                  <td>
-                    <PinStatusBadge status={player.pin_status} />
-                  </td>
+                  {pinSecurity && (
+                    <td>
+                      <PinStatusBadge status={player.pin_status} />
+                    </td>
+                  )}
                   <td>
                     {player.is_active ? (
                       <button

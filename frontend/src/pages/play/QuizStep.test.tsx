@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuizStep } from './QuizStep';
 import * as playApi from '../../api/play';
+import { ApiError } from '../../api/client';
 import type { Quiz, ResumedAnswer } from '../../api/types';
 
 const quiz: Quiz = {
@@ -151,15 +152,7 @@ describe('QuizStep', () => {
     it('cancels a pending debounced save when Submit is clicked, without losing the answer', async () => {
       const user = userEvent.setup({ delay: null });
       const saveSpy = vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
-      const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({
-        id: 1,
-        quiz_id: 1,
-        access_code_id: 42,
-        player_name: 'Jordan Smith',
-        display_name: 'Jordan Smith',
-        submitted_at: '2026-01-01T00:00:00Z',
-        answers: [],
-      });
+      const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({ attempt_id: 1, status: 'submitted', submitted_at: '2026-01-01T00:00:00Z', mode: 'GRADED' });
       const onSubmitted = vi.fn();
 
       render(
@@ -227,15 +220,7 @@ describe('QuizStep', () => {
     it('allows submission once every question has an answer', async () => {
       const user = userEvent.setup();
       vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
-      const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({
-        id: 1,
-        quiz_id: 1,
-        access_code_id: 42,
-        player_name: 'Jordan Smith',
-        display_name: 'Jordan Smith',
-        submitted_at: '2026-01-01T00:00:00Z',
-        answers: [],
-      });
+      const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({ attempt_id: 1, status: 'submitted', submitted_at: '2026-01-01T00:00:00Z', mode: 'GRADED' });
       const onSubmitted = vi.fn();
 
       render(
@@ -287,15 +272,7 @@ describe('QuizStep', () => {
     it('does not require an answer when the setting is off', async () => {
       const user = userEvent.setup();
       vi.spyOn(playApi, 'saveAnswer').mockResolvedValue(undefined);
-      const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({
-        id: 1,
-        quiz_id: 1,
-        access_code_id: 42,
-        player_name: 'Jordan Smith',
-        display_name: 'Jordan Smith',
-        submitted_at: '2026-01-01T00:00:00Z',
-        answers: [],
-      });
+      const submitSpy = vi.spyOn(playApi, 'submitQuiz').mockResolvedValue({ attempt_id: 1, status: 'submitted', submitted_at: '2026-01-01T00:00:00Z', mode: 'GRADED' });
 
       render(
         <QuizStep
@@ -536,8 +513,9 @@ describe('QuizStep drawing autosave', () => {
   it('keeps the drawing and warns the player when another device won the race', async () => {
     // A 409 must never discard the player's work: submit is authoritative and
     // will still carry it. They are told, not silently overwritten.
+    // The server's real refusal: decided by its reason code, not its words.
     vi.spyOn(playApi, 'saveDrawing').mockRejectedValue(
-      new Error('This drawing was updated on another device'),
+      new ApiError('This drawing was updated on another device', 409, undefined, 'stale_revision'),
     );
     renderWithDraft();
     await screen.findByRole('button', { name: /edit your drawing/i });

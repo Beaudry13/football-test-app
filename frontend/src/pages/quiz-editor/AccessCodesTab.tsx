@@ -6,7 +6,9 @@ import {
   setAccessCodeExpiry,
 } from '../../api/accessCodes';
 import { listGroups } from '../../api/groups';
-import { getErrorMessage } from '../../api/client';
+import { ApiError, getErrorMessage } from '../../api/client';
+import { generateMissingPins, type IssuedPin } from '../../api/players';
+import { PinSheetDialog } from '../../components/pins/PinSheetDialog';
 import type { AccessCode, AssessmentMode, Group, Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
@@ -99,6 +101,13 @@ function ModePicker({
   );
 }
 
+/** A player an activation was refused for: no PIN yet, with PINs enforced. */
+interface PlayerNeedingPin {
+  player_id: number;
+  name: string;
+  jersey_number: string | null;
+}
+
 export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [codes, setCodes] = useState<AccessCode[] | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -120,6 +129,11 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirmDialog();
   const [isActivating, setIsActivating] = useState(false);
+  /** Who stopped the last activation for want of a PIN (Phase 3c). Only ever
+   *  set by the server's refusal, which only happens with PINs enforced. */
+  const [needPins, setNeedPins] = useState<PlayerNeedingPin[] | null>(null);
+  const [isIssuingPins, setIsIssuingPins] = useState(false);
+  const [pinSheet, setPinSheet] = useState<IssuedPin[] | null>(null);
 
   // The API refuses to activate a quiz with no questions (422). That one is
   // unambiguous from data this tab already has, so the button says so rather
@@ -159,6 +173,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
 
   async function handleActivate() {
     setError(null);
+    setNeedPins(null);
     setIsActivating(true);
     try {
       await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions, availableUntil);
@@ -167,9 +182,37 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       // The new code is live; the panel that made it has nothing left to say.
       setShowReactivate(false);
     } catch (err) {
-      setError(getErrorMessage(err));
+      if (err instanceof ApiError && err.reason === 'players_need_pins') {
+        const listed = (err.details as unknown as { players_without_pins?: PlayerNeedingPin[] } | undefined)
+          ?.players_without_pins;
+        setNeedPins(listed ?? []);
+      } else {
+        setError(getErrorMessage(err));
+      }
     } finally {
       setIsActivating(false);
+    }
+  }
+
+  /** The same batched "Generate missing PINs" the Team page runs. Whatever was
+   *  issued is SHOWN, even if a later batch fails - a PIN nobody saw is a PIN
+   *  nobody can use. Never replaces a PIN a player already has. */
+  async function handleGeneratePins() {
+    setIsIssuingPins(true);
+    setError(null);
+    const issuedSoFar: IssuedPin[] = [];
+    try {
+      for (let batch = 0; batch < 50; batch += 1) {
+        const { issued, remaining } = await generateMissingPins();
+        issuedSoFar.push(...issued);
+        if (remaining === 0 || issued.length === 0) break;
+      }
+      setNeedPins(null);
+    } catch (err) {
+      setError(`${getErrorMessage(err)} Some players may still need a PIN - try again for the rest.`);
+    } finally {
+      if (issuedSoFar.length > 0) setPinSheet(issuedSoFar);
+      setIsIssuingPins(false);
     }
   }
 
@@ -213,7 +256,33 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   return (
     <div>
       {dialog}
+      {pinSheet && <PinSheetDialog pins={pinSheet} onClosed={() => setPinSheet(null)} />}
       <ErrorBanner message={error} />
+      {needPins && (
+        <div className={`${nb.card} ${styles.pinBlocker}`} role="alert">
+          <p className={styles.pinBlockerTitle}>
+            {needPins.length === 1
+              ? "1 player doesn't have a PIN yet, so they couldn't start this quiz."
+              : `${needPins.length} players don't have a PIN yet, so they couldn't start this quiz.`}
+          </p>
+          {needPins.length > 0 && (
+            <ul className={styles.pinBlockerList}>
+              {needPins.map((p) => (
+                <li key={p.player_id}>
+                  {p.name}
+                  {p.jersey_number ? ` · #${p.jersey_number}` : ''}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className={styles.activateHint}>
+            Give them PINs, hand out the sheet, then activate the quiz again.
+          </p>
+          <button className={nb.btnPrimary} onClick={() => void handleGeneratePins()} disabled={isIssuingPins}>
+            {isIssuingPins ? 'Generating…' : 'Generate missing PINs'}
+          </button>
+        </div>
+      )}
 
       <div className={`${nb.card} ${styles.activeCard}`}>
         {activeCode ? (

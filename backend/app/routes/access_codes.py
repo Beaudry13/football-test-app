@@ -14,7 +14,8 @@ from app.extensions import db
 from app.models import AccessCode, Group
 from app.models.question import QuestionType
 from app.schemas.access_code import ActivateQuizSchema, SetExpirySchema
-from app.services.access_codes import generate_unique_code
+from app.services import player_enforcement
+from app.services.access_codes import generate_unique_code, players_without_pins
 from app.services.attempts import deliverable_questions
 from app.utils.auth import current_coach, get_editable_quiz, get_visible_quiz
 from app.utils.validation import load_json_body, load_optional_json_body
@@ -140,6 +141,32 @@ def activate_quiz(quiz_id: int):
         raise ApiError(
             "Cannot activate a quiz with no roster and no group selected", status_code=422
         )
+
+    # PLAYER PIN ENFORCEMENT (Phase 3c) - THE ACTIVATION PIN GATE.
+    #
+    # With enforcement on, a code activated now is SECURED from its first
+    # second, so an active player without a PIN could not start it at all -
+    # they would be told to ask their coach in the middle of the session. The
+    # coach is told HERE instead, where the fix is one click away, and nothing
+    # changes: the currently active code stays active and no new one is minted.
+    #
+    # Asked of the exact roster /start will use (roster_entries), so activation
+    # and the start fence cannot disagree about who this quiz is for. Asked for
+    # THIS organization: another organization's choice cannot block this one.
+    # Off - the default everywhere - activation is exactly what it was.
+    if player_enforcement.settings_for(quiz.organization_id).enabled:
+        missing = players_without_pins(quiz, groups)
+        if missing:
+            count = len(missing)
+            raise ApiError(
+                (
+                    f"{count} player{' does' if count == 1 else 's do'}n't have a PIN yet, "
+                    "so they couldn't start this quiz. Give them PINs, then activate it."
+                ),
+                status_code=422,
+                reason="players_need_pins",
+                details={"players_without_pins": missing},
+            )
 
     # Only one code should be usable to join at a time; retire any still-active ones.
     for existing_code in quiz.access_codes:

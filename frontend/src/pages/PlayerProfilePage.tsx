@@ -5,10 +5,12 @@ import {
   getPlayerHistory,
   reactivatePlayer,
   resetPlayerPin,
+  setPlayerPin,
   updatePlayer,
   uploadPlayerPhoto,
   type IssuedPin,
 } from '../api/players';
+import { usePinSecurity } from '../hooks/usePinSecurity';
 import { PinSheetDialog } from '../components/pins/PinSheetDialog';
 import { PinStatusBadge } from '../components/pins/PinStatusBadge';
 import { getErrorMessage } from '../api/client';
@@ -41,6 +43,11 @@ export function PlayerProfilePage() {
   /** A PIN just issued, held ONLY while its one-time sheet is open. */
   const [pinSheet, setPinSheet] = useState<IssuedPin[] | null>(null);
   const [isIssuingPin, setIsIssuingPin] = useState(false);
+  /** The "set it myself" box, open only while the coach is typing digits. */
+  const [manualPin, setManualPin] = useState<string | null>(null);
+  /** Whether this organization uses Player PIN Security. It decides whether a
+   *  missing PIN is WORTH FLAGGING - not whether a coach may manage one. */
+  const { enabled: pinSecurity } = usePinSecurity();
   const { confirm, dialog } = useConfirmDialog();
 
   const load = useCallback(async () => {
@@ -115,13 +122,44 @@ export function PlayerProfilePage() {
         const who = jersey_number ? `${full_name} (#${jersey_number})` : full_name;
         const confirmed = await confirm({
           title: 'Reset PIN?',
-          body: `${who}'s current PIN will stop working. Their quizzes and results aren't affected.`,
+          body: `${who}'s current PIN will stop working, and any phone they're signed in on will ask for the new one. Their quizzes and results aren't affected.`,
           confirmLabel: 'Reset PIN',
         });
         if (!confirmed) return;
       }
       setIsIssuingPin(true);
       const { issued } = await resetPlayerPin(id);
+      setPinSheet([issued]);
+      await load();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsIssuingPin(false);
+    }
+  }
+
+  /** The coach chooses the digits instead of Peira.
+   *
+   *  Same consequence as a reset when one already exists - the old PIN and any
+   *  signed-in device stop working - so it asks the same way before replacing.
+   *  The typed PIN is sent, shown back once on the sheet, and kept nowhere. */
+  async function handleSetPin(pin: string) {
+    if (!history) return;
+    setError(null);
+    try {
+      if (history.pin_status !== 'missing') {
+        const { full_name, jersey_number } = history.player;
+        const who = jersey_number ? `${full_name} (#${jersey_number})` : full_name;
+        const confirmed = await confirm({
+          title: 'Change this PIN?',
+          body: `Changing this PIN will sign ${who} out on any device they're using. Their quiz attempts and results will not be deleted.`,
+          confirmLabel: 'Change PIN',
+        });
+        if (!confirmed) return;
+      }
+      setIsIssuingPin(true);
+      const { issued } = await setPlayerPin(id, pin);
+      setManualPin(null);
       setPinSheet([issued]);
       await load();
     } catch (err) {
@@ -201,7 +239,12 @@ export function PlayerProfilePage() {
                         · <span className={`${nb.badge} ${nb.badgeNeutral}`}>Inactive</span>
                       </>
                     )}
-                    {history.pin_status && (
+                    {/* NOT A WARNING WHERE PINS ARE OPTIONAL. With the
+                        organization's setting off, "No PIN" beside a player's
+                        name says something is wrong when nothing is; the PIN
+                        actions below stay available for a staff getting ready
+                        to turn it on. */}
+                    {pinSecurity && history.pin_status && (
                       <>
                         {' '}
                         · <PinStatusBadge status={history.pin_status} />
@@ -215,13 +258,23 @@ export function PlayerProfilePage() {
                   {isEditing ? 'Cancel' : 'Edit'}
                 </button>
                 {history.pin_status && (
-                  <button className={nb.btnSm} onClick={handleIssuePin} disabled={isIssuingPin}>
-                    {isIssuingPin
-                      ? 'Working…'
-                      : history.pin_status === 'missing'
-                        ? 'Create PIN'
-                        : 'Reset PIN'}
-                  </button>
+                  <>
+                    <button className={nb.btnSm} onClick={handleIssuePin} disabled={isIssuingPin}>
+                      {isIssuingPin
+                        ? 'Working…'
+                        : history.pin_status === 'missing'
+                          ? 'Generate PIN'
+                          : 'Reset PIN'}
+                    </button>
+                    <button
+                      className={nb.btnSm}
+                      onClick={() => setManualPin(manualPin === null ? '' : null)}
+                      disabled={isIssuingPin}
+                      aria-expanded={manualPin !== null}
+                    >
+                      {manualPin === null ? 'Set PIN manually' : 'Cancel'}
+                    </button>
+                  </>
                 )}
                 {history.player.is_active ? (
                   <button className={nb.btnSm} onClick={handleDeactivate}>
@@ -234,6 +287,37 @@ export function PlayerProfilePage() {
                 )}
               </div>
             </div>
+
+            {manualPin !== null && (
+              <form
+                className={`${nb.card} ${styles.editForm}`}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSetPin(manualPin);
+                }}
+              >
+                <label htmlFor="manual-pin">New 6-digit PIN</label>
+                <input
+                  id="manual-pin"
+                  className={nb.input}
+                  value={manualPin}
+                  onChange={(e) => setManualPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoComplete="off"
+                  style={{ width: 120, letterSpacing: '0.2em' }}
+                  placeholder="482915"
+                />
+                <button type="submit" className={nb.btnSm} disabled={manualPin.length !== 6 || isIssuingPin}>
+                  {isIssuingPin ? 'Working…' : 'Save PIN'}
+                </button>
+                {/* Said before it happens, not after: Peira cannot show this
+                    PIN again, and the player has to be told it. */}
+                <span className={styles.pinHint}>
+                  You will see it once, to give to the player. Peira stores it scrambled and can never show
+                  it again.
+                </span>
+              </form>
+            )}
 
             {isEditing && (
               <div className={`${nb.card} ${styles.editForm}`}>

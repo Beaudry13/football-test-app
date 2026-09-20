@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlayerProfilePage } from './PlayerProfilePage';
 import * as playersApi from '../api/players';
 import * as groupsApi from '../api/groups';
+import * as orgApi from '../api/organizations';
 import type { IssuedPin } from '../api/players';
 import type { Player, PlayerHistory, PinStatus } from '../api/types';
 
@@ -59,9 +60,26 @@ function renderPage() {
   );
 }
 
+
+/** These are the ON-state tests: PIN management is only drawn for an
+ *  organization that has chosen Player PIN Security. The OFF state - the
+ *  default - is covered in PlayerProfilePinSecurityOff.test.tsx. */
+function organizationUsingPins() {
+  vi.spyOn(orgApi, 'getOrganization').mockResolvedValue({
+    id: 1,
+    name: 'Wildcats',
+    player_pin_security_enabled: true,
+    players_without_pins: 0,
+    members: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([]);
+  organizationUsingPins();
 });
 
 describe('a player without a PIN', () => {
@@ -74,7 +92,7 @@ describe('a player without a PIN', () => {
     renderPage();
 
     expect(await screen.findByText('No PIN')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Create PIN' }));
+    await user.click(screen.getByRole('button', { name: 'Generate PIN' }));
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     const sheet = await screen.findByRole('dialog');

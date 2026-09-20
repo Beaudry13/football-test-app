@@ -31,7 +31,7 @@ from app.config import BaseConfig, TestingConfig
 from app.extensions import db
 from app.models import Answer, AttemptStatus, PlayerAttempt, PlayerCredential
 from app.models.assessment_mode import PRACTICE
-from app.services import player_credentials
+from app.services import player_credentials, player_enforcement
 from app.services.attempt_tokens import TOKEN_HEADER, check_token, hash_token
 from app.services.player_enforcement import (
     MAX_COMPAT_WINDOW,
@@ -62,12 +62,21 @@ NOW = datetime.now(timezone.utc)
 
 @pytest.fixture
 def enforce(app, monkeypatch):
-    """Turn enforcement on for this test only, with the given window."""
+    """Turn enforcement on for this test only, with the given window.
+
+    BOTH SWITCHES. Protection needs the platform switch AND the organization's
+    own `player_pin_security_enabled`, so this turns the platform one on and
+    treats every organization as having chosen it - which is what the suites
+    below are about. The ORGANIZATION half, including its OFF default and the
+    combinations, is tested for real against the column in
+    test_player_pin_org_setting.py.
+    """
 
     def _set(cutover: datetime, compat: datetime):
         monkeypatch.setitem(app.config, "PLAYER_PIN_ENFORCEMENT", True)
         monkeypatch.setitem(app.config, "PLAYER_PIN_CUTOVER_AT", cutover.isoformat())
         monkeypatch.setitem(app.config, "PLAYER_PIN_COMPAT_UNTIL", compat.isoformat())
+        monkeypatch.setattr(player_enforcement, "organization_enabled", lambda organization_id: True)
 
     return _set
 
@@ -165,18 +174,51 @@ def in_thread(app, fn):
     return thread, out
 
 
+#: What the poll below reads. `wait_event_type = 'Lock'` is a backend blocked on
+#: the lock manager - the row locks these tests are about (wait_event is
+#: 'transactionid' or 'tuple').
+_BLOCKED_BACKENDS = (
+    "SELECT count(*) FROM pg_stat_activity "
+    "WHERE datname = current_database() AND wait_event_type = 'Lock'"
+)
+
+
 def wait_for_lock_waiters(count, timeout=15.0):
+    """Block until `count` backends are waiting on a lock in this database.
+
+    EVERY SAMPLE IS ITS OWN TRANSACTION, and that is the whole point.
+    PostgreSQL serves pg_stat_* from a snapshot that is CACHED FOR THE
+    TRANSACTION (`stats_fetch_consistency = cache`, the default since 15). A
+    poll loop inside one transaction therefore re-reads the FIRST sample it ever
+    took, forever. This helper is called immediately after the threads start, so
+    that first sample is normally taken BEFORE they reach the lock - and the
+    loop then spun for the full timeout while the backends sat blocked in plain
+    sight. It failed only when thread startup lost the race, which is why it
+    looked like flakiness in the tests rather than a bug in the observer.
+
+    AUTOCOMMIT gives each statement its own transaction and so its own snapshot;
+    the condition is then seen within one 50ms tick of becoming true. Measured
+    against this database: a transactional poller NEVER observes a backend that
+    blocks after its first sample, an autocommitting one always does.
+
+    The timeout is only a failure guard now, not part of how the wait works.
+    """
     deadline = time.monotonic() + timeout
-    with db.engine.connect() as conn:
+    with db.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
         while time.monotonic() < deadline:
-            waiting = conn.execute(text(
-                "SELECT count(*) FROM pg_stat_activity "
-                "WHERE datname = current_database() AND wait_event_type = 'Lock'"
-            )).scalar()
-            if waiting >= count:
+            if conn.execute(text(_BLOCKED_BACKENDS)).scalar() >= count:
                 return
             time.sleep(0.05)
-    raise AssertionError(f"expected {count} request(s) blocked on a row lock; none arrived")
+        # Say what the database actually looked like, so a real failure here is
+        # diagnosable instead of a bare timeout.
+        activity = conn.execute(text(
+            "SELECT pid, state, wait_event_type, wait_event, left(query, 60) AS query "
+            "FROM pg_stat_activity WHERE datname = current_database() ORDER BY pid"
+        )).mappings().all()
+    raise AssertionError(
+        f"expected {count} request(s) blocked on a row lock; none arrived. "
+        f"Backends: {[dict(row) for row in activity]}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -611,8 +653,11 @@ class TestCompatibilityWindow:
 
     def test_a_player_with_a_pin_on_an_old_code_needs_the_token(self, client, coach_headers, enforce):
         env = build(client, coach_headers, with_drawing=False)
-        self.old_code_window(enforce, env.code["id"])
+        # Started BEFORE enforcement is on. Since Phase 3b, /start itself refuses
+        # a player with a PIN on a protected code, so this is how a never-tokened
+        # attempt of such a player comes to exist.
         assert client.post("/api/play/start", json=env.who).status_code == 201  # never tokened
+        self.old_code_window(enforce, env.code["id"])
         r = send(client, "answers", env)
         assert (r.status_code, reason(r)) == (401, "token_missing")
 
@@ -756,13 +801,16 @@ class TestResultsOrdering:
         db.session.commit()
         assert self.results(client, env)["answers"][0]["your_answer"] == "False"
 
-    def test_results_stay_unauthenticated_even_with_enforcement_on(self, client, coach_headers, secured):
+    def test_secured_results_need_the_token_since_phase_3b(self, client, coach_headers, secured):
+        """Phase 3a left results open; Phase 3b closed them. The full coverage is
+        tests/test_results_auth_and_name_fences.py - this keeps the ordering
+        class honest about the rule it now runs under."""
         env = build(client, coach_headers, with_drawing=False)
         token, _id, _ = claimed(client, env)
         send(client, "submit", SimpleNamespace(**{**env.__dict__, "draw": None}), token)
-        r = client.post("/api/play/results", json={
-            "code": env.code["code"], "player_name": env.player["full_name"], "player_id": env.player["id"]})
-        assert r.status_code == 200
+        body = {"code": env.code["code"], "player_name": env.player["full_name"], "player_id": env.player["id"]}
+        assert client.post("/api/play/results", json=body).status_code == 401
+        assert client.post("/api/play/results", json=body, headers=token_headers(token)).status_code == 200
 
 
 # ---------------------------------------------------------------------------

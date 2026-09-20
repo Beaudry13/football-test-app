@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, saveDrawing, submitQuiz } from '../../api/play';
-import { getErrorMessage } from '../../api/client';
+import { ApiError, getErrorMessage } from '../../api/client';
 import type {
   AssessmentMode,
   DeliveredPlayerQuestion,
@@ -24,6 +24,7 @@ import {
   resolveResumeDrawing,
 } from './resumeDrawing';
 import type { DrawingDocument } from '../../components/drawing/types';
+import { isAuthRefusal } from './playerEntry';
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 /** Longer than the text debounce. A drawing payload is orders of magnitude
@@ -118,6 +119,9 @@ export function QuizStep({
   initialAnswers,
   mode = 'GRADED',
   initialFeedback = [],
+  carryOverAnswers,
+  attemptToken,
+  onAuthRequired,
   onSubmitted,
   onPracticeComplete,
 }: {
@@ -149,6 +153,17 @@ export function QuizStep({
   /** Feedback already earned before a reload, so a refresh mid-practice does
    * not wipe the explanations the player was reading. */
   initialFeedback?: PracticeFeedback[];
+  /** Answers that were on screen when the server last asked this player to
+   *  prove who they are - put back over the server's copy and saved again, so
+   *  entering a PIN mid-quiz never costs an answer that had not reached it. */
+  carryOverAnswers?: Record<number, PlayerAnswer>;
+  /** The token this device holds for the attempt, read at SEND time so a new
+   *  one is picked up the moment it is issued. Null when there is none. */
+  attemptToken?: () => string | null;
+  /** The server wants proof of who this is (a PIN reset, the quiz continued on
+   *  another device, or PINs switched on mid-quiz). NOT a save failure to
+   *  retry: every later write would be refused the same way. */
+  onAuthRequired?: (reason: string | undefined, answers: Record<number, PlayerAnswer>) => void;
   onSubmitted: () => void;
   /** Practice ends on its own screen, not the results page - a practice
    * attempt never becomes a result a coach reviews. */
@@ -169,7 +184,62 @@ export function QuizStep({
   const [resumed] = useState(() =>
     resolveDrawings(seedAnswers(initialAnswers), initialAnswers, sourceQuestions, drawingScope),
   );
-  const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => resumed.answers);
+  /** Unsaved work carried across a PIN prompt, over the server's copy. Only
+   *  what differs, and never a practice question already checked - that answer
+   *  is locked, and the server's is the one that was judged. */
+  const [carried] = useState<number[]>(() => {
+    if (!carryOverAnswers) return [];
+    const checked = new Set(initialFeedback.map((f) => f.question_id));
+    return Object.keys(carryOverAnswers)
+      .map(Number)
+      .filter((id) => {
+        if (checked.has(id)) return false;
+        const mine = carryOverAnswers[id];
+        const theirs = resumed.answers[id];
+        return (
+          (mine.answer_text ?? null) !== (theirs?.answer_text ?? null) ||
+          (mine.selected_option_id ?? null) !== (theirs?.selected_option_id ?? null) ||
+          JSON.stringify(mine.selected_option_ids ?? null) !== JSON.stringify(theirs?.selected_option_ids ?? null)
+        );
+      });
+  });
+  const [answers, setAnswers] = useState<Record<number, PlayerAnswer>>(() => {
+    const merged = { ...resumed.answers };
+    for (const id of carried) {
+      // Drawings are not carried here: their own local drafts already survive
+      // and win by revision (resumeDrawing.ts).
+      const mine = { ...carryOverAnswers![id] };
+      delete mine.drawing;
+      merged[id] = { ...merged[id], ...mine };
+    }
+    return merged;
+  });
+  /** The same answers, readable from a request that finishes later. */
+  const answersRef = useRef(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+  const authRaised = useRef(false);
+
+  /** A refusal that means "prove who you are" goes to the PIN screen, once.
+   *  Returns true when it did, so the caller does not also report an error. */
+  function raiseIfAuth(err: unknown): boolean {
+    if (!onAuthRequired || !isAuthRefusal(err)) return false;
+    if (!authRaised.current) {
+      authRaised.current = true;
+      Object.values(debounceTimers.current).forEach(clearTimeout);
+      debounceTimers.current = {};
+      onAuthRequired(err.reason, answersRef.current);
+    }
+    return true;
+  }
+
+  /** The device's token as a trailing argument, or nothing - so a call made
+   *  without one is exactly the call it always was. */
+  function tokenArgs(): [string] | [] {
+    const value = attemptToken?.() ?? null;
+    return value ? [value] : [];
+  }
   /** ONE NOTICE FOR BOTH multi-device situations, holding whichever message
    *  applies. They share an opening sentence and a presentation; only the
    *  second half differs, because what happened to THIS device's work
@@ -288,9 +358,12 @@ export function QuizStep({
       selected_option_ids: answer.selected_option_ids ?? null,
       answer_text: answer.answer_text ?? null,
       time_to_answer_ms: timeToAnswerFor(questionId),
-    })
+    }, ...tokenArgs())
       .then(() => setSaveStatus('saved'))
-      .catch(() => setSaveStatus('error'));
+      .catch((err) => {
+        if (raiseIfAuth(err)) return;
+        setSaveStatus('error');
+      });
     // A non-409 failure here is caught, not surfaced as a blocking error -
     // submit's own final sync (see handleSubmit) re-sends every answer's
     // current value as a safety net, so a transient autosave failure isn't
@@ -324,18 +397,20 @@ export function QuizStep({
       document: answer.drawing,
       // Read now, not from the captured `answer` - see drawingRevisions.
       base_revision: knownRevision ?? null,
-    })
+    }, ...tokenArgs())
       .then((result) => {
         setSaveStatus('saved');
         drawingRevisions.current[questionId] = result.revision;
       })
       .catch((err) => {
+        if (raiseIfAuth(err)) return;
         setSaveStatus('error');
-        // 409 means this drawing was changed elsewhere - another device, or a
-        // tab left open. The local copy is kept and submit still carries it
-        // (submit is authoritative), so the player is never stranded; they
-        // are just told rather than left with a silent "Saved" that was not.
-        if (getErrorMessage(err).toLowerCase().includes('another device')) {
+        // 409 stale_revision means this drawing was changed elsewhere - another
+        // device, or a tab left open. The local copy is kept and submit still
+        // carries it (submit is authoritative), so the player is never
+        // stranded; they are just told rather than left with a silent "Saved"
+        // that was not. Decided by the REASON CODE, never the message's words.
+        if (err instanceof ApiError && err.reason === 'stale_revision') {
           // SAME OPENING AS THE RESUME NOTICE, different second half, because
           // the outcome genuinely differs: here the player's local drawing is
           // still on screen and still wins at submit. Telling them "the latest
@@ -367,9 +442,10 @@ export function QuizStep({
             selected_option_id: answer.selected_option_id ?? null,
       selected_option_ids: answer.selected_option_ids ?? null,
             answer_text: answer.answer_text ?? null,
-          });
+          }, ...tokenArgs());
           setSaveStatus('saved');
-        } catch {
+        } catch (err) {
+          if (raiseIfAuth(err)) return;
           setSaveStatus('error');
         }
       }
@@ -383,9 +459,10 @@ export function QuizStep({
         player_name: playerName,
         player_id: playerId,
         question_id: questionId,
-      });
+      }, ...tokenArgs());
       setFeedback((prev) => ({ ...prev, [questionId]: result }));
     } catch (err) {
+      if (raiseIfAuth(err)) return;
       setError(getErrorMessage(err));
     } finally {
       setIsChecking(false);
@@ -408,6 +485,11 @@ export function QuizStep({
     for (const questionId of resumed.restoredLocally) {
       const answer = answers[questionId];
       if (answer?.drawing) updateAnswer(questionId, answer);
+    }
+    // And work carried across a PIN prompt goes back to the server the same way.
+    for (const questionId of carried) {
+      const answer = answers[questionId];
+      if (answer) updateAnswer(questionId, answer);
     }
     // Mount-only: re-running would fight the player's live edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -515,13 +597,14 @@ export function QuizStep({
           // authoritative, so this never 409s against their own autosave.
           drawing: answers[q.id]?.drawing ?? null,
         })),
-      });
+      }, ...tokenArgs());
       if (isPractice && onPracticeComplete) {
         onPracticeComplete(questions.map((q) => feedback[q.id]).filter(Boolean));
       } else {
         onSubmitted();
       }
     } catch (err) {
+      if (raiseIfAuth(err)) return;
       setError(getErrorMessage(err));
     } finally {
       setIsSubmitting(false);

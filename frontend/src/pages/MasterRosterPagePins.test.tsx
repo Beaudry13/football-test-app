@@ -11,6 +11,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MasterRosterPage } from './MasterRosterPage';
 import * as playersApi from '../api/players';
+import * as orgApi from '../api/organizations';
 import type { IssuedPin } from '../api/players';
 import type { Player } from '../api/types';
 
@@ -52,8 +53,25 @@ function renderPage() {
 const ALEX = makePlayer({ id: 2, first_name: 'Alex', last_name: 'Reed', full_name: 'Alex Reed', pin_status: 'missing' });
 const SAM = makePlayer({ id: 3, first_name: 'Sam', last_name: 'Cole', full_name: 'Sam Cole', pin_status: 'missing' });
 
+
+/** These are the ON-state tests: PIN management is only drawn for an
+ *  organization that has chosen Player PIN Security. The OFF state - the
+ *  default - is covered in MasterRosterPinSecurityOff.test.tsx. */
+function organizationUsingPins() {
+  vi.spyOn(orgApi, 'getOrganization').mockResolvedValue({
+    id: 1,
+    name: 'Wildcats',
+    player_pin_security_enabled: true,
+    players_without_pins: 0,
+    members: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
+  organizationUsingPins();
 });
 
 describe('PIN status on the roster', () => {

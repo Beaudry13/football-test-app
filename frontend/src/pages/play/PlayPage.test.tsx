@@ -55,13 +55,10 @@ const startedAttempt: AttemptState = {
 };
 
 const submittedResponse = {
-  id: 1,
-  quiz_id: 5,
-  access_code_id: 42,
-  player_name: 'Jordan Smith',
-  display_name: 'Jordan Smith',
+  attempt_id: 900,
+  status: 'submitted' as const,
   submitted_at: '2026-01-01T00:05:00Z',
-  answers: [],
+  mode: 'GRADED' as const,
 };
 
 const playerResults: PlayerResultsResponse = {

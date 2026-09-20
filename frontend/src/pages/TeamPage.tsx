@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import {
   getOrganization,
   listInvites,
@@ -6,6 +7,7 @@ import {
   renameOrganization,
   requestStaffInvite,
   revokeInvite,
+  setPlayerPinSecurity,
   updateMemberRole,
 } from '../api/organizations';
 import { getErrorMessage } from '../api/client';
@@ -49,6 +51,40 @@ export function TeamPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  /** PLAYER PIN SECURITY, this organization's own choice.
+   *
+   *  Turning it ON issues no PINs - the card says how many players still need
+   *  one and sends the admin to the roster, where "Generate missing PINs"
+   *  lives. Turning it OFF deletes nothing, which is what makes turning it
+   *  back on safe, so only the ON direction asks for confirmation. */
+  async function handlePinSecurity(enabled: boolean) {
+    if (!org) return;
+    setError(null);
+    try {
+      if (enabled) {
+        const waiting = org.players_without_pins ?? 0;
+        const confirmed = await confirm({
+          title: 'Turn on Player PIN Security?',
+          body: waiting
+            ? `Players will need their 6-digit PIN to start a quiz or open their results. ` +
+              `${waiting} active player${waiting === 1 ? " doesn't" : "s don't"} have a PIN yet - ` +
+              'give them one from Team → Players, or they will not be able to start.'
+            : 'Players will need their 6-digit PIN to start a quiz or open their results. ' +
+              'Every active player already has one.',
+          confirmLabel: 'Turn on',
+        });
+        if (!confirmed) return;
+      }
+      setIsBusy(true);
+      await setPlayerPinSecurity(enabled);
+      await refresh();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsBusy(false);
+    }
+  }
 
   async function handleRename(event: FormEvent) {
     event.preventDefault();
@@ -167,6 +203,49 @@ export function TeamPage() {
           </button>
         </form>
       )}
+
+      <div className={`${nb.card} ${styles.card}`}>
+        <h2 className={nb.subheading}>Player PIN Security</h2>
+        <p className={styles.settingHint}>
+          Require players to enter a 6-digit PIN to protect their quiz attempts and results.
+        </p>
+        <div className={styles.settingRow}>
+          <span className={`${nb.badge} ${org.player_pin_security_enabled ? nb.badgeSuccess : nb.badgeNeutral}`}>
+            {org.player_pin_security_enabled ? 'On' : 'Off'}
+          </span>
+          {isAdmin ? (
+            <button
+              className={nb.btnSm}
+              disabled={isBusy}
+              onClick={() => handlePinSecurity(!org.player_pin_security_enabled)}
+            >
+              {org.player_pin_security_enabled ? 'Turn off' : 'Turn on'}
+            </button>
+          ) : (
+            <span className={styles.settingHint}>Only an organization admin can change this.</span>
+          )}
+        </div>
+        <p className={styles.settingHint}>
+          {org.player_pin_security_enabled ? (
+            <>
+              Players choose their name, then enter their PIN. Quizzes cannot be activated for players
+              who do not have one yet.
+            </>
+          ) : (
+            <>Players join with the access code and their name, as they do now.</>
+          )}
+          {org.player_pin_security_enabled && (org.players_without_pins ?? 0) > 0 && (
+            <>
+              {' '}
+              <strong>
+                {org.players_without_pins} player{org.players_without_pins === 1 ? '' : 's'}{' '}
+                {org.players_without_pins === 1 ? 'doesn' : 'don'}&apos;t have a PIN yet.
+              </strong>{' '}
+              <Link to="/team">Manage PINs</Link>
+            </>
+          )}
+        </p>
+      </div>
 
       <div className={`${nb.card} ${styles.card}`}>
         <h2 className={nb.subheading}>Coaches ({org.members.length})</h2>

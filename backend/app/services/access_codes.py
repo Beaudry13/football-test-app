@@ -9,7 +9,7 @@ import string
 from datetime import datetime, timezone
 
 from app.extensions import db
-from app.models import AccessCode, Player, Quiz
+from app.models import AccessCode, Player, PlayerCredential, Quiz
 
 CODE_ALPHABET = "".join(sorted(set(string.ascii_uppercase + string.digits) - set("0O1IL")))
 CODE_LENGTH = 6
@@ -150,6 +150,83 @@ def effective_roster_players(access_code: AccessCode) -> list[dict]:
                     }
                 )
     return result
+
+
+def canonical_player_ids_matching_name(access_code: AccessCode, player_name: str) -> list[int]:
+    """The canonical players on this activation's effective roster whom a typed
+    NAME could mean, in roster order, each once.
+
+    PLAYER PIN ENFORCEMENT (Phase 3b) - the name-only fence. A canonical entry
+    matches by its Player's CURRENT full name OR by the name snapshot on its
+    group/roster row. The snapshot matters: renaming a player does not rewrite
+    `group_players.player_name` / `roster_players.player_name`, and
+    `effective_roster_names` still admits that old name at /start - so matching
+    current names alone would let the old name begin an unprotected legacy
+    attempt for a player who has a PIN.
+
+    Same normalisation as the /start safety net: strip, then casefold.
+    """
+    wanted = player_name.strip().casefold()
+    matches: list[int] = []
+    for entry in roster_entries(access_code.quiz, access_code.groups):
+        if entry.player_id is None or entry.player is None:
+            continue
+        names = {entry.player.full_name.strip().casefold(), entry.player_name.strip().casefold()}
+        if wanted in names and entry.player_id not in matches:
+            matches.append(entry.player_id)
+    return matches
+
+
+def roster_entries(quiz: Quiz, groups) -> list:
+    """The raw roster rows an activation sends to: every row of its linked
+    groups, or - with none linked - the quiz's own roster.
+
+    THE ONE ANSWER TO "WHO IS THIS CODE FOR", shared by the /start name fence and
+    the activation PIN gate. Taking `groups` rather than a code is what lets
+    activation ask the question BEFORE the code exists, and get exactly the
+    answer /start will give once it does.
+    """
+    if groups:
+        return [entry for group in groups for entry in group.players]
+    return list(quiz.roster.players) if quiz.roster else []
+
+
+def players_without_pins(quiz: Quiz, groups) -> list[dict]:
+    """PLAYER PIN ENFORCEMENT (Phase 3c) - who would be locked out of this
+    activation because they have no PIN.
+
+    Active canonical players on the roster the activation targets, with no
+    credential, each once: `{player_id, name, jersey_number}`, ordered by name.
+
+    Not included, on purpose:
+      * inactive players - they cannot begin anything under any code;
+      * free-text roster entries - there is no player to give a PIN to, and a
+        name-only attempt remains the documented legacy exception.
+
+    Reads only whether a credential EXISTS - never its hash or throttle state.
+    """
+    ids = {
+        entry.player_id
+        for entry in roster_entries(quiz, groups)
+        if entry.player_id is not None and entry.player is not None
+    }
+    if not ids:
+        return []
+    has_credential = db.exists().where(PlayerCredential.player_id == Player.id)
+    players = (
+        Player.query.filter(
+            Player.id.in_(ids),
+            Player.organization_id == quiz.organization_id,
+            Player.is_active.is_(True),
+            ~has_credential,
+        )
+        .order_by(Player.last_name, Player.first_name, Player.id)
+        .all()
+    )
+    return [
+        {"player_id": p.id, "name": p.full_name, "jersey_number": p.jersey_number}
+        for p in players
+    ]
 
 
 def selectable_players_for_code(access_code: AccessCode) -> list[dict]:

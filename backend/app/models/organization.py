@@ -17,6 +17,17 @@ class Organization(TimestampMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
+    #: PLAYER PIN SECURITY - this organization's own choice, and the product
+    #: switch for it. OFF for every existing organization and every new one:
+    #: deploying the capability must never start asking anybody's players for a
+    #: PIN. A staff admin turns it on when their roster is ready.
+    #:
+    #: It is ANDed with the platform's PLAYER_PIN_ENFORCEMENT kill switch - see
+    #: services/player_enforcement.settings_for(). One organization's choice
+    #: cannot affect another's.
+    player_pin_security_enabled = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.text("false")
+    )
 
     coaches = db.relationship("Coach", back_populates="organization")
     quizzes = db.relationship("Quiz", back_populates="organization")
@@ -34,6 +45,10 @@ class Organization(TimestampMixin, db.Model):
         return {
             "id": self.id,
             "name": self.name,
+            # The organization's security policy is not a secret from its own
+            # coaches: it explains why their players are asked for a PIN.
+            # Changing it is admin-only (routes/organizations.py).
+            "player_pin_security_enabled": self.player_pin_security_enabled,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }

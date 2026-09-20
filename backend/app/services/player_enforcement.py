@@ -1,14 +1,29 @@
-"""Player PIN enforcement - PHASE 3A: cutover configuration, secured codes, and
-authorizing player writes.
+"""Player PIN enforcement - who must prove who they are, and when.
 
-OFF BY DEFAULT, AND OFF MEANS EXACTLY PHASE 2. With PLAYER_PIN_ENFORCEMENT
-unset, `authorize_player_write` returns the attempt untouched without locking
-or reading anything, and every player route behaves as it did before this file
-existed. The player impersonation vulnerability is NOT closed by this slice.
+TWO SWITCHES, ONE ANSWER
+------------------------
+PIN protection applies to an organization only when BOTH are true:
 
-THE SWITCH IS TEMPORARY. It exists for a controlled cutover and an emergency
-rollback during the compatibility window, and is removed in Phase 4 once hard
-cutover is proven. It is not a permanent way to run without player security.
+  1. PLATFORM: `PLAYER_PIN_ENFORCEMENT` is on. One deploy-level control over
+     the whole feature - the rollout gate, and the emergency kill switch. Off
+     means no organization is protected, whatever any of them has chosen.
+  2. ORGANIZATION: that organization's `player_pin_security_enabled` is on.
+     The product setting a staff admin owns, stored per organization, OFF for
+     every existing and new organization.
+
+`settings_for()` is the ONE place those are combined; everything else asks it.
+One organization's choice cannot affect another's, because the answer is
+always computed for the organization that owns the code in hand.
+
+OFF MEANS EXACTLY WHAT CAME BEFORE. With either switch off,
+`authorize_player_write` returns the attempt untouched without locking or
+reading anything, and every player route behaves as it did before this file
+existed - for that organization.
+
+THE PLATFORM SWITCH IS TEMPORARY. It exists for a controlled cutover and an
+emergency rollback during the compatibility window. Once hard cutover is
+proven it goes away and the ORGANIZATION setting remains the product control.
+Neither is a permanent way to run without player security.
 
 SECURED CODES
 -------------
@@ -41,12 +56,12 @@ from flask import current_app
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import PlayerAttempt, PlayerCredential
+from app.models import Organization, PlayerAttempt, PlayerCredential
 from app.services import attempt_tokens
 
 # The attempt row lock lives with the other /play attempt lookups in
 # services/attempts.py, and is re-exported here for the routes that authorize.
-from app.services.attempts import lock_attempt  # noqa: F401
+from app.services.attempts import attempt_token_ever_issued, lock_attempt  # noqa: F401
 
 #: The longest compatibility window the configuration will accept. Old codes
 #: must not keep an open-ended exemption.
@@ -117,14 +132,55 @@ def validate_config(config) -> None:
     parse_settings(config)
 
 
-def current_settings() -> EnforcementSettings:
+def platform_settings() -> EnforcementSettings:
+    """The PLATFORM switch and its dates. Says nothing about any organization -
+    only `settings_for` answers "is this organization protected"."""
     return parse_settings(current_app.config)
+
+
+def organization_enabled(organization_id: int | None) -> bool:
+    """Has this organization chosen Player PIN Security?
+
+    READ FRESH, EVERY TIME, and deliberately not cached. An earlier version
+    memoised this on `g`, which is per APPLICATION context - and an application
+    context outlives a request wherever one is pushed by hand (a CLI command, a
+    script, the test client), so an admin turning protection on could be
+    answered with a stale "off". A security answer must not be able to go stale;
+    the cost is one primary-key lookup, and a player request asks at most twice
+    because the routes pass the settings they resolved down the call.
+    """
+    if organization_id is None:
+        return False
+    return bool(
+        db.session.query(Organization.player_pin_security_enabled)
+        .filter(Organization.id == organization_id)
+        .scalar()
+    )
+
+
+def settings_for(organization_id: int | None) -> EnforcementSettings:
+    """THE ONE ANSWER: is PIN protection active for this organization, and
+    under which cutover dates?
+
+    Platform switch AND the organization's own setting. The dates are the
+    platform's - a cutover window is a rollout property, not a per-team one.
+    """
+    settings = platform_settings()
+    if not settings.enabled or not organization_enabled(organization_id):
+        return EnforcementSettings(enabled=False)
+    return settings
+
+
+def settings_for_code(access_code) -> EnforcementSettings:
+    """`settings_for` the organization that owns this access code - the form
+    every player route needs, since a code is what a player arrives with."""
+    return settings_for(access_code.quiz.organization_id)
 
 
 def is_code_secured(
     access_code, *, now: datetime | None = None, settings: EnforcementSettings | None = None
 ) -> bool:
-    settings = settings or current_settings()
+    settings = settings or settings_for_code(access_code)
     if not settings.enabled:
         return False
     now = now or datetime.now(timezone.utc)
@@ -189,7 +245,7 @@ def token_required(
     access_code, attempt: PlayerAttempt, *, now: datetime | None = None,
     settings: EnforcementSettings | None = None,
 ) -> bool:
-    settings = settings or current_settings()
+    settings = settings or settings_for_code(access_code)
     if attempt.player_id is None or not settings.enabled:
         return False
     if is_code_secured(access_code, now=now, settings=settings):
@@ -212,7 +268,7 @@ def authorize_player_write(access_code, attempt: PlayerAttempt) -> PlayerAttempt
     """
     if attempt.player_id is None:
         return attempt
-    settings = current_settings()
+    settings = settings_for_code(access_code)
     if not settings.enabled:
         return attempt
     locked = lock_attempt(attempt.id)
@@ -223,3 +279,57 @@ def authorize_player_write(access_code, attempt: PlayerAttempt) -> PlayerAttempt
         db.session.rollback()
         raise token_refusal(check)
     return locked
+
+
+# ---------------------------------------------------------------------------
+# PHASE 3B - who must prove who they are before a start or their results
+# ---------------------------------------------------------------------------
+
+PICK_PLAYER = "pick_player"
+
+
+def canonical_access_protected(
+    access_code, player_id: int, *, settings: EnforcementSettings | None = None
+) -> bool:
+    """Must this canonical player authenticate (PIN or token) before a NEW
+    start, or before reading results, under this code?
+
+    Enforcement on AND any of:
+      * the code is secured;
+      * the player has a PIN;
+      * the player has EVER been issued a token under this code.
+    The last two are the compatibility window's rules from Phase 3a, applied to
+    the player rather than to one attempt. Decided WITHOUT looking at whether
+    anything is submitted, so a refusal built on it reveals nothing about that.
+    """
+    settings = settings or settings_for_code(access_code)
+    if not settings.enabled:
+        return False
+    if is_code_secured(access_code, settings=settings):
+        return True
+    if _player_has_credential(player_id):
+        return True
+    return attempt_token_ever_issued(access_code.id, player_id)
+
+
+def pin_required_for(player_id: int) -> ApiError:
+    """401 pin_required from /start, carrying the ONE identifier the client
+    needs to send the player to /claim: which canonical player the request
+    resolved to. Never whether they have a PIN, an attempt or a submission -
+    and a player_id is already public in the roster validate-code serves."""
+    return ApiError(
+        _AUTH_MESSAGES[PIN_REQUIRED],
+        status_code=401,
+        details={"player_id": player_id},
+        reason=PIN_REQUIRED,
+    )
+
+
+def pick_player_error() -> ApiError:
+    """409 pick_player: a typed name matches more than one canonical player.
+    No candidates are listed - the client already holds the roster picker."""
+    return ApiError(
+        "More than one player has that name. Pick your name from the list.",
+        status_code=409,
+        reason=PICK_PLAYER,
+    )

@@ -14,13 +14,23 @@ export class ApiError extends Error {
   status: number;
   details?: Record<string, string[]>;
   reason?: string;
+  /** How long the server asked the caller to wait, when it said - the player
+   *  PIN throttle's cooldown. Undefined for every other error. */
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status: number, details?: Record<string, string[]>, reason?: string) {
+  constructor(
+    message: string,
+    status: number,
+    details?: Record<string, string[]>,
+    reason?: string,
+    retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.details = details;
     this.reason = reason;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -103,6 +113,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       response.status,
       errorBody?.details,
       errorBody?.reason,
+      typeof errorBody?.retry_after_seconds === 'number' ? errorBody.retry_after_seconds : undefined,
     );
   }
 
@@ -142,8 +153,11 @@ async function requestBlob(path: string, options: RequestOptions = {}): Promise<
 export function getErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.details) {
-      const firstDetail = Object.values(error.details)[0]?.[0];
-      if (firstDetail) return firstDetail;
+      // Validation details are lists of messages. Some refusals carry data
+      // there instead (a player id, a list of players) - never show that as
+      // if it were the message.
+      const firstDetail = (Object.values(error.details)[0] as unknown[] | undefined)?.[0];
+      if (typeof firstDetail === 'string' && firstDetail) return firstDetail;
     }
     return error.message;
   }

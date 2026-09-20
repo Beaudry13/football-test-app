@@ -30,6 +30,18 @@ class PlayerUpdateSchema(Schema):
     )
 
 
+class SetPlayerPinSchema(Schema):
+    """A PIN a coach chose for one player.
+
+    SHAPE ONLY, and shape is exactly six digits - the same alphabet Peira
+    generates, so a hand-set PIN is indistinguishable from a generated one
+    afterwards. Whether it is too guessable is services/player_credentials'
+    rule, not marshmallow's.
+    """
+
+    pin = fields.Str(required=True, validate=validate.Regexp(r"^\d{6}$"))
+
+
 class PlayerBulkCreateSchema(Schema):
     players = fields.List(
         fields.Nested(PlayerCreateSchema), required=True, validate=validate.Length(min=1)

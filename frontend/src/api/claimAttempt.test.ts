@@ -27,8 +27,25 @@ describe('claimAttempt', () => {
     expect(post).toHaveBeenCalledWith(
       '/play/claim',
       { access_code_id: 9, player_id: 21, pin: '482915' },
-      { auth: false },
+      { auth: false, headers: {} },
     );
+  });
+
+  it('sends a stored token as X-Attempt-Token only when no PIN is typed', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({});
+
+    await claimAttempt({ access_code_id: 9, player_id: 21 }, 'device-token');
+    await claimAttempt({ access_code_id: 9, player_id: 21, pin: '482915' }, 'stale-token');
+
+    expect(post).toHaveBeenNthCalledWith(1, '/play/claim', { access_code_id: 9, player_id: 21 }, {
+      auth: false,
+      headers: { 'X-Attempt-Token': 'device-token' },
+    });
+    // A typed PIN wins: the stale token is not sent alongside it.
+    expect(post).toHaveBeenNthCalledWith(2, '/play/claim', { access_code_id: 9, player_id: 21, pin: '482915' }, {
+      auth: false,
+      headers: {},
+    });
   });
 
   it('stores neither the PIN nor the token by itself', async () => {
