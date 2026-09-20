@@ -1028,3 +1028,114 @@
   left: 0;
 }
 
+/* ---- ML-UX-4: strip hierarchy and More ----------------------------------
+ *
+ * Additive, as above. `.chip`, `.group`, `.lbl`, `.popover`, `.pop-title` and
+ * `.pop-clear` are prototype-derived and pinned by motionLabCss.test.ts;
+ * nothing here edits them. New behaviour gets new class names, and the two
+ * places an existing selector is re-stated sit below the marker so the
+ * cascade does the work.
+ */
+
+/* THE CHIP IS NO LONGER A BUTTON. It says who, and which side he is on,
+   because "Z" alone does not tell a coach whether he is looking at his own
+   receiver or the man covering him. */
+.motion-lab-root .chip.chip-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  cursor: default;
+}
+.motion-lab-root .chip-side {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  text-transform: none;
+}
+
+/* The primary is gold only while there is nothing to run. Once he has an
+   assignment, Redraw is an ordinary button - the loud one has done its job. */
+.motion-lab-root .bar.context .strip-primary {
+  flex: 0 0 auto;
+}
+
+/* The summary holds the right end of the strip. It gives way before any
+   control does, and it is the only thing in the strip that may truncate. */
+.motion-lab-root .strip-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* MORE: four groups, in one column, wide enough for a sentence. */
+.motion-lab-root .more-pop {
+  /* SPEC §8: it opens BELOW More, left-aligned. The prototype's `.popover`
+     right-aligns, which was right for a menu on the right of a bar; More sits
+     in the middle of the strip and should hang from its own left edge. */
+  right: auto;
+  left: 0;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+/* A rule above every group title but the first, so the groups read as
+   groups without needing a heavier treatment. */
+.motion-lab-root .more-pop .pop-title + * {
+  margin-top: 2px;
+}
+.motion-lab-root .more-pop .pop-title:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.motion-lab-root .more-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+.motion-lab-root .more-row.stacked {
+  display: block;
+}
+.motion-lab-root .more-choices {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+.motion-lab-root .more-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.motion-lab-root .more-choice.on {
+  color: var(--accent);
+}
+.motion-lab-root .more-radio {
+  width: 12px;
+  flex: 0 0 auto;
+}
+
+/* Formation's footer count is a statement, not a choice. */
+.motion-lab-root .pop-foot {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+.motion-lab-root .formation-pop {
+  min-width: 300px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+

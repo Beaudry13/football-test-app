@@ -200,8 +200,10 @@ describe('Motion Lab editor on the server', () => {
     await settle()
     await openEditor(100)
     await waitFor(() => expect(playName()).toBe(a.name))
-    fireEvent.click(screen.getByRole('button', { name: /^Look/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save look…' }))
+    // ML-UX-4 renamed the coach-facing control to Formation (SPEC §13).
+      // The stored concept is still a Look: what this test asserts below.
+      fireEvent.click(screen.getByRole('button', { name: /^Formation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save this formation…' }))
     const input = document.querySelector('input.inline-name') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Trips Rt' } })
     fireEvent.keyDown(input, { key: 'Enter' })

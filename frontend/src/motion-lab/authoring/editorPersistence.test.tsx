@@ -173,8 +173,10 @@ describe('Motion Lab editor persistence', () => {
     const [a] = gapPlays()
     seed([a], a.id)
     render(<MotionLabEditor repository={repo} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Look/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save look…' }))
+    // ML-UX-4 renamed the coach-facing control to Formation (SPEC §13).
+      // The stored concept is still a Look: what this test asserts below.
+      fireEvent.click(screen.getByRole('button', { name: /^Formation/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save this formation…' }))
     const input = document.querySelector('input.inline-name') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'Base 11' } })
     fireEvent.keyDown(input, { key: 'Enter' })

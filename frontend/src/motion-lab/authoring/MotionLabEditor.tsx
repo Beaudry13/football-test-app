@@ -240,7 +240,7 @@ export function MotionLabEditor({
   const [advancedOpen, setAdvancedOpen] = useState(advancedOpenMemo)
   const [draft, setDraft] = useState<Pt[] | null>(null)
   const [setup, setSetup] = useState<Setup | null>(null)
-  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'players' | 'look' | 'situation' | 'assignment' | 'player' | 'viewer' | 'rate' | 'display'>(null)
+  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'viewer' | 'rate' | 'display'>(null)
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look'>(null)
@@ -468,7 +468,7 @@ export function MotionLabEditor({
     const l = lookFromPlayers(name, players)
     repository.saveLook(l)
     setLooks(repository.listLooks())
-    showToast(`Look "${name}" saved.`)
+    showToast(`Formation "${name}" saved.`)
   }
   const loadLook = (l: Look) => {
     // Replacing the men on the field invalidates anything that named them.
@@ -478,10 +478,10 @@ export function MotionLabEditor({
     setEngagements([])
     setSelectedId(null)
     reset()
-    showToast(`Look "${l.name}" loaded — assignments and ball cleared.`)
+    showToast(`Formation "${l.name}" loaded — assignments and the ball were cleared.`)
   }
   const deleteLook = (l: Look) => {
-    if (!window.confirm(`Delete look "${l.name}"?`)) return
+    if (!window.confirm(`Delete formation "${l.name}"?`)) return
     repository.deleteLook(l.id)
     setLooks(repository.listLooks())
   }
@@ -1267,18 +1267,20 @@ export function MotionLabEditor({
    */
   const showRouteHandle = !setup && (interaction === 'idle' || interaction === 'draw-armed')
 
-  const hint = (() => {
-    if (present) return telestrating ? <>Draw on the field while paused. <b>Esc</b> to stop drawing.</> : <>Teaching. Click a player to highlight him.</>
-    if (pickingViewer) return <>Player view — <b>click the player</b> to watch from.</>
-    if (watching) return <>{view === 'coach' ? 'Coach' : 'Player'} view is for watching. Switch to <b>Overhead</b> to edit.</>
-    if (setup) return <>{setup.step === 'copy-to' ? 'Copying an assignment' : 'Setting the ball action'} — <b>Esc</b> to cancel.</>
-    if (interaction === 'drawing') return <>Drawing <b>{selected?.label}</b>'s assignment. Let go to finish. <b>Esc</b> to cancel.</>
-    if (interaction === 'draw-armed') return <>Draw <b>{selected?.label}</b>'s assignment: drag on the field. <b>Esc</b> to cancel.</>
-    if (interaction === 'adjusting') return <>Drag a handle to adjust <b>{selected?.label}</b>'s path. Hard breaks stay sharp. <b>Esc</b> to finish.</>
-    if (!selected) return <>Drag any player to move him. Click one to draw his assignment. Then set the <b>Ball</b>.</>
-    if (!hasPath) return <><b>{selected.label}</b> selected — drag the <b>gold arrow</b> to draw his assignment, or press <b>D</b>.</>
-    return <><b>{selected.label}</b> — drag the <b>gold arrow</b> to redraw · <b>E</b> edit path · <b>Delete</b> clear.</>
-  })()
+  /**
+   * The drawing banner's sentence (SPEC §11.2).
+   *
+   * Only two states reach it now. Every other instruction this used to carry
+   * moved to the place it describes: the strip says what a selected man can
+   * do (ML-UX-4), the pick banners say what to click (ML-UX-3), and the
+   * watching and Present sentences live in their own strip branches.
+   */
+  const hint =
+    interaction === 'drawing' ? (
+      <>Drawing <b>{selected?.label}</b>'s assignment. Let go to finish. <b>Esc</b> to cancel.</>
+    ) : (
+      <>Draw <b>{selected?.label}</b>'s assignment: drag on the field. <b>Esc</b> to cancel.</>
+    )
 
   /**
    * THE WAITING SENTENCE for a field pick (SPEC §11.2).
@@ -1354,6 +1356,8 @@ export function MotionLabEditor({
         <button onClick={() => setEngagements((es) => es.filter((x) => x.id !== selectedEngagement.id))}>Remove</button>
       </span>
     ) : (
+      /* SPEC §4.1/§4.2: a blocker blocks, a defender engages. One button,
+         the word a coach would use for the man he has selected. */
       <button
         onClick={() => {
           cancelDrawing()
@@ -1361,7 +1365,7 @@ export function MotionLabEditor({
           setSetup({ step: 'pick-partner', forId: selected.id })
         }}
       >
-        Engage…
+        {selected.side === 'offense' ? 'Blocks…' : 'Engages…'}
       </button>
     )
   ) : null
@@ -1477,6 +1481,76 @@ export function MotionLabEditor({
     </div>
   )
 
+  /**
+   * EVERYTHING THAT IS NOT ONE OF THE SEVEN (SPEC §8).
+   *
+   * Four groups, in this order, with nothing else ever added: how he runs it,
+   * what to do with the assignment, where the QB throws from, and the man
+   * himself. These all used to be spread across the strip and a chip menu,
+   * which is why the strip could not be read at a glance.
+   */
+  const autoEnd = selected && drawnSchedule.has(selected.id) ? resolveEnd({ ...selected, endBehavior: undefined }, drawnSchedule.get(selected.id)!) : null
+  const canEndBehavior = !!selected && selected.side === 'offense' && selected.id !== qbId && !!autoEnd
+  const moreMenu = selected ? (
+    <div className="popover more-pop">
+      <div className="pop-title">How he runs it</div>
+      <div className="more-row">
+        <label className="lbl">Speed</label>
+        <Seg value={selected.speed} options={SPEEDS} onChange={(speed) => updatePlayer(selected.id, { speed })} size="sm" />
+      </div>
+      {canEndBehavior && (
+        <div className="more-row stacked">
+          <label className="lbl">After the route</label>
+          <div className="more-choices">
+            {/*
+              The automatic answer is offered as itself, not as the word
+              "Auto": a coach wants to know what the man DOES. Choosing the
+              option that matches the automatic answer clears the override
+              rather than freezing today's guess into the play.
+            */}
+            {(['continue', 'settle'] as EndBehavior[]).map((v) => {
+              const isAuto = autoEnd === v
+              const chosen = (selected.endBehavior ?? autoEnd) === v
+              const explicit = selected.endBehavior === v
+              return (
+                <button
+                  key={v}
+                  className={`more-choice${chosen ? ' on' : ''}`}
+                  onClick={() => updatePlayer(selected.id, { endBehavior: isAuto ? undefined : v })}
+                >
+                  <span className="more-radio" aria-hidden="true">{chosen ? '●' : '○'}</span>
+                  {v === 'continue' ? 'Keeps running' : 'Stops'}
+                  {isAuto && !explicit ? ' (auto)' : ''}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="pop-title">Assignment</div>
+      <button disabled={!hasPath} onClick={() => startCopy(false)}>Copy his assignment to…</button>
+      <button disabled={!hasPath} onClick={() => startCopy(true)}>Mirror his assignment to…</button>
+      <button className="pop-clear" disabled={!hasPath} onClick={() => { setMenuOpen(null); clearPath(selected.id) }}>
+        Clear assignment <span className="key">Delete</span>
+      </button>
+
+      {selected.id === qbId && canPickRelease && (
+        <>
+          <div className="pop-title">Throw point</div>
+          {/* The same two handlers the ball menu's Advanced uses - one throw
+              point, reachable from the man or from the ball. */}
+          <button onClick={startPickRelease}>Set on field…</button>
+          {hasReleaseOverride && <button onClick={useDefaultRelease}>Use end of drop</button>}
+        </>
+      )}
+
+      <div className="pop-title">Player</div>
+      <button onClick={() => { setMenuOpen(null); setRenaming('player') }}>Rename…</button>
+      <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Remove from play</button>
+    </div>
+  ) : null
+
   const situationChip = (
     <div className="ball-menu">
       <button className={`sit-chip${menuOpen === 'situation' ? ' active' : ''}`} disabled={present} onClick={() => toggleMenu('situation')} title="Down, distance, spot and hash">
@@ -1535,8 +1609,11 @@ export function MotionLabEditor({
           {menuOpen === 'play' && !present && (
             <div className="popover play-pop">
               <button onClick={() => { setMenuOpen(null); setRenaming('play') }}>Rename…</button>
-              <button onClick={() => createPlay(players)}>New play (this look)</button>
+              <button onClick={() => createPlay(players)}>New play (this formation)</button>
               <button onClick={duplicatePlay}>Duplicate</button>
+              {/* SPEC §13: it used to sit in the strip, permanently, for
+                  something a coach does once in a while and never by accident. */}
+              <button disabled={!hasPaths} onClick={() => { setMenuOpen(null); clearAllPaths() }}>Clear all assignments</button>
               <button className="pop-clear" onClick={deletePlay}>Delete play</button>
               <div className="pop-title">Open</div>
               <div className="play-list">
@@ -1588,23 +1665,6 @@ export function MotionLabEditor({
           </>
         ) : (
           <>
-            {/*
-              TEMPORARY, AND DELIBERATELY SO (ML-UX-1).
-              The mode segment is gone - the pointer's target decides what a
-              drag means now. This button remains only so a coach with a mouse
-              never loses an obvious way to start a route while the gold
-              handle is still new to him; it ARMS drawing, exactly as D does.
-              ML-UX-4 moves the primary action into the selected-player strip
-              and this goes with it.
-            */}
-            <button
-              className={`draw-btn${interaction === 'draw-armed' || interaction === 'drawing' ? ' active' : ''}`}
-              disabled={!selected || !!setup || watching}
-              onClick={armDrawing}
-              title="Arm drawing for the selected player (D)"
-            >
-              {hasPath ? 'Redraw' : 'Draw assignment'}<span className="key">D</span>
-            </button>
             <button className="primary" onClick={enterPresent} title="Hide the authoring tools and teach">
               Present
             </button>
@@ -1622,26 +1682,23 @@ export function MotionLabEditor({
                 call, not this slice's. Only the grammar changes here. */}
             <span className="hint">{ballNote ?? (ball ? ballText : '')}</span>
           </>
-        ) : interaction === 'draw-armed' || interaction === 'drawing' || interaction === 'adjusting' ? (
+        ) : interaction === 'draw-armed' || interaction === 'drawing' ? (
           /*
             THE WAITING ROW (SPEC §2). While the coach is part-way through
             something the strip says so and offers the way out, instead of
             showing controls for a man whose route is mid-flight.
 
-            Adjust is included, which the design does not ask for: until
-            ML-UX-4 builds the strip's Adjust toggle there is nothing else on
-            screen that says anchor editing is on, and the instruction it
-            replaced has just left the top bar.
+            Adjusting is NOT one of these (SPEC §5.3 gives it no banner): the
+            strip's Adjust button says so itself, in gold-line, and the strip
+            stays on screen where a coach can reach Timing while he works.
+            ML-UX-2 borrowed this row for it only because that button did not
+            exist yet.
           */
           <>
             <span className="banner">{hint}</span>
             <div className="spacer" />
-            <button
-              onClick={clicked(() => (interaction === 'adjusting' ? setInteraction('idle') : cancelDrawing()))}
-              title="Cancel · Esc"
-            >
-              {interaction === 'adjusting' ? 'Done' : 'Cancel'}
-              <span className="key">Esc</span>
+            <button onClick={clicked(cancelDrawing)} title="Cancel · Esc">
+              Cancel<span className="key">Esc</span>
             </button>
           </>
         ) : pickingViewer ? (
@@ -1691,132 +1748,129 @@ export function MotionLabEditor({
             <button onClick={cancelSetup} title="Cancel · Esc">Cancel<span className="key">Esc</span></button>
           </>
         ) : selected ? (
+          /*
+            THE SELECTED-PLAYER STRIP (SPEC §4.1). Seven controls in a fixed
+            order that never reflows: who, draw, adjust, when, who he blocks,
+            everything else, and what he ends up doing. Anything that is not
+            one of those seven lives under More - the strip used to carry nine
+            groups and a coach had to read it to find the one he wanted.
+          */
           <>
-            {/* The man: click his chip to rename or remove him */}
-            <div className="ball-menu">
-              {renaming === 'player' ? (
-                <InlineName value={selected.label} onCommit={(v) => { updatePlayer(selected.id, { label: v.slice(0, 4).toUpperCase() }); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Label" />
-              ) : (
-                <button className={`chip ${selected.side} chip-btn${menuOpen === 'player' ? ' active' : ''}`} onClick={() => toggleMenu('player')} title="Rename or remove this player">
-                  {selected.label} <span className="key">▾</span>
-                </button>
-              )}
-              {menuOpen === 'player' && (
-                <div className="popover play-pop-left">
-                  <button onClick={() => { setMenuOpen(null); setRenaming('player') }}>Rename…</button>
-                  <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Remove from play</button>
-                </div>
-              )}
-            </div>
-            {hasPath ? (
-              <>
-                <span className="group">
-                  <label className="lbl">Timing</label>
-                  <Seg value={selected.timing} options={TIMINGS} onChange={(timing) => updatePlayer(selected.id, { timing })} size="sm" />
-                  {selected.timing === 'delayed' && (
-                    <span className="delay">
-                      <input type="number" min={0} max={5} step={0.1} value={selected.delay} onChange={(e) => updatePlayer(selected.id, { delay: Number(e.target.value) })} />
-                      <span>s</span>
-                    </span>
-                  )}
-                </span>
-                <span className="group">
-                  <label className="lbl">Speed</label>
-                  <Seg value={selected.speed} options={SPEEDS} onChange={(speed) => updatePlayer(selected.id, { speed })} size="sm" />
-                </span>
-                {selected.side === 'offense' && selected.id !== qbId && drawnSchedule.has(selected.id) && (
-                  <span className="group">
-                    <label className="lbl">End</label>
-                    <Seg
-                      value={selected.endBehavior ?? 'auto'}
-                      options={[
-                        { value: 'auto', label: `Auto (${resolveEnd({ ...selected, endBehavior: undefined }, drawnSchedule.get(selected.id)!) === 'continue' ? 'continue' : 'settle'})` },
-                        { value: 'continue', label: 'Continue' },
-                        { value: 'settle', label: 'Settle' },
-                      ]}
-                      onChange={(v: 'auto' | EndBehavior) => updatePlayer(selected.id, { endBehavior: v === 'auto' ? undefined : v })}
-                      size="sm"
-                    />
-                  </span>
-                )}
-              </>
+            {/* 1. WHO. Not a button any more: renaming and removing are under
+                   More, and a chip that opened a menu was the only place they
+                   ever lived. It still hosts the inline rename field. */}
+            {renaming === 'player' ? (
+              <InlineName value={selected.label} onCommit={(v) => { updatePlayer(selected.id, { label: v.slice(0, 4).toUpperCase() }); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Label" />
             ) : (
-              <span className="hint">No assignment yet — press <b>D</b> and draw one.</span>
+              <span className={`chip ${selected.side} chip-static`}>
+                {selected.label}
+                <span className="chip-side">{selected.side === 'offense' ? 'Offense' : 'Defense'}</span>
+              </span>
             )}
-            <span className="divider" />
-            <div className="ball-menu">
-              <button className={menuOpen === 'assignment' ? 'active' : ''} onClick={() => toggleMenu('assignment')}>
-                Assignment <span className="key">▾</span>
+
+            {/* 2. DRAW. The same arming ML-UX-1 built; solid gold while there
+                   is nothing to run, plain once there is. */}
+            <button
+              className={`strip-primary${hasPath ? '' : ' primary'}`}
+              onClick={clicked(armDrawing)}
+              title={hasPath ? 'Draw it again · D' : 'Draw what he does · D'}
+            >
+              {hasPath ? 'Redraw' : '✎ Draw assignment'}
+            </button>
+
+            {/* 3. ADJUST. Only means something once there is a route, and says
+                   so itself while it is on - which is why adjusting no longer
+                   needs a banner. */}
+            {hasPath && (
+              <button
+                className={interaction === 'adjusting' ? 'gold-line' : ''}
+                onClick={clicked(() => {
+                  cancelDrawing()
+                  setInteraction((i) => (i === 'adjusting' ? 'idle' : 'adjusting'))
+                })}
+                title="Move the points of his route · E"
+              >
+                Adjust
               </button>
-              {menuOpen === 'assignment' && (
-                <div className="popover play-pop-left">
-                  <button onClick={armDrawing}>{hasPath ? 'Redraw path' : 'Draw path'} <span className="key">D</span></button>
-                  <button disabled={!hasPath} onClick={() => { setMenuOpen(null); cancelDrawing(); setInteraction('adjusting') }}>Edit path <span className="key">E</span></button>
-                  <button disabled={!hasPath} onClick={() => startCopy(false)}>Copy to…</button>
-                  <button disabled={!hasPath} onClick={() => startCopy(true)}>Mirror to…</button>
-                  <button className="pop-clear" disabled={!hasPath} onClick={() => { setMenuOpen(null); clearPath(selected.id) }}>Clear assignment <span className="key">⌫</span></button>
-                </div>
-              )}
-            </div>
-            {selected.id === qbId && canPickRelease && (
-              <>
-                <button onClick={startPickRelease}>Throw From Here</button>
-                {hasReleaseOverride && <button onClick={useDefaultRelease}>Use Default</button>}
-              </>
             )}
-            <span className="divider" />
+
+            {/* 4. WHEN. Always present, path or no path. */}
+            <span className="group">
+              <label className="lbl">Timing</label>
+              <Seg value={selected.timing} options={TIMINGS} onChange={(timing) => updatePlayer(selected.id, { timing })} size="sm" />
+              {selected.timing === 'delayed' && (
+                <span className="delay">
+                  <input type="number" min={0} max={5} step={0.1} value={selected.delay} onChange={(e) => updatePlayer(selected.id, { delay: Number(e.target.value) })} />
+                  <span>s</span>
+                </span>
+              )}
+            </span>
+
+            {/* 5. WHO HE MEETS. The engaged group here is still today's;
+                   ML-UX-5 replaces it with the design's [Blocks DE ▾]. */}
             {engageControls}
+
+            {/* 6. EVERYTHING ELSE. */}
+            <div className="ball-menu">
+              <button
+                className={menuOpen === 'more' ? 'active' : ''}
+                onClick={() => toggleMenu('more')}
+                aria-expanded={menuOpen === 'more'}
+              >
+                More <span className="key">▾</span>
+              </button>
+              {menuOpen === 'more' && moreMenu}
+            </div>
+
+            {/* 7. WHAT HE ENDS UP DOING. The slot is reserved now so the strip
+                   does not move when ML-UX-7 fills it; until then it only has
+                   something true to say when there is no assignment. */}
+            <div className="spacer" />
+            <span className="strip-summary">{hasPath ? '' : 'No assignment yet.'}</span>
           </>
         ) : (
+          /*
+            RESTING (SPEC §3.3): one button and one sentence. Players and Look
+            were two menus for one idea - who is on the field and how they are
+            arranged - so they are one menu called Formation. (The situation
+            chip stays here until ML-UX-6 moves it to the dock.)
+          */
           <>
-            {/* Resting: set the look, the men, the situation */}
             <div className="ball-menu">
-              <button className={menuOpen === 'players' ? 'active' : ''} onClick={() => toggleMenu('players')}>
-                Players <span className="key">▾</span>
+              <button
+                className={menuOpen === 'formation' ? 'active' : ''}
+                onClick={() => toggleMenu('formation')}
+                aria-expanded={menuOpen === 'formation'}
+              >
+                Formation <span className="key">▾</span>
               </button>
-              {menuOpen === 'players' && (
-                <div className="popover play-pop-left">
-                  <button onClick={() => addPlayer('offense')}>Add offensive player</button>
-                  <button onClick={() => addPlayer('defense')}>Add defensive player</button>
-                  <div className="pop-title">{players.filter((p) => p.side === 'offense').length} offense · {players.filter((p) => p.side === 'defense').length} defense</div>
-                </div>
-              )}
-            </div>
-            <div className="ball-menu">
-              <button className={menuOpen === 'look' ? 'active' : ''} onClick={() => toggleMenu('look')}>
-                Look <span className="key">▾</span>
-              </button>
-              {menuOpen === 'look' && (
-                <div className="popover play-pop-left look-pop" onKeyDown={(e) => e.stopPropagation()}>
-                  <div className="pop-title">Save this alignment as a look</div>
+              {menuOpen === 'formation' && (
+                <div className="popover play-pop-left formation-pop" onKeyDown={(e) => e.stopPropagation()}>
+                  <div className="pop-title">Save this arrangement</div>
                   {renaming === 'look' ? (
                     <InlineName value="" placeholder="e.g. Trips Right vs Over" onCommit={(v) => { if (v) saveLook(v); setRenaming(null) }} onCancel={() => setRenaming(null)} />
                   ) : (
-                    <button onClick={() => setRenaming('look')}>Save look…</button>
+                    <button onClick={() => setRenaming('look')}>Save this formation…</button>
                   )}
-                  <div className="pop-title">Saved looks</div>
+                  <div className="pop-title">Saved formations</div>
                   {looks.length === 0 && <span className="hint">None yet.</span>}
                   {looks.map((l) => (
                     <div key={l.id} className="look-row">
                       <span className="play-row-name">{l.name}</span>
-                      <button onClick={() => { loadLook(l); setMenuOpen(null) }} title="Replace the men on the field with this look">Load</button>
-                      <button onClick={() => { createPlay(l.players, `${l.name} — new play`); setMenuOpen(null) }} title="Start a new play from this look">New play</button>
-                      <button className="pop-clear" onClick={() => deleteLook(l)} title="Delete this look">×</button>
+                      <button onClick={() => { loadLook(l); setMenuOpen(null) }} title="Replace the men on the field with this formation">Load</button>
+                      <button onClick={() => { createPlay(l.players, `${l.name} — new play`); setMenuOpen(null) }} title="Start a new play from this formation">New play</button>
+                      <button className="pop-clear" onClick={() => deleteLook(l)} title="Delete this formation">×</button>
                     </div>
                   ))}
+                  <div className="pop-title">Players</div>
+                  <button onClick={() => addPlayer('offense')}>Add offensive player</button>
+                  <button onClick={() => addPlayer('defense')}>Add defensive player</button>
+                  <div className="pop-foot">{players.filter((p) => p.side === 'offense').length} offense · {players.filter((p) => p.side === 'defense').length} defense</div>
                 </div>
               )}
             </div>
             {situationChip}
-            <span className="hint">{ballNote ?? 'Drag men into the look. Click one to draw his assignment.'}</span>
-          </>
-        )}
-        {!setup && !present && (
-          <>
-            <div className="spacer" />
-            <button disabled={!hasPaths} onClick={clearAllPaths}>
-              Clear All Paths
-            </button>
+            <span className="hint">{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
           </>
         )}
       </div>
