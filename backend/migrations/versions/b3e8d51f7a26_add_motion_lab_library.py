@@ -14,8 +14,21 @@ No backfill: nothing existed before. Browser-stored prototype plays are not
 imported by this migration.
 
 Revision ID: b3e8d51f7a26
-Revises: e5b2c8a41f73
+Revises: f1a6c27b90d4
 Create Date: 2026-09-16
+
+RE-POINTED 20 Sep 2026, when master was merged into the Motion Lab branch.
+This revision and f1a6c27b90d4 (organization Player PIN Security) were both
+authored against e5b2c8a41f73, so together they were two Alembic heads and
+`flask db upgrade` would have refused to run. Re-pointing this one behind the
+PIN revision restores a single line rather than leaving a merge node in the
+graph forever.
+
+Safe to re-point rather than merge because Motion Lab has never been deployed:
+this revision has never run on production, whose chain ends at f1a6c27b90d4.
+The two are operationally independent anyway - the PIN revision adds a column
+to `organizations`, this one adds `folders.area` and the motion tables - so
+the order they run in changes nothing.
 """
 
 import sqlalchemy as sa
@@ -23,7 +36,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "b3e8d51f7a26"
-down_revision = "e5b2c8a41f73"
+down_revision = "f1a6c27b90d4"
 branch_labels = None
 depends_on = None
 
