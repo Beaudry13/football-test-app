@@ -14,6 +14,7 @@ import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, situationLabel, ty
 import type { PlayRepository } from '../storage/playRepository'
 import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
+import { playerSummary } from './playerSummary'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -1166,6 +1167,10 @@ export function MotionLabEditor({
 
   const selected = players.find((p) => p.id === selectedId) ?? null
   const hasPath = !!selected && selected.path.length > 1
+  /** The strip's last word on him (ML-UX-7): read from state, never stored. */
+  const summary = selected
+    ? playerSummary({ player: selected, players, drawn: drawnSchedule.get(selected.id), engagements, derived: engaged, ball, ballThen })
+    : ''
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -1987,11 +1992,12 @@ export function MotionLabEditor({
               {menuOpen === 'more' && moreMenu}
             </div>
 
-            {/* 7. WHAT HE ENDS UP DOING. The slot is reserved now so the strip
-                   does not move when ML-UX-7 fills it; until then it only has
-                   something true to say when there is no assignment. */}
+            {/* 7. WHAT HE ENDS UP DOING (ML-UX-7, SPEC §4.4): derived from the
+                   schedule he actually runs, never stored. It is the one thing
+                   in the strip that gives way - it ellipsizes before any
+                   control is squeezed - so the whole line is in its tooltip. */}
             <div className="spacer" />
-            <span className="strip-summary">{hasPath ? '' : 'No assignment yet.'}</span>
+            <span className="strip-summary" title={summary}>{summary}</span>
           </>
         ) : (
           /*

@@ -76,16 +76,25 @@ export function fullBallSentence(action: BallAction | null, then: BallAction | n
 }
 
 /**
- * How far downfield the ball is caught, for the menu's Now card.
+ * Where the ball is caught, relative to the line: "9 yds downfield", "3 yds
+ * behind the line", "at the line".
  *
  * Derived at render from the catch point the play already stores; nothing new
  * is written. Behind the line of scrimmage is said as such rather than as a
- * negative number, and a catch at the line is neither.
+ * negative number, and a catch at the line is neither. ONE RULE for both
+ * places that say it - the ball menu's Now card and the receiver's strip
+ * summary (ML-UX-7) - so the two can never disagree about the same catch.
  */
-export function catchDepth(action: BallAction | null): string | null {
+export function catchDepthWords(action: BallAction | null): string | null {
   if (!action || (action.kind !== 'pass' && action.kind !== 'play-action')) return null
   const y = action.catchPoint.y
   const yards = Math.round(Math.abs(y))
-  if (yards === 0) return 'caught at the line'
-  return y > 0 ? `caught ${yards} yds downfield` : `caught ${yards} yds behind the line`
+  if (yards === 0) return 'at the line'
+  return y > 0 ? `${yards} yds downfield` : `${yards} yds behind the line`
+}
+
+/** How far downfield the ball is caught, for the menu's Now card. */
+export function catchDepth(action: BallAction | null): string | null {
+  const words = catchDepthWords(action)
+  return words ? `caught ${words}` : null
 }

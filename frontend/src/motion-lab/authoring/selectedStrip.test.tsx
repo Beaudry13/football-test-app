@@ -241,12 +241,17 @@ describe('the summary slot', () => {
     expect(summary()!.textContent).toBe('No assignment yet.')
   })
 
-  it('is reserved but empty once he has an assignment - ML-UX-7 fills it', () => {
+  it('says what he does once he has an assignment (ML-UX-7), and holds all of it in its tooltip', () => {
     open(play)
-    select(play, withPath(play).id)
+    const man = withPath(play)
+    select(play, man.id)
 
-    expect(summary()).not.toBeNull()
-    expect(summary()!.textContent).toBe('')
+    // What it says is pinned in playerSummary.test.ts and the A–E fixture
+    // suite; here, only that the slot is filled with a summary of HIM.
+    const text = summary()!.textContent!
+    expect(text).toMatch(/^(Route|Drop|Path) · \d+ yds (up|back|across)/)
+    expect(text).not.toBe('No assignment yet.')
+    expect(summary()).toHaveAttribute('title', text)
   })
 })
 
