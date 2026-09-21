@@ -293,11 +293,12 @@ describe('what makes the strip go away', () => {
 })
 
 describe('resting', () => {
-  it('is one button, the situation, and one sentence', () => {
+  it('is one button and one sentence', () => {
     open(play)
 
-    expect(within(strip()).getByRole('button', { name: /^Formation/ })).toBeInTheDocument()
-    expect(strip().querySelector('.sit-chip')).not.toBeNull()
+    expect(within(strip()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Formation ▾'])
+    // ML-UX-6 moved the situation to the dock; ML-UX-4 had left it here.
+    expect(strip().querySelector('.sit-chip')).toBeNull()
     expect(strip().textContent).toContain('Drag a player to move him. Click a player to give him a job.')
     // Clear All Paths used to sit here permanently.
     expect(maybeBtn(/Clear All Paths/)).toBeNull()

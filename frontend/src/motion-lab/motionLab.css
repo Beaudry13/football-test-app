@@ -1020,8 +1020,13 @@
  * FIRST thing in the dock, 16 px from the window edge, so a 320 px menu
  * right-aligned to it starts at -174 px and half of it is off-screen. Align it
  * to the button's left edge instead - the same clamp-to-viewport rule, applied
- * to the other side. Rate and Display still hang from the right, where they
- * belong. Found in the browser; jsdom has no layout and cannot see this.
+ * to the other side. Found in the browser; jsdom has no layout and cannot see
+ * this.
+ *
+ * NOTE: this used to add "Rate and Display still hang from the right". They did
+ * not - every dock menu is wrapped in `.ball-menu`, so this rule caught both,
+ * and Display opened 210 px off the right edge at 1280. ML-UX-6 right-aligns
+ * the dock's right-hand menus explicitly; see its section below.
  */
 .motion-lab-root .bar.bottom .ball-menu .popover {
   right: auto;
@@ -1153,3 +1158,39 @@
   flex: 0 0 auto;
 }
 
+
+/* ---- ML-UX-6: the situation in the dock --------------------------------
+ * Additive, as above. `.sit-chip` and `.sit-pop` are prototype-derived and
+ * pinned by motionLabCss.test.ts, so the dock's rules for them are re-stated
+ * here, scoped to `.bar.bottom`, and the cascade does the work.
+ */
+
+/* Capped at 180 px (SPEC §14). The label is "1st & 10 · own 35 · middle",
+   which can outrun that, so it ellipsizes - and gives way before Display is
+   pushed off the end of the bar. The tooltip carries the whole label. */
+.motion-lab-root .bar.bottom .sit-chip {
+  display: block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* THE RIGHT-HAND DOCK MENUS HANG FROM THEIR RIGHT EDGE.
+ *
+ * ML-UX-3 left-aligned `.bar.bottom .ball-menu .popover` so the ball menu,
+ * first in the dock, would not open off the LEFT of the screen. Every dock
+ * menu is wrapped in `.ball-menu`, so that rule caught Display too: at 1280 px
+ * Display opened at x 1173-1490, 210 px past the right edge, before this slice
+ * touched anything (measured in the browser; jsdom has no layout). The
+ * situation popover, 320 px wide on an anchor near the right end, would do the
+ * same. Both sit at the right of the dock, so both hang from their right
+ * edge - SPEC §14's clamp, applied to the side they are on. The ball menu and
+ * the rate menu keep the ML-UX-3 rule. The compound selectors out-rank that
+ * rule, so this does not depend on source order.
+ */
+.motion-lab-root .bar.bottom .ball-menu .popover.sit-pop,
+.motion-lab-root .bar.bottom .ball-menu .popover.display-pop {
+  left: auto;
+  right: 0;
+}

@@ -5,7 +5,7 @@ import { listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor } from './authoring/MotionLabEditor'
-import { getMotionLabSession, type MotionLabSession } from './storage/apiPlayRepository'
+import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
 import './motionLab.css'
 
 /**
@@ -215,11 +215,39 @@ export default function MotionLabEditorPage() {
             ← Library
           </button>
         }
-        saveStatus={<SaveStatus state={status?.state ?? 'saved'} message={status?.message ?? null} />}
+        saveStatus={({ editPending }) => {
+          // Read the session HERE, not from this render: the editor calls
+          // this in its own renders too - on every edit, and at the handoff,
+          // where savePlay may change nothing the page would re-render for.
+          const id = session.repository.currentPlayId()
+          const live = id ? session.stateOf(id) : null
+          return <SaveStatus state={shownSaveState(live?.state ?? 'saved', editPending)} message={live?.message ?? null} />
+        }}
         notice={notice}
       />
     </div>
   )
+}
+
+/**
+ * WHAT THE COACH IS TOLD (ML-UX-6, SPEC §3.3: "Saving…" from the first edit
+ * until the write succeeds).
+ *
+ * The session knows about the write. Only the editor knows about the 400 ms
+ * before it, when an edit is on screen and not yet handed over - and until
+ * this, that window read "Saved". So an edit the editor is still holding turns
+ * "Saved" into "Saving…".
+ *
+ * IT NEVER OUTRANKS A PROBLEM, and never says "Saved" on its own. After a
+ * failure the session does not send on the next edit: a retry is already
+ * scheduled (`retrying`), the refusal is permanent until the coach resolves it
+ * (`failed`), or a conflict is waiting for a decision. "Saving…" there would
+ * announce an attempt that is not happening - so the session's word stands.
+ * The editor's own fallback indicator differs on purpose: a local write really
+ * is retried at the next edit's flush.
+ */
+function shownSaveState(session: PlaySaveState, editPending: boolean): PlaySaveState {
+  return editPending && session === 'saved' ? 'saving' : session
 }
 
 function SaveStatus({ state, message }: { state: string; message: string | null }) {

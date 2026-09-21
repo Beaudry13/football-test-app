@@ -75,7 +75,18 @@ beforeEach(async () => {
   localStorage.clear()
   lastPath = ''
 })
-afterEach(() => {
+// SESSIONS OUTLIVE THEIR TEST. resetMotionLabSessions() only forgets them;
+// their retry timers keep running, and the api mock above forwards to
+// whichever fake server is current when a request is made. So a retry one test
+// leaves scheduled fires into the NEXT test's server, where it can take that
+// test's failNextWith or write over its play 100. (Found when a new failure test
+// passed alone and failed after "a failed save says so".) Send every scheduled
+// retry now, into this test's own server, while it is still the current one -
+// and BEFORE the mocks are restored: the retry re-renders the page, which
+// needs the mocked useAuth.
+afterEach(async () => {
+  window.dispatchEvent(new Event('online'))
+  await act(async () => settle(10))
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
@@ -223,5 +234,148 @@ describe('Motion Lab editor on the server', () => {
       </MemoryRouter>,
     )
     expect(await screen.findByText("This play isn't in your Motion Lab.")).toBeInTheDocument()
+  })
+})
+
+/**
+ * THE INDICATOR A COACH ACTUALLY SEES (ML-UX-6, SPEC §3.3).
+ *
+ * The page's server-backed indicator replaces the editor's own, so this is
+ * the one that has to say "Saving…" from the edit until the server confirms.
+ * It used to read "Saved" for the editor's whole 400 ms quiet period - the
+ * session had not yet been told anything changed - and "Saving…" only while
+ * the request was out (28 ms in a real browser). The editor now hands the page
+ * `editPending`; the session still decides everything after that.
+ */
+describe('the save indicator on the server path', () => {
+  const sleep = (ms: number) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+  const saves = () => server.current.calls.filter((c) => c.kind === 'save')
+
+  /** Every text the indicator shows, in order, from now on. */
+  function watchStatus() {
+    const seen = [statusText()]
+    const observer = new MutationObserver(() => {
+      const now = document.querySelector('.motion-lab-root .bar .saved')?.textContent ?? '(gone)'
+      if (seen.at(-1) !== now) seen.push(now)
+    })
+    observer.observe(document.querySelector('.motion-lab-root .bar')!, { subtree: true, childList: true, characterData: true })
+    return () => {
+      observer.disconnect()
+      return seen
+    }
+  }
+
+  it('Saved, then Saving… from the edit, through the quiet period and the write, then Saved', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+    const seen = watchStatus()
+    expect(statusText()).toBe('Saved')
+    server.current.hold()
+
+    dragPlayer(a, 'O8', 0, -2)
+    expect(statusText()).toBe('Saving…')
+
+    // The window that used to read "Saved": nothing has been sent.
+    await sleep(200)
+    expect(statusText()).toBe('Saving…')
+    expect(saves()).toHaveLength(0)
+
+    // Handed over: the request is out and held. The editor is no longer
+    // holding anything, so this "Saving…" is the SESSION's.
+    await sleep(250)
+    expect(saves()).toHaveLength(1)
+    expect(statusText()).toBe('Saving…')
+
+    // Only the server's answer makes it "Saved".
+    server.current.release()
+    await act(async () => settle(10))
+    expect(statusText()).toBe('Saved')
+    expect(seen()).toEqual(['Saved', 'Saving…', 'Saved'])
+  })
+
+  it('opening a play is not an edit: it never reads Saving…', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+    const seen = watchStatus()
+
+    await sleep(600)
+
+    expect(seen()).toEqual(['Saved'])
+    expect(saves()).toHaveLength(0)
+  })
+
+  it('a switch mid quiet period flushes the edit, and nothing is left reading Saving…', async () => {
+    const { a, b } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+
+    dragPlayer(a, 'O5', 1, 0)
+    expect(statusText()).toBe('Saving…')
+    fireEvent.click(document.querySelector('.play-btn')!)
+    fireEvent.click(within(document.querySelector('.play-list') as HTMLElement).getByText(b.name))
+    await act(async () => settle(10))
+
+    expect(playName()).toBe(b.name)
+    expect(statusText()).toBe('Saved')
+    const o5 = (server.current.plays.get(100)!.document.players as { id: string; x: number }[]).find((p) => p.id === 'O5')!
+    expect(o5.x).toBeCloseTo(a.players.find((p) => p.id === 'O5')!.x + 1, 6)
+  })
+
+  it('after a network failure an edit does not pretend a save has started; the retry carries it', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+    server.current.failNextWith(new ApiError('Could not reach the server.', 0))
+    dragPlayer(a, 'O8', 0, -1)
+    await sleep(450)
+    await act(async () => settle(10))
+    expect(statusText()).toBe('Not saved — retrying')
+    const sent = saves().length
+
+    // A retry is already scheduled and this edit will ride on it; nothing new
+    // is sent now, so "Saving…" would be a claim about an attempt that is
+    // not happening.
+    dragPlayer(a, 'O5', 1, 0)
+    expect(statusText()).toBe('Not saved — retrying')
+    await sleep(450)
+    await act(async () => settle(10))
+    expect(statusText()).toBe('Not saved — retrying')
+    expect(saves()).toHaveLength(sent)
+
+    // The connection comes back: the retry goes out with the latest version,
+    // and only its answer makes it "Saved".
+    await act(async () => {
+      window.dispatchEvent(new Event('online'))
+      await settle(10)
+    })
+    expect(statusText()).toBe('Saved')
+    const stored = server.current.plays.get(100)!.document.players as { id: string; x: number; y: number }[]
+    expect(stored.find((p) => p.id === 'O5')!.x).toBeCloseTo(a.players.find((p) => p.id === 'O5')!.x + 1, 6)
+  })
+
+  it('a refused save stays Not saved, and later edits do not claim to be saving', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+    server.current.failNextWith(new ApiError('This play is too large to save.', 413))
+    dragPlayer(a, 'O8', 0, -1)
+    await sleep(450)
+    await act(async () => settle(10))
+    expect(statusText()).toBe('Not saved')
+    const sent = saves().length
+
+    dragPlayer(a, 'O5', 1, 0)
+    expect(statusText()).toBe('Not saved')
+    await sleep(450)
+    await act(async () => settle(10))
+    expect(statusText()).toBe('Not saved')
+    expect(saves()).toHaveLength(sent)
   })
 })

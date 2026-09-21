@@ -201,6 +201,12 @@ const fmtWhen = (t: number) => {
  * saves over a network (P2): a synchronous repository can only report that a
  * save was accepted locally, not that it reached the server. `notice` is shown
  * over the field, for things the coach must decide (an edit conflict).
+ *
+ * `saveStatus` may be a function, and the page's is (ML-UX-6). The editor calls
+ * it with `editPending`: true from an edit until the editor hands the play to
+ * the repository - the 400 ms quiet period, which only the editor knows about.
+ * Without it the page's indicator said "Saved" for the whole of that window,
+ * because the repository had not yet been told anything had changed.
  */
 export function MotionLabEditor({
   repository,
@@ -210,7 +216,7 @@ export function MotionLabEditor({
 }: {
   repository: PlayRepository
   exit?: ReactNode
-  saveStatus?: ReactNode
+  saveStatus?: ReactNode | ((editor: { editPending: boolean }) => ReactNode)
   notice?: ReactNode
 }) {
   // ---- the play (coach intent) ----------------------------------------
@@ -230,6 +236,18 @@ export function MotionLabEditor({
   const [looks, setLooks] = useState<Look[]>([])
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [saveFailed, setSaveFailed] = useState(false)
+  /**
+   * ML-UX-6 (SPEC §3.3). True from the first edit until the write lands: the
+   * whole 400 ms quiet period AND the write itself. Without it the indicator
+   * said "Saved" throughout the quiet period - the one window in which the
+   * edit had NOT been saved and would be lost if the tab died.
+   *
+   * Editor state only; it never reaches the play. When the page supplies
+   * `saveStatus` as a function, this is handed to it as `editPending`, and
+   * the page's session decides everything after the handoff - the network
+   * write, "Saved", and every failure.
+   */
+  const [saving, setSaving] = useState(false)
   const loadedRef = useRef(false)
 
   // ---- authoring UI ----------------------------------------------------
@@ -396,6 +414,7 @@ export function MotionLabEditor({
     if (!dirtyRef.current) return
     dirtyRef.current = false
     const ok = repository.savePlay(latestRef.current())
+    setSaving(false)
     setSaveFailed(!ok)
     if (ok) {
       setSavedAt(Date.now())
@@ -410,6 +429,10 @@ export function MotionLabEditor({
       return
     }
     dirtyRef.current = true
+    // Set with `dirty`, cleared with it in flushSave - so "Saving…" is on
+    // screen exactly while there is something unsaved. Opening a play returns
+    // above, before this, so opening never reads as saving.
+    setSaving(true)
     const id = setTimeout(flushSave, SAVE_DEBOUNCE)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1678,9 +1701,24 @@ export function MotionLabEditor({
     </div>
   ) : null
 
+  /*
+    THE SITUATION LIVES IN THE DOCK (ML-UX-6, SPEC §9 row 9). Down and
+    distance describe the field the play is run on, not whoever is selected,
+    so it left the strip; and the dock is still there in Present, where a
+    coach reads "3rd & 7" aloud - so it is NOT disabled there any more (§3.2
+    lets the situation menu open in Present; §13: "always incl. Present").
+    It opens upward because the dock is on the bottom edge.
+  */
   const situationChip = (
     <div className="ball-menu">
-      <button className={`sit-chip${menuOpen === 'situation' ? ' active' : ''}`} disabled={present} onClick={() => toggleMenu('situation')} title="Down, distance, spot and hash">
+      <button
+        className={`sit-chip${menuOpen === 'situation' ? ' active' : ''}`}
+        onClick={() => toggleMenu('situation')}
+        aria-expanded={menuOpen === 'situation'}
+        // The chip is capped at 180 px and the label can outrun it, so the
+        // tooltip carries the whole thing.
+        title={`${situationLabel(situation)} — down, distance, spot and hash`}
+      >
         {situationLabel(situation)}
       </button>
       {menuOpen === 'situation' && (
@@ -1704,12 +1742,9 @@ export function MotionLabEditor({
             <label className="lbl">Hash</label>
             <Seg value={situation.hash} options={HASHES} onChange={setHash} size="sm" />
           </div>
-          <div className="sit-row">
-            <label className="lbl">Markings</label>
-            <button className={situation.show ? 'active' : ''} onClick={() => setSituation((s) => ({ ...s, show: !s.show }))}>
-              {situation.show ? 'Shown' : 'Hidden'}
-            </button>
-          </div>
+          {/* Markings used to be here. Whether the field shows them is a
+              display choice, not part of the situation, so it is in Display
+              now - the same `situation.show`, only reached from there. */}
         </div>
       )}
     </div>
@@ -1755,9 +1790,12 @@ export function MotionLabEditor({
           )}
         </div>
         {!present &&
-          (saveStatus ?? (
-            <span className={`saved${saveFailed ? ' failed' : ''}`} title={saveFailed ? 'Could not save to browser storage' : savedAt ? `Saved ${fmtWhen(savedAt)}` : ''}>
-              {saveFailed ? 'Not saved' : savedAt ? 'Saved' : ''}
+          (typeof saveStatus === 'function' ? saveStatus({ editPending: saving }) : saveStatus ?? (
+            // Saving outranks a past failure: the next edit IS the retry
+            // (SPEC §3.3), so while it is pending the honest word is
+            // "Saving…". If it fails again, "Not saved" comes straight back.
+            <span className={`saved${!saving && saveFailed ? ' failed' : ''}`} title={saving ? '' : saveFailed ? 'Could not save to browser storage' : savedAt ? `Saved ${fmtWhen(savedAt)}` : ''}>
+              {saving ? 'Saving…' : saveFailed ? 'Not saved' : savedAt ? 'Saved' : ''}
             </span>
           ))}
         {!present && (
@@ -1803,7 +1841,7 @@ export function MotionLabEditor({
       <div className="bar context">
         {present ? (
           <>
-            {situationChip}
+            {/* The situation chip is in the dock now, which Present keeps. */}
             {selected && <div className={`chip ${selected.side}`}>{selected.label}</div>}
             {/* Present still carries a ball note; removing it is ML-UX-8's
                 call, not this slice's. Only the grammar changes here. */}
@@ -1959,8 +1997,9 @@ export function MotionLabEditor({
           /*
             RESTING (SPEC §3.3): one button and one sentence. Players and Look
             were two menus for one idea - who is on the field and how they are
-            arranged - so they are one menu called Formation. (The situation
-            chip stays here until ML-UX-6 moves it to the dock.)
+            arranged - so they are one menu called Formation. The situation
+            used to sit here as well; it is the field's, not the formation's,
+            and lives in the dock.
           */
           <>
             <div className="ball-menu">
@@ -1996,7 +2035,6 @@ export function MotionLabEditor({
                 </div>
               )}
             </div>
-            {situationChip}
             <span className="hint">{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
           </>
         )}
@@ -2130,8 +2168,12 @@ export function MotionLabEditor({
             </div>
           )}
         </div>
-        {/* HOW THE FIELD IS DISPLAYED, in one place. Paths belongs to the play
-            and is saved with it; Labels is this screen, this session. */}
+        {/* The third group: the field the play is run on, and how it is shown. */}
+        <span className="dock-divider" />
+        {situationChip}
+        {/* HOW THE FIELD IS DISPLAYED, in one place. Paths and Field markings
+            belong to the play and are saved with it; Labels is this screen,
+            this session. */}
         <div className="ball-menu">
           <button
             className={menuOpen === 'display' ? 'active' : ''}
@@ -2151,6 +2193,15 @@ export function MotionLabEditor({
                 <label className="lbl">Labels</label>
                 <button className={`labels-btn${showLabels ? ' active' : ''}`} onClick={() => setShowLabels((v) => !v)} title="Show or hide position labels">
                   {showLabels ? 'Shown' : 'Hidden'}
+                </button>
+              </div>
+              {/* Moved from the Situation popover (ML-UX-6, SPEC §9.6). Same
+                  `situation.show`, same setter, same Shown / Hidden words as
+                  Labels above it: two rows of one menu must not disagree. */}
+              <div className="sit-row">
+                <label className="lbl">Field markings</label>
+                <button className={`markings-btn${situation.show ? ' active' : ''}`} onClick={() => setSituation((s) => ({ ...s, show: !s.show }))} title="Show or hide the line to gain on the field">
+                  {situation.show ? 'Shown' : 'Hidden'}
                 </button>
               </div>
             </div>

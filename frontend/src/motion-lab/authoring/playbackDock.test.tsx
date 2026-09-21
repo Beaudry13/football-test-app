@@ -283,10 +283,13 @@ describe('Display', () => {
     expect(labels().length).toBeGreaterThan(0)
 
     fireEvent.click(displayBtn())
-    fireEvent.click(within(dock()).getByRole('button', { name: 'Shown' }))
+    // By its class, not its words: since ML-UX-6 Field markings sits below it
+    // and says Shown / Hidden too.
+    const labelsBtn = () => dock().querySelector('.labels-btn') as HTMLButtonElement
+    fireEvent.click(labelsBtn())
 
     expect(labels()).toHaveLength(0)
-    expect(btn('Hidden')).toBeInTheDocument()
+    expect(labelsBtn().textContent).toBe('Hidden')
   })
 
   it('Escape closes it', () => {

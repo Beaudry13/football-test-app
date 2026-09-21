@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
@@ -187,5 +187,192 @@ describe('Motion Lab editor persistence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New play' }))
     expect(repo.listPlays().map((p) => p.name)).toContain('Base 11 — new play')
     expect(document.querySelector('.play-name')!.textContent).toBe('Base 11 — new play')
+  })
+})
+
+/**
+ * THE BUILT-IN SAVE INDICATOR (ML-UX-6, SPEC §3.3).
+ *
+ * "Saving…" from the first edit until the write lands - the quiet period AND
+ * the write. Before this it read "Saved" throughout the quiet period, which is
+ * precisely the window in which an edit is NOT yet saved.
+ *
+ * This is the editor's fallback. Inside PEIRA the page passes `saveStatus`,
+ * the server-backed indicator, and that one is authoritative - it is the only
+ * one that knows whether a network write landed. The last test here pins that
+ * the fallback never competes with it.
+ */
+describe('the built-in save indicator', () => {
+  const indicator = () => document.querySelector('.bar .saved') as HTMLElement | null
+  const text = () => indicator()?.textContent ?? null
+  const failed = () => indicator()?.classList.contains('failed') ?? false
+
+  afterEach(() => vi.useRealTimers())
+
+  it('opening a play is not an edit, so it never reads Saving…', () => {
+    const [a] = gapPlays()
+    seed([a], a.id)
+    vi.useFakeTimers()
+    render(<MotionLabEditor repository={repo} />)
+    expect(text()).toBe('')
+    act(() => vi.advanceTimersByTime(2000))
+    expect(text()).toBe('')
+  })
+
+  it('reads Saving… for the whole quiet period, then Saved', () => {
+    const [a] = gapPlays()
+    seed([a], a.id)
+    vi.useFakeTimers()
+    render(<MotionLabEditor repository={repo} />)
+
+    drag(a, 'O8', 0, -2)
+    expect(text()).toBe('Saving…')
+    act(() => vi.advanceTimersByTime(399))
+    expect(text()).toBe('Saving…')
+    // Nothing has been written yet - which is exactly why it must not say Saved.
+    expect(stored(a.id)).toEqual(a)
+
+    act(() => vi.advanceTimersByTime(1))
+    expect(text()).toBe('Saved')
+    expect(failed()).toBe(false)
+  })
+
+  it('still reads Saving… while the write itself is running', () => {
+    const [a] = gapPlays()
+    seed([a], a.id)
+    const during: (string | null)[] = []
+    const watched: PlayRepository = {
+      ...repo,
+      savePlay: (p) => {
+        during.push(text())
+        return repo.savePlay(p)
+      },
+    }
+    vi.useFakeTimers()
+    render(<MotionLabEditor repository={watched} />)
+
+    drag(a, 'O8', 0, -2)
+    act(() => vi.advanceTimersByTime(500))
+
+    expect(during).toEqual(['Saving…'])
+    expect(text()).toBe('Saved')
+  })
+
+  it('a failed write reads Not saved; the next edit is the retry, and reads Saving… until it lands', () => {
+    const [a] = gapPlays()
+    seed([a], a.id)
+    let broken = true
+    const flaky: PlayRepository = { ...repo, savePlay: (p) => (broken ? false : repo.savePlay(p)) }
+    vi.useFakeTimers()
+    render(<MotionLabEditor repository={flaky} />)
+
+    drag(a, 'O8', 0, -2)
+    act(() => vi.advanceTimersByTime(500))
+    expect(text()).toBe('Not saved')
+    expect(failed()).toBe(true)
+
+    // Still failing: the retry says so, then comes straight back to Not saved.
+    drag(a, 'O5', 1, 0)
+    expect(text()).toBe('Saving…')
+    expect(failed()).toBe(false)
+    act(() => vi.advanceTimersByTime(500))
+    expect(text()).toBe('Not saved')
+
+    // Storage recovers: the next edit's write lands, and so does the last one's.
+    broken = false
+    drag(a, 'O5', 1, 0)
+    expect(text()).toBe('Saving…')
+    act(() => vi.advanceTimersByTime(500))
+    expect(text()).toBe('Saved')
+    expect(failed()).toBe(false)
+    expect(stored(a.id)!.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(a.players.find((p) => p.id === 'O8')!.y - 2, 6)
+  })
+
+  it('a switch to another play flushes the pending edit, and nothing is left reading Saving…', () => {
+    const [a, b] = gapPlays()
+    seed([a, b], a.id)
+    render(<MotionLabEditor repository={repo} />)
+
+    drag(a, 'O8', 0, -2)
+    expect(text()).toBe('Saving…')
+    playMenu()
+    fireEvent.click(within(document.querySelector('.play-list') as HTMLElement).getByText(b.name))
+
+    expect(text()).toBe('Saved')
+    expect(stored(a.id)!.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(a.players.find((p) => p.id === 'O8')!.y - 2, 6)
+  })
+
+  it.each([
+    ['pagehide', () => window.dispatchEvent(new Event('pagehide'))],
+    ['beforeunload', () => window.dispatchEvent(new Event('beforeunload'))],
+    [
+      'the tab going hidden',
+      () => {
+        Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+        document.dispatchEvent(new Event('visibilitychange'))
+      },
+    ],
+  ])('%s flushes the pending edit and settles the indicator', (_label, leave) => {
+    const [a] = gapPlays()
+    seed([a], a.id)
+    render(<MotionLabEditor repository={repo} />)
+
+    drag(a, 'O8', 0, -2)
+    expect(text()).toBe('Saving…')
+    try {
+      act(() => leave())
+    } finally {
+      // Restore the real getter for every later test.
+      delete (document as unknown as Record<string, unknown>).visibilityState
+    }
+
+    expect(text()).toBe('Saved')
+    expect(stored(a.id)!.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(a.players.find((p) => p.id === 'O8')!.y - 2, 6)
+  })
+
+  it('a page indicator given as a function is told editPending, from the edit until the handoff', () => {
+    // The contract the page's server-backed indicator is built on: the one
+    // stretch only the editor knows about.
+    const [a] = gapPlays()
+    seed([a], a.id)
+    const atHandoff: string[] = []
+    const probe = () => document.querySelector('.probe')?.textContent
+    const watched: PlayRepository = {
+      ...repo,
+      savePlay: (p) => {
+        atHandoff.push(probe()!)
+        return repo.savePlay(p)
+      },
+    }
+    vi.useFakeTimers()
+    render(<MotionLabEditor repository={watched} saveStatus={({ editPending }) => <span className="probe">{String(editPending)}</span>} />)
+    expect(probe()).toBe('false')
+
+    drag(a, 'O8', 0, -2)
+    expect(probe()).toBe('true')
+    act(() => vi.advanceTimersByTime(399))
+    expect(probe()).toBe('true')
+    act(() => vi.advanceTimersByTime(1))
+
+    // Still pending while the repository is being handed the play; over once
+    // it has it. Everything after that is the repository's to report.
+    expect(atHandoff).toEqual(['true'])
+    expect(probe()).toBe('false')
+    expect(indicator()).toBeNull()
+  })
+
+  it("the page's own indicator still replaces it outright", () => {
+    const [a] = gapPlays()
+    seed([a], a.id)
+    vi.useFakeTimers()
+    render(<MotionLabEditor repository={repo} saveStatus={<span className="server-status">Saved on the server</span>} />)
+
+    drag(a, 'O8', 0, -2)
+    expect(indicator()).toBeNull()
+    expect(document.querySelector('.server-status')!.textContent).toBe('Saved on the server')
+    act(() => vi.advanceTimersByTime(500))
+    expect(indicator()).toBeNull()
+    // The fallback stepping aside changes nothing about the save itself.
+    expect(stored(a.id)!.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(a.players.find((p) => p.id === 'O8')!.y - 2, 6)
   })
 })
