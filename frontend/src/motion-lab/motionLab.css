@@ -1194,3 +1194,32 @@
   left: auto;
   right: 0;
 }
+
+/* ---- ML-UX-8: views and Present chrome ------------------------------------
+ * Additive, as above. `.app`, `.app.present .bar.context` and `button.primary`
+ * are prototype-derived and pinned by motionLabCss.test.ts; nothing here
+ * edits them.
+ */
+
+/* PRESENT HAS NO STRIP, SO IT HAS THREE ROWS. The prototype's grid names four
+   (top bar, strip, field, dock). Take the strip away and leave that in place,
+   and the field slides into the strip's `auto` row while the DOCK takes the
+   `1fr` - a stretched dock under a squashed field. Top bar, field, dock. */
+.motion-lab-root .app.present {
+  grid-template-rows: auto 1fr auto;
+}
+
+/* Present and Exit Present: outlined gold. Important, not the primary - Play
+   is the one solid-gold control on the screen (SPEC §2; DESIGN §19). */
+.motion-lab-root .bar button.gold-line {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+
+/* In Present the play is named, not offered: the name as text. */
+.motion-lab-root .bar .present-name {
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
+}

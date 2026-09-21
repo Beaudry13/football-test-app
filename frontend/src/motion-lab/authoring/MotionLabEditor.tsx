@@ -957,6 +957,14 @@ export function MotionLabEditor({
         svgRef.current!.setPointerCapture(e.pointerId)
         return
       }
+      // Player view with nobody to watch from (ML-UX-8, owner decision):
+      // Present has no strip to ask the question in, so the click answers
+      // it. Without this, a coach who chose Player first was stuck - a click
+      // only highlighted, and nothing ever chose a viewer.
+      if (pickingViewer) {
+        if (hit) setViewerId(hit)
+        return
+      }
       setSelectedId(hit)
       return
     }
@@ -1208,7 +1216,10 @@ export function MotionLabEditor({
           break
         case 'b':
         case 'B':
-          if (!setup && !watching && !present) setMenuOpen((o) => (o === 'ball' ? null : 'ball'))
+          // Coach and Player views too (SPEC §10: "not Present; not picking"):
+          // the ball button works there, so its key does. A pick it leads to
+          // switches back to Overhead on its own (§6.8, ML-UX-3).
+          if (!setup && !present) setMenuOpen((o) => (o === 'ball' ? null : 'ball'))
           break
         case 'Escape':
           // First match wins. Drawing comes before arming, and both before
@@ -1758,14 +1769,20 @@ export function MotionLabEditor({
   return (
     <div ref={appRef} className={`app${present ? ' present' : ''}${pulseHandle ? '' : ' drew-once'}`}>
       <div className="bar">
-        {exit}
+        {/* ML-UX-8: in Present the only way out is Exit Present. A stray click
+            on "← Library" in a meeting would drop the coach out of teaching
+            and into the Library. It comes back the moment he exits. */}
+        {!present && exit}
         <div className="brand">
           Peira <span>Motion Lab</span>
         </div>
 
         {/* The play: name, library, undo */}
         <div className="ball-menu">
-          {renaming === 'play' ? (
+          {present ? (
+            // Present names the play; it does not offer it (SPEC §2, §13).
+            <span className="play-name present-name" title={playName}>{playName}</span>
+          ) : renaming === 'play' ? (
             <InlineName value={playName} onCommit={(v) => { setPlayName(v); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Play name" />
           ) : (
             <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} title={present ? playName : 'Play: rename, open, duplicate, delete'}>
@@ -1817,42 +1834,57 @@ export function MotionLabEditor({
         */}
         <div className="spacer" />
 
+        {/* "How I am watching", never an editing mode - hence the label
+            (SPEC §2, §11.1). ML-UX-2 added the rule that hides it below
+            1300 px but never the label itself. */}
+        <label className="lbl view-label">View</label>
         <Seg value={view} options={VIEWS} onChange={switchView} />
 
+        {/* Present and Exit Present are OUTLINED gold: important, not the
+            primary. Play is the one solid-gold control on the screen. */}
         {present ? (
           <>
+            {/* Telestration is Overhead only (SPEC §16). No banner while he
+                draws - Present has no strip, and a row appearing would move
+                the field under the pen - so the lit button is the state. */}
             {view === 'overhead' && (
               <div className="seg">
-                <button className={telestrating ? 'active' : ''} onClick={() => setTelestrating((t) => !t)} title="Draw on the field while paused">
+                <button
+                  className={telestrating ? 'active' : ''}
+                  onClick={() => setTelestrating((t) => !t)}
+                  title={telestrating ? 'Draw on the field while paused · Esc to stop' : 'Draw on the field while paused'}
+                >
                   ✎ Draw
                 </button>
-                <button disabled={strokes.length === 0} onClick={() => setStrokes([])}>Clear marks</button>
+                {/* Enabled even with nothing to clear: nothing visible in
+                    Present is disabled (SPEC §3.3). With no marks it does
+                    nothing. */}
+                <button onClick={() => setStrokes([])}>Clear marks</button>
               </div>
             )}
-            <button className="primary" onClick={exitPresent}>
+            <button className="gold-line" onClick={exitPresent}>
               Exit Present
             </button>
           </>
         ) : (
           <>
-            <button className="primary" onClick={enterPresent} title="Hide the authoring tools and teach">
+            <button className="gold-line" onClick={enterPresent} title="Hide the tools and teach">
               Present
             </button>
           </>
         )}
       </div>
 
-      {/* Always rendered so the field never jumps when a player is selected. */}
+      {/*
+        THE STRIP. Always rendered while authoring, so the field never jumps
+        when a player is selected. Present has NO strip at all (SPEC §2, §3.3,
+        ML-UX-8): no controls, no summary, no ball note, no banner - the field
+        takes the 44 px, and a highlighted man is a ring on the field. The
+        grid drops to three rows with it (motionLab.css, ML-UX-8).
+      */}
+      {!present && (
       <div className="bar context">
-        {present ? (
-          <>
-            {/* The situation chip is in the dock now, which Present keeps. */}
-            {selected && <div className={`chip ${selected.side}`}>{selected.label}</div>}
-            {/* Present still carries a ball note; removing it is ML-UX-8's
-                call, not this slice's. Only the grammar changes here. */}
-            <span className="hint">{ballNote ?? (ball ? ballText : '')}</span>
-          </>
-        ) : interaction === 'draw-armed' || interaction === 'drawing' ? (
+        {interaction === 'draw-armed' || interaction === 'drawing' ? (
           /*
             THE WAITING ROW (SPEC §2). While the coach is part-way through
             something the strip says so and offers the way out, instead of
@@ -1872,18 +1904,27 @@ export function MotionLabEditor({
             </button>
           </>
         ) : pickingViewer ? (
+          /* CHOOSING A VIEWER (SPEC §3.3, §11.2): a waiting state, so it wears
+             the same banner as a drawing or a pick - one sentence and the way
+             out. Every player is a legal answer. */
           <>
-            <div className="chip ball">👁</div>
-            <span className="instruction">Player view — <b>click the player</b> you want to watch from.</span>
+            <span className="banner">
+              <span className="banner-icon">👁</span>
+              <b>Click the player to watch from.</b>
+            </span>
             <div className="spacer" />
-            <button onClick={() => setView('overhead')}>Cancel<span className="key">Esc</span></button>
+            <button onClick={() => setView('overhead')} title="Cancel · Esc">
+              Cancel<span className="key">Esc</span>
+            </button>
           </>
         ) : watching && view === 'player' && viewer ? (
+          /* WATCHING FROM A MAN: who, how to change him, and what that means. */
           <>
-            <label className="lbl">Viewing</label>
             <div className={`chip ${viewer.side}`}>{viewer.label}</div>
             <div className="ball-menu">
-              <button className={menuOpen === 'viewer' ? 'active' : ''} onClick={() => toggleMenu('viewer')}>Change</button>
+              <button className={menuOpen === 'viewer' ? 'active' : ''} onClick={() => toggleMenu('viewer')} aria-expanded={menuOpen === 'viewer'}>
+                Change <span className="key">▾</span>
+              </button>
               {menuOpen === 'viewer' && (
                 <div className="popover viewer-pop">
                   {(['offense', 'defense'] as const).map((side) => (
@@ -1900,10 +1941,10 @@ export function MotionLabEditor({
                 </div>
               )}
             </div>
-            <span className="hint">Camera rides with {viewer.label}. Play, scrub, or switch views any time.</span>
+            <span className="hint">Camera rides with the {viewer.label}.</span>
           </>
         ) : watching ? (
-          <span className="hint">Elevated coaching view. Play, scrub and change views freely; switch to <b>Overhead</b> to edit the play.</span>
+          <span className="hint">Watching from the sideline. Switch to Overhead to edit.</span>
         ) : setup ? (
           /* A pick is a waiting state, so it wears the same banner a drawing
              does (SPEC §11.2). This branch stays BELOW the drawing one above:
@@ -2045,6 +2086,7 @@ export function MotionLabEditor({
           </>
         )}
       </div>
+      )}
 
       <div className="stage">
         {notice}
@@ -2119,8 +2161,14 @@ export function MotionLabEditor({
         ⟲ is one.
       */}
       <div className="bar bottom">
-        {ballControl}
-        <span className="dock-divider" />
+        {/* Present's dock is everything but the ball (SPEC §2, §6.1): the
+            ball is set while authoring, and its divider goes with it. */}
+        {!present && (
+          <>
+            {ballControl}
+            <span className="dock-divider" />
+          </>
+        )}
         <button className="icon-btn" onClick={clicked(restart)} disabled={!canPlay} title="Restart · R" aria-label="Restart">
           ⟲
         </button>

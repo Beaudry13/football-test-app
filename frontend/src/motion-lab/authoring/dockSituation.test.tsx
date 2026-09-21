@@ -80,8 +80,10 @@ describe('where the chip is', () => {
 
     key('Escape')
     fireEvent.click(screen.getByRole('button', { name: 'Present' }))
-    expect(strip().querySelector('.sit-chip')).toBeNull()
+    // Since ML-UX-8 Present has no strip at all; the chip is still in the dock.
+    expect(document.querySelector('.bar.context')).toBeNull()
     expect(document.querySelectorAll('.sit-chip')).toHaveLength(1)
+    expect(dock().querySelector('.sit-chip')).not.toBeNull()
   })
 
   it('sits in the third group: ball │ transport … rate │ situation, Display', () => {
