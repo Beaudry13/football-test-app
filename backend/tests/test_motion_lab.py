@@ -359,6 +359,14 @@ class TestStructuralValidation:
             (lambda d: {**d, "ball": {"kind": "teleport"}}, "ball.kind: must be one of"),
             (lambda d: {**d, "ball": {"kind": "pass", "targetId": "O8", "catchPoint": {"x": 1}}}, "ball.catchPoint: missing field(s) y"),
             (lambda d: {**d, "engagements": [{"a": "O1", "b": "D1"}]}, "missing field(s) point"),
+            (lambda d: {**d, "engagements": [{**d["engagements"][0], "auto": "true"}]}, "engagements[0].auto: must be true or false"),
+            # 1 and 0 are the trap: Python would take both for integers and
+            # JavaScript would take both for truthiness. `auto` is a boolean.
+            (lambda d: {**d, "engagements": [{**d["engagements"][0], "auto": 1}]}, "engagements[0].auto: must be true or false"),
+            (lambda d: {**d, "engagements": [{**d["engagements"][0], "auto": 0}]}, "engagements[0].auto: must be true or false"),
+            # `null` is not "false". Absence is how a legacy engagement says
+            # the coach owns its point; an explicit null says nothing at all.
+            (lambda d: {**d, "engagements": [{**d["engagements"][0], "auto": None}]}, "engagements[0].auto: must be true or false"),
             (lambda d: {**d, "situation": {**d["situation"], "hash": "center"}}, "situation.hash: must be one of"),
             (lambda d: {**d, "filter": "special teams"}, "filter: must be one of"),
         ],
@@ -426,6 +434,83 @@ class TestStructuralValidation:
             engagements=[{"id": "e", "kind": "engage", "a": "GHOST", "b": "D1", "point": {"x": 0, "y": 0}}],
         )
         assert self.post(client, owner, document).status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# Engagement.auto - the one additive field (ML-UX-5)
+# ---------------------------------------------------------------------------
+
+
+def engagement(**overrides):
+    """The engagement the editor sends, with `auto` set or left off."""
+    return {"id": "e1", "kind": "engage", "a": "O1", "b": "D1", "point": {"x": 7.0, "y": 1.0}, "release": "O1", **overrides}
+
+
+class TestEngagementAuto:
+    """`auto` says PEIRA chose the meeting point rather than the coach, so the
+    editor can keep an inferred point on the end of a blocker's path as that
+    path is redrawn. The server's whole job here is to carry it - including
+    carrying its ABSENCE, which is what a play written before the field
+    existed uses to mean "the coach owns this point".
+
+    Written after the audit found the frontend persisting `auto` into a
+    validator that refused it: every editor test uses the local repository, so
+    nothing in either suite had ever sent the real document to the real route.
+    """
+
+    def round_trip(self, client, owner, eng):
+        created = create_play(client, owner["headers"], document=play_document(engagements=[eng]))
+        fetched = client.get(f"/api/motion-lab/plays/{created['id']}", headers=owner["headers"])
+        assert fetched.status_code == 200, fetched.get_json()
+        return created, fetched.get_json()
+
+    @pytest.mark.parametrize("value", [True, False])
+    def test_the_server_accepts_and_returns_it_unchanged(self, client, owner, value):
+        created, fetched = self.round_trip(client, owner, engagement(auto=value))
+        assert created["document"]["engagements"][0]["auto"] is value
+        assert fetched["document"]["engagements"][0]["auto"] is value
+
+    def test_a_legacy_engagement_has_no_auto_and_still_has_none_afterwards(self, client, owner):
+        # THE POINT OF THE WHOLE EXERCISE. Accepting the field is easy; not
+        # inventing it is the part that keeps old plays honest.
+        created, fetched = self.round_trip(client, owner, engagement())
+        assert "auto" not in created["document"]["engagements"][0]
+        assert "auto" not in fetched["document"]["engagements"][0]
+
+    def test_saving_an_existing_play_neither_adds_nor_drops_it(self, client, owner):
+        play = create_play(client, owner["headers"], document=play_document(engagements=[engagement(auto=True)]))
+        document = play_document(engagements=[engagement(auto=True), engagement(id="e2", b="D2")])
+        saved = save_play(client, owner["headers"], play, document=document)
+        assert saved.status_code == 200, saved.get_json()
+        stored = saved.get_json()["document"]["engagements"]
+        assert stored[0]["auto"] is True
+        assert "auto" not in stored[1]
+
+    def test_it_reaches_the_jsonb_column_without_a_schema_bump(self, client, owner, app):
+        """What lands in JSONB is what the editor sent, `auto` included."""
+        play = create_play(client, owner["headers"], document=play_document(engagements=[engagement(auto=True)]))
+        with app.app_context():
+            row = db.session.get(MotionPlay, play["id"])
+            assert row.document["engagements"][0]["auto"] is True
+            assert row.schema_version == 1
+
+    def test_the_rest_of_the_engagement_contract_is_untouched(self, client, owner):
+        # Adding a key must not have loosened the object: everything the
+        # validator refused before it, it still refuses beside it.
+        for bad, fragment in [
+            ({**engagement(auto=True), "nudge": 1}, "unknown field(s) nudge"),
+            ({k: v for k, v in engagement(auto=True).items() if k != "point"}, "missing field(s) point"),
+            ({**engagement(auto=True), "kind": "tackle"}, "kind: must be one of"),
+            ({**engagement(auto=True), "a": 7}, "a: must be a string"),
+            ({**engagement(auto=True), "point": {"x": 1}}, "point: missing field(s) y"),
+        ]:
+            response = client.post(
+                "/api/motion-lab/plays",
+                json={"name": "x", "document": play_document(engagements=[bad]), "schema_version": 1},
+                headers=owner["headers"],
+            )
+            assert response.status_code == 422, response.get_json()
+            assert fragment in response.get_json()["details"]["document"][0]
 
 
 # ---------------------------------------------------------------------------

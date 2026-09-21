@@ -20,6 +20,15 @@ nothing else, so a client cannot quietly start persisting derived state -
 schedules, frames, orientation, playback position - by adding a field. A new
 authored field is a schema change: bump SUPPORTED_SCHEMA_VERSIONS and this
 file together.
+
+THE ONE EXCEPTION, and why it is one. `Engagement.auto` was added without a
+version bump (owner decision, 20 September 2026) because it is ADDITIVE and
+IGNORABLE: it is optional, its absence is meaningful and preserved, and a
+client that has never heard of it drops it on read and behaves exactly as it
+did before. Nothing derived is being persisted - `auto` records whether PEIRA
+chose the meeting point or the coach did, which is coach intent the server
+could not recompute. A field that changed the MEANING of an existing one, or
+that an older client would misread rather than ignore, still needs the bump.
 """
 
 from __future__ import annotations
@@ -59,7 +68,7 @@ PLAY_KEYS = {"players", "ball", "ballThen", "engagements", "situation", "filter"
 LOOK_KEYS = {"players"}
 PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior"}
 BALL_KEYS = {"kind", "carrierId", "targetId", "fakeId", "catchPoint", "releasePoint"}
-ENGAGEMENT_KEYS = {"id", "kind", "a", "b", "point", "release"}
+ENGAGEMENT_KEYS = {"id", "kind", "a", "b", "point", "release", "auto"}
 SITUATION_KEYS = {"losYard", "hash", "down", "distance", "show"}
 POINT_KEYS = {"x", "y"}
 
@@ -185,6 +194,15 @@ def _engagements(value, path: str):
         _point(engagement["point"], f"{p}.point")
         if "release" in engagement and not _optional(engagement["release"]):
             _string(engagement["release"], f"{p}.release")
+        # ABSENCE IS THE THIRD STATE, and the server must not spend it. A play
+        # written before `auto` existed has no such key, and that is how the
+        # frontend knows the coach owns its meeting point; injecting a default
+        # here would rewrite that history on the first save. So: validate it
+        # when it is there, leave the document alone when it is not. Strictly
+        # boolean, like `situation.show` - `null` is not "false", and 1/0 are
+        # not booleans (in Python they would pass `isinstance(x, int)`).
+        if "auto" in engagement and not isinstance(engagement["auto"], bool):
+            _fail(f"{p}.auto", "must be true or false")
 
 
 def _situation(value, path: str):

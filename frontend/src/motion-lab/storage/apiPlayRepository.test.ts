@@ -58,6 +58,46 @@ describe('saving', () => {
     expect(Object.keys(sent).sort()).toEqual(['ball', 'ballThen', 'engagements', 'filter', 'players', 'situation'])
   })
 
+  it('sends Engagement.auto as PEIRA authored it, including the legacy absence', async () => {
+    /**
+     * THE SENDER HALF of the `auto` contract. The receiver half is
+     * backend/tests/test_motion_lab.py::TestEngagementAuto, which posts this
+     * same shape to the real route; the two together are why the field now
+     * survives a save. They were written after an audit found the frontend
+     * persisting `auto` into a validator that refused it - every editor test
+     * uses the LOCAL repository, so no suite had ever sent the real document
+     * to the real server.
+     *
+     * The third engagement is the one that matters most: a play written
+     * before `auto` existed has no such key, and "no key" is how the editor
+     * knows the coach owns that meeting point. Serializing it as `false`
+     * would be a different claim.
+     */
+    const session = start()
+    const base = gapPlays()[0]
+    const engagements = [
+      { id: 'e1', kind: 'engage' as const, a: 'O1', b: 'D1', point: { x: 7, y: 1 }, auto: true },
+      { id: 'e2', kind: 'engage' as const, a: 'O2', b: 'D2', point: { x: 9, y: 2 }, auto: false },
+      { id: 'e3', kind: 'engage' as const, a: 'O3', b: 'D3', point: { x: 11, y: 3 } },
+    ]
+    const play: Play = { ...base, engagements }
+    session.repository.savePlay(play)
+    await settle()
+
+    const sent = (server.calls[0].body as { document: { engagements: Record<string, unknown>[] } }).document.engagements
+    expect(sent.map((e) => e.auto)).toEqual([true, false, undefined])
+    expect('auto' in sent[2]).toBe(false)
+    expect(sent).toEqual(toDocument(play).engagements)
+    expect(session.stateOf(play.id).state).toBe('saved')
+
+    // And back out again: a second session reading the server's rows sees the
+    // same three, through the sanitizer that older plays also come through.
+    const reopened = createMotionLabSession({ plays: server.playRows(), looks: server.lookRows(), draftScope: SCOPE, api: server.api, drafts })
+    const stored = reopened.repository.listPlays().find((p) => p.name === play.name)!.engagements
+    expect(stored.map((e) => e.auto)).toEqual([true, false, undefined])
+    expect('auto' in stored[2]).toBe(false)
+  })
+
   it('coalesces edits made while a request is out into ONE follow-up carrying the latest', async () => {
     const session = start()
     const play = gapPlays()[0]
