@@ -1597,7 +1597,15 @@ export function MotionLabEditor({
     ) : (
       <button
         disabled={legalPartners.length === 0}
-        title={legalPartners.length === 0 ? 'Every defender is already engaged.' : undefined}
+        // The sentence names the side he would have picked from: a defender
+        // with nobody left is out of offensive players, not defenders.
+        title={
+          legalPartners.length === 0
+            ? selected.side === 'offense'
+              ? 'Every defender is already engaged.'
+              : 'Every offensive player is already engaged.'
+            : undefined
+        }
         onClick={() => startPartnerPick()}
       >
         {engagedWord}…
@@ -1641,7 +1649,6 @@ export function MotionLabEditor({
       >
         🏈 <span className="ball-sentence">{ballText}</span>
         {ballWarning && <span className="warn" title={ballWarning}>!</span>}
-        <span className="key">B</span>
       </button>
       {menuOpen === 'ball' && (
         <div className="popover ball-pop">
@@ -1854,7 +1861,7 @@ export function MotionLabEditor({
           ) : renaming === 'play' ? (
             <InlineName value={playName} onCommit={(v) => { setPlayName(v); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Play name" />
           ) : (
-            <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} title={present ? playName : 'Play: rename, open, duplicate, delete'}>
+            <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} aria-expanded={menuOpen === 'play'} title={present ? playName : 'Play: rename, open, duplicate, delete'}>
               <span className="play-name">{playName}</span>
               {!present && <span className="key">▾</span>}
             </button>
@@ -1891,8 +1898,8 @@ export function MotionLabEditor({
           ))}
         {!present && (
           <div className="seg">
-            <button disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)">↶</button>
-            <button disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Shift+Z)">↷</button>
+            <button disabled={!canUndo} onClick={undo} title="Undo · Ctrl+Z">↶</button>
+            <button disabled={!canRedo} onClick={redo} title="Redo · Ctrl+Shift+Z">↷</button>
           </div>
         )}
 
@@ -2241,8 +2248,9 @@ export function MotionLabEditor({
         <button className="icon-btn" onClick={clicked(restart)} disabled={!canPlay} title="Restart · R" aria-label="Restart">
           ⟲
         </button>
-        <button className="primary play-toggle" onClick={clicked(togglePlay)} disabled={!canPlay}>
-          {playing ? '❚❚ Pause' : '▶ Play'}<span className="key">Space</span>
+        {/* Keys live in tooltips, not on buttons (SPEC §11.1, DESIGN §18). */}
+        <button className="primary play-toggle" onClick={clicked(togglePlay)} disabled={!canPlay} title={playing ? 'Pause · Space' : 'Play · Space'}>
+          {playing ? '❚❚ Pause' : '▶ Play'}
         </button>
         <button className="icon-btn" onClick={clicked(() => step(-0.1))} disabled={!canPlay} title="Back 0.1 s · ←" aria-label="Back 0.1 seconds">
           ◁

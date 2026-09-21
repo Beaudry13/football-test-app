@@ -84,16 +84,20 @@ describe('motionLab.css scoping', () => {
 
   it('declares its custom properties only on the root', () => {
     const where = scoped.filter((r) => /(^|;)\s*--[\w-]+\s*:/.test(r.body)).map((r) => r.prelude)
-    expect(where).toEqual([ROOT])
+    // The prototype's root rule, then ML-UX-10's state tokens in a second one
+    // below the marker (the first is pinned and cannot take new declarations).
+    // Both on the root and nowhere else; a third lands here deliberately.
+    expect(where).toEqual([ROOT, ROOT])
   })
 
   it('names its keyframes motion-lab-* and only animates with those', () => {
     const names = scoped.filter((r) => r.prelude.startsWith('@keyframes')).map((r) => r.prelude.split(/\s+/)[1])
-    // ML-UX-1 added the route handle's first-draw pulse. New keyframes are
-    // expected to land here deliberately, named motion-lab-*, never silently.
-    expect(names).toEqual(['motion-lab-toast-in', 'motion-lab-catch-pulse', 'motion-lab-handle-pulse'])
+    // ML-UX-1 added the route handle's first-draw pulse, ML-UX-10 the menus'
+    // opening fade. New keyframes are expected to land here deliberately,
+    // named motion-lab-*, never silently.
+    expect(names).toEqual(['motion-lab-toast-in', 'motion-lab-catch-pulse', 'motion-lab-handle-pulse', 'motion-lab-popover-in'])
     // `animation: none` names no keyframe - it is how the reduced-motion
-    // block switches the handle's pulse off.
+    // blocks switch the handle's pulse and the menus' fade off.
     const used = [...SCOPED.matchAll(/animation:\s*([\w-]+)/g)].map((m) => m[1]).filter((n) => n !== 'none')
     expect(used.every((n) => names.includes(n))).toBe(true)
   })

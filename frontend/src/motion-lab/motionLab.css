@@ -935,10 +935,11 @@
 .motion-lab-root .bar.bottom .ball-btn {
   max-width: 240px;
 }
-/* The button is a row: football, sentence, badge, key. Only the sentence
-   gives way. The prototype's `.ball-btn` is an inline-block whose children
-   simply overflowed and were clipped - with a badge and a key hint after the
-   sentence, that clipped the sentence rather than shortening it. */
+/* The button is a row: football, sentence, badge. Only the sentence gives
+   way. The prototype's `.ball-btn` is an inline-block whose children simply
+   overflowed and were clipped - with a badge (and, until ML-UX-10 took keys
+   off the buttons, a key hint) after the sentence, that clipped the sentence
+   rather than shortening it. */
 .motion-lab-root .bar.bottom .ball-btn {
   display: inline-flex;
   align-items: center;
@@ -1262,5 +1263,176 @@
 @media (pointer: coarse) {
   .motion-lab-root svg.board .route-handle .hit-coarse {
     display: inline;
+  }
+}
+
+/* ---- ML-UX-10: states and motion -----------------------------------------
+ * Additive. SPEC §4.3's state table, §1.4's "nothing else is gold", the
+ * 120 ms popover fade and focus rings (§15). The prototype's button, hover,
+ * primary-hover and popover-hover rules above the marker are pinned by
+ * motionLabCss.test.ts, so every state is re-stated here and the cascade
+ * does the work.
+ *
+ * ONE STEP, EVERY CONTROL. Idle, then one step lighter on hover; pressed
+ * goes back to the control's own idle tone (no third colour); disabled is
+ * 40% and does not react to the pointer at all. Gold keeps its meanings: the
+ * primary darkens a step on hover and two when pressed, and a chosen segment
+ * or a menu's current row never changes under the pointer.
+ *
+ * Exclusions are chained - `:not(.a):not(.b)` - never listed inside one
+ * `:not()`: the scoping test reads every comma as a new selector. Chaining
+ * also raises specificity, which several rules below lean on; where two
+ * rules tie, the later one is the one meant to win.
+ */
+
+/* The plain tones are SPEC §4.3's. The primary's are the gold mixed with the
+   panel it sits on - 92% on hover, 85% pressed - written out rather than
+   computed with color-mix(): a browser without color-mix() would drop the
+   declaration and leave Play with no background at all under the pointer.
+   statesAndMotion.test.tsx re-derives both from --accent and --panel. */
+.motion-lab-root {
+  --btn: #1e2126;
+  --btn-hover: #262a30;
+  --accent-hover: #e5bb44;
+  --accent-pressed: #d5af41;
+}
+
+/* PLAIN: idle, hover, pressed. `.active` (a chosen segment, a menu's current
+   row, an open menu's button) and `.primary` are left to their own rules. */
+.motion-lab-root button {
+  background: var(--btn);
+}
+.motion-lab-root button:not(:disabled):not(.active):not(.primary):hover {
+  background: var(--btn-hover);
+}
+.motion-lab-root button:not(:disabled):not(.active):not(.primary):active {
+  background: var(--btn);
+}
+
+/* The segments and toggles in the Situation and Display menus wear the plain
+   look through a prototype rule that pins the old idle; re-state it. Hover
+   and pressed reach them through the plain rules above. */
+.motion-lab-root .sit-row .seg button:not(.active),
+.motion-lab-root .sit-row > button:not(.active) {
+  background: var(--btn);
+}
+
+/* PRESSED GOES BACK TO EACH CONTROL'S OWN IDLE. A menu's rows are flat, so
+   theirs is the menu; the rest have a tone of their own. */
+.motion-lab-root .popover button:not(:disabled):not(.active):active {
+  background: transparent;
+}
+.motion-lab-root button.ball-btn.has-action:not(:disabled):active {
+  background: #2a2412;
+}
+.motion-lab-root button.sit-chip:not(:disabled):not(.active):active {
+  background: #1a2230;
+}
+.motion-lab-root button.viewer-chip.offense:not(.active):active {
+  background: #3a3a37;
+}
+.motion-lab-root button.viewer-chip.defense:not(.active):active {
+  background: #4a2018;
+}
+
+/* A menu's current row keeps saying so under the pointer, as a chosen
+   segment does. */
+.motion-lab-root .popover button.play-row.active:hover {
+  background: #2a2412;
+}
+
+/* THE PRIMARY. Hover darkens rather than lightening (the prototype's
+   #ffd966), and it stays opaque: fading the button would fade its words. */
+.motion-lab-root button.primary:not(:disabled):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.motion-lab-root button.primary:not(:disabled):active {
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+}
+
+/* GOLD-LINE (Present, Exit Present, Set the ball, Adjust on, Releases ✓).
+   Their own rule outranked every hover, so they never answered the pointer.
+   The outline and the words stay gold; only the fill takes the step. */
+.motion-lab-root button.gold-line:not(:disabled):not(.active):hover {
+  background: var(--btn-hover);
+}
+.motion-lab-root button.gold-line:not(:disabled):not(.active):active {
+  background: transparent;
+}
+
+/* DISABLED DOES NOT REACT. The prototype's hover rules match a disabled
+   button too, so each kind that can be disabled is held at its own idle. */
+.motion-lab-root button:disabled:hover {
+  background: var(--btn);
+}
+.motion-lab-root button.primary:disabled:hover {
+  background: var(--accent);
+}
+.motion-lab-root .ball-btn.has-action:disabled:hover {
+  background: #2a2412;
+}
+.motion-lab-root button.gold-line:disabled:hover,
+.motion-lab-root .popover button:disabled:hover {
+  background: transparent;
+}
+
+/* AN OPEN MENU'S BUTTON IS NOT GOLD (SPEC §1.4; the design's own frames
+   leave it plain). It shows the hover tone for as long as the menu is open.
+   Every menu trigger still sets `.active` while open; `aria-expanded` is what
+   tells a trigger from a chosen segment, and each keeps its own ink. */
+.motion-lab-root button.active[aria-expanded='true'] {
+  background: var(--btn-hover);
+  border-color: var(--border);
+  color: var(--text);
+}
+.motion-lab-root .ball-btn.has-action.active[aria-expanded='true'] {
+  border-color: #6b5a1f;
+}
+.motion-lab-root button.gold-line.active[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.motion-lab-root .sit-chip.active[aria-expanded='true'] {
+  border-color: #2c3d57;
+  color: #a9c8ff;
+}
+
+/* FOCUS, FOR THE KEYBOARD. PEIRA's global ring is `currentColor`: on a gold
+   control that is the near-black ink, drawn outside the button over the dark
+   bar, so on Play, Draw assignment and every chosen segment it could not be
+   seen. Here it is gold, 2 px, with 2 px of bar between it and the control.
+   index.css is untouched; this only out-ranks it inside Motion Lab. */
+.motion-lab-root :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* `.seg` clips its buttons (overflow: hidden), which cut off any ring drawn
+   outside them. Segments draw it inside instead - in ink on the chosen one,
+   where a gold ring on gold would vanish. */
+.motion-lab-root .seg button:focus-visible {
+  outline-offset: -2px;
+}
+.motion-lab-root .seg button.active:focus-visible {
+  outline-color: var(--accent-ink);
+}
+
+/* Every menu fades in over 120 ms as it opens. Menus mount when they open,
+   so this runs once per opening; closing stays immediate. */
+.motion-lab-root .popover {
+  animation: motion-lab-popover-in 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-lab-root .popover {
+    animation: none;
+  }
+}
+@keyframes motion-lab-popover-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
