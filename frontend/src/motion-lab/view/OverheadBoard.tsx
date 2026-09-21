@@ -39,8 +39,16 @@ const PLAYER_R = 0.85 * U
  * selection ring; moving that one number out to 28 is the whole adjustment.
  * The stub is thinner than the marker's own stroke and carries no label, so
  * it reads as something attached to the man rather than a second man.
+ *
+ * THE HIT AREA STARTS AT 26, NOT THE SPEC'S 16 (owner decision, ML-UX-9). The
+ * handle is drawn on top of the marker, so a hit area reaching in to 16 would
+ * cover the marker's edge (17) and the whole selection ring - and a press
+ * meant to MOVE the man would start a drawing instead, against SPEC §5.1's
+ * "the pointer target decides". 26 is just outside the ring. The touch
+ * problem 16 was solving is solved by width instead: 28 px wide for a mouse,
+ * 40 px for a finger (`pointer: coarse`, SPEC §5.2).
  */
-const HANDLE = { stub: 28, head: 44, tip: 58, hit: 26, halfWidth: 14, headHalf: 7 }
+const HANDLE = { stub: 28, head: 44, tip: 58, hit: 26, halfWidth: 14, headHalf: 7, coarseHalfWidth: 20 }
 
 /**
  * Which way the handle points: downfield, which is up the screen.
@@ -58,6 +66,9 @@ function RouteHandle({ id, y }: { id: string; y: number }) {
     <g data-handle={id} className="route-handle" transform={back ? 'scale(1 -1)' : undefined}>
       {/* Hit area first, and invisible: generous to grab, never drawn. */}
       <rect x={-HANDLE.halfWidth} y={-HANDLE.tip} width={HANDLE.halfWidth * 2} height={HANDLE.tip - HANDLE.hit} fill="transparent" />
+      {/* The same, 40 px wide, for a finger. CSS shows it only on a coarse
+          pointer; the rect above stays exactly as it was for a mouse. */}
+      <rect className="hit-coarse" x={-HANDLE.coarseHalfWidth} y={-HANDLE.tip} width={HANDLE.coarseHalfWidth * 2} height={HANDLE.tip - HANDLE.hit} fill="transparent" />
       <circle cy={-HANDLE.tip} r={HANDLE.headHalf} fill="transparent" />
       <line x1={0} y1={-HANDLE.stub} x2={0} y2={-HANDLE.head} stroke="var(--accent)" strokeWidth={4} strokeLinecap="round" />
       <path d={`M ${-HANDLE.headHalf} ${-HANDLE.head} L ${HANDLE.headHalf} ${-HANDLE.head} L 0 ${-HANDLE.tip} Z`} fill="var(--accent)" />

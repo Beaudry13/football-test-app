@@ -273,10 +273,13 @@ describe('Present guards: no edits, no authoring keys (§3.3, §10, §16)', () =
     select(play, rg().id)
     const path = JSON.stringify(rg().path)
 
+    // The board stays exactly in its Present state. (This used to be a
+    // `not.toContain('board-draw-armed')`, which would have passed for ever
+    // once ML-UX-9 renamed that class - so it asserts what IS true instead.)
     key('d')
-    expect(board().getAttribute('class')).not.toContain('board-draw-armed')
+    expect(board().getAttribute('class')).toBe('board board-present')
     key('e')
-    expect(board().getAttribute('class')).not.toContain('board-adjusting')
+    expect(board().getAttribute('class')).toBe('board board-present')
     key('Delete')
     key('Backspace')
     await settle()

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { OverheadBoard } from '../view/OverheadBoard'
 import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
 import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
-import { cumulativeLength, simplify, type EndBehavior, type Pt } from '../engine/geometry'
+import { simplify, type EndBehavior, type Pt } from '../engine/geometry'
 import { buildSchedule, posAt, resolveEnd } from '../engine/timeline'
 import { ballTargetOf, deriveBall, isPass, projectOntoPath, THEN_KINDS, type BallAction } from '../engine/ball'
 import { catchDepth, fullBallSentence } from './ballSentence'
@@ -62,6 +62,11 @@ let advancedOpenMemo = false
 // shape survives, large enough that hand jitter doesn't become a handle.
 const ANCHOR_EPS = 0.45
 const MIN_SAMPLE_GAP = 0.15
+/**
+ * A stroke whose pointer never got this far (yards) from where it went down
+ * was a tap, not a draw (SPEC §5.4: "drawn length < 1 yd → no change").
+ */
+const TAP_SLOP = 1
 const TAIL = 0.4
 /** A catch-point click further than this from the route is ignored. */
 const CATCH_PICK_RADIUS = 3
@@ -259,6 +264,14 @@ export function MotionLabEditor({
   /** Mirrors `advancedOpenMemo` so opening the disclosure re-renders the menu. */
   const [advancedOpen, setAdvancedOpen] = useState(advancedOpenMemo)
   const [draft, setDraft] = useState<Pt[] | null>(null)
+  /**
+   * A drag is in progress - a player, an anchor or a block's × (ML-UX-9,
+   * SPEC §5.3's `moving`). The board's cursor and the route handle's
+   * visibility read it. It is set and cleared on exactly the lines `dragRef`
+   * is, so it cannot outlive or precede the drag itself; `dragRef` stays the
+   * drag's source of truth.
+   */
+  const [dragging, setDragging] = useState(false)
   const [setup, setSetup] = useState<Setup | null>(null)
   const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'block' | 'viewer' | 'rate' | 'display'>(null)
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
@@ -293,6 +306,11 @@ export function MotionLabEditor({
    * selection yet.
    */
   const drawTargetRef = useRef<string | null>(null)
+  /**
+   * Was drawing armed when the stroke in flight went down? A tap is not a
+   * draw, so it hands back the state it interrupted rather than disarming.
+   */
+  const armedAtPressRef = useRef(false)
   const rafRef = useRef(0)
   const lastTsRef = useRef(0)
 
@@ -1012,6 +1030,7 @@ export function MotionLabEditor({
       const en = engagements.find((x) => x.id === engId)!
       setSelectedId(en.a)
       dragRef.current = { kind: 'engage', id: engId, index: 0, dx: en.point.x - pos.x, dy: en.point.y - pos.y }
+      setDragging(true)
       svgRef.current!.setPointerCapture(e.pointerId)
       return
     }
@@ -1023,6 +1042,7 @@ export function MotionLabEditor({
         const p = players.find((pl) => pl.id === selectedId)!
         const a = p.path[Number(idx)]
         dragRef.current = { kind: 'anchor', id: selectedId, index: Number(idx), dx: a.x - pos.x, dy: a.y - pos.y }
+        setDragging(true)
         svgRef.current!.setPointerCapture(e.pointerId)
         return
       }
@@ -1051,6 +1071,7 @@ export function MotionLabEditor({
       if (!startId) return
       const start = players.find((p) => p.id === startId)!
       drawTargetRef.current = startId
+      armedAtPressRef.current = interaction === 'draw-armed'
       // The path is always anchored at the player, wherever the pointer went down.
       draftRef.current = [{ x: start.x, y: start.y }, pos]
       setDraft(draftRef.current)
@@ -1066,6 +1087,7 @@ export function MotionLabEditor({
       // Adjusting only means something for a player with a path.
       if (interaction === 'adjusting' && p.path.length < 2) setInteraction('idle')
       dragRef.current = { kind: 'player', id: hit, index: 0, dx: p.x - pos.x, dy: p.y - pos.y }
+      setDragging(true)
       svgRef.current!.setPointerCapture(e.pointerId)
     } else {
       setSelectedId(null)
@@ -1150,6 +1172,7 @@ export function MotionLabEditor({
     }
     if (dragRef.current) {
       dragRef.current = null
+      setDragging(false)
       svgRef.current?.releasePointerCapture(e.pointerId)
       return
     }
@@ -1159,11 +1182,21 @@ export function MotionLabEditor({
       draftRef.current = null
       drawTargetRef.current = null
       setDraft(null)
-      setInteraction('idle')
       svgRef.current?.releasePointerCapture(e.pointerId)
-      // A bare click (no real movement) selects without drawing.
-      const cum = cumulativeLength(d)
-      if (cum[cum.length - 1] < 1) return
+      // A TAP IS NOT A DRAW (SPEC §5.4, §5.7). What decides it is how far
+      // the POINTER got from where it went down - d[1] onward - never the
+      // route's length. The route starts at the man (d[0]) and a press on
+      // his handle is already 1.3-2.9 yd from him, so measuring the route
+      // turned every bare tap on the handle into a short one. The press is
+      // clamped only for this measurement, into the space every later
+      // sample was recorded in; the route itself is untouched.
+      const press = clampToField(d[1])
+      const moved = Math.max(...d.slice(1).map((q) => Math.hypot(q.x - press.x, q.y - press.y)))
+      if (moved < TAP_SLOP) {
+        setInteraction(armedAtPressRef.current ? 'draw-armed' : 'idle')
+        return
+      }
+      setInteraction('idle')
       updatePlayer(drawnFor, { path: simplify(d, ANCHOR_EPS) })
       // The handle has been found; it no longer needs to wave.
       drewOnce = true
@@ -1310,14 +1343,24 @@ export function MotionLabEditor({
   }, [players])
 
   /**
-   * A stroke must not survive the coach looking away.
+   * A stroke must not survive the coach looking away, and nor must a drag.
    *
    * Losing focus mid-drag means the pointerup lands somewhere else and never
    * reaches us, which would leave a half-drawn route following the mouse.
    * Throw it away instead: the previous assignment is untouched.
+   *
+   * A drag of a man, an anchor or a block's × simply stops (ML-UX-9). It is
+   * not a pointerup and commits nothing new, but it rolls nothing back
+   * either: a drag writes as it goes, and whatever it had already moved
+   * stays moved and saves as usual. Without this the board sat in
+   * `board-moving` and the next pointermove carried the drag on.
    */
   useEffect(() => {
-    const onBlur = () => cancelDrawing()
+    const onBlur = () => {
+      cancelDrawing()
+      dragRef.current = null
+      setDragging(false)
+    }
     window.addEventListener('blur', onBlur)
     return () => window.removeEventListener('blur', onBlur)
   }, [cancelDrawing])
@@ -1368,9 +1411,35 @@ export function MotionLabEditor({
    * It is an invitation to draw, so it appears only where a drag would draw:
    * resting on a selected man, or already armed. While a stroke is in flight,
    * while anchors are being edited, and during a ball pick it would be a
-   * second gold thing competing for the same pointer.
+   * second gold thing competing for the same pointer. And not while anything
+   * is being dragged (SPEC §5.2, "hidden while moving"; the ring still moves):
+   * the drag holds the pointer, so the handle could not be used anyway.
    */
-  const showRouteHandle = !setup && (interaction === 'idle' || interaction === 'draw-armed')
+  const showRouteHandle = !setup && !dragging && (interaction === 'idle' || interaction === 'draw-armed')
+
+  /**
+   * THE BOARD'S ONE STATE CLASS (ML-UX-9, SPEC §5.3): `board-idle`,
+   * `board-armed`, `board-drawing`, `board-adjusting`, `board-moving`,
+   * `board-picking`, `board-present` or `board-tele`. CSS reads it to set
+   * every cursor; nothing sets a cursor inline.
+   *
+   * One at a time, in the order the states actually win: a drag in progress
+   * is what the pointer is doing whatever else is true (it only ever starts
+   * from idle or Adjust); Present never overlaps a pick or a drawing, since
+   * entering it cancels both; a pick leaves `interaction` idle, so it has to
+   * be read before it.
+   */
+  const boardState = dragging
+    ? 'moving'
+    : present
+      ? telestrating
+        ? 'tele'
+        : 'present'
+      : setup
+        ? 'picking'
+        : interaction === 'draw-armed'
+          ? 'armed'
+          : interaction
 
   /**
    * The drawing banner's sentence (SPEC §11.2).
@@ -2120,7 +2189,7 @@ export function MotionLabEditor({
         ) : (
         <OverheadBoard
           svgRef={svgRef}
-          className={`board board-${interaction}${setup ? ' setup' : ''}${present ? ' present' : ''}${telestrating ? ' tele' : ''}`}
+          className={`board board-${boardState}`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}

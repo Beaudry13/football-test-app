@@ -162,18 +162,18 @@
   touch-action: none;
   user-select: none;
 }
-.motion-lab-root svg.board.board-draw-armed,
+.motion-lab-root svg.board.board-armed,
 .motion-lab-root svg.board.board-drawing {
   cursor: crosshair;
 }
 .motion-lab-root svg.board .player {
   cursor: grab;
 }
-.motion-lab-root svg.board.board-draw-armed .player,
+.motion-lab-root svg.board.board-armed .player,
 .motion-lab-root svg.board.board-drawing .player {
   cursor: crosshair;
 }
-.motion-lab-root svg.board .player.dragging {
+.motion-lab-root svg.board.board-moving .player {
   cursor: grabbing;
 }
 .motion-lab-root svg.board text {
@@ -279,7 +279,7 @@
   color: var(--text);
 }
 
-.motion-lab-root svg.board.mode-edit .anchor {
+.motion-lab-root svg.board.board-adjusting .anchor {
   cursor: grab;
 }
 
@@ -416,13 +416,13 @@
   color: var(--accent);
 }
 
-.motion-lab-root svg.board.setup {
+.motion-lab-root svg.board.board-picking {
   cursor: pointer;
 }
-.motion-lab-root svg.board.setup .player {
+.motion-lab-root svg.board.board-picking .player {
   cursor: default;
 }
-.motion-lab-root svg.board.setup .player.pickable {
+.motion-lab-root svg.board.board-picking .player.pickable {
   cursor: pointer;
 }
 
@@ -682,16 +682,16 @@
 .motion-lab-root .app.present .stage {
   padding: 6px 12px;
 }
-.motion-lab-root svg.board.present {
+.motion-lab-root svg.board.board-present {
   cursor: default;
 }
-.motion-lab-root svg.board.present .player {
+.motion-lab-root svg.board.board-present .player {
   cursor: pointer;
 }
-.motion-lab-root svg.board.tele {
+.motion-lab-root svg.board.board-tele {
   cursor: crosshair;
 }
-.motion-lab-root svg.board.tele .player {
+.motion-lab-root svg.board.board-tele .player {
   cursor: crosshair;
 }
 
@@ -1222,4 +1222,45 @@
   font-weight: 800;
   font-size: 14px;
   color: var(--text);
+}
+
+/* ---- ML-UX-9: handle and cursor polish -----------------------------------
+ * Additive. The board carries ONE state class (MotionLabEditor.tsx,
+ * `boardState`) and CSS alone sets the cursor for it - SPEC §5.3's contract:
+ *
+ *   board-idle       board default   · players grab
+ *   board-moving     grabbing, everywhere on the board (rule below)
+ *   board-armed,     crosshair       · players crosshair
+ *   board-drawing
+ *   board-adjusting  board default   · players grab · anchors grab
+ *   board-picking    pointer on legal players only
+ *   board-present    board default   · players pointer
+ *   board-tele       crosshair       · players crosshair
+ *
+ * The prototype rules above were renamed onto these classes. Two had been
+ * dead: `.player.dragging` was never applied by anything, prototype or
+ * PEIRA, so "grabbing" never showed; and `.mode-edit .anchor` died when
+ * ML-UX-1 replaced `mode-*` with `board-*`, taking the anchors' grab cursor
+ * in Adjust with it.
+ */
+
+/* A DRAG IS IN PROGRESS - a player, an anchor or a block's ×. The board holds
+   the pointer for as long as it lasts, so the whole board says grabbing,
+   whatever passes under the pointer. Last in the sheet so it outranks, at
+   equal specificity, the handle's crosshair and the ×'s grab. */
+.motion-lab-root svg.board.board-moving,
+.motion-lab-root svg.board.board-moving * {
+  cursor: grabbing;
+}
+
+/* THE HANDLE ON A TOUCH SCREEN (SPEC §5.2): 40 px to grab instead of 28. The
+   coarse rect is always in the markup and shown only here, so a mouse gets
+   exactly the hit area it had before. */
+.motion-lab-root svg.board .route-handle .hit-coarse {
+  display: none;
+}
+@media (pointer: coarse) {
+  .motion-lab-root svg.board .route-handle .hit-coarse {
+    display: inline;
+  }
 }

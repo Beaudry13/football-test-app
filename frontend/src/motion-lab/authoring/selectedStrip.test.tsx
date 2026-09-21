@@ -140,7 +140,7 @@ describe('the primary', () => {
 
     fireEvent.click(stripBtn(/Draw assignment/))
 
-    expect(board().classList.contains('board-draw-armed')).toBe(true)
+    expect(board().classList.contains('board-armed')).toBe(true)
   })
 
   it('has left the top bar', () => {

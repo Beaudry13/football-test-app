@@ -419,7 +419,8 @@ describe('the board says what a drag will do', () => {
     expect(board().classList.contains('board-idle')).toBe(true)
 
     key('d')
-    expect(board().classList.contains('board-draw-armed')).toBe(true)
+    // SPEC §5.3's name for it since ML-UX-9 (was `board-draw-armed`).
+    expect(board().classList.contains('board-armed')).toBe(true)
 
     stroke(playerMarker(Y), [
       [p.x, p.y],
