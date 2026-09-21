@@ -70,6 +70,8 @@ const TAP_SLOP = 1
 const TAIL = 0.4
 /** A catch-point click further than this from the route is ignored. */
 const CATCH_PICK_RADIUS = 3
+/** How long the resting hint stays gold when D has nobody to draw for (§12.1). */
+const HINT_FLASH = 200
 /** Autosave and undo-grouping quiet periods. */
 const SAVE_DEBOUNCE = 400
 const HISTORY_DEBOUNCE = 350
@@ -325,6 +327,22 @@ export function MotionLabEditor({
     setToast(msg)
     setTimeout(() => setToast((t) => (t === msg ? null : t)), 2600)
   }, [])
+
+  /**
+   * D WITH NOBODY SELECTED (SPEC §12.1, ML-UX-11). The key does nothing, and
+   * the resting hint - whatever it says right now - turns gold for 200 ms, so
+   * the eye goes to the sentence that says what to do first. A colour state
+   * set and cleared here, not an animation: reduced motion sees it too. Each
+   * press starts the 200 ms over. Not authoring state: no save, no history.
+   */
+  const [hintFlash, setHintFlash] = useState(false)
+  const hintFlashTimer = useRef<number | undefined>(undefined)
+  const flashHint = useCallback(() => {
+    window.clearTimeout(hintFlashTimer.current)
+    setHintFlash(true)
+    hintFlashTimer.current = window.setTimeout(() => setHintFlash(false), HINT_FLASH)
+  }, [])
+  useEffect(() => () => window.clearTimeout(hintFlashTimer.current), [])
 
   const applyAuthoring = useCallback((a: Authoring) => {
     setPlayers(a.players)
@@ -712,6 +730,13 @@ export function MotionLabEditor({
   }, [])
 
   const qbId = players.find((p) => p.side === 'offense' && p.label === 'QB')?.id
+  /**
+   * Who can take the ball from the QB - handoff, pitch, pass, play action
+   * (SPEC §6.4): an offensive player who is not the QB. The ball picks and
+   * the ball menu ask this same question, so they cannot disagree.
+   */
+  const ballEligible = (p: Player) => p.side === 'offense' && p.id !== qbId
+  const anyBallEligible = players.some(ballEligible)
 
   const addPlayer = (side: Side) => {
     const n = players.filter((p) => p.side === side).length
@@ -871,7 +896,7 @@ export function MotionLabEditor({
     if (setup.step === 'copy-to') return p.id !== setup.sourceId
     if (setup.step === 'pick-catch' || setup.step === 'pick-release' || setup.step === 'pick-engage-point') return false
     if ('then' in setup && setup.then) return p.side === 'offense' && p.id !== (ballTimeline.chain?.carrierId ?? qbId)
-    if (p.side !== 'offense' || p.id === qbId) return false
+    if (!ballEligible(p)) return false
     if (setup.step === 'pick-target' && setup.fakeId === p.id) return false
     return true
   }
@@ -1239,6 +1264,9 @@ export function MotionLabEditor({
         case 'd':
         case 'D':
           if (selectedId && !setup && !watching && !present) armDrawing()
+          // Nobody to draw for (SPEC §12.1): the resting hint flashes instead -
+          // only where that hint is on screen, so Overhead, no pick, not Present.
+          else if (!selectedId && !setup && view === 'overhead' && !present) flashHint()
           break
         case 'e':
         case 'E':
@@ -1298,7 +1326,7 @@ export function MotionLabEditor({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, hasPath, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, present, togglePlay, restart, step, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, undo, redo])
+  }, [selectedId, hasPath, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, view, present, togglePlay, restart, step, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, flashHint, undo, redo])
 
   // Leaving the selection empties arming and anchor editing of meaning.
   useEffect(() => {
@@ -1666,14 +1694,25 @@ export function MotionLabEditor({
           ) : (
             <div className="pop-title">What happens with the ball?</div>
           )}
-          {BALL_CHOICES.map((c) => (
-            <button key={c.kind} onClick={() => startSetup(c.kind)}>
-              <span className={`now-dot${ball?.kind === c.kind ? ' on' : ''}`} aria-hidden="true">
-                {ball?.kind === c.kind ? '●' : ''}
-              </span>
-              {ball ? c.short : c.long}
-            </button>
-          ))}
+          {BALL_CHOICES.map((c) => {
+            // SPEC §12.3: with nobody but the QB on offense there is nobody
+            // to give it to. Keeping it is still an answer; the other four
+            // would open a pick with no legal choice in it.
+            const unavailable = c.kind !== 'keep' && !anyBallEligible
+            return (
+              <button
+                key={c.kind}
+                disabled={unavailable}
+                title={unavailable ? 'Add an offensive player first.' : undefined}
+                onClick={() => startSetup(c.kind)}
+              >
+                <span className={`now-dot${ball?.kind === c.kind ? ' on' : ''}`} aria-hidden="true">
+                  {ball?.kind === c.kind ? '●' : ''}
+                </span>
+                {ball ? c.short : c.long}
+              </button>
+            )
+          })}
           {ball && ball.kind !== 'keep' && (
             <>
               <div className="pop-title">Then…</div>
@@ -2158,7 +2197,7 @@ export function MotionLabEditor({
                 </div>
               )}
             </div>
-            <span className="hint">{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
+            <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
           </>
         )}
       </div>

@@ -1436,3 +1436,14 @@
     opacity: 1;
   }
 }
+
+/* ---- ML-UX-11: edge presentation -----------------------------------------
+ * D with nobody selected (SPEC §12.1): the resting hint - whatever it says,
+ * the ball's warning included - turns gold for 200 ms. The editor sets and
+ * clears this class; there is no transition and no keyframe, so reduced
+ * motion sees it too: a colour changes, nothing moves.
+ */
+.motion-lab-root .bar.context .hint.hint-flash,
+.motion-lab-root .bar.context .hint.hint-flash b {
+  color: var(--accent);
+}
