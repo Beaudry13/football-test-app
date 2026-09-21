@@ -165,7 +165,16 @@ export function sanitizePlay(raw: unknown): Play | null {
           const x = e as Record<string, unknown>
           if (typeof x.a !== 'string' || typeof x.b !== 'string' || !ids.has(x.a) || !ids.has(x.b) || x.a === x.b || !isPt(x.point)) return null
           const release = typeof x.release === 'string' && (x.release === x.a || x.release === x.b) ? x.release : undefined
-          return { id: typeof x.id === 'string' ? x.id : newId('e'), kind: 'engage', a: x.a, b: x.b, point: x.point, release }
+          // ML-UX-5: `auto` says PEIRA chose the point, not the coach. Carried
+          // through so it survives a reload; no engine code reads it.
+          //
+          // ABSENT STAYS ABSENT. Writing `auto: false` into a play that never
+          // had the key would break the round-trip every older play relies on
+          // - a stored play must come back exactly as it was written. Absent
+          // is falsy, so a play from before ML-UX-5 is read as the coach
+          // having placed the point, which is the safe reading.
+          const auto = 'auto' in x ? { auto: x.auto === true } : null
+          return { id: typeof x.id === 'string' ? x.id : newId('e'), kind: 'engage', a: x.a, b: x.b, point: x.point, release, ...auto }
         })
         .filter((e): e is Engagement => !!e)
     : []

@@ -29,6 +29,22 @@ export interface Engagement {
    * derivation below is the only place that would need to know.)
    */
   release?: string
+  /**
+   * ML-UX-5. Did PEIRA choose `point`, rather than the coach?
+   *
+   * True while the point is still the one inferred from the blocker's path,
+   * so the editor may keep it there as that path is redrawn. It becomes false
+   * the moment a coach drags the marker or picks a spot himself, and never
+   * goes back: his placement outranks the guess.
+   *
+   * NOTHING IN THE ENGINE READS THIS. It is coach intent, recorded here
+   * because it belongs to the engagement and has to survive a reload; the
+   * editor owns every behaviour attached to it. Optional, and absent means
+   * false, so plays written before ML-UX-5 load as the coach having placed
+   * the point - which is the safe reading, since nobody can now say he did
+   * not.
+   */
+  auto?: boolean
 }
 
 export interface DerivedEngagement {

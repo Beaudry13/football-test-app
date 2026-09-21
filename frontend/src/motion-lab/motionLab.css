@@ -1139,3 +1139,17 @@
   overflow-y: auto;
 }
 
+/* ---- ML-UX-5: the engaged group -----------------------------------------
+ * Additive, as above. The block's menu hangs from its own left edge, like
+ * More; the warning sits before the group so a coach reads the problem
+ * before the thing that has it.
+ */
+.motion-lab-root .block-pop {
+  right: auto;
+  left: 0;
+  min-width: 220px;
+}
+.motion-lab-root .bar.context .warn {
+  flex: 0 0 auto;
+}
+

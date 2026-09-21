@@ -13,6 +13,7 @@ import { applyEngagements, type Engagement } from '../engine/interactions'
 import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
 import type { PlayRepository } from '../storage/playRepository'
 import { isEditorKeystroke } from './keyboardScope'
+import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -76,7 +77,7 @@ type Setup =
   | { step: 'pick-target'; fakeId?: string; then?: boolean }
   | { step: 'pick-catch'; fakeId?: string; targetId: string; then?: boolean }
   | { step: 'pick-release'; targetId: string }
-  | { step: 'pick-partner'; forId: string }
+  | { step: 'pick-partner'; forId: string; changing?: string }
   | { step: 'pick-engage-point'; forId: string; partnerId: string }
   | { step: 'copy-to'; sourceId: string; mirror: boolean }
 
@@ -240,7 +241,7 @@ export function MotionLabEditor({
   const [advancedOpen, setAdvancedOpen] = useState(advancedOpenMemo)
   const [draft, setDraft] = useState<Pt[] | null>(null)
   const [setup, setSetup] = useState<Setup | null>(null)
-  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'viewer' | 'rate' | 'display'>(null)
+  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'block' | 'viewer' | 'rate' | 'display'>(null)
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look'>(null)
@@ -818,7 +819,13 @@ export function MotionLabEditor({
   const pickable = (p: Player): boolean => {
     if (pickingViewer) return true
     if (!setup) return false
-    if (setup.step === 'pick-partner') return p.id !== setup.forId
+    if (setup.step === 'pick-partner') {
+      // SPEC §7.2: the other side, and not already in a block. A man can only
+      // be in one, and a block against your own side is not a thing.
+      const blocker = players.find((pl) => pl.id === setup.forId)
+      if (!blocker || p.side === blocker.side) return false
+      return !engagements.some((e) => (e.a === p.id || e.b === p.id) && e.id !== setup.changing)
+    }
     if (setup.step === 'copy-to') return p.id !== setup.sourceId
     if (setup.step === 'pick-catch' || setup.step === 'pick-release' || setup.step === 'pick-engage-point') return false
     if ('then' in setup && setup.then) return p.side === 'offense' && p.id !== (ballTimeline.chain?.carrierId ?? qbId)
@@ -849,9 +856,30 @@ export function MotionLabEditor({
       case 'pick-fake':
         setSetup({ step: 'pick-target', fakeId: id })
         break
-      case 'pick-partner':
-        setSetup({ step: 'pick-engage-point', forId: setup.forId, partnerId: id })
+      case 'pick-partner': {
+        // SPEC §7.3: one click. The spot is nearly always the end of the
+        // blocker's path, so PEIRA fills it in and the coach corrects it only
+        // when he disagrees - which is what `auto` records.
+        const blocker = players.find((pl) => pl.id === setup.forId)!
+        const point = inferMeetPoint(blocker, p)
+        if (setup.changing) {
+          // Same block, different man: the id and the release are the coach's
+          // and survive. The point moves only if it was PEIRA's to move.
+          setEngagements((es) =>
+            es.map((x) => (x.id === setup.changing ? { ...x, b: id, point: x.auto ? point : x.point } : x)),
+          )
+        } else {
+          setEngagements((es) => [...es, { id: newId('e'), kind: 'engage', a: setup.forId, b: id, point, auto: true }])
+          showToast(
+            meetPointCameFromPath(blocker)
+              ? `${blocker.label} blocks ${p.label} where his path ends. Drag the × to move it.`
+              : `${blocker.label} blocks ${p.label} halfway to him. Drag the × to move it, or draw ${blocker.label}'s path.`,
+          )
+        }
+        setSelectedId(setup.forId)
+        cancelSetup()
         break
+      }
       case 'copy-to':
         copyAssignment(setup.sourceId, id, setup.mirror)
         setSetup(null)
@@ -930,8 +958,13 @@ export function MotionLabEditor({
           cancelSetup()
         }
       } else if (setup.step === 'pick-engage-point') {
+        // The coach placing the point himself ends PEIRA's claim on it.
         const { forId, partnerId } = setup
-        setEngagements((es) => [...es, { id: newId('e'), kind: 'engage', a: forId, b: partnerId, point: clampToField(pos) }])
+        setEngagements((es) =>
+          es.some((x) => x.a === forId && x.b === partnerId)
+            ? es.map((x) => (x.a === forId && x.b === partnerId ? { ...x, point: clampToField(pos), auto: false } : x))
+            : [...es, { id: newId('e'), kind: 'engage', a: forId, b: partnerId, point: clampToField(pos), auto: false }],
+        )
         setSelectedId(forId)
         cancelSetup()
       } else if (hit) {
@@ -1027,7 +1060,8 @@ export function MotionLabEditor({
       const pos = toField(e)
       const next = clampToField({ x: pos.x + drag.dx, y: pos.y + drag.dy })
       if (drag.kind === 'engage') {
-        setEngagements((es) => es.map((x) => (x.id === drag.id ? { ...x, point: next } : x)))
+        // SPEC §7.4: he has moved it himself, so PEIRA stops moving it for him.
+        setEngagements((es) => es.map((x) => (x.id === drag.id ? { ...x, point: next, auto: false } : x)))
         return
       }
       setPlayers((ps) =>
@@ -1205,6 +1239,38 @@ export function MotionLabEditor({
   }, [selectedId, interaction])
 
   /**
+   * KEEP AN INFERRED BLOCK ON THE END OF THE BLOCKER'S PATH (SPEC §7.9).
+   *
+   * While `auto` is true the point is still PEIRA's guess, so it follows the
+   * path it was guessed from: redraw the route and the block moves to the new
+   * end; clear the route and it falls back to halfway between the two men;
+   * draw one again and it returns to the end.
+   *
+   * ONLY THE BLOCKER'S PATH. A defender's route changing has not altered
+   * where the man blocking him ends up, and moving the point then would make
+   * a coach's block wander for a reason he did not cause.
+   *
+   * Once he has placed the point himself, `auto` is false and this leaves it
+   * alone for good.
+   */
+  useEffect(() => {
+    setEngagements((es) => {
+      let changed = false
+      const next = es.map((e) => {
+        if (!e.auto) return e
+        const blocker = players.find((p) => p.id === e.a)
+        const partner = players.find((p) => p.id === e.b)
+        if (!blocker || !partner) return e
+        const point = inferMeetPoint(blocker, partner)
+        if (point.x === e.point.x && point.y === e.point.y) return e
+        changed = true
+        return { ...e, point }
+      })
+      return changed ? next : es
+    })
+  }, [players])
+
+  /**
    * A stroke must not survive the coach looking away.
    *
    * Losing focus mid-drag means the pointerup lands somewhere else and never
@@ -1316,8 +1382,15 @@ export function MotionLabEditor({
         )
       case 'pick-release':
         return <><b>Click where on the QB's path he throws from.</b></>
-      case 'pick-partner':
-        return <><b>Choose who {name(setup.forId)} engages.</b></>
+      case 'pick-partner': {
+        // SPEC §7.2: the word depends on who is doing it.
+        const forPlayer = players.find((pl) => pl.id === setup.forId)
+        return forPlayer?.side === 'offense' ? (
+          <><b>Choose the defender {forPlayer.label} blocks.</b></>
+        ) : (
+          <><b>Choose who {name(setup.forId)} engages.</b></>
+        )
+      }
       case 'pick-engage-point':
         return <><b>Click where {name(setup.forId)} and {name(setup.partnerId)} meet.</b></>
       case 'copy-to':
@@ -1325,47 +1398,101 @@ export function MotionLabEditor({
     }
   })()
 
-  // ENGAGE for the selected player: one button, or who he's engaged with + Remove.
+  /**
+   * WHO HE MEETS (SPEC §7.6). Strip position 5.
+   *
+   * Unengaged, one button: `Blocks…` for a blocker, `Engages…` for a
+   * defender - disabled when there is nobody left on the other side to pick,
+   * because a pick with no legal answer is a dead end.
+   *
+   * Engaged, the block itself: who it is against, with its menu, and whether
+   * he comes off it. A red `!` in front when the engine says they cannot
+   * actually get there.
+   */
   const selectedEngagement = selected ? engagements.find((x) => x.a === selected.id || x.b === selected.id) ?? null : null
   const selectedDerived = selectedEngagement ? engaged.find((d) => d.id === selectedEngagement.id) ?? null : null
+  const engagedWord = selected?.side === 'offense' ? 'Blocks' : 'Engages'
+  /** The other side, minus anyone already spoken for (SPEC §7.2). */
+  const legalPartners = selected
+    ? players.filter((p) => p.side !== selected.side && !engagements.some((e) => e.a === p.id || e.b === p.id))
+    : []
+  const startPartnerPick = (changing?: string) => {
+    if (!selected) return
+    cancelDrawing()
+    reset()
+    setMenuOpen(null)
+    setSetup({ step: 'pick-partner', forId: selected.id, changing })
+  }
+
   const engageControls = selected ? (
     selectedEngagement ? (
-      <span className="group">
-        <label className="lbl">Engage</label>
-        <span className="engaged-with">
-          ↔ {name(selectedEngagement.a === selected.id ? selectedEngagement.b : selectedEngagement.a)}
-          {selectedEngagement.release && <span className="release-note"> · {name(selectedEngagement.release)} releases</span>}
-        </span>
+      <>
         {selectedDerived?.warning && <span className="warn" title={selectedDerived.warning}>!</span>}
-        {selectedEngagement.release === selected.id ? (
+        <div className="ball-menu">
           <button
-            className="active"
-            title="Stay on the block for the whole play"
-            onClick={() => setEngagements((es) => es.map((x) => (x.id === selectedEngagement.id ? { ...x, release: undefined } : x)))}
+            className={menuOpen === 'block' ? 'active' : ''}
+            onClick={() => toggleMenu('block')}
+            aria-expanded={menuOpen === 'block'}
           >
-            Release ✓
+            {engagedWord} {name(selectedEngagement.a === selected.id ? selectedEngagement.b : selectedEngagement.a)}{' '}
+            <span className="key">▾</span>
           </button>
-        ) : (
-          <button
-            title={`${selected.label} comes off after a moment and carries on with his path`}
-            onClick={() => setEngagements((es) => es.map((x) => (x.id === selectedEngagement.id ? { ...x, release: selected.id } : x)))}
-          >
-            Release
-          </button>
-        )}
-        <button onClick={() => setEngagements((es) => es.filter((x) => x.id !== selectedEngagement.id))}>Remove</button>
-      </span>
+          {menuOpen === 'block' && (
+            <div className="popover play-pop-left block-pop">
+              <button onClick={() => startPartnerPick(selectedEngagement.id)}>
+                {selected.side === 'offense' ? 'Change the defender…' : 'Change who he engages…'}
+              </button>
+              <button
+                onClick={() => {
+                  setMenuOpen(null)
+                  cancelDrawing()
+                  reset()
+                  setSetup({
+                    step: 'pick-engage-point',
+                    forId: selectedEngagement.a,
+                    partnerId: selectedEngagement.b,
+                  })
+                }}
+              >
+                Move the meeting point…
+              </button>
+              <button
+                className="pop-clear"
+                onClick={() => {
+                  setMenuOpen(null)
+                  setEngagements((es) => es.filter((x) => x.id !== selectedEngagement.id))
+                }}
+              >
+                Remove the block
+              </button>
+            </div>
+          )}
+        </div>
+        {/* SPEC §7.5: engage-only is the default. One release per block, so
+            setting it here takes it off the other man. */}
+        <button
+          className={selectedEngagement.release === selected.id ? 'gold-line' : ''}
+          title="Comes off after a moment and continues his own path."
+          onClick={() =>
+            setEngagements((es) =>
+              es.map((x) =>
+                x.id === selectedEngagement.id
+                  ? { ...x, release: x.release === selected.id ? undefined : selected.id }
+                  : x,
+              ),
+            )
+          }
+        >
+          {selectedEngagement.release === selected.id ? 'Releases ✓' : 'Releases'}
+        </button>
+      </>
     ) : (
-      /* SPEC §4.1/§4.2: a blocker blocks, a defender engages. One button,
-         the word a coach would use for the man he has selected. */
       <button
-        onClick={() => {
-          cancelDrawing()
-          reset()
-          setSetup({ step: 'pick-partner', forId: selected.id })
-        }}
+        disabled={legalPartners.length === 0}
+        title={legalPartners.length === 0 ? 'Every defender is already engaged.' : undefined}
+        onClick={() => startPartnerPick()}
       >
-        {selected.side === 'offense' ? 'Blocks…' : 'Engages…'}
+        {engagedWord}…
       </button>
     )
   ) : null
