@@ -92,9 +92,11 @@ type Setup =
 /** Steps that ask for a point on somebody's path. */
 type PathPick = Extract<Setup, { step: 'pick-catch' | 'pick-release' }>
 
+/** SPEC §11.1's words, sentence case (ML-UX-12). Only the labels: the stored
+ *  values and the summary's own "pre-snap" are unchanged. */
 const TIMINGS: { value: Timing; label: string }[] = [
-  { value: 'pre-snap', label: 'Pre-Snap' },
-  { value: 'on-snap', label: 'On Snap' },
+  { value: 'pre-snap', label: 'Pre-snap' },
+  { value: 'on-snap', label: 'On snap' },
   { value: 'delayed', label: 'Delayed' },
 ]
 const SPEEDS: { value: SpeedTier; label: string }[] = [
@@ -2122,7 +2124,7 @@ export function MotionLabEditor({
 
             {/* 4. WHEN. Always present, path or no path. */}
             <span className="group">
-              <label className="lbl">Timing</label>
+              <label className="lbl timing-label">Timing</label>
               <Seg value={selected.timing} options={TIMINGS} onChange={(timing) => updatePlayer(selected.id, { timing })} size="sm" />
               {selected.timing === 'delayed' && (
                 <span className="delay">

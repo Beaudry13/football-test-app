@@ -301,7 +301,7 @@ describe('Present guards: no edits, no authoring keys (§3.3, §10, §16)', () =
     open(play)
     const rb = play.players.find((p) => p.label === 'RB')!
     select(play, rb.id)
-    fireEvent.click(within(strip()!).getByRole('button', { name: 'Pre-Snap' }))
+    fireEvent.click(within(strip()!).getByRole('button', { name: 'Pre-snap' }))
     await settle()
     expect(stored(play).players.find((p) => p.id === rb.id)!.timing).toBe('pre-snap')
 

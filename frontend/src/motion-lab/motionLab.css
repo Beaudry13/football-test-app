@@ -1447,3 +1447,19 @@
 .motion-lab-root .bar.context .hint.hint-flash b {
   color: var(--accent);
 }
+
+/* ---- ML-UX-12: the last two laptop rules (SPEC §14) ---------------------
+ * TIMING's label goes below 1300 px, as VIEW's does; the segment it names
+ * stays, and so does everything it does. And Present at 1280 drops "Motion
+ * Lab" from the brand, which is all §14 asks of Present's top bar.
+ */
+@media (max-width: 1299.98px) {
+  .motion-lab-root .bar .lbl.timing-label {
+    display: none;
+  }
+}
+@media (max-width: 1280px) {
+  .motion-lab-root .app.present .brand span {
+    display: none;
+  }
+}
