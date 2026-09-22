@@ -122,6 +122,22 @@ export function projectOntoPath(pts: Pt[], cum: number[], p: Pt): { pt: Pt; alon
   return best
 }
 
+/**
+ * The same projection, onto the POST-SNAP route only (P3.4).
+ *
+ * A player with pre-snap motion carries one stitched line: motion, then the
+ * route. A catch, a throw or a block is a post-snap event, so it must never
+ * land on where he was before the snap. With no motion this IS
+ * projectOntoPath, exactly.
+ */
+export function projectOntoRoute(s: { pts: Pt[]; cum: number[]; preLength?: number }, p: Pt): { pt: Pt; along: number; gap: number } {
+  if (!s.preLength) return projectOntoPath(s.pts, s.cum, p)
+  let i = 0
+  while (i < s.cum.length - 1 && s.cum[i] < s.preLength - 1e-9) i++
+  const proj = projectOntoPath(s.pts.slice(i), s.cum.slice(i).map((c) => c - s.cum[i]), p)
+  return { ...proj, along: proj.along + s.cum[i] }
+}
+
 interface Transfer {
   kind: 'handoff' | 'fake' | 'flight' | 'pitch'
   time: number
@@ -230,7 +246,7 @@ export function deriveBall(players: Player[], schedule: ScheduleMap, snapAt: num
   const releaseTimeFor = (passerId: string, override: Pt | undefined, earliest: number): number => {
     const sq = schedule.get(passerId)
     if (!sq) return Math.max(earliest, earliest + QUICK_GAME_RELEASE - 0.1)
-    const along = override ? projectOntoPath(sq.pts, sq.cum, override).along : sq.length
+    const along = override ? projectOntoRoute(sq, override).along : sq.length
     return Math.max(earliest, timeAtAlong(sq, along))
   }
 
@@ -251,7 +267,7 @@ export function deriveBall(players: Player[], schedule: ScheduleMap, snapAt: num
     let catchAt: Pt
     let requestedTime: number | null = null
     if (s) {
-      const proj = projectOntoPath(s.pts, s.cum, requested)
+      const proj = projectOntoRoute(s, requested)
       catchAt = proj.pt
       requestedCatch = proj.pt
       // His ACTUAL schedule - including any engagement, wait or release on the way.

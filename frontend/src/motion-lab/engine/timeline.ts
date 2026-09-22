@@ -32,6 +32,14 @@ export interface Schedule {
    * it for the brief contact before a release. `end` includes it.
    */
   hold?: { from: number; until: number }
+  /**
+   * Yards of PRE-SNAP MOTION at the front of `pts`; the post-snap route is
+   * everything after it. Absent for a player with no motion, so every
+   * schedule the prototype built is unchanged. Anything that projects a
+   * post-snap point onto his line - a catch, a throw, a block - must search
+   * from here on, or it can land on where he was before the snap.
+   */
+  preLength?: number
 }
 
 const holdDur = (s: Schedule) => (s.hold ? s.hold.until - s.hold.from : 0)
@@ -57,6 +65,24 @@ export function buildSchedule(players: Player[]): { schedule: ScheduleMap; snapA
   const base = new Map<string, Omit<Schedule, 'start' | 'end'>>()
   let longestPre = 0
   for (const p of players) {
+    // MOTION, THEN THE ROUTE (P3.4). One line, stitched where the snap
+    // catches him, so every renderer and the ball read one schedule. The
+    // motion is pre-snap and finishes AT the snap, exactly like the legacy
+    // pre-snap path below; the route is everything after it.
+    if (p.motion && p.motion.length >= 2) {
+      const pre = renderPath(p.motion)
+      const post = p.path.length >= 2 ? renderPath(p.path) : []
+      const end = pre[pre.length - 1]
+      const joined = post.length && Math.hypot(post[0].x - end.x, post[0].y - end.y) < 1e-6 ? post.slice(1) : post
+      const pts = [...pre, ...joined]
+      const cum = cumulativeLength(pts)
+      const length = cum[cum.length - 1]
+      const preLength = cumulativeLength(pre)[pre.length - 1]
+      const speed = SPEED_YPS[p.speed]
+      base.set(p.id, { pts, cum, length, speed, drawnLength: length, preLength })
+      longestPre = Math.max(longestPre, preLength / speed)
+      continue
+    }
     if (p.path.length < 2) continue
     const pts = renderPath(p.path)
     const cum = cumulativeLength(pts)
@@ -73,6 +99,17 @@ export function buildSchedule(players: Player[]): { schedule: ScheduleMap; snapA
   for (const p of players) {
     const b = base.get(p.id)
     if (!b) continue
+    if (b.preLength !== undefined) {
+      // Motion ends at the snap; a delayed route waits there, which is this
+      // schedule's one pause. (Motion + delay + a block release would need a
+      // second one - the editor does not allow that combination.)
+      const start = snapAt - b.preLength / b.speed
+      const wait = p.timing === 'delayed' && b.length > b.preLength ? Math.max(0, p.delay) : 0
+      const moving = b.length / b.speed
+      schedule.set(p.id, { ...b, start, end: start + moving + wait, ...(wait > 0 ? { hold: { from: snapAt, until: snapAt + wait } } : null) })
+      playersEnd = Math.max(playersEnd, start + moving + wait)
+      continue
+    }
     const dur = b.length / b.speed
     const start = p.timing === 'pre-snap' ? snapAt - dur : p.timing === 'delayed' ? snapAt + Math.max(0, p.delay) : snapAt
     schedule.set(p.id, { ...b, start, end: start + dur })
@@ -98,6 +135,8 @@ export function posAt(schedule: ScheduleMap, p: Player, t: number): Pt {
 export function resolveEnd(p: Player, s: Schedule): EndBehavior {
   if (p.endBehavior) return p.endBehavior
   if (p.timing === 'pre-snap') return 'settle'
+  // Motion and no route yet: he stops where the snap caught him.
+  if (s.preLength !== undefined && s.length - s.preLength < 1e-6) return 'settle'
   return classifyEnd(s.pts, s.cum)
 }
 

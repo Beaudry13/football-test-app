@@ -87,7 +87,8 @@ describe('the laptop rules (SPEC §14)', () => {
     // Only the word goes: the segment is its own element, untouched by the rule.
     const seg = label.parentElement!.querySelector('.seg')!
     expect(seg.matches('.lbl, .timing-label')).toBe(false)
-    expect([...seg.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Pre-snap', 'On snap', 'Delayed'])
+    // P3.4: Timing is when his ROUTE starts; pre-snap movement is its own phase.
+    expect([...seg.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['On snap', 'Delayed'])
   })
 
   it('Present at 1280 drops "Motion Lab" from the brand, and only that', () => {

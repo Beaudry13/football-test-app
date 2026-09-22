@@ -19,7 +19,7 @@ import type { Player } from '../engine/formation'
 import type { Pt } from '../engine/geometry'
 import type { Engagement } from '../engine/interactions'
 import { inferMeetPoint } from './meetPoint'
-import { snapperOf } from './roles'
+import { passerOf, snapperOf } from './roles'
 
 export type MoveGroup = 'formation' | 'offense' | 'defense' | 'line'
 
@@ -121,6 +121,8 @@ function movingPoints(state: Movable, ids: Set<string>): { alignments: Pt[]; res
     // His route travels with him - anchors and all. A route may cross the
     // line of scrimmage, which is why only ALIGNMENTS answer to that rule.
     for (const a of p.path) rest.push(a)
+    // And his pre-snap motion (P3.4): never left behind by a move.
+    for (const a of p.motion ?? []) rest.push(a)
   }
   for (const e of state.engagements) if (bothMove(e, ids)) rest.push(e.point)
   for (const a of [state.ball, state.ballThen]) {
@@ -134,7 +136,9 @@ function movingPoints(state: Movable, ids: Set<string>): { alignments: Pt[]; res
 }
 
 const passerMoves = (state: Movable, ids: Set<string>) => {
-  const passer = state.players.find((p) => p.side === 'offense' && p.role === 'passer')
+  // The shared lookup: the role when the play has one, the prototype's label
+  // while it has not been asked yet - opening a play writes no roles.
+  const passer = passerOf(state.players)
   return !!passer && ids.has(passer.id)
 }
 
@@ -177,7 +181,7 @@ export function clampDelta(state: Movable, ids: Set<string>, group: MoveGroup, d
 export function translate(state: Movable, ids: Set<string>, delta: Pt): Movable {
   const shift = (q: Pt): Pt => ({ x: q.x + delta.x, y: q.y + delta.y })
   const players = state.players.map((p) =>
-    ids.has(p.id) ? { ...p, ...shift(p), path: p.path.map(shift) } : p,
+    ids.has(p.id) ? { ...p, ...shift(p), path: p.path.map(shift), ...(p.motion ? { motion: p.motion.map(shift) } : null) } : p,
   )
   const byId = new Map(players.map((p) => [p.id, p]))
 

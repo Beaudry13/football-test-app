@@ -12,7 +12,7 @@
 
 import type { Player } from './formation'
 import { cumulativeLength, pointAtDistance, type Pt } from './geometry'
-import { projectOntoPath } from './ball'
+import { projectOntoRoute } from './ball'
 import type { Schedule, ScheduleMap } from './timeline'
 
 export interface Engagement {
@@ -92,8 +92,8 @@ function approach(p: Player, s: Schedule | undefined, point: Pt, snapAt: number)
     const dir = gap > 0.1 ? { x: (point.x - p.x) / gap, y: (point.y - p.y) / gap } : { x: 0, y: p.side === 'defense' ? -1 : 1 }
     return { gap, along: 0, arrival: snapAt, dir }
   }
-  const proj = projectOntoPath(s.pts, s.cum, point)
-  const back = pointAtDistance(s.pts, s.cum, Math.max(0, proj.along - 1))
+  const proj = projectOntoRoute(s, point)
+  const back = pointAtDistance(s.pts, s.cum, Math.max(s.preLength ?? 0, proj.along - 1))
   const len = dist(back, point)
   const dir = len > 0.1 ? { x: (point.x - back.x) / len, y: (point.y - back.y) / len } : { x: 0, y: p.side === 'defense' ? -1 : 1 }
   return { gap: proj.gap, along: proj.along, arrival: s.start + proj.along / s.speed, dir }
@@ -186,7 +186,7 @@ export function applyEngagements(
       }
       const depth = (p: Player) => {
         const s = out.get(p.id)
-        const from = s ? pointAtDistance(s.pts, s.cum, Math.max(0, projectOntoPath(s.pts, s.cum, e.point).along - 1)) : { x: p.x, y: p.y }
+        const from = s ? pointAtDistance(s.pts, s.cum, Math.max(s.preLength ?? 0, projectOntoRoute(s, e.point).along - 1)) : { x: p.x, y: p.y }
         return from.x * dir.x + from.y * dir.y
       }
       const endA = endsThere(A, apA)

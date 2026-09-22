@@ -69,7 +69,7 @@ BALL_KINDS = {"keep", "handoff", "pitch", "pass", "play-action"}
 
 PLAY_KEYS = {"players", "ball", "ballThen", "engagements", "situation", "filter"}
 LOOK_KEYS = {"players"}
-PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior", "role"}
+PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior", "role", "motion"}
 BALL_KEYS = {"kind", "carrierId", "targetId", "fakeId", "catchPoint", "releasePoint"}
 ENGAGEMENT_KEYS = {"id", "kind", "a", "b", "point", "release", "auto"}
 SITUATION_KEYS = {"losYard", "hash", "down", "distance", "show"}
@@ -147,14 +147,21 @@ def _players(value, path: str):
             _string(player["side"], f"{p}.side", choices=SIDES)
         if "label" in player:
             _string(player["label"], f"{p}.label", max_length=MAX_LABEL_LENGTH)
-        if "path" in player:
-            path_value = player["path"]
-            if not isinstance(path_value, list):
-                _fail(f"{p}.path", "must be a list")
-            if len(path_value) > MAX_PATH_ANCHORS:
-                _fail(f"{p}.path", f"at most {MAX_PATH_ANCHORS} anchors")
-            for j, anchor in enumerate(path_value):
-                _point(anchor, f"{p}.path[{j}]")
+        anchors = 0
+        # `path` and, since P3.4, `motion` (pre-snap movement; the path is the
+        # route after the snap). Same shape, same checks - and ONE anchor
+        # budget between them, so splitting a line in two buys no headroom.
+        for key in ("path", "motion"):
+            if key not in player:
+                continue
+            line = player[key]
+            if not isinstance(line, list):
+                _fail(f"{p}.{key}", "must be a list")
+            for j, anchor in enumerate(line):
+                _point(anchor, f"{p}.{key}[{j}]")
+            anchors += len(line)
+            if anchors > MAX_PATH_ANCHORS:
+                _fail(f"{p}.{key}", f"at most {MAX_PATH_ANCHORS} anchors across path and motion")
         if "timing" in player:
             _string(player["timing"], f"{p}.timing", choices=TIMINGS)
         if "delay" in player:

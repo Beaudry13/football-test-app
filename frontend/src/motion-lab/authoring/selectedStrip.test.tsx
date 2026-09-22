@@ -212,7 +212,9 @@ describe('Timing', () => {
     await settle()
     const before = stored(play).players.find((p) => p.id === man.id)!.path
 
-    fireEvent.click(stripBtn('Pre-snap'))
+    fireEvent.click(stripBtn('Delayed'))
+    await settle()
+    fireEvent.click(stripBtn('On snap'))
     await settle()
 
     expect(stored(play).players.find((p) => p.id === man.id)!.path).toEqual(before)

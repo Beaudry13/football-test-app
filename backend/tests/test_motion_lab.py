@@ -817,3 +817,114 @@ class TestOlderTabCannotStripRoles:
         )
         assert response.status_code == 409
         assert response.get_json()["reason"] == "schema_outdated"
+
+
+# ---------------------------------------------------------------------------
+# P3.4 - pre-snap motion: stored, checked, and never stripped by an old tab
+# ---------------------------------------------------------------------------
+
+JET = [{"x": 23.0, "y": -1.0}, {"x": 15.0, "y": -1.0}]
+
+
+def with_motion(document, player_id="O9", side_index=None):
+    """The same play with one man given pre-snap motion (and his route moved to start where it ends)."""
+    players = []
+    for p in document["players"]:
+        if p["id"] == player_id:
+            start = {"x": p["x"], "y": p["y"]}
+            p = {**p, "motion": [start, JET[1]], "path": [JET[1], {"x": 10.0, "y": 8.0}]}
+        players.append(p)
+    return {**document, "players": players}
+
+
+class TestMotion:
+    def post(self, client, owner, document, schema_version=2):
+        body = {"name": "x", "document": document, "schema_version": schema_version}
+        return client.post("/api/motion-lab/plays", json=body, headers=owner["headers"])
+
+    def test_a_play_with_motion_is_stored_as_written(self, client, owner):
+        document = with_motion(with_roles(play_document()))
+        response = self.post(client, owner, document)
+        assert response.status_code == 201, response.get_json()
+        stored = {p["id"]: p for p in response.get_json()["document"]["players"]}
+        assert stored["O9"]["motion"] == document["players"][9]["motion"]
+        assert stored["O9"]["path"][0] == JET[1]
+
+    def test_defense_may_motion_too(self, client, owner):
+        document = play_document()
+        document["players"] = [
+            {**p, "motion": [{"x": p["x"], "y": p["y"]}, {"x": p["x"] + 3, "y": p["y"]}]} if p["id"] == "D4" else p
+            for p in document["players"]
+        ]
+        assert self.post(client, owner, document).status_code == 201
+
+    def test_a_one_point_motion_is_accepted_and_left_for_the_loader(self, client, owner):
+        # Same rule as `path`: the SHAPE is checked here, and the frontend's
+        # loader reads fewer than two points as no motion at all.
+        document = play_document()
+        document["players"][9] = {**document["players"][9], "motion": [{"x": 1.0, "y": 1.0}]}
+        assert self.post(client, owner, document).status_code == 201
+
+    @pytest.mark.parametrize(
+        "motion, fragment",
+        [
+            ("everywhere", "motion: must be a list"),
+            ([{"x": 1}], "motion[0]: missing field(s) y"),
+            ([{"x": 1, "y": "far"}], "motion[0].y: must be a number"),
+            ([{"x": 99999, "y": 1}], "motion[0].x: must be between"),
+        ],
+    )
+    def test_a_malformed_motion_is_refused(self, client, owner, motion, fragment):
+        document = play_document()
+        document["players"][9] = {**document["players"][9], "motion": motion}
+        response = self.post(client, owner, document)
+        assert response.status_code == 422
+        assert fragment in json.dumps(response.get_json())
+
+    def test_path_and_motion_share_one_anchor_budget(self, client, owner):
+        half = MAX_PATH_ANCHORS // 2 + 1
+        document = play_document()
+        document["players"][9] = {
+            **document["players"][9],
+            "motion": [{"x": 1.0, "y": 1.0}] * half,
+            "path": [{"x": 1.0, "y": 1.0}] * half,
+        }
+        response = self.post(client, owner, document)
+        assert response.status_code == 422
+        assert "across path and motion" in json.dumps(response.get_json())
+
+
+class TestOlderTabCannotStripMotion:
+    """The P3.1 refusal covers motion too, because it keys on the version.
+
+    A tab left open on the release before P3 rebuilds each player field by
+    field - it has never heard of `role` or `motion` - so its next autosave
+    would write both away. It sends the version its model writes (1), and the
+    stored play is version 2, so the save is refused and nothing is lost.
+    """
+
+    def stored(self, client, owner):
+        return client.post(
+            "/api/motion-lab/plays",
+            json={"name": "Jet", "document": with_motion(with_roles(play_document())), "schema_version": 2},
+            headers=owner["headers"],
+        ).get_json()
+
+    def test_the_old_tab_is_refused(self, client, owner):
+        play = self.stored(client, owner)
+        stripped = play_document()  # what the old tab's model sends back: no role, no motion
+        response = save_play(client, owner["headers"], play, document=stripped, schema_version=1)
+        assert response.status_code == 409
+        assert response.get_json()["reason"] == "schema_outdated"
+        assert "Reload" in response.get_json()["error"]
+
+    def test_role_motion_and_revision_all_survive(self, client, owner):
+        play = self.stored(client, owner)
+        save_play(client, owner["headers"], play, document=play_document(), schema_version=1)
+
+        after = client.get(f"/api/motion-lab/plays/{play['id']}", headers=owner["headers"]).get_json()
+        by_id = {p["id"]: p for p in after["document"]["players"]}
+        assert after["revision"] == play["revision"]
+        assert by_id["O9"]["motion"] == with_motion(play_document())["players"][9]["motion"]
+        assert by_id["O6"]["role"] == "passer"
+        assert by_id["O2"]["role"] == "snapper"

@@ -17,7 +17,7 @@ import { FieldMarkings } from './FieldMarkings'
 import { VIEWBOX, U, Y_MAX, toView } from '../engine/field'
 import { roleHolder, type Player } from '../engine/formation'
 import type { Pt } from '../engine/geometry'
-import { posAt, type ScheduleMap } from '../engine/timeline'
+import { posAt, type Schedule, type ScheduleMap } from '../engine/timeline'
 import { isPass, type BallAction, type BallTimeline } from '../engine/ball'
 import { orientationAt, type OrientationMap } from '../engine/orientation'
 import type { DerivedEngagement, Engagement } from '../engine/interactions'
@@ -131,6 +131,17 @@ export interface OverheadBoardProps {
   showRouteHandle?: boolean
   /** A route being drawn right now. */
   draft?: Pt[] | null
+  /** The draft is PRE-SNAP MOTION: drawn in the motion's dotted language. */
+  draftIsMotion?: boolean
+  /**
+   * Which of the selected man's two lines the editor is pointed at (P3.4).
+   * 'motion' shows his motion's anchors and puts the handle on him; 'path'
+   * (the default, and all a man without motion ever has) shows his route's
+   * anchors - and, when he has motion, puts the handle where the motion ends.
+   */
+  phaseLine?: 'motion' | 'path'
+  /** While adjusting one phase, the other line of the selected man steps back. */
+  dimOtherPhase?: boolean
   /** An in-progress telestration mark. */
   teleDraft?: Pt[] | null
   /** Where a catch/release pick would land under the pointer. */
@@ -172,6 +183,9 @@ export function OverheadBoard({
   editingPath = false,
   showRouteHandle = false,
   draft = null,
+  draftIsMotion = false,
+  phaseLine = 'path',
+  dimOtherPhase = false,
   teleDraft = null,
   hoverCatch = null,
   catchTargetId = null,
@@ -184,6 +198,50 @@ export function OverheadBoard({
   // The passer by role, the same lookup the engine uses (formation.roleHolder).
   const qbId = roleHolder(players, 'passer', 'QB')?.id
   const selected = players.find((p) => p.id === selectedId) ?? null
+
+  /**
+   * A man WITH MOTION carries one stitched line: motion, then route. Split
+   * it where the snap catches him - `preLength` yards in - so the two phases
+   * can be drawn in their own language. A man without motion never reaches
+   * this: his line is drawn exactly as it always was.
+   */
+  const phases = (s: Schedule) => {
+    const pre = s.preLength ?? 0
+    let i = 0
+    while (i < s.cum.length - 1 && s.cum[i] < pre - 1e-9) i++
+    const motionPts = s.pts.slice(0, i + 1)
+    const routePts = s.pts.slice(i)
+    const join = s.pts[i]
+    const back = motionPts.length >= 2 ? motionPts[motionPts.length - 2] : join
+    return { motionPts, routePts, join, back }
+  }
+
+  /**
+   * THE SNAP BAR: a short bar across his line where the snap catches him, in
+   * his own side colour. A bar and not a dot, so it can never be read as an
+   * anchor (ring), the catch (gold ring) or the throw point (blue diamond).
+   */
+  const SnapBar = ({ join, back, side }: { join: Pt; back: Pt; side: Player['side'] }) => {
+    const a = toView(back)
+    const b = toView(join)
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    const nx = -(b.y - a.y) / len
+    const ny = (b.x - a.x) / len
+    const h = 6
+    return (
+      <line
+        data-snap-bar
+        x1={b.x - nx * h}
+        y1={b.y - ny * h}
+        x2={b.x + nx * h}
+        y2={b.y + ny * h}
+        stroke={side === 'offense' ? 'var(--offense)' : 'var(--defense)'}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        pointerEvents="none"
+      />
+    )
+  }
   const qbHasPath = !!qbId && schedule.has(qbId)
   const hasReleaseOverride = isPass(ball) && !!ball.releasePoint
   const adjustedKey = ballTimeline.catchAdjusted ? `${ballTimeline.catchPoint!.x.toFixed(1)},${ballTimeline.catchPoint!.y.toFixed(1)}` : ''
@@ -230,7 +288,22 @@ export function OverheadBoard({
               />
             ))}
           {players
-            .filter((p) => p.id !== selectedId && p.id !== catchTargetId && schedule.has(p.id) && pathVisible(p))
+            .filter((p) => p.id !== selectedId && p.id !== catchTargetId && schedule.has(p.id) && pathVisible(p) && drawnSchedule.get(p.id)!.preLength !== undefined)
+            .map((p) => {
+              const { motionPts, routePts, join, back } = phases(drawnSchedule.get(p.id)!)
+              const colour = p.side === 'offense' ? 'rgba(242,242,238,0.75)' : 'rgba(226,87,58,0.85)'
+              return (
+                <g key={`phases-${p.id}`} opacity={catchTargetId ? 0.25 : 1}>
+                  <polyline data-motion-line={p.id} points={pointsAttr(motionPts)} fill="none" stroke={colour} strokeWidth={3} strokeDasharray="2 7" strokeLinecap="round" strokeLinejoin="round" />
+                  {routePts.length >= 2 && (
+                    <polyline data-route-line={p.id} points={pointsAttr(routePts)} fill="none" stroke={colour} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" markerEnd="url(#arrow)" />
+                  )}
+                  <SnapBar join={join} back={back} side={p.side} />
+                </g>
+              )
+            })}
+          {players
+            .filter((p) => p.id !== selectedId && p.id !== catchTargetId && schedule.has(p.id) && pathVisible(p) && drawnSchedule.get(p.id)!.preLength === undefined)
             .map((p) => (
               <polyline
                 key={`path-${p.id}`}
@@ -245,7 +318,24 @@ export function OverheadBoard({
                 opacity={catchTargetId ? 0.25 : 1}
               />
             ))}
-          {(catchTargetId ?? selectedId) && schedule.has(catchTargetId ?? selectedId!) && (
+          {(catchTargetId ?? selectedId) && schedule.has(catchTargetId ?? selectedId!) && drawnSchedule.get(catchTargetId ?? selectedId!)!.preLength !== undefined && (() => {
+            const id = catchTargetId ?? selectedId!
+            const man = players.find((p) => p.id === id)!
+            const { motionPts, routePts, join, back } = phases(drawnSchedule.get(id)!)
+            // While he is being adjusted, the line NOT being edited steps back.
+            const motionOpacity = dimOtherPhase && phaseLine !== 'motion' ? 0.45 : 1
+            const routeOpacity = dimOtherPhase && phaseLine === 'motion' ? 0.45 : 1
+            return (
+              <g>
+                <polyline data-motion-line={id} points={pointsAttr(motionPts)} fill="none" stroke="var(--accent)" strokeWidth={4.5} strokeDasharray="2 8" strokeLinecap="round" strokeLinejoin="round" opacity={motionOpacity} />
+                {routePts.length >= 2 && (
+                  <polyline data-route-line={id} points={pointsAttr(routePts)} fill="none" stroke="var(--accent)" strokeWidth={4.5} strokeLinecap="round" strokeLinejoin="round" markerEnd="url(#arrow)" opacity={routeOpacity} />
+                )}
+                <SnapBar join={join} back={back} side={man.side} />
+              </g>
+            )
+          })()}
+          {(catchTargetId ?? selectedId) && schedule.has(catchTargetId ?? selectedId!) && drawnSchedule.get(catchTargetId ?? selectedId!)!.preLength === undefined && (
             <polyline
               points={pointsAttr(drawnSchedule.get(catchTargetId ?? selectedId!)!.pts)}
               fill="none"
@@ -258,7 +348,7 @@ export function OverheadBoard({
             />
           )}
           {draft && (
-            <polyline points={pointsAttr(draft)} fill="none" stroke="var(--accent)" strokeWidth={4} strokeDasharray="8 6" strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
+            <polyline points={pointsAttr(draft)} fill="none" stroke="var(--accent)" strokeWidth={4} strokeDasharray={draftIsMotion ? '2 7' : '8 6'} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
           )}
 
           {/* Where the coach asked for the catch, when the ball ends up elsewhere */}
@@ -320,10 +410,23 @@ export function OverheadBoard({
                     {p.label}
                   </text>
                 )}
-                {isSel && showRouteHandle && !present && <RouteHandle id={p.id} y={positionAt(p, time).y} />}
+                {isSel && showRouteHandle && !present && !(p.motion && phaseLine === 'path') && <RouteHandle id={p.id} y={positionAt(p, time).y} />}
               </g>
             )
           })}
+
+          {/* HIS ROUTE STARTS WHERE HIS MOTION ENDS (P3.4): in the route phase
+              the handle sits on the snap bar, so a drag from it draws the
+              route from where the snap catches him. */}
+          {selected?.motion && phaseLine === 'path' && showRouteHandle && !present && (() => {
+            const end = selected.motion[selected.motion.length - 1]
+            const v = toView(end)
+            return (
+              <g transform={`translate(${v.x} ${v.y})`}>
+                <RouteHandle id={selected.id} y={end.y} />
+              </g>
+            )
+          })()}
 
           {/* Football — drawn above the players so it never hides under a marker */}
           <g data-ball data-phase={ballFrame.phase} transform={`translate(${ballV.x} ${ballV.y})`} pointerEvents="none">
@@ -389,7 +492,7 @@ export function OverheadBoard({
           {!present &&
             editingPath &&
             selected &&
-            selected.path.slice(1).map((a, i) => {
+            (phaseLine === 'motion' && selected.motion ? selected.motion : selected.path).slice(1).map((a, i) => {
               const v = toView(a)
               return (
                 <g key={`anchor-${i + 1}`} data-anchor={i + 1} className="anchor" transform={`translate(${v.x} ${v.y})`}>

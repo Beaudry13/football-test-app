@@ -350,3 +350,25 @@ describe('the library the editor sees', () => {
     expect(server.looks.size).toBe(0)
   })
 })
+
+describe('a save refused because a newer Motion Lab wrote the play (P3.1 / P3.4)', () => {
+  it('stops sending, says so, and never retries into the refusal', async () => {
+    const session = start()
+    const play = gapPlays()[0]
+    session.repository.savePlay(play)
+    await settle()
+
+    // What the server answers a tab older than the stored document.
+    server.failNextWith(new ApiError('This play was saved by a newer Motion Lab (v2); this tab writes v1. Reload before editing.', 409, undefined, 'schema_outdated'))
+    session.repository.savePlay(renamed(play, 'Old tab edit'))
+    await settle()
+
+    // Honest: it stops and asks, exactly as for any 409 - no silent retry
+    // loop, and nothing written over the newer play.
+    expect(session.stateOf(play.id).state).toBe('conflict')
+    const saves = server.calls.filter((c) => c.kind === 'save').length
+    session.repository.savePlay(renamed(play, 'Old tab edit, again'))
+    await settle()
+    expect(server.calls.filter((c) => c.kind === 'save')).toHaveLength(saves)
+  })
+})

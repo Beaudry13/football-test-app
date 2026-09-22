@@ -301,16 +301,17 @@ describe('Present guards: no edits, no authoring keys (§3.3, §10, §16)', () =
     open(play)
     const rb = play.players.find((p) => p.label === 'RB')!
     select(play, rb.id)
-    fireEvent.click(within(strip()!).getByRole('button', { name: 'Pre-snap' }))
+    // Any real edit will do; Timing is post-snap only since P3.4.
+    fireEvent.click(within(strip()!).getByRole('button', { name: 'Delayed' }))
     await settle()
-    expect(stored(play).players.find((p) => p.id === rb.id)!.timing).toBe('pre-snap')
+    expect(stored(play).players.find((p) => p.id === rb.id)!.timing).toBe('delayed')
 
     fireEvent.click(btn('Present'))
     key('z', { ctrlKey: true })
     key('z', { ctrlKey: true, shiftKey: true })
     key('y', { ctrlKey: true })
     await settle()
-    expect(stored(play).players.find((p) => p.id === rb.id)!.timing).toBe('pre-snap')
+    expect(stored(play).players.find((p) => p.id === rb.id)!.timing).toBe('delayed')
 
     fireEvent.click(btn('Exit Present'))
     key('z', { ctrlKey: true })

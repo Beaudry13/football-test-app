@@ -133,7 +133,13 @@ function sanitizePlayer(raw: unknown): Player | null {
   // would be a change to every one of those documents. Defence carries no
   // role - nothing reads its labels.
   const role = side === 'offense' && (r.role === 'passer' || r.role === 'snapper') ? { role: r.role as PlayerRole } : null
-  return { id: r.id, side, label, x: r.x, y: r.y, path: path.length >= 2 ? path : [], timing, delay: isNum(r.delay) ? r.delay : 0.5, speed, endBehavior, ...role }
+  // MOTION: absent stays absent, and so does anything too short to be one.
+  // With motion his path is the POST-snap route, so a stray 'pre-snap'
+  // timing on the same man can only mean on-snap.
+  const motionPts = Array.isArray(r.motion) ? (r.motion.filter(isPt) as Player['path']) : []
+  const motion = motionPts.length >= 2 ? { motion: motionPts } : null
+  const phased = motion && timing === 'pre-snap' ? 'on-snap' : timing
+  return { id: r.id, side, label, x: r.x, y: r.y, path: path.length >= 2 ? path : [], timing: phased, delay: isNum(r.delay) ? r.delay : 0.5, speed, endBehavior, ...role, ...motion }
 }
 
 /** A ball action is kept only if every player it names still exists. */

@@ -83,6 +83,13 @@ export interface Player {
    * then reads labels exactly as the prototype did.
    */
   role?: PlayerRole
+  /**
+   * PRE-SNAP MOTION, in field yards: from his alignment to where he is at the
+   * snap. `path` is then the POST-SNAP route, and it starts where this ends.
+   * Optional, and absent means this player has no motion - he runs exactly
+   * as the prototype ran him, including a legacy `timing: 'pre-snap'` path.
+   */
+  motion?: Pt[]
 }
 
 const MID = 53.33 / 2

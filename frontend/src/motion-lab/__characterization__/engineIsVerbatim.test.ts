@@ -28,13 +28,29 @@ const VIEW = resolve(here, '../view')
 // Line endings are a checkout setting (core.autocrlf), not source.
 const read = (path: string) => readFileSync(path, 'utf-8').replace(/\r\n/g, '\n')
 
-/** Four of the nine, still byte-for-byte the prototype's. */
-const VERBATIM_FILES = ['field', 'geometry', 'timeline', 'perspective']
+/** Three of the nine, still byte-for-byte the prototype's. */
+const VERBATIM_FILES = ['field', 'geometry', 'perspective']
 /** All nine. Listed, not derived: a file must never leave this list by being
  *  taken off the verbatim one. */
 const ALL_ENGINE_FILES = ['field', 'geometry', 'formation', 'timeline', 'ball', 'orientation', 'perspective', 'interactions', 'play']
 
 /**
+ * APPROVED DIVERGENCE 3 (P3.4, owner decision, 22 September 2026): MOTION.
+ *
+ * A player may have PRE-SNAP MOTION and a separate POST-SNAP route. The
+ * prototype had one path per man, so "jet motion, then a wheel" could not be
+ * said. `motion` is optional: the schedule stitches it in front of the route
+ * (it ends at the snap, the route starts where it ends) and records how much
+ * of the line is motion as `preLength`. Everything that projects a post-snap
+ * point onto a man's line - the catch, the throw point, a block and its
+ * release direction - now searches from `preLength` on, so none of them can
+ * land on where he was before the snap.
+ *
+ * WHAT KEEPS THIS SAFE: a man with no motion takes the prototype's branch,
+ * unchanged, and `projectOntoRoute` with no `preLength` IS `projectOntoPath`.
+ * No fixture here has motion, so the goldens and the engine-against-prototype
+ * comparison below prove the old behaviour on real plays.
+ *
  * APPROVED DIVERGENCE 2 (P3.1, owner decision, 22 September 2026): ROLES.
  *
  * The prototype found the two men the engine must know - who throws it, who
@@ -76,6 +92,7 @@ const APPROVED_DIVERGENCE = [
       /^\s*return undefined$/,
       /^\s*return players\.find\(\(p\) => p\.side === 'offense' && p\.label === legacyLabel\)$/,
       /^\s*role\?: PlayerRole$/,
+      /^\s*motion\?: Pt\[\]$/,
       /^\s*\}$/,
       /^\s*(\/\*\*.*|\*\/|\*(\s.*)?|\/\/.*)$/,
     ],
@@ -88,9 +105,21 @@ const APPROVED_DIVERGENCE = [
       /^import \{ roleHolder, type Player \} from '\.\/formation'$/,
       /^\s*const center = roleHolder\(players, 'snapper', 'C'\)$/,
       /^\s*const qb = roleHolder\(players, 'passer', 'QB'\)$/,
+      // P3.4: the same projection, onto the post-snap route only.
+      /^export function projectOntoRoute\(s: \{ pts: Pt\[\]; cum: number\[\]; preLength\?: number \}, p: Pt\): \{ pt: Pt; along: number; gap: number \} \{$/,
+      /^\s*if \(!s\.preLength\) return projectOntoPath\(s\.pts, s\.cum, p\)$/,
+      /^\s*let i = 0$/,
+      /^\s*while \(i < s\.cum\.length - 1 && s\.cum\[i\] < s\.preLength - 1e-9\) i\+\+$/,
+      /^\s*const proj = projectOntoPath\(s\.pts\.slice\(i\), s\.cum\.slice\(i\)\.map\(\(c\) => c - s\.cum\[i\]\), p\)$/,
+      /^\s*return \{ \.\.\.proj, along: proj\.along \+ s\.cum\[i\] \}$/,
+      /^\s*\}$/,
+      /^\s*const along = override \? projectOntoRoute\(sq, override\)\.along : sq\.length$/,
+      /^\s*const proj = projectOntoRoute\(s, requested\)$/,
       /^\s*(\/\*\*.*|\*\/|\*(\s.*)?|\/\/.*)$/,
     ],
     removed: [
+      /^\s*const along = override \? projectOntoPath\(sq\.pts, sq\.cum, override\)\.along : sq\.length$/,
+      /^\s*const proj = projectOntoPath\(s\.pts, s\.cum, requested\)$/,
       /^import type \{ Player \} from '\.\/formation'$/,
       /^\s*const center = players\.find\(\(p\) => p\.side === 'offense' && p\.label === 'C'\)$/,
       /^\s*const qb = players\.find\(\(p\) => p\.side === 'offense' && p\.label === 'QB'\)$/,
@@ -117,11 +146,55 @@ const APPROVED_DIVERGENCE = [
     ],
   },
   {
-    file: 'interactions',
-    // The field, and the comment block that explains it.
-    added: [/^\s*auto\?: boolean$/, /^\s*(\/\*\*|\*\/|\*(\s.*)?)$/],
-    // Purely additive: the prototype's type is untouched.
+    file: 'timeline',
+    // The motion branch, the delay held at the snap, and a motion-only man
+    // settling. Purely additive: the prototype's own branch runs untouched
+    // for every man without motion.
+    added: [
+      /^\s*preLength\?: number$/,
+      /^\s*if \(p\.motion && p\.motion\.length >= 2\) \{$/,
+      /^\s*const pre = renderPath\(p\.motion\)$/,
+      /^\s*const post = p\.path\.length >= 2 \? renderPath\(p\.path\) : \[\]$/,
+      /^\s*const end = pre\[pre\.length - 1\]$/,
+      /^\s*const joined = post\.length && Math\.hypot\(post\[0\]\.x - end\.x, post\[0\]\.y - end\.y\) < 1e-6 \? post\.slice\(1\) : post$/,
+      /^\s*const pts = \[\.\.\.pre, \.\.\.joined\]$/,
+      /^\s*const cum = cumulativeLength\(pts\)$/,
+      /^\s*const length = cum\[cum\.length - 1\]$/,
+      /^\s*const preLength = cumulativeLength\(pre\)\[pre\.length - 1\]$/,
+      /^\s*const speed = SPEED_YPS\[p\.speed\]$/,
+      /^\s*base\.set\(p\.id, \{ pts, cum, length, speed, drawnLength: length, preLength \}\)$/,
+      /^\s*longestPre = Math\.max\(longestPre, preLength \/ speed\)$/,
+      /^\s*continue$/,
+      /^\s*\}$/,
+      /^\s*if \(b\.preLength !== undefined\) \{$/,
+      /^\s*const start = snapAt - b\.preLength \/ b\.speed$/,
+      /^\s*const wait = p\.timing === 'delayed' && b\.length > b\.preLength \? Math\.max\(0, p\.delay\) : 0$/,
+      /^\s*const moving = b\.length \/ b\.speed$/,
+      /^\s*schedule\.set\(p\.id, \{ \.\.\.b, start, end: start \+ moving \+ wait, \.\.\.\(wait > 0 \? \{ hold: \{ from: snapAt, until: snapAt \+ wait \} \} : null\) \}\)$/,
+      /^\s*playersEnd = Math\.max\(playersEnd, start \+ moving \+ wait\)$/,
+      /^\s*if \(s\.preLength !== undefined && s\.length - s\.preLength < 1e-6\) return 'settle'$/,
+      /^\s*(\/\*\*.*|\*\/|\*(\s.*)?|\/\/.*)$/,
+    ],
     removed: [],
+  },
+  {
+    file: 'interactions',
+    // Divergence 1: the auto field and its comment. Divergence 3: the block
+    // point and the release direction project onto the post-snap route only.
+    added: [
+      /^\s*auto\?: boolean$/,
+      /^import \{ projectOntoRoute \} from '\.\/ball'$/,
+      /^\s*const proj = projectOntoRoute\(s, point\)$/,
+      /^\s*const back = pointAtDistance\(s\.pts, s\.cum, Math\.max\(s\.preLength \?\? 0, proj\.along - 1\)\)$/,
+      /^\s*const from = s \? pointAtDistance\(s\.pts, s\.cum, Math\.max\(s\.preLength \?\? 0, projectOntoRoute\(s, e\.point\)\.along - 1\)\) : \{ x: p\.x, y: p\.y \}$/,
+      /^\s*(\/\*\*.*|\*\/|\*(\s.*)?|\/\/.*)$/,
+    ],
+    removed: [
+      /^import \{ projectOntoPath \} from '\.\/ball'$/,
+      /^\s*const proj = projectOntoPath\(s\.pts, s\.cum, point\)$/,
+      /^\s*const back = pointAtDistance\(s\.pts, s\.cum, Math\.max\(0, proj\.along - 1\)\)$/,
+      /^\s*const from = s \? pointAtDistance\(s\.pts, s\.cum, Math\.max\(0, projectOntoPath\(s\.pts, s\.cum, e\.point\)\.along - 1\)\) : \{ x: p\.x, y: p\.y \}$/,
+    ],
   },
   {
     file: 'play',
@@ -135,7 +208,10 @@ const APPROVED_DIVERGENCE = [
       /^export const SCHEMA_VERSION = 2$/,
       /^import \{ initialPlayers, type Player, type PlayerRole \} from '\.\/formation'$/,
       /^\s*const role = side === 'offense' && \(r\.role === 'passer' \|\| r\.role === 'snapper'\) \? \{ role: r\.role as PlayerRole \} : null$/,
-      /^\s*return \{ id: r\.id, side, label, .*, endBehavior, \.\.\.role \}$/,
+      /^\s*return \{ id: r\.id, side, label, .*, timing: phased, .*, endBehavior, \.\.\.role, \.\.\.motion \}$/,
+      /^\s*const motionPts = Array\.isArray\(r\.motion\) \? \(r\.motion\.filter\(isPt\) as Player\['path'\]\) : \[\]$/,
+      /^\s*const motion = motionPts\.length >= 2 \? \{ motion: motionPts \} : null$/,
+      /^\s*const phased = motion && timing === 'pre-snap' \? 'on-snap' : timing$/,
       /^\s*const taken = new Set<string>\(\)$/,
       /^\s*const withRoles = unique\.map\(\(p\) => \{$/,
       /^\s*if \(!p\.role\) return p$/,
@@ -183,7 +259,7 @@ describe('engine source', () => {
   })
 
   it('exactly the approved files diverge, and no others', () => {
-    expect(ALL_ENGINE_FILES.filter(diverges).sort()).toEqual(['ball', 'formation', 'interactions', 'orientation', 'play'])
+    expect(ALL_ENGINE_FILES.filter(diverges).sort()).toEqual(['ball', 'formation', 'interactions', 'orientation', 'play', 'timeline'])
   })
 
   it.each(APPROVED_DIVERGENCE)('$file.ts differs only by what was approved', ({ file, added, removed }) => {
@@ -217,7 +293,7 @@ describe('engine source', () => {
       formation: [/p\.role === role/, /p\.side === 'offense' && p\.role/, /^\s*role\?: PlayerRole$/, /^export type PlayerRole = /, /^export function roleHolder\(/],
       ball: [/roleHolder\(players, '(passer|snapper)', '(QB|C)'\)/],
       orientation: [/roleHolder\(players, 'passer', 'QB'\)/],
-      play: [/r\.role/, /p\.role/, /const \{ role: _dropped/, /taken\.(has|add)\(p\.role\)/, /endBehavior, \.\.\.role \}$/],
+      play: [/r\.role/, /p\.role/, /const \{ role: _dropped/, /taken\.(has|add)\(p\.role\)/, /endBehavior, \.\.\.role, \.\.\.motion \}$/],
     }
     for (const name of ALL_ENGINE_FILES) {
       const lines = read(resolve(ENGINE, `${name}.ts`))
@@ -227,6 +303,28 @@ describe('engine source', () => {
         expect(
           (allowed[name] ?? []).some((re) => re.test(line)),
           `${name}.ts reads a role outside the approved contract:\n  ${line}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('the engine reads motion in the schedule and the loader, nowhere else', () => {
+    // Everything downstream reads the stitched SCHEDULE (and its preLength),
+    // never p.motion itself - so the ball, blocks and orientation cannot each
+    // grow their own idea of what motion means.
+    const allowed: Record<string, RegExp[]> = {
+      formation: [/^\s*motion\?: Pt\[\]$/],
+      timeline: [/p\.motion/],
+      play: [/r\.motion/, /const motion = motionPts/, /const phased = motion/, /\.\.\.motion \}$/],
+    }
+    for (const name of ALL_ENGINE_FILES) {
+      const lines = read(resolve(ENGINE, `${name}.ts`))
+        .split('\n')
+        .filter((l) => /\bmotion\b/.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l))
+      for (const line of lines) {
+        expect(
+          (allowed[name] ?? []).some((re) => re.test(line)),
+          `${name}.ts reads motion outside the approved contract:\n  ${line}`,
         ).toBe(true)
       }
     }
