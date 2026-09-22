@@ -276,11 +276,11 @@ describe('the player himself', () => {
     expect(manIn(play, man.id).label).toBe('WIDE')
   })
 
-  it('Remove takes him with no questions, and says so', async () => {
+  it('Delete player takes him with no questions, and says so', async () => {
     const man = withPath(play)
     openMore(play, man.id)
 
-    fireEvent.click(item('Remove from play'))
+    fireEvent.click(item('Delete player'))
     await settle()
 
     expect(stored(play).players.find((p) => p.id === man.id)).toBeUndefined()
@@ -288,10 +288,10 @@ describe('the player himself', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull()
   })
 
-  it('removing him can be undone', async () => {
+  it('deleting him can be undone', async () => {
     const man = withPath(play)
     openMore(play, man.id)
-    fireEvent.click(item('Remove from play'))
+    fireEvent.click(item('Delete player'))
     await settle()
     expect(stored(play).players.find((p) => p.id === man.id)).toBeUndefined()
 
@@ -301,12 +301,12 @@ describe('the player himself', () => {
     expect(stored(play).players.find((p) => p.id === man.id)).toBeDefined()
   })
 
-  it('removing an engaged man takes his engagement with him', async () => {
+  it('deleting an engaged man takes his engagement with him', async () => {
     const blocker = play.engagements.length ? play.players.find((p) => p.id === play.engagements[0].a)! : null
     if (!blocker) return
     openMore(play, blocker.id)
 
-    fireEvent.click(item('Remove from play'))
+    fireEvent.click(item('Delete player'))
     await settle()
 
     expect(stored(play).engagements.some((e) => e.a === blocker.id || e.b === blocker.id)).toBe(false)
@@ -321,5 +321,177 @@ describe('what is deliberately NOT in More', () => {
     expect(text).not.toContain('Blocks')
     expect(text).not.toContain('Then')
     expect(maybeItem(/Adjust/)).toBeNull()
+  })
+})
+
+describe('deleting a player, with roles in place (P3.2)', () => {
+  /**
+   * A man's id carries every reference to him, so removal has always cleaned
+   * those up. Two men are different because the ENGINE needs them: the passer
+   * (nothing names him - the ball simply assumes him) and the snapper (whose
+   * feet are the snap spot). Deleting the passer therefore takes the ball
+   * action with him, and deleting the snapper is refused until somebody else
+   * has the job - otherwise the snap silently moves to midfield.
+   *
+   * ROLE, NEVER LABEL: a man called QB who is not the passer deletes like
+   * anybody else.
+   */
+  const named = (label: string, side: 'offense' | 'defense' = 'offense') =>
+    play.players.find((p) => p.label === label && p.side === side)!
+  const del = async () => {
+    fireEvent.click(item('Delete player'))
+    await settle()
+  }
+  const toastText = () => document.querySelector('.toast')?.textContent ?? ''
+  const gone = (id: string) => stored(play).players.every((p) => p.id !== id)
+  const roleOf = (id: string) => stored(play).players.find((p) => p.id === id)?.role
+
+  it('deletes a defensive player and leaves everyone else alone', async () => {
+    const lb = named('LB', 'defense')
+    openMore(play, lb.id)
+    await del()
+
+    expect(gone(lb.id)).toBe(true)
+    // Everyone else is exactly as he was authored. (Roles are written down by
+    // this first save; they are asserted on their own, below and in roles.test.)
+    const authored = (p: (typeof play.players)[number]) => ({ ...p, role: undefined })
+    expect(stored(play).players.map(authored)).toEqual(play.players.filter((p) => p.id !== lb.id).map(authored))
+    expect(stored(play).ball).toEqual(play.ball)
+    expect(stored(play).engagements).toEqual(play.engagements)
+  })
+
+  it('deleting the passer takes the ball action with him, and says so', async () => {
+    const qb = named('QB')
+    openMore(play, qb.id)
+    expect(stored(play).ball).not.toBeNull()
+    await del()
+
+    expect(gone(qb.id)).toBe(true)
+    expect(stored(play).ball).toBeNull()
+    expect(stored(play).ballThen).toBeNull()
+    expect(toastText()).toMatch(/ball/i)
+  })
+
+  it('deleting the passer hands the job to nobody', async () => {
+    const qb = named('QB')
+    openMore(play, qb.id)
+    await del()
+
+    expect(stored(play).players.some((p) => p.role === 'passer')).toBe(false)
+  })
+
+  it('deleting the snapper is refused, with the way out', async () => {
+    const c = named('C')
+    openMore(play, c.id)
+    const before = JSON.stringify(stored(play))
+    await del()
+
+    expect(gone(c.id)).toBe(false)
+    expect(JSON.stringify(stored(play))).toBe(before)
+    expect(toastText()).toMatch(/snapper/i)
+  })
+
+  it('a refused delete is not an undo step', async () => {
+    const c = named('C')
+    openMore(play, c.id)
+    // One real edit first, so there is something for undo to walk back to.
+    fireEvent.click(item('Fast'))
+    await settle()
+    const afterEdit = JSON.stringify(stored(play))
+
+    openMore(play, c.id)
+    await del()
+    act(() => void fireEvent.keyDown(window, { key: 'z', ctrlKey: true }))
+    await settle()
+
+    // Undo walked back the SPEED change, which means the refusal never
+    // reached the history at all.
+    expect(JSON.stringify(stored(play))).not.toBe(afterEdit)
+    expect(stored(play).players.find((p) => p.id === c.id)!.speed).toBe(play.players.find((p) => p.id === c.id)!.speed)
+  })
+
+  it('once somebody else snaps it, the old snapper deletes normally', async () => {
+    const c = named('C')
+    const rg = named('RG')
+    openMore(play, rg.id)
+    fireEvent.click(item('Make snapper'))
+    await settle()
+    expect(roleOf(rg.id)).toBe('snapper')
+
+    openMore(play, c.id)
+    await del()
+    expect(gone(c.id)).toBe(true)
+    expect(roleOf(rg.id)).toBe('snapper')
+  })
+
+  it('a man called QB who does not throw it deletes like anybody else', async () => {
+    const qb = named('QB')
+    const rb = named('RB')
+    openMore(play, rb.id)
+    fireEvent.click(item('Make passer'))
+    await settle()
+
+    openMore(play, qb.id)
+    await del()
+    expect(gone(qb.id)).toBe(true)
+    expect(roleOf(rb.id)).toBe('passer')
+    expect(stored(play).ball).not.toBeNull()
+  })
+
+  it('a man called C who does not snap it deletes like anybody else', async () => {
+    const c = named('C')
+    const rg = named('RG')
+    openMore(play, rg.id)
+    fireEvent.click(item('Make snapper'))
+    await settle()
+    // He is still called C; the job is the other man's now.
+    openMore(play, c.id)
+    await del()
+
+    expect(gone(c.id)).toBe(true)
+    expect(stored(play).players.find((p) => p.id === rg.id)!.label).toBe('RG')
+  })
+
+  it('undo brings back the man, his job, his route and the ball', async () => {
+    const qb = named('QB')
+    openMore(play, qb.id)
+    // One real edit first, so the stored play is the one the editor is
+    // holding - roles written down and all - and undo has a step to land on.
+    fireEvent.click(item('Fast'))
+    await settle()
+    const before = stored(play)
+
+    openMore(play, qb.id)
+    await del()
+    expect(gone(qb.id)).toBe(true)
+
+    act(() => void fireEvent.keyDown(window, { key: 'z', ctrlKey: true }))
+    await settle()
+
+    const back = stored(play).players.find((p) => p.id === qb.id)!
+    const was = before.players.find((p) => p.id === qb.id)!
+    expect(back).toEqual(was)
+    expect(back.role).toBe('passer')
+    expect(stored(play).ball).toEqual(before.ball)
+    expect(stored(play).engagements).toEqual(before.engagements)
+  })
+
+  it('the camera stops riding with a man who has been deleted', async () => {
+    const man = withPath(play)
+    open(play)
+    select(play, man.id)
+    const view = (name: string) => fireEvent.click(within(document.querySelector('.bar') as HTMLElement).getByRole('button', { name }))
+    view('Player')
+    await settle()
+    expect(strip().textContent).toContain(man.label)
+
+    view('Overhead')
+    select(play, man.id)
+    fireEvent.click(within(strip()).getByRole('button', { name: /^More/ }))
+    await del()
+
+    view('Player')
+    await settle()
+    expect(strip().textContent).toMatch(/Click the player to watch from/)
   })
 })

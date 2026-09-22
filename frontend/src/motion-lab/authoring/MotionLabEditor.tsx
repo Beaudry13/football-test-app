@@ -812,13 +812,45 @@ export function MotionLabEditor({
     showToast(`${man.label} ${role === 'passer' ? 'throws it now' : 'snaps it now'}.`)
   }
 
-  /** Remove a man and everything that named him - never leave a dangling reference. */
+  /**
+   * Delete a man and everything that named him - never leave a dangling
+   * reference, and never leave the football with nobody to play it.
+   *
+   * Everything else in a play points at him by id (the ball's carrier, target
+   * and fake, engagements, the Player-view camera), so those are simply
+   * dropped. THE TWO JOBS ARE NOT LIKE THAT, because the engine needs them and
+   * no id names them:
+   *
+   *   THE PASSER. The ball assumes him - a pass says who catches it, never who
+   *   throws it - so deleting him would leave a live ball action with "No QB
+   *   on the field" behind it. The action goes with him. Nobody inherits the
+   *   job: the coach says who throws it now (More > Make passer), because
+   *   guessing is what roles exist to stop.
+   *
+   *   THE SNAPPER. His feet ARE the snap spot; with nobody doing the job the
+   *   engine falls back to the middle of the field, which is a play quietly
+   *   changing shape. So this one is refused, and says what to do instead.
+   *   Refusing changes nothing, so it is not an undo step either.
+   */
   const removePlayer = (id: string) => {
-    const label = players.find((p) => p.id === id)?.label ?? '?'
+    const man = players.find((p) => p.id === id)
+    if (!man) return
+    const label = man.label
+    if (man.role === 'snapper') {
+      setMenuOpen(null)
+      showToast(`${label} snaps it. Make another player the snapper first, then delete him.`)
+      return
+    }
     setPlayers((ps) => ps.filter((p) => p.id !== id))
     const names = (a: BallAction | null) => (a ? ('carrierId' in a && a.carrierId === id) || ('targetId' in a && a.targetId === id) || ('fakeId' in a && a.fakeId === id) : false)
     const dropped: string[] = []
-    if (names(ball)) {
+    if (man.role === 'passer' && (ball || ballThen)) {
+      // He threw it. Nothing in the action names him, and that is exactly why
+      // it cannot stay.
+      setBall(null)
+      setBallThen(null)
+      dropped.push('ball action')
+    } else if (names(ball)) {
       setBall(null)
       setBallThen(null)
       dropped.push('ball action')
@@ -833,7 +865,7 @@ export function MotionLabEditor({
     if (selectedId === id) setSelectedId(null)
     if (viewerId === id) setViewerId(null)
     setMenuOpen(null)
-    showToast(dropped.length ? `${label} removed — his ${dropped.join(' and ')} went with him.` : `${label} removed.`)
+    showToast(dropped.length ? `${label} deleted — his ${dropped.join(' and ')} went with him.` : `${label} deleted.`)
   }
 
   /** The same movement, relative to HIS alignment; mirrored across his own centre if asked. */
@@ -1893,7 +1925,7 @@ export function MotionLabEditor({
       {selected.side === 'offense' && selected.role !== 'snapper' && (
         <button onClick={() => makeRole(selected.id, 'snapper')}>Make snapper</button>
       )}
-      <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Remove from play</button>
+      <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Delete player</button>
     </div>
   ) : null
 
