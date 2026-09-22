@@ -532,6 +532,38 @@ attempt keeps the version it was delivered.
 - Coach wording is "Stop sending it" / "Start sending it again". "Retire"
   stays in the code and out of the UI.
 
+**Motion Lab** — the validated play-animation prototype, integrated in P1
+and put on the server in P2 (branch `feature/motion-lab-p2-library`). Read
+`docs/MOTION-LAB-BASELINE.md` first; §8 is P2.
+
+- **The engine is the prototype's, byte for byte.** `frontend/src/motion-lab/engine/`
+  is pinned to `prototypes/motion-lab/src` by `engineIsVerbatim.test.ts`, and its
+  behaviour by characterization goldens that can only be regenerated from the
+  PROTOTYPE engine. A behaviour diff is a bug to explain, never a golden to update.
+- **Store coach intent, derive football.** Plays persist players, paths, timing,
+  ball action, engagements and situation - never schedules, frames, orientation
+  or playback state.
+- **Everything Motion Lab styles sits under `.motion-lab-root`.** Its stylesheet
+  stays loaded after a coach leaves the route, so an unscoped rule would restyle
+  all of PEIRA (#1 above). `motionLabCss.test.ts` enforces it.
+- **Plays and looks are organization content on the server** (`motion_plays`,
+  `motion_looks`), collaborative within the org, 404 across orgs. The document
+  is checked STRUCTURALLY by `services/motion_documents.py` - never add a Python
+  football engine to validate it.
+- **Every content write is revision-checked; a mismatch is a 409, never a
+  merge.** The editor stops and asks. localStorage holds only DRAFTS of
+  unconfirmed saves, and recovery is decided by revision, never by clock - the
+  same rule as Draw on Image. The lifecycle is documented once, at the top of
+  `storage/apiPlayRepository.ts`.
+- **Motion Lab is still platform-owner only** - `require_motion_lab_coach()`
+  (404) and `mayUseMotionLab` (hides the nav entry, redirects the route).
+  Opening it to coaches means changing those two, deliberately.
+- **`folders.area` splits one table into two trees** (`quizzes`, `motion`).
+  `GET /folders` defaults to quizzes and `visible_folders` is the Quizzes rule
+  only; anything counting or listing folders must say which area it means.
+- The known football limitations (label-based QB/C, college hashes, 17-yard
+  window) are recorded, not bugs to fix in passing.
+
 **Draw on Image** — a per-question drawing answer, Phases 0-2 complete.
 
 - Read `docs/DESIGN-draw-on-image.md` first — product decisions are locked in

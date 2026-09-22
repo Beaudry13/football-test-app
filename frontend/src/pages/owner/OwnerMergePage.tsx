@@ -22,6 +22,8 @@ const MOVED_ROWS: { key: keyof MergePreview['source']['counts']; label: string }
   { key: 'folders', label: 'Folders' },
   { key: 'playbooks', label: 'Playbooks' },
   { key: 'document_pages', label: 'Playbook pages' },
+  { key: 'motion_plays', label: 'Motion Lab plays' },
+  { key: 'motion_looks', label: 'Motion Lab looks' },
 ];
 
 /** Merge one organization into another.

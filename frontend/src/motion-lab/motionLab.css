@@ -1,0 +1,1465 @@
+/* MOTION LAB STYLES, SCOPED.
+ *
+ * The validated prototype's styles.css (preserve/motion-lab-prototype,
+ * prototypes/motion-lab/src/styles.css) with EVERY rule placed under
+ * .motion-lab-root. Declarations are unchanged. Three adaptations, only these:
+ *
+ *   1. Selectors. :root and body became .motion-lab-root; * became the root
+ *      and its descendants; every other selector gained a .motion-lab-root
+ *      prefix. That adds the same specificity (0,1,0) to every rule, so the
+ *      prototype's own cascade resolves exactly as before - and nothing here
+ *      can match an element outside the root, however long this stylesheet
+ *      stays loaded.
+ *   2. Keyframe names are global in CSS: toast-in and catch-pulse became
+ *      motion-lab-toast-in and motion-lab-catch-pulse.
+ *   3. The root is a fixed, full-viewport container (see its rule below).
+ *
+ * WHY: a stylesheet a route imports stays in the document for the rest of the
+ * session. Unscoped, the prototype's bare button and universal rules would
+ * restyle every PEIRA page a coach visited after Motion Lab - CLAUDE.md
+ * "Things that will bite you" #1. motionLabCss.test.ts enforces the scoping.
+ *
+ * Two PEIRA globals still reach inside on purpose: index.css's :focus-visible
+ * ring and its prefers-reduced-motion rule. Both are accessibility baselines
+ * meant for every surface.
+ */
+
+.motion-lab-root {
+  --bg: #0f1012;
+  --panel: #17191c;
+  --border: #2a2d32;
+  --text: #e8e8e6;
+  --muted: #8b8f96;
+  --accent: #f7c948;
+  --accent-ink: #1a1400;
+  --offense: #f2f2ee;
+  --defense: #e2573a;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+}
+
+.motion-lab-root,
+.motion-lab-root * {
+  box-sizing: border-box;
+}
+
+/* Was the prototype's `body` rule. Motion Lab no longer owns the page, so
+   the root takes the whole viewport itself instead of styling PEIRA's <body>.
+   INTEGRATION: position and inset are the only declarations added. */
+.motion-lab-root {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.motion-lab-root .app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  /* One column that is exactly the viewport: a bar full of nowrap items
+     must shrink its flexible parts, never widen the page. */
+  grid-template-columns: minmax(0, 1fr);
+  height: 100vh;
+  width: 100vw;
+}
+.motion-lab-root .bar {
+  min-width: 0;
+}
+
+.motion-lab-root .bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.motion-lab-root .bar.bottom {
+  border-bottom: 0;
+  border-top: 1px solid var(--border);
+}
+
+.motion-lab-root .brand {
+  white-space: nowrap;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.motion-lab-root .brand span {
+  color: var(--accent);
+}
+
+.motion-lab-root .spacer {
+  flex: 1;
+}
+
+.motion-lab-root .hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+.motion-lab-root .hint b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.motion-lab-root button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: #222529;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+.motion-lab-root button:hover {
+  background: #2b2f34;
+}
+.motion-lab-root button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.motion-lab-root button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.motion-lab-root button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  min-width: 90px;
+}
+.motion-lab-root button.primary:hover {
+  background: #ffd966;
+}
+.motion-lab-root button .key {
+  opacity: 0.55;
+  font-weight: 500;
+  margin-left: 6px;
+  font-size: 11px;
+}
+
+.motion-lab-root .stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  min-height: 0;
+}
+
+.motion-lab-root svg.board {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--border), 0 20px 60px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  user-select: none;
+}
+.motion-lab-root svg.board.board-armed,
+.motion-lab-root svg.board.board-drawing {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board .player {
+  cursor: grab;
+}
+.motion-lab-root svg.board.board-armed .player,
+.motion-lab-root svg.board.board-drawing .player {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board.board-moving .player {
+  cursor: grabbing;
+}
+.motion-lab-root svg.board text {
+  pointer-events: none;
+}
+
+.motion-lab-root input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 120px;
+}
+
+.motion-lab-root .time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 90px;
+  text-align: right;
+}
+
+/* ---- iteration 2 ---- */
+
+.motion-lab-root .app {
+  grid-template-rows: auto auto 1fr auto;
+}
+
+.motion-lab-root .group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.motion-lab-root .bar.context {
+  padding-block: 8px;
+  min-height: 50px;
+  background: #131518;
+}
+
+.motion-lab-root .lbl {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.motion-lab-root .seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.motion-lab-root .seg button {
+  border: 0;
+  border-radius: 0;
+  border-right: 1px solid var(--border);
+}
+.motion-lab-root .seg button:last-child {
+  border-right: 0;
+}
+.motion-lab-root .seg-sm button {
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.motion-lab-root .chip {
+  font-weight: 800;
+  font-size: 13px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.motion-lab-root .chip.offense {
+  background: var(--offense);
+  color: #111;
+}
+.motion-lab-root .chip.defense {
+  background: var(--defense);
+  color: #fff;
+}
+
+.motion-lab-root .divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+}
+
+.motion-lab-root .delay {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.motion-lab-root .delay input {
+  font: inherit;
+  width: 64px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #222529;
+  color: var(--text);
+}
+
+.motion-lab-root svg.board.board-adjusting .anchor {
+  cursor: grab;
+}
+
+.motion-lab-root .scrub {
+  flex: 1;
+  position: relative;
+  min-width: 140px;
+  padding-top: 12px;
+}
+.motion-lab-root .scrub input {
+  width: 100%;
+  margin: 0;
+}
+.motion-lab-root .snap-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #4da3ff;
+  pointer-events: none;
+}
+.motion-lab-root .snap-mark span {
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #4da3ff;
+  line-height: 1;
+}
+
+/* The hint changes with every selection; it must never reflow the field. */
+.motion-lab-root .top-hint {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Bars never change height: the field must not move under the coach's
+   cursor when a selection changes what the bar contains. Bars never clip
+   either - popovers hang below them - so the flexible items (hint, ball
+   summary, play name) shrink instead of the bar scrolling. */
+.motion-lab-root .bar:not(.bottom) {
+  flex-wrap: nowrap;
+  overflow: visible;
+  gap: 8px;
+}
+.motion-lab-root .bar.context {
+  height: 50px;
+}
+
+.motion-lab-root button {
+  white-space: nowrap;
+}
+
+/* ---- iteration 3: the ball ---- */
+
+.motion-lab-root .bar {
+  position: relative;
+  overflow: visible;
+}
+.motion-lab-root .ball-menu {
+  position: relative;
+}
+.motion-lab-root .ball-btn.has-action {
+  border-color: #6b5a1f;
+  background: #2a2412;
+}
+.motion-lab-root .ball-btn .warn {
+  display: inline-block;
+  margin-left: 6px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+.motion-lab-root .popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  gap: 2px;
+  background: #1d2024;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.motion-lab-root .popover button {
+  text-align: left;
+  border: 0;
+  background: transparent;
+}
+.motion-lab-root .popover button:hover {
+  background: #2b2f34;
+}
+.motion-lab-root .popover .pop-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px 2px;
+}
+.motion-lab-root .popover .pop-clear {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  color: #e88;
+}
+
+.motion-lab-root .chip.ball {
+  background: #2a2412;
+  border-color: #6b5a1f;
+}
+.motion-lab-root .instruction {
+  font-size: 14px;
+  color: var(--text);
+}
+.motion-lab-root .instruction b {
+  color: var(--accent);
+}
+
+.motion-lab-root svg.board.board-picking {
+  cursor: pointer;
+}
+.motion-lab-root svg.board.board-picking .player {
+  cursor: default;
+}
+.motion-lab-root svg.board.board-picking .player.pickable {
+  cursor: pointer;
+}
+
+/* ---- iteration 4: throw point ---- */
+
+.motion-lab-root .stage {
+  position: relative;
+}
+.motion-lab-root .toast {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  animation: motion-lab-toast-in 0.2s ease-out;
+  pointer-events: none;
+}
+@keyframes motion-lab-toast-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.motion-lab-root .catch-marker.adjusted .pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: motion-lab-catch-pulse 0.8s ease-out 3;
+}
+@keyframes motion-lab-catch-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+.motion-lab-root .throw-point {
+  cursor: help;
+}
+
+/* ---- iteration 5: field view ---- */
+.motion-lab-root svg.board.field-view {
+  cursor: default;
+}
+
+/* ---- iteration 6: coach + player views ---- */
+.motion-lab-root .viewer-pop {
+  left: 0;
+  right: auto;
+  min-width: 0;
+  gap: 6px;
+}
+.motion-lab-root .viewer-row {
+  display: flex;
+  gap: 4px;
+}
+.motion-lab-root .viewer-chip {
+  padding: 5px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  min-width: 36px;
+  text-align: center;
+}
+.motion-lab-root .viewer-chip.offense {
+  background: #3a3a37;
+}
+.motion-lab-root .viewer-chip.defense {
+  background: #4a2018;
+}
+.motion-lab-root .viewer-chip.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---- iteration 8: engage ---- */
+.motion-lab-root .engage-marker {
+  cursor: grab;
+}
+.motion-lab-root .engaged-with {
+  font-weight: 700;
+  color: #ff8c42;
+}
+.motion-lab-root .context .warn {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: help;
+}
+
+.motion-lab-root .release-note {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.motion-lab-root .then-note {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ---- Authoring V1 ---- */
+
+.motion-lab-root .play-btn {
+  max-width: 260px;
+  font-weight: 700;
+}
+.motion-lab-root .play-btn .play-name {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.motion-lab-root .saved {
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 52px;
+}
+.motion-lab-root .saved.failed {
+  color: #e2573a;
+  font-weight: 700;
+}
+.motion-lab-root .inline-name {
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: #222529;
+  color: var(--text);
+  min-width: 200px;
+}
+.motion-lab-root .popover.play-pop {
+  left: 0;
+  right: auto;
+  min-width: 300px;
+}
+.motion-lab-root .popover.play-pop-left {
+  left: 0;
+  right: auto;
+}
+.motion-lab-root .play-list {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.motion-lab-root .play-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.motion-lab-root .play-row.active {
+  background: #2a2412;
+  color: var(--accent);
+}
+.motion-lab-root .play-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motion-lab-root .play-row-when {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.motion-lab-root .look-pop {
+  min-width: 340px;
+}
+.motion-lab-root .look-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+}
+.motion-lab-root .look-row .play-row-name {
+  flex: 1;
+  font-weight: 600;
+}
+.motion-lab-root .look-row button {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: #222529;
+}
+.motion-lab-root .look-row .pop-clear {
+  margin-top: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.motion-lab-root .chip-btn {
+  cursor: pointer;
+}
+.motion-lab-root .sit-chip {
+  font-weight: 700;
+  border-radius: 999px;
+  background: #1a2230;
+  border-color: #2c3d57;
+  color: #a9c8ff;
+}
+.motion-lab-root .sit-pop {
+  left: 0;
+  right: auto;
+  min-width: 320px;
+  gap: 8px;
+}
+.motion-lab-root .sit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 6px;
+}
+.motion-lab-root .sit-row .lbl {
+  min-width: 64px;
+}
+.motion-lab-root .sit-row input[type='number'] {
+  font: inherit;
+  width: 64px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #222529;
+  color: var(--text);
+}
+.motion-lab-root .sit-row .seg button:not(.active),
+.motion-lab-root .sit-row > button:not(.active) {
+  border: 1px solid var(--border);
+  background: #222529;
+}
+.motion-lab-root .sit-row .seg button:not(.active) {
+  border: 0;
+  border-right: 1px solid var(--border);
+}
+
+/* Present: the authoring chrome steps back, the field steps forward. */
+.motion-lab-root .app.present .bar {
+  background: #0f1012;
+}
+.motion-lab-root .app.present .bar.context {
+  background: #0f1012;
+  border-bottom-color: #1a1c20;
+}
+.motion-lab-root .app.present .stage {
+  padding: 6px 12px;
+}
+.motion-lab-root svg.board.board-present {
+  cursor: default;
+}
+.motion-lab-root svg.board.board-present .player {
+  cursor: pointer;
+}
+.motion-lab-root svg.board.board-tele {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board.board-tele .player {
+  cursor: crosshair;
+}
+
+/* Keep the top bar inside a laptop width: the variable-length items truncate. */
+.motion-lab-root .ball-btn {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.motion-lab-root .play-btn {
+  max-width: 200px;
+}
+.motion-lab-root .play-btn .play-name {
+  max-width: 160px;
+}
+.motion-lab-root .saved {
+  min-width: 0;
+}
+.motion-lab-root .saved:empty {
+  display: none;
+}
+.motion-lab-root .bar.context .hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Segments inside a popover keep their selected state (the popover's
+   flat-button rule would otherwise wash it out). */
+.motion-lab-root .popover button.active,
+.motion-lab-root .popover button.active:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ==== PEIRA ADDITIONS ====================================================
+ * Everything below this marker is NOT in the prototype. motionLabCss.test.ts
+ * compares every rule above it with prototypes/motion-lab/src/styles.css and
+ * requires everything below it to be scoped too.
+ */
+
+/* P2: a decision the coach must make about this play (an edit conflict, a
+   recovered draft), over the top of the field like the toast - but it stays
+   until answered, and it holds buttons. */
+.motion-lab-root .ml-notice {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  max-width: min(760px, calc(100% - 32px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #1d2024;
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.motion-lab-root .ml-notice b {
+  color: var(--accent);
+}
+
+/* ML-UX-1: the gold route handle, and the one toolbar button left that arms
+   drawing. The handle is a grab point on the selected player - crosshair,
+   because dragging it draws rather than moves. */
+.motion-lab-root svg.board .route-handle {
+  cursor: crosshair;
+}
+.motion-lab-root svg.board .route-handle line,
+.motion-lab-root svg.board .route-handle path {
+  pointer-events: none;
+}
+/* Until the first route of this page load is drawn, the handle breathes so a
+   coach meeting the new gesture can find it. The class that switches this off
+   sits on .app, outside the board, so the SVG markup the snapshots pin never
+   depends on whether anyone has drawn yet. */
+.motion-lab-root .app:not(.drew-once) svg.board .route-handle {
+  animation: motion-lab-handle-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-lab-root .app:not(.drew-once) svg.board .route-handle {
+    animation: none;
+  }
+}
+@keyframes motion-lab-handle-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.motion-lab-root .draw-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---- ML-UX-2: three zones and the dock -----------------------------------
+ *
+ * THESE RULES DELIBERATELY OVERRIDE PROTOTYPE RULES ABOVE.
+ *
+ * `.bar`, `.bar.bottom` and `.bar.context` are prototype-derived, and
+ * motionLabCss.test.ts pins every prototype rule's declarations, in order, so
+ * that the P1 scoping work cannot have quietly restyled anything. Editing
+ * those rules in place would break that guarantee for a layout change it was
+ * never meant to police. Re-stating the selectors down here, after the marker,
+ * changes the layout by the cascade and leaves the guarantee intact - at the
+ * cost of two rules per selector, which is why this note exists.
+ *
+ * The prototype let the bars WRAP. That is what made the editor's height move
+ * when a selection changed, and it is what a fixed-height dock cannot allow.
+ */
+.motion-lab-root .bar {
+  flex-wrap: nowrap;
+  height: 44px;
+  padding: 0 16px;
+  gap: 8px;
+}
+.motion-lab-root .bar.context {
+  height: 44px;
+  min-height: 0;
+  padding: 0 16px;
+}
+.motion-lab-root .bar.bottom {
+  height: 56px;
+  gap: 10px;
+}
+
+/* Anything that can be long gives way first; nothing ever pushes a control
+   off the end of a bar. */
+.motion-lab-root .bar .hint,
+.motion-lab-root .bar .banner,
+.motion-lab-root .bar .instruction,
+.motion-lab-root .bar .play-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motion-lab-root .bar .play-name {
+  display: inline-block;
+  max-width: 200px;
+}
+
+/* The waiting row: one sentence, and the way out. */
+.motion-lab-root .bar.context .banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent);
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Transport. The only large gold thing in the dock is Play/Pause. */
+.motion-lab-root .bar.bottom .icon-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+}
+.motion-lab-root .bar.bottom .play-toggle {
+  flex: 0 0 auto;
+  height: 36px;
+  padding: 0 18px;
+}
+.motion-lab-root .bar.bottom .scrub {
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+.motion-lab-root .bar.bottom .time {
+  flex: 0 0 auto;
+  width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.motion-lab-root .bar.bottom .rate-pill {
+  flex: 0 0 auto;
+  min-width: 58px;
+}
+
+/* Display and rate open upward: they live on the bottom edge. */
+.motion-lab-root .bar.bottom .popover {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.motion-lab-root .display-pop {
+  min-width: 260px;
+}
+.motion-lab-root .display-pop .sit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.motion-lab-root .rate-pop {
+  min-width: 96px;
+}
+
+/* The top bar's VIEW label is the first thing to go on a narrow laptop. */
+@media (max-width: 1300px) {
+  .motion-lab-root .bar .lbl.view-label {
+    display: none;
+  }
+}
+
+/* ---- ML-UX-3: the ball in the dock ---------------------------------------
+ *
+ * Additive, like the ML-UX-2 layout above: `.ball-btn`, `.warn`, `.popover`,
+ * `.pop-title` and `.pop-clear` are all prototype-derived and their
+ * declarations are pinned by motionLabCss.test.ts. Everything here either
+ * introduces a NEW class or re-states an existing selector below the marker so
+ * the cascade does the work and the characterization stays untouched.
+ */
+
+/* The ball sits first in the dock, then a hairline, then the transport. */
+.motion-lab-root .bar.bottom .ball-menu {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.motion-lab-root .dock-divider {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+/* The sentence gives way before any control does, and says the whole thing in
+   its tooltip when it has been cut short. */
+.motion-lab-root .bar.bottom .ball-btn {
+  max-width: 240px;
+}
+/* The button is a row: football, sentence, badge. Only the sentence gives
+   way. The prototype's `.ball-btn` is an inline-block whose children simply
+   overflowed and were clipped - with a badge (and, until ML-UX-10 took keys
+   off the buttons, a key hint) after the sentence, that clipped the sentence
+   rather than shortening it. */
+.motion-lab-root .bar.bottom .ball-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.motion-lab-root .ball-sentence {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 1300px) {
+  .motion-lab-root .bar.bottom .ball-btn {
+    max-width: 160px;
+  }
+}
+
+/* Nothing set yet: an invitation, outlined rather than filled, so it reads as
+   the one thing still to do without shouting as loudly as Play. */
+.motion-lab-root .ball-btn.gold-line {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+
+/* The menu is a question when nothing is set and a statement once something
+   is; either way it needs room for a sentence. */
+.motion-lab-root .ball-pop {
+  min-width: 320px;
+  max-width: 420px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.motion-lab-root .now-card {
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #1d2024;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.motion-lab-root .now-card b {
+  color: var(--accent);
+}
+.motion-lab-root .now-note {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+/* The dot marks which of the five the play is on now. It holds its width when
+   empty so the labels stay in one column. */
+.motion-lab-root .now-dot {
+  display: inline-block;
+  width: 12px;
+  color: var(--accent);
+}
+
+/* Advanced: shut until asked for. */
+.motion-lab-root .adv-toggle {
+  text-align: left;
+}
+.motion-lab-root .adv-body {
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+/* The banner's icon, shared by a drawing and a ball pick. */
+.motion-lab-root .banner-icon {
+  margin-right: 2px;
+}
+
+/* THE BALL MENU HANGS FROM THE LEFT EDGE OF ITS BUTTON.
+ *
+ * The prototype's `.popover` is right-aligned (`right: 0`), which was correct
+ * when every popover sat on the right-hand side of a bar. The ball is now the
+ * FIRST thing in the dock, 16 px from the window edge, so a 320 px menu
+ * right-aligned to it starts at -174 px and half of it is off-screen. Align it
+ * to the button's left edge instead - the same clamp-to-viewport rule, applied
+ * to the other side. Found in the browser; jsdom has no layout and cannot see
+ * this.
+ *
+ * NOTE: this used to add "Rate and Display still hang from the right". They did
+ * not - every dock menu is wrapped in `.ball-menu`, so this rule caught both,
+ * and Display opened 210 px off the right edge at 1280. ML-UX-6 right-aligns
+ * the dock's right-hand menus explicitly; see its section below.
+ */
+.motion-lab-root .bar.bottom .ball-menu .popover {
+  right: auto;
+  left: 0;
+}
+
+/* ---- ML-UX-4: strip hierarchy and More ----------------------------------
+ *
+ * Additive, as above. `.chip`, `.group`, `.lbl`, `.popover`, `.pop-title` and
+ * `.pop-clear` are prototype-derived and pinned by motionLabCss.test.ts;
+ * nothing here edits them. New behaviour gets new class names, and the two
+ * places an existing selector is re-stated sit below the marker so the
+ * cascade does the work.
+ */
+
+/* THE CHIP IS NO LONGER A BUTTON. It says who, and which side he is on,
+   because "Z" alone does not tell a coach whether he is looking at his own
+   receiver or the man covering him. */
+.motion-lab-root .chip.chip-static {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  cursor: default;
+}
+.motion-lab-root .chip-side {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  text-transform: none;
+}
+
+/* The primary is gold only while there is nothing to run. Once he has an
+   assignment, Redraw is an ordinary button - the loud one has done its job. */
+.motion-lab-root .bar.context .strip-primary {
+  flex: 0 0 auto;
+}
+
+/* The summary holds the right end of the strip. It gives way before any
+   control does, and it is the only thing in the strip that may truncate. */
+.motion-lab-root .strip-summary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* MORE: four groups, in one column, wide enough for a sentence. */
+.motion-lab-root .more-pop {
+  /* SPEC §8: it opens BELOW More, left-aligned. The prototype's `.popover`
+     right-aligns, which was right for a menu on the right of a bar; More sits
+     in the middle of the strip and should hang from its own left edge. */
+  right: auto;
+  left: 0;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+/* A rule above every group title but the first, so the groups read as
+   groups without needing a heavier treatment. */
+.motion-lab-root .more-pop .pop-title + * {
+  margin-top: 2px;
+}
+.motion-lab-root .more-pop .pop-title:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.motion-lab-root .more-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 2px 0;
+}
+.motion-lab-root .more-row.stacked {
+  display: block;
+}
+.motion-lab-root .more-choices {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+}
+.motion-lab-root .more-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+.motion-lab-root .more-choice.on {
+  color: var(--accent);
+}
+.motion-lab-root .more-radio {
+  width: 12px;
+  flex: 0 0 auto;
+}
+
+/* Formation's footer count is a statement, not a choice. */
+.motion-lab-root .pop-foot {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+.motion-lab-root .formation-pop {
+  min-width: 300px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* ---- ML-UX-5: the engaged group -----------------------------------------
+ * Additive, as above. The block's menu hangs from its own left edge, like
+ * More; the warning sits before the group so a coach reads the problem
+ * before the thing that has it.
+ */
+.motion-lab-root .block-pop {
+  right: auto;
+  left: 0;
+  min-width: 220px;
+}
+.motion-lab-root .bar.context .warn {
+  flex: 0 0 auto;
+}
+
+
+/* ---- ML-UX-6: the situation in the dock --------------------------------
+ * Additive, as above. `.sit-chip` and `.sit-pop` are prototype-derived and
+ * pinned by motionLabCss.test.ts, so the dock's rules for them are re-stated
+ * here, scoped to `.bar.bottom`, and the cascade does the work.
+ */
+
+/* Capped at 180 px (SPEC §14). The label is "1st & 10 · own 35 · middle",
+   which can outrun that, so it ellipsizes - and gives way before Display is
+   pushed off the end of the bar. The tooltip carries the whole label. */
+.motion-lab-root .bar.bottom .sit-chip {
+  display: block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* THE RIGHT-HAND DOCK MENUS HANG FROM THEIR RIGHT EDGE.
+ *
+ * ML-UX-3 left-aligned `.bar.bottom .ball-menu .popover` so the ball menu,
+ * first in the dock, would not open off the LEFT of the screen. Every dock
+ * menu is wrapped in `.ball-menu`, so that rule caught Display too: at 1280 px
+ * Display opened at x 1173-1490, 210 px past the right edge, before this slice
+ * touched anything (measured in the browser; jsdom has no layout). The
+ * situation popover, 320 px wide on an anchor near the right end, would do the
+ * same. Both sit at the right of the dock, so both hang from their right
+ * edge - SPEC §14's clamp, applied to the side they are on. The ball menu and
+ * the rate menu keep the ML-UX-3 rule. The compound selectors out-rank that
+ * rule, so this does not depend on source order.
+ */
+.motion-lab-root .bar.bottom .ball-menu .popover.sit-pop,
+.motion-lab-root .bar.bottom .ball-menu .popover.display-pop {
+  left: auto;
+  right: 0;
+}
+
+/* ---- ML-UX-8: views and Present chrome ------------------------------------
+ * Additive, as above. `.app`, `.app.present .bar.context` and `button.primary`
+ * are prototype-derived and pinned by motionLabCss.test.ts; nothing here
+ * edits them.
+ */
+
+/* PRESENT HAS NO STRIP, SO IT HAS THREE ROWS. The prototype's grid names four
+   (top bar, strip, field, dock). Take the strip away and leave that in place,
+   and the field slides into the strip's `auto` row while the DOCK takes the
+   `1fr` - a stretched dock under a squashed field. Top bar, field, dock. */
+.motion-lab-root .app.present {
+  grid-template-rows: auto 1fr auto;
+}
+
+/* Present and Exit Present: outlined gold. Important, not the primary - Play
+   is the one solid-gold control on the screen (SPEC §2; DESIGN §19). */
+.motion-lab-root .bar button.gold-line {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: transparent;
+}
+
+/* In Present the play is named, not offered: the name as text. */
+.motion-lab-root .bar .present-name {
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* ---- ML-UX-9: handle and cursor polish -----------------------------------
+ * Additive. The board carries ONE state class (MotionLabEditor.tsx,
+ * `boardState`) and CSS alone sets the cursor for it - SPEC §5.3's contract:
+ *
+ *   board-idle       board default   · players grab
+ *   board-moving     grabbing, everywhere on the board (rule below)
+ *   board-armed,     crosshair       · players crosshair
+ *   board-drawing
+ *   board-adjusting  board default   · players grab · anchors grab
+ *   board-picking    pointer on legal players only
+ *   board-present    board default   · players pointer
+ *   board-tele       crosshair       · players crosshair
+ *
+ * The prototype rules above were renamed onto these classes. Two had been
+ * dead: `.player.dragging` was never applied by anything, prototype or
+ * PEIRA, so "grabbing" never showed; and `.mode-edit .anchor` died when
+ * ML-UX-1 replaced `mode-*` with `board-*`, taking the anchors' grab cursor
+ * in Adjust with it.
+ */
+
+/* A DRAG IS IN PROGRESS - a player, an anchor or a block's ×. The board holds
+   the pointer for as long as it lasts, so the whole board says grabbing,
+   whatever passes under the pointer. Last in the sheet so it outranks, at
+   equal specificity, the handle's crosshair and the ×'s grab. */
+.motion-lab-root svg.board.board-moving,
+.motion-lab-root svg.board.board-moving * {
+  cursor: grabbing;
+}
+
+/* THE HANDLE ON A TOUCH SCREEN (SPEC §5.2): 40 px to grab instead of 28. The
+   coarse rect is always in the markup and shown only here, so a mouse gets
+   exactly the hit area it had before. */
+.motion-lab-root svg.board .route-handle .hit-coarse {
+  display: none;
+}
+@media (pointer: coarse) {
+  .motion-lab-root svg.board .route-handle .hit-coarse {
+    display: inline;
+  }
+}
+
+/* ---- ML-UX-10: states and motion -----------------------------------------
+ * Additive. SPEC §4.3's state table, §1.4's "nothing else is gold", the
+ * 120 ms popover fade and focus rings (§15). The prototype's button, hover,
+ * primary-hover and popover-hover rules above the marker are pinned by
+ * motionLabCss.test.ts, so every state is re-stated here and the cascade
+ * does the work.
+ *
+ * ONE STEP, EVERY CONTROL. Idle, then one step lighter on hover; pressed
+ * goes back to the control's own idle tone (no third colour); disabled is
+ * 40% and does not react to the pointer at all. Gold keeps its meanings: the
+ * primary darkens a step on hover and two when pressed, and a chosen segment
+ * or a menu's current row never changes under the pointer.
+ *
+ * Exclusions are chained - `:not(.a):not(.b)` - never listed inside one
+ * `:not()`: the scoping test reads every comma as a new selector. Chaining
+ * also raises specificity, which several rules below lean on; where two
+ * rules tie, the later one is the one meant to win.
+ */
+
+/* The plain tones are SPEC §4.3's. The primary's are the gold mixed with the
+   panel it sits on - 92% on hover, 85% pressed - written out rather than
+   computed with color-mix(): a browser without color-mix() would drop the
+   declaration and leave Play with no background at all under the pointer.
+   statesAndMotion.test.tsx re-derives both from --accent and --panel. */
+.motion-lab-root {
+  --btn: #1e2126;
+  --btn-hover: #262a30;
+  --accent-hover: #e5bb44;
+  --accent-pressed: #d5af41;
+}
+
+/* PLAIN: idle, hover, pressed. `.active` (a chosen segment, a menu's current
+   row, an open menu's button) and `.primary` are left to their own rules. */
+.motion-lab-root button {
+  background: var(--btn);
+}
+.motion-lab-root button:not(:disabled):not(.active):not(.primary):hover {
+  background: var(--btn-hover);
+}
+.motion-lab-root button:not(:disabled):not(.active):not(.primary):active {
+  background: var(--btn);
+}
+
+/* The segments and toggles in the Situation and Display menus wear the plain
+   look through a prototype rule that pins the old idle; re-state it. Hover
+   and pressed reach them through the plain rules above. */
+.motion-lab-root .sit-row .seg button:not(.active),
+.motion-lab-root .sit-row > button:not(.active) {
+  background: var(--btn);
+}
+
+/* PRESSED GOES BACK TO EACH CONTROL'S OWN IDLE. A menu's rows are flat, so
+   theirs is the menu; the rest have a tone of their own. */
+.motion-lab-root .popover button:not(:disabled):not(.active):active {
+  background: transparent;
+}
+.motion-lab-root button.ball-btn.has-action:not(:disabled):active {
+  background: #2a2412;
+}
+.motion-lab-root button.sit-chip:not(:disabled):not(.active):active {
+  background: #1a2230;
+}
+.motion-lab-root button.viewer-chip.offense:not(.active):active {
+  background: #3a3a37;
+}
+.motion-lab-root button.viewer-chip.defense:not(.active):active {
+  background: #4a2018;
+}
+
+/* A menu's current row keeps saying so under the pointer, as a chosen
+   segment does. */
+.motion-lab-root .popover button.play-row.active:hover {
+  background: #2a2412;
+}
+
+/* THE PRIMARY. Hover darkens rather than lightening (the prototype's
+   #ffd966), and it stays opaque: fading the button would fade its words. */
+.motion-lab-root button.primary:not(:disabled):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.motion-lab-root button.primary:not(:disabled):active {
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+}
+
+/* GOLD-LINE (Present, Exit Present, Set the ball, Adjust on, Releases ✓).
+   Their own rule outranked every hover, so they never answered the pointer.
+   The outline and the words stay gold; only the fill takes the step. */
+.motion-lab-root button.gold-line:not(:disabled):not(.active):hover {
+  background: var(--btn-hover);
+}
+.motion-lab-root button.gold-line:not(:disabled):not(.active):active {
+  background: transparent;
+}
+
+/* DISABLED DOES NOT REACT. The prototype's hover rules match a disabled
+   button too, so each kind that can be disabled is held at its own idle. */
+.motion-lab-root button:disabled:hover {
+  background: var(--btn);
+}
+.motion-lab-root button.primary:disabled:hover {
+  background: var(--accent);
+}
+.motion-lab-root .ball-btn.has-action:disabled:hover {
+  background: #2a2412;
+}
+.motion-lab-root button.gold-line:disabled:hover,
+.motion-lab-root .popover button:disabled:hover {
+  background: transparent;
+}
+
+/* AN OPEN MENU'S BUTTON IS NOT GOLD (SPEC §1.4; the design's own frames
+   leave it plain). It shows the hover tone for as long as the menu is open.
+   Every menu trigger still sets `.active` while open; `aria-expanded` is what
+   tells a trigger from a chosen segment, and each keeps its own ink. */
+.motion-lab-root button.active[aria-expanded='true'] {
+  background: var(--btn-hover);
+  border-color: var(--border);
+  color: var(--text);
+}
+.motion-lab-root .ball-btn.has-action.active[aria-expanded='true'] {
+  border-color: #6b5a1f;
+}
+.motion-lab-root button.gold-line.active[aria-expanded='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.motion-lab-root .sit-chip.active[aria-expanded='true'] {
+  border-color: #2c3d57;
+  color: #a9c8ff;
+}
+
+/* FOCUS, FOR THE KEYBOARD. PEIRA's global ring is `currentColor`: on a gold
+   control that is the near-black ink, drawn outside the button over the dark
+   bar, so on Play, Draw assignment and every chosen segment it could not be
+   seen. Here it is gold, 2 px, with 2 px of bar between it and the control.
+   index.css is untouched; this only out-ranks it inside Motion Lab. */
+.motion-lab-root :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* `.seg` clips its buttons (overflow: hidden), which cut off any ring drawn
+   outside them. Segments draw it inside instead - in ink on the chosen one,
+   where a gold ring on gold would vanish. */
+.motion-lab-root .seg button:focus-visible {
+  outline-offset: -2px;
+}
+.motion-lab-root .seg button.active:focus-visible {
+  outline-color: var(--accent-ink);
+}
+
+/* Every menu fades in over 120 ms as it opens. Menus mount when they open,
+   so this runs once per opening; closing stays immediate. */
+.motion-lab-root .popover {
+  animation: motion-lab-popover-in 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-lab-root .popover {
+    animation: none;
+  }
+}
+@keyframes motion-lab-popover-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- ML-UX-11: edge presentation -----------------------------------------
+ * D with nobody selected (SPEC §12.1): the resting hint - whatever it says,
+ * the ball's warning included - turns gold for 200 ms. The editor sets and
+ * clears this class; there is no transition and no keyframe, so reduced
+ * motion sees it too: a colour changes, nothing moves.
+ */
+.motion-lab-root .bar.context .hint.hint-flash,
+.motion-lab-root .bar.context .hint.hint-flash b {
+  color: var(--accent);
+}
+
+/* ---- ML-UX-12: the last two laptop rules (SPEC §14) ---------------------
+ * TIMING's label goes below 1300 px, as VIEW's does; the segment it names
+ * stays, and so does everything it does. And Present at 1280 drops "Motion
+ * Lab" from the brand, which is all §14 asks of Present's top bar.
+ */
+@media (max-width: 1299.98px) {
+  .motion-lab-root .bar .lbl.timing-label {
+    display: none;
+  }
+}
+@media (max-width: 1280px) {
+  .motion-lab-root .app.present .brand span {
+    display: none;
+  }
+}

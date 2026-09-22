@@ -58,11 +58,17 @@ interface RequestOptions {
    * browser history and `Referer`.
    */
   headers?: Record<string, string>;
+  /**
+   * Let the request outlive the page (fetch keepalive). Added for Motion Lab's
+   * autosave, so an edit saved as the coach closes the tab can still arrive.
+   * Browsers cap keepalive bodies at ~64KB; callers only set it below that.
+   */
+  keepalive?: boolean;
 }
 
 /** Thin fetch wrapper: JSON in/out, auth header injection, and a typed ApiError on failure. */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, formData, auth = true, headers: extraHeaders } = options;
+  const { method = 'GET', body, formData, auth = true, headers: extraHeaders, keepalive } = options;
 
   const headers: Record<string, string> = { ...extraHeaders };
   if (auth) {
@@ -80,7 +86,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { method, headers, body: requestBody });
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: requestBody,
+      ...(keepalive ? { keepalive: true } : {}),
+    });
   } catch {
     // fetch() itself rejects (rather than resolving with a non-ok status) for
     // network-level failures - server unreachable, no connection, CORS block.

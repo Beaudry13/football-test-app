@@ -1,3 +1,5 @@
+import { mayUseMotionLab } from '../../motion-lab/motionLabAccess';
+
 /** Peira's three primary destinations.
  *
  * ONE LIST, TWO PRESENTATIONS. The top header shows these on a desktop; the
@@ -17,6 +19,8 @@ export interface SectionLink {
   /** Labels this link as tourable. An attribute, not a class, so restyling
    *  can never silently unhook the tour. */
   tour?: string;
+  /** Shown only to coaches this returns true for. Absent = every coach. */
+  visibleTo?: (coach: { is_platform_owner: boolean }) => boolean;
 }
 
 export const SECTION_LINKS: SectionLink[] = [
@@ -24,6 +28,15 @@ export const SECTION_LINKS: SectionLink[] = [
     to: '/dashboard',
     label: 'Quizzes',
     isActive: (path) => path === '/dashboard' || path.startsWith('/quizzes'),
+  },
+  // MOTION LAB - PLATFORM OWNER ONLY during the P2 pilot, so the owner meets
+  // the real entry point before coaches do. A fourth destination for that one
+  // account only; every other coach still sees exactly three.
+  {
+    to: '/motion-lab',
+    label: 'Motion Lab',
+    isActive: (path) => path.startsWith('/motion-lab'),
+    visibleTo: mayUseMotionLab,
   },
   {
     to: '/documents',
@@ -48,3 +61,8 @@ export const SECTION_LINKS: SectionLink[] = [
     tour: 'roster',
   },
 ];
+
+/** The destinations this coach should see, in order. */
+export function sectionLinksFor(coach: { is_platform_owner: boolean }): SectionLink[] {
+  return SECTION_LINKS.filter((link) => !link.visibleTo || link.visibleTo(coach));
+}

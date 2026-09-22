@@ -54,7 +54,7 @@ from app.services.signed_media import AUDIENCE_COACH
 from app.utils.auth import (
     current_coach,
     get_editable_quiz,
-    get_org_folder,
+    get_org_quiz_folder,
     get_visible_quiz,
     own_quizzes_query,
 )
@@ -416,7 +416,7 @@ def update_quiz(quiz_id: int):
         if data["folder_id"] is None:
             quiz.folder_id = None
         else:
-            quiz.folder_id = get_org_folder(data["folder_id"]).id
+            quiz.folder_id = get_org_quiz_folder(data["folder_id"]).id
 
     db.session.commit()
     return jsonify(quiz.to_dict())

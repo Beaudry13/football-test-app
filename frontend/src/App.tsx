@@ -39,6 +39,11 @@ import { CompetitionJoinPage } from './pages/compete/CompetitionJoinPage';
 import { WaitingRoomPage } from './pages/compete/WaitingRoomPage';
 import { HostLobbyPage } from './pages/compete/HostLobbyPage';
 import { CompetitionSetupPage } from './pages/compete/CompetitionSetupPage';
+import {
+  MotionLabEditorRoute,
+  MotionLabGate,
+  MotionLabLibraryRoute,
+} from './motion-lab/MotionLabRoute';
 
 function App() {
   return (
@@ -134,6 +139,12 @@ function App() {
                 />
                 <Route path="coaches" element={<OwnerCoachesPage />} />
               </Route>
+              {/* MOTION LAB LIBRARY - the organization's plays and looks in
+                  Motion Lab folders. Platform owner only during the P2 pilot. */}
+              <Route element={<MotionLabGate />}>
+                <Route path="/motion-lab" element={<MotionLabLibraryRoute />} />
+                <Route path="/motion-lab/folders/:folderId" element={<MotionLabLibraryRoute />} />
+              </Route>
               <Route path="/documents" element={<DocumentsPage />} />
               <Route path="/documents/:documentId" element={<DocumentPage />} />
               {/* The old addresses still mean what they meant - a bookmark or
@@ -167,6 +178,15 @@ function App() {
               path="/quizzes/:quizId/questions/:questionId/annotate"
               element={<AnnotationPage />}
             />
+
+            {/* MOTION LAB EDITOR - a full-screen tool like annotation, outside
+                NotebookLayout so the field keeps the screen. The Library is
+                inside NotebookLayout above. PLATFORM-OWNER ONLY during the P2
+                pilot: MotionLabGate sends anyone else to the dashboard, and the
+                Motion Lab API refuses them regardless. */}
+            <Route element={<MotionLabGate />}>
+              <Route path="/motion-lab/plays/:playId" element={<MotionLabEditorRoute />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<NotFoundRedirect />} />

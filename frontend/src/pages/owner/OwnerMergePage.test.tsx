@@ -21,6 +21,8 @@ const counts = {
   answers: 6,
   answer_drawings: 0,
   document_pages: 0,
+  motion_plays: 0,
+  motion_looks: 0,
 };
 
 const orgs: OwnerOrganizationRow[] = [
