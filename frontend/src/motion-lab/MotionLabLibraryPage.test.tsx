@@ -21,6 +21,7 @@ vi.mock('../api/folders', () => ({ renameFolder: vi.fn(), deleteFolder: vi.fn() 
 import * as motionApi from '../api/motionLab'
 import * as foldersApi from '../api/folders'
 import { MotionLabLibraryPage } from './MotionLabLibraryPage'
+import { SCHEMA_VERSION } from './engine/play'
 
 /**
  * The Motion Lab Library: the organization's plays filed in nested Motion Lab
@@ -121,7 +122,7 @@ describe('Motion Lab Library', () => {
     await userEvent.click(await screen.findByRole('button', { name: /New play/ }))
     await waitFor(() => expect(lastPath).toBe('/motion-lab/plays/99'))
     const body = vi.mocked(motionApi.createMotionPlay).mock.calls[0][0]
-    expect(body).toMatchObject({ name: 'Untitled Play', schema_version: 1, folder_id: 2 })
+    expect(body).toMatchObject({ name: 'Untitled Play', schema_version: SCHEMA_VERSION, folder_id: 2 })
     expect(body.document.players).toHaveLength(22)
   })
 

@@ -15,7 +15,7 @@
 import type { PointerEventHandler, Ref } from 'react'
 import { FieldMarkings } from './FieldMarkings'
 import { VIEWBOX, U, Y_MAX, toView } from '../engine/field'
-import type { Player } from '../engine/formation'
+import { roleHolder, type Player } from '../engine/formation'
 import type { Pt } from '../engine/geometry'
 import { posAt, type ScheduleMap } from '../engine/timeline'
 import { isPass, type BallAction, type BallTimeline } from '../engine/ball'
@@ -181,7 +181,8 @@ export function OverheadBoard({
   // The same derivations the editor made inline, from the same inputs.
   const positionAt = (p: Player, t: number): Pt => posAt(schedule, p, t)
   const ballFrame = ballTimeline.at(time)
-  const qbId = players.find((p) => p.side === 'offense' && p.label === 'QB')?.id
+  // The passer by role, the same lookup the engine uses (formation.roleHolder).
+  const qbId = roleHolder(players, 'passer', 'QB')?.id
   const selected = players.find((p) => p.id === selectedId) ?? null
   const qbHasPath = !!qbId && schedule.has(qbId)
   const hasReleaseOverride = isPass(ball) && !!ball.releasePoint

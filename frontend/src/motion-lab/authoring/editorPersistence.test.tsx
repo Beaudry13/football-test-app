@@ -87,10 +87,16 @@ describe('Motion Lab editor persistence', () => {
     seed([a, b], b.id)
     vi.useFakeTimers()
     try {
+      const before = localStorage.getItem(PLAYS_KEY)
       render(<MotionLabEditor repository={repo} />)
       expect(document.querySelector('.play-name')!.textContent).toBe(b.name)
       act(() => vi.advanceTimersByTime(2000))
-      expect(stored(b.id)).toEqual(b)
+      // Nothing was written at all: the bytes on disk are the ones the play
+      // arrived with, version and all. (Reading stamps the reader's version
+      // in memory - P3.1 raised it to 2 - which is why the stored bytes, not
+      // the loaded object, are what "not an edit" has to mean.)
+      expect(localStorage.getItem(PLAYS_KEY)).toBe(before)
+      expect({ ...stored(b.id)!, v: b.v }).toEqual(b)
     } finally {
       vi.useRealTimers()
     }
@@ -230,7 +236,8 @@ describe('the built-in save indicator', () => {
     act(() => vi.advanceTimersByTime(399))
     expect(text()).toBe('Saving…')
     // Nothing has been written yet - which is exactly why it must not say Saved.
-    expect(stored(a.id)).toEqual(a)
+    // (`v` is the reader's stamp, not the play's content; see above.)
+    expect({ ...stored(a.id)!, v: a.v }).toEqual(a)
 
     act(() => vi.advanceTimersByTime(1))
     expect(text()).toBe('Saved')

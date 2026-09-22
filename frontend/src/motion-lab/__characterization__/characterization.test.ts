@@ -48,7 +48,13 @@ describe.each(all.map((play) => [play.name, play] as const))('%s', (_name, play)
   })
 
   it('survives the sanitizer unchanged (stored intent round-trips)', () => {
-    expect(modelUnderTest.sanitizePlay(JSON.parse(JSON.stringify(play)))).toEqual(play)
+    // `v` is the MODEL's stamp, not the coach's intent: a play is read by
+    // whatever version opens it and re-stamped with that one (P3.1 raised it
+    // to 2 for roles). Everything a coach authored still has to come back
+    // exactly as it was written, including from these version 1 fixtures.
+    const back = modelUnderTest.sanitizePlay(JSON.parse(JSON.stringify(play)))!
+    expect({ ...back, v: play.v }).toEqual(play)
+    expect(back.v).toBe(modelUnderTest.SCHEMA_VERSION)
   })
 })
 
@@ -56,7 +62,11 @@ describe('preserved look', () => {
   it('survives the sanitizer unchanged', () => {
     const looks = paneLooks()
     expect(looks.map((l) => l.name)).toEqual(['Trips Rt'])
-    for (const look of looks) expect(modelUnderTest.sanitizeLook(JSON.parse(JSON.stringify(look)))).toEqual(look)
+    for (const look of looks) {
+      const back = modelUnderTest.sanitizeLook(JSON.parse(JSON.stringify(look)))!
+      expect({ ...back, v: look.v }).toEqual(look)
+      expect(back.v).toBe(modelUnderTest.SCHEMA_VERSION)
+    }
   })
 })
 

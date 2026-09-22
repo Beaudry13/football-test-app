@@ -5,6 +5,38 @@ export type Side = 'offense' | 'defense'
 /** When a player's assignment begins, in football terms. */
 export type Timing = 'pre-snap' | 'on-snap' | 'delayed'
 
+/**
+ * A job the engine itself has to be able to find: who throws it, who snaps it.
+ *
+ * THE LABEL IS WHAT THE COACH CALLS HIM; THE ROLE IS WHAT HE DOES. The
+ * prototype had no roles and found both men by label - the offensive player
+ * called QB, the one called C - so renaming the quarterback to "Q" or "12"
+ * left the ball with nobody to throw it and the snap at midfield. A role is
+ * carried by the man, so it survives a rename, a move, a saved formation and
+ * an undo. At most one of each, on offense.
+ */
+export type PlayerRole = 'passer' | 'snapper'
+
+/**
+ * The man doing a job, by role, falling back to the label the prototype used.
+ *
+ * The fallback is what keeps every play written before roles existed - and
+ * every characterization golden - behaving exactly as it did: when nobody
+ * carries the role, this is the prototype's own lookup, line for line. Once
+ * any man carries it, the label stops deciding anything, so a coach can call
+ * his quarterback whatever he likes and a second "QB" on the field takes
+ * nothing over.
+ */
+export function roleHolder(players: Player[], role: PlayerRole, legacyLabel: string): Player | undefined {
+  const byRole = players.find((p) => p.side === 'offense' && p.role === role)
+  if (byRole) return byRole
+  if (players.some((p) => p.side === 'offense' && p.role)) {
+    // This document knows about roles; it simply has nobody in this one.
+    return undefined
+  }
+  return players.find((p) => p.side === 'offense' && p.label === legacyLabel)
+}
+
 /** How the player moves. Tiers, not yards-per-second; a coach picks a word. */
 export type SpeedTier = 'controlled' | 'normal' | 'fast'
 export const SPEED_YPS: Record<SpeedTier, number> = {
@@ -45,6 +77,12 @@ export interface Player {
    * Absent = auto (decided from the route's geometry, see classifyEnd).
    */
   endBehavior?: EndBehavior
+  /**
+   * What he does for the engine, independent of his label (see PlayerRole).
+   * Optional, and absent means this document predates roles - the engine
+   * then reads labels exactly as the prototype did.
+   */
+  role?: PlayerRole
 }
 
 const MID = 53.33 / 2

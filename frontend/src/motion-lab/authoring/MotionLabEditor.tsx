@@ -3,6 +3,7 @@ import { OverheadBoard } from '../view/OverheadBoard'
 import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
 import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
 import { simplify, type EndBehavior, type Pt } from '../engine/geometry'
+import { assignRole, passerIdOf, snapperOf, withRoles } from './roles'
 import { buildSchedule, posAt, resolveEnd } from '../engine/timeline'
 import { ballTargetOf, deriveBall, isPass, projectOntoPath, THEN_KINDS, type BallAction } from '../engine/ball'
 import { catchDepth, fullBallSentence } from './ballSentence'
@@ -426,9 +427,13 @@ export function MotionLabEditor({
     (p: Play) => {
       setPlayId(p.id)
       setPlayName(p.name)
-      applyAuthoring({ players: p.players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })
+      // Who throws it and who snaps it is written down now, in memory, so a
+      // rename can never change it (./roles). A play that already says is
+      // untouched, so opening one is still not an edit.
+      const players = withRoles(p.players)
+      applyAuthoring({ players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })
       setFilter(p.filter)
-      historyRef.current = { stack: [JSON.stringify({ players: p.players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })], idx: 0 }
+      historyRef.current = { stack: [JSON.stringify({ players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })], idx: 0 }
       setHistoryTick((t) => t + 1)
       setSelectedId(null)
       setSetup(null)
@@ -566,7 +571,7 @@ export function MotionLabEditor({
   }
   const loadLook = (l: Look) => {
     // Replacing the men on the field invalidates anything that named them.
-    setPlayers(l.players.map((p) => ({ ...p, path: [] })))
+    setPlayers(withRoles(l.players.map((p) => ({ ...p, path: [] }))))
     setBall(null)
     setBallThen(null)
     setEngagements([])
@@ -762,7 +767,8 @@ export function MotionLabEditor({
     setInteraction((i) => (i === 'adjusting' ? 'idle' : i))
   }, [])
 
-  const qbId = players.find((p) => p.side === 'offense' && p.label === 'QB')?.id
+  // The passer, by ROLE (see ./roles). His label is the coach's business.
+  const qbId = passerIdOf(players) ?? undefined
   /**
    * Who can take the ball from the QB - handoff, pitch, pass, play action
    * (SPEC §6.4): an offensive player who is not the QB. The ball picks and
@@ -789,6 +795,21 @@ export function MotionLabEditor({
     setSelectedId(p.id)
     setMenuOpen(null)
     setRenaming('player')
+  }
+
+  /**
+   * Hand a job to this man: he throws it, or he snaps it.
+   *
+   * Explicit, because the alternative is guessing from a label - which is
+   * what roles exist to stop. Whoever held the job loses it; the play always
+   * has one passer and one snapper (./roles).
+   */
+  const makeRole = (id: string, role: 'passer' | 'snapper') => {
+    setMenuOpen(null)
+    const man = players.find((p) => p.id === id)
+    if (!man || man.role === role) return
+    setPlayers((ps) => assignRole(ps, id, role))
+    showToast(`${man.label} ${role === 'passer' ? 'throws it now' : 'snaps it now'}.`)
   }
 
   /** Remove a man and everything that named him - never leave a dangling reference. */
@@ -832,7 +853,7 @@ export function MotionLabEditor({
 
   /** Move the whole look sideways so the ball sits on the chosen hash. */
   const setHash = (hash: Situation['hash']) => {
-    const center = players.find((p) => p.side === 'offense' && p.label === 'C')
+    const center = snapperOf(players)
     const ol = players.filter((p) => p.side === 'offense' && ['LT', 'LG', 'C', 'RG', 'RT'].includes(p.label))
     const nowX = center ? center.x : ol.length ? ol.reduce((s, p) => s + p.x, 0) / ol.length : FIELD_WIDTH / 2
     const dx = hashX(hash) - nowX
@@ -1864,6 +1885,14 @@ export function MotionLabEditor({
 
       <div className="pop-title">Player</div>
       <button onClick={() => { setMenuOpen(null); setRenaming('player') }}>Rename…</button>
+      {/* WHAT HE DOES, not what he is called: the engine finds the passer and
+          the snapper by role, so these stay right through any rename. */}
+      {selected.side === 'offense' && selected.role !== 'passer' && (
+        <button onClick={() => makeRole(selected.id, 'passer')}>Make passer</button>
+      )}
+      {selected.side === 'offense' && selected.role !== 'snapper' && (
+        <button onClick={() => makeRole(selected.id, 'snapper')}>Make snapper</button>
+      )}
       <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Remove from play</button>
     </div>
   ) : null
@@ -2122,7 +2151,7 @@ export function MotionLabEditor({
                    More, and a chip that opened a menu was the only place they
                    ever lived. It still hosts the inline rename field. */}
             {renaming === 'player' ? (
-              <InlineName value={selected.label} onCommit={(v) => { updatePlayer(selected.id, { label: v.slice(0, 4).toUpperCase() }); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Label" />
+              <InlineName value={selected.label} onCommit={(v) => { const label = v.slice(0, 4).toUpperCase(); if (label !== selected.label) updatePlayer(selected.id, { label }); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Label" />
             ) : (
               <span className={`chip ${selected.side} chip-static`}>
                 {selected.label}

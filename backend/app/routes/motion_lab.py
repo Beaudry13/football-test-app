@@ -67,6 +67,22 @@ def _conflict(kind: str):
     )
 
 
+def _outdated_client(kind: str, stored: int, sent: int):
+    """The tab saving this is older than the document it is saving over.
+
+    A browser left open on a previous release rebuilds a play through ITS
+    model, which knows nothing of fields added since - so its next autosave
+    would quietly strip them. The version the client sends is the version its
+    model writes, so anything below what is stored is refused rather than
+    allowed to erase the difference.
+    """
+    return ApiError(
+        f"This {kind} was saved by a newer Motion Lab (v{stored}); this tab writes v{sent}. Reload before editing.",
+        status_code=409,
+        reason="schema_outdated",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Plays
 # ---------------------------------------------------------------------------
@@ -125,6 +141,9 @@ def save_play(play_id: int):
     data = load_json_body(PlaySaveSchema())
     document = validate_play_document(data["document"], data["schema_version"])
     play = get_org_motion_play(play_id, coach, for_update=True)
+    if data["schema_version"] < play.schema_version:
+        db.session.rollback()
+        raise _outdated_client("play", play.schema_version, data["schema_version"])
     if play.revision != data["base_revision"]:
         db.session.rollback()
         raise _conflict("play")
@@ -253,6 +272,9 @@ def save_look(look_id: int):
     data = load_json_body(LookSaveSchema())
     document = validate_look_document(data["document"], data["schema_version"])
     look = get_org_motion_look(look_id, coach, for_update=True)
+    if data["schema_version"] < look.schema_version:
+        db.session.rollback()
+        raise _outdated_client("formation", look.schema_version, data["schema_version"])
     if look.revision != data["base_revision"]:
         db.session.rollback()
         raise _conflict("look")

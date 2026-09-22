@@ -85,9 +85,15 @@ describe('what the field did NOT change', () => {
     expect(out.players).toHaveLength(p.players.length)
   })
 
-  it('the schema version did not move', () => {
-    expect(SCHEMA_VERSION).toBe(1)
-    expect(sanitizePlay(play())!.v).toBe(1)
+  it('auto did not move the schema version - roles did', () => {
+    // ML-UX-5's point stands: `auto` needed no version, because a reader that
+    // has never heard of it is correct anyway. The version is 2 because P3.1
+    // added roles, which an older reader WOULD strip - and a play read here
+    // still carries its auto exactly as written.
+    expect(SCHEMA_VERSION).toBe(2)
+    const back = sanitizePlay(play())!
+    expect(back.v).toBe(SCHEMA_VERSION)
+    expect(back.engagements).toEqual(play().engagements)
   })
 
   it('an engagement that was invalid before is still rejected, auto or not', () => {

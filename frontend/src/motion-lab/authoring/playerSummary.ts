@@ -5,6 +5,7 @@ import { cumulativeLength, endDirection, renderPath, SHARP_BREAK_DEG, turnAngle,
 import type { DerivedEngagement, Engagement } from '../engine/interactions'
 import type { Schedule } from '../engine/timeline'
 import { catchDepthWords } from './ballSentence'
+import { passerOf, snapperOf } from './roles'
 
 /**
  * WHAT HE IS DOING, IN ONE LINE (ML-UX-7, SPEC §4.4 with §4.2, §7.8, §12.6).
@@ -82,9 +83,10 @@ function finish(dir: Pt, fromX: number, centerX: number): 'up' | 'back' | 'out' 
  *   offensive line → Path; backs → Path when they get the ball, else Route;
  *   receivers, tight ends and any other offensive label → Route.
  */
-function noun(p: Player, first: Heading, carries: boolean): 'Route' | 'Drop' | 'Path' {
+function noun(p: Player, first: Heading, carries: boolean, isPasser: boolean): 'Route' | 'Drop' | 'Path' {
   if (p.side === 'defense') return 'Path'
-  if (p.label === 'QB') return first === 'back' ? 'Drop' : 'Path'
+  // The passer by role, so "Drop" still reads right when he is called Q or 12.
+  if (isPasser) return first === 'back' ? 'Drop' : 'Path'
   if (OFFENSIVE_LINE.has(p.label)) return 'Path'
   if (BACKS.has(p.label)) return carries ? 'Path' : 'Route'
   return 'Route'
@@ -148,12 +150,12 @@ export function playerSummary({ player, players, drawn, engagements, derived, ba
   const first = heading(firstStep(player.path))
   let lastBreak = -1
   for (let i = 1; i < pts.length - 1; i++) if (turnAngle(pts[i - 1], pts[i], pts[i + 1]) >= SHARP_BREAK_DEG) lastBreak = i
-  const centerX = players.find((p) => p.side === 'offense' && p.label === 'C')?.x ?? FIELD_WIDTH / 2
+  const centerX = snapperOf(players)?.x ?? FIELD_WIDTH / 2
   // Two words at most, even for a three-leg route: the SPEC's vocabulary is
   // first direction, then finishing direction - "up, then up" included.
   const shape = lastBreak < 0 ? first : `${first}, then ${finish(endDirection(pts, cum), pts[lastBreak].x, centerX)}`
 
-  const parts = [`${noun(player, first, carriesIn(id, actions))} · ${Math.round(length)} yds ${shape}`]
+  const parts = [`${noun(player, first, carriesIn(id, actions), player.id === passerOf(players)?.id)} · ${Math.round(length)} yds ${shape}`]
   if (player.timing === 'pre-snap') parts.push('pre-snap')
   else if (player.timing === 'delayed') parts.push(`delayed ${player.delay} s`)
   // Owner decision: any non-default tier is said, "normal" included - a

@@ -14,7 +14,7 @@
 // is: WHERE he throws from is a point on that path (its end unless the coach
 // picks another), and WHEN he throws is simply when he gets there.
 
-import type { Player } from './formation'
+import { roleHolder, type Player } from './formation'
 import type { Pt } from './geometry'
 import { extendUntil, posAt, posBeyond, resolveEnd, timeAtAlong, type ScheduleMap } from './timeline'
 
@@ -161,8 +161,10 @@ export const THEN_KINDS = ['handoff', 'pitch', 'pass'] as const
 
 export function deriveBall(players: Player[], schedule: ScheduleMap, snapAt: number, action: BallAction | null, then: BallAction | null = null): BallTimeline {
   const byId = new Map(players.map((p) => [p.id, p]))
-  const center = players.find((p) => p.side === 'offense' && p.label === 'C')
-  const qb = players.find((p) => p.side === 'offense' && p.label === 'QB')
+  // Who snaps it and who throws it, by ROLE - falling back to the labels this
+  // engine has always used when the play carries no roles (roleHolder).
+  const center = roleHolder(players, 'snapper', 'C')
+  const qb = roleHolder(players, 'passer', 'QB')
 
   // The snap spot is the center's feet, on the line, whatever the formation.
   const spot: Pt = center ? { x: center.x, y: center.y + 1.0 } : { x: 53.33 / 2, y: 0.4 }

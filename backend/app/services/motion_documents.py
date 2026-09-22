@@ -39,7 +39,7 @@ import math
 from app.errors import ApiError
 
 #: The frontend model's SCHEMA_VERSION values this server accepts.
-SUPPORTED_SCHEMA_VERSIONS = frozenset({1})
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2})
 
 #: Serialized size ceilings. A real play is a few KB (22 players, a handful of
 #: anchors each); these leave two orders of magnitude of headroom.
@@ -60,13 +60,16 @@ SIDES = {"offense", "defense"}
 TIMINGS = {"pre-snap", "on-snap", "delayed"}
 SPEEDS = {"controlled", "normal", "fast"}
 END_BEHAVIORS = {"continue", "settle"}
+#: Jobs the ENGINE has to be able to find, independent of the coach's label.
+#: One passer and one snapper at most, and only on offense.
+ROLES = {"passer", "snapper"}
 HASHES = {"left", "middle", "right"}
 FILTERS = {"all", "offense", "defense", "none"}
 BALL_KINDS = {"keep", "handoff", "pitch", "pass", "play-action"}
 
 PLAY_KEYS = {"players", "ball", "ballThen", "engagements", "situation", "filter"}
 LOOK_KEYS = {"players"}
-PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior"}
+PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior", "role"}
 BALL_KEYS = {"kind", "carrierId", "targetId", "fakeId", "catchPoint", "releasePoint"}
 ENGAGEMENT_KEYS = {"id", "kind", "a", "b", "point", "release", "auto"}
 SITUATION_KEYS = {"losYard", "hash", "down", "distance", "show"}
@@ -130,6 +133,7 @@ def _players(value, path: str):
     if len(value) > MAX_PLAYERS:
         _fail(path, f"at most {MAX_PLAYERS} players")
     seen: set[str] = set()
+    roles_taken: set[str] = set()
     for i, raw in enumerate(value):
         p = f"{path}[{i}]"
         player = _object(raw, p, PLAYER_KEYS, {"id", "x", "y"})
@@ -159,6 +163,18 @@ def _players(value, path: str):
             _string(player["speed"], f"{p}.speed", choices=SPEEDS)
         if "endBehavior" in player and not _optional(player["endBehavior"]):
             _string(player["endBehavior"], f"{p}.endBehavior", choices=END_BEHAVIORS)
+        if "role" in player and not _optional(player["role"]):
+            _string(player["role"], f"{p}.role", choices=ROLES)
+            role = player["role"]
+            # One passer, one snapper, on offense. Two of either would leave
+            # the engine picking by list order - exactly what a role is for -
+            # and the frontend's loader drops the second claim on open, so a
+            # document arriving with both is wrong before it is stored.
+            if player.get("side", "offense") != "offense":
+                _fail(f"{p}.role", "belongs to an offensive player")
+            if role in roles_taken:
+                _fail(f"{p}.role", f"is already held by another player ({role})")
+            roles_taken.add(role)
 
 
 def _ball(value, path: str):
