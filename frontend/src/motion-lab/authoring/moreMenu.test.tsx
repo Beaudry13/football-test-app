@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MotionLabEditor } from './MotionLabEditor'
+import { passerOf } from './roles'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, installPointerStubs, playerMarker } from '../testing/pointerStubs'
@@ -471,7 +472,7 @@ describe('deleting a player, with roles in place (P3.2)', () => {
     const back = stored(play).players.find((p) => p.id === qb.id)!
     const was = before.players.find((p) => p.id === qb.id)!
     expect(back).toEqual(was)
-    expect(back.role).toBe('passer')
+    expect(passerOf(stored(play).players)!.id).toBe(qb.id)
     expect(stored(play).ball).toEqual(before.ball)
     expect(stored(play).engagements).toEqual(before.engagements)
   })

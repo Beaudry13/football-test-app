@@ -4,7 +4,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, installPointerStubs, playerMarker } from '../testing/pointerStubs'
-import { clampToField, U, Y_MAX } from '../engine/field'
+import { BOUNDS, U, Y_MAX } from '../engine/field'
 import { hashX, situationLabel, type Play, type Situation } from '../engine/play'
 
 /**
@@ -146,22 +146,33 @@ describe('the popover', () => {
 })
 
 describe('the hash still moves the whole formation', () => {
-  /** Where `setHash` puts everyone: the centre goes to the hash, and every
-   *  man, every route point and every meeting point moves with him. */
+  /**
+   * Where `setHash` puts everyone: the snapper goes to the hash, and every
+   * man, route point and meeting point takes THE SAME step sideways.
+   *
+   * P3.3 changed how the edge of the field is handled. It used to clamp each
+   * point on its own, which squashed a formation whenever one man reached a
+   * sideline before the rest - the widest receiver stopped and everybody else
+   * kept sliding. The step is now worked out once for the whole look, so
+   * relative spacing survives and the ball simply lands short of the hash.
+   */
   function expectShifted(from: Play, to: Play, hash: Situation['hash']) {
-    const center = from.players.find((p) => p.side === 'offense' && p.label === 'C')!
-    const dx = hashX(hash) - center.x
-    const shift = (q: { x: number; y: number }) => clampToField({ x: q.x + dx, y: q.y })
+    const snapper = from.players.find((p) => p.side === 'offense' && p.label === 'C')!
+    const want = hashX(hash) - snapper.x
+    const points = (p: Play) => [...p.players.flatMap((q) => [{ x: q.x, y: q.y }, ...q.path]), ...p.engagements.map((e) => e.point)]
+    const before = points(from)
+    const allowed = Math.min(
+      Math.max(want, Math.max(...before.map((q) => BOUNDS.minX - q.x))),
+      Math.min(...before.map((q) => BOUNDS.maxX - q.x)),
+    )
 
     expect(to.situation.hash).toBe(hash)
-    for (const p of from.players) {
-      const q = to.players.find((x) => x.id === p.id)!
-      expect([q.x, q.y]).toEqual([shift(p).x, shift(p).y].map((v) => expect.closeTo(v, 6)))
-      q.path.forEach((pt, i) => expect([pt.x, pt.y]).toEqual([shift(p.path[i]).x, shift(p.path[i]).y].map((v) => expect.closeTo(v, 6))))
-    }
-    from.engagements.forEach((e, i) =>
-      expect(to.engagements[i].point.x).toBeCloseTo(shift(e.point).x, 6),
-    )
+    // One step, taken by everything that moved.
+    for (const q of points(to).map((q, i) => q.x - before[i].x)) expect(q).toBeCloseTo(allowed, 6)
+    // Nobody left the field, and nothing was squashed to get there.
+    for (const q of points(to)) expect(q.x).toBeGreaterThanOrEqual(BOUNDS.minX - 1e-9)
+    for (const q of points(to)) expect(q.x).toBeLessThanOrEqual(BOUNDS.maxX + 1e-9)
+    for (const p of from.players) expect(to.players.find((x) => x.id === p.id)!.y).toBeCloseTo(p.y, 6)
   }
 
   it.each(['left', 'right'] as const)('to the %s hash, and back to the middle', async (hash) => {
