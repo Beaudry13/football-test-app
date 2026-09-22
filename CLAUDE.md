@@ -8,6 +8,8 @@ This file is read automatically at the start of every session. It exists so
 a fresh session on any machine can get running quickly and avoid the traps
 that are not obvious from the code.
 
+**Product architecture:** `docs/DESIGN-product-architecture.md` is the authoritative record of PEIRA's structure (loop, areas, Motion Lab, Team, Concept) — planning only; it authorises no implementation.
+
 ---
 
 ## Stack

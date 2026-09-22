@@ -1,0 +1,300 @@
+<meta charset="utf-8">
+<title>Game Plan Week</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #F6F3EC; --surface: #FFFFFF; --surface-2: #EFEAE0; --ink: #1B1D22; --ink-2: #4E545E; --muted: #7C8493;
+    --line: rgba(27,29,34,0.10); --line-strong: rgba(27,29,34,0.18);
+    --gold: #C8922E; --gold-bg: rgba(200,146,46,0.12); --gold-ink: #1B1400;
+    --turf: #245A3C;
+    --heading: 'Playfair Display', Georgia, serif; --body: Inter, system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0E1013; --surface: #14171C; --surface-2: #1C2027; --ink: #F2F4F7; --ink-2: #C3C9D4; --muted: #8B93A1; --line: rgba(255,255,255,0.09); --line-strong: rgba(255,255,255,0.18); --gold: #D9A441; --gold-bg: rgba(217,164,65,0.12); --gold-ink: #0E1013; } }
+  :root[data-theme="dark"] { --bg: #0E1013; --surface: #14171C; --surface-2: #1C2027; --ink: #F2F4F7; --ink-2: #C3C9D4; --muted: #8B93A1; --line: rgba(255,255,255,0.09); --line-strong: rgba(255,255,255,0.18); --gold: #D9A441; --gold-bg: rgba(217,164,65,0.12); --gold-ink: #0E1013; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--body); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding-block: 36px 80px; padding-inline: 20px; }
+  h1 { font: 700 34px/1.15 var(--heading); margin: 0 0 6px; text-wrap: balance; }
+  h2 { font: 700 22px/1.2 var(--heading); margin: 48px 0 8px; padding-top: 18px; border-top: 1px solid var(--line); }
+  p { max-width: 68ch; color: var(--ink-2); margin: 0 0 12px; }
+  .eyebrow { font: 700 11px/1 var(--body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  .cap { font: 500 12.5px/1.45 var(--body); color: var(--muted); margin: 8px 0 0; }
+  .cap b { color: var(--ink); }
+  .screen { background: var(--bg); border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; margin-top: 16px; box-shadow: 0 12px 40px rgba(0,0,0,0.08); }
+  .nav { display: flex; align-items: center; gap: 22px; padding: 12px 22px; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .nav .brand { font: 700 15px var(--heading); margin-right: 8px; }
+  .nav a { color: var(--ink-2); text-decoration: none; font-weight: 500; }
+  .nav a.on { color: var(--ink); font-weight: 700; border-bottom: 2px solid var(--gold); padding-bottom: 2px; }
+  .nav .sp { flex: 1; } .nav .acct { color: var(--muted); font-size: 12.5px; }
+  .content { padding: 22px 28px 30px; }
+  .back { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .title { font: 700 30px/1.1 var(--heading); margin: 0; }
+  .meta { color: var(--ink-2); font-size: 13.5px; margin-top: 4px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 7px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: 600 13px var(--body); white-space: nowrap; }
+  .btn.gold { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); }
+  .btn.quiet { background: transparent; border-color: transparent; color: var(--ink-2); }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--body); padding: 7px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-strong); color: var(--ink-2); }
+  .chip b { color: var(--ink); }
+  .chip.gold { border-color: var(--gold); background: var(--gold-bg); color: var(--gold); }
+  .chip.tag { background: var(--surface-2); border: 0; padding: 4px 8px; font-size: 11px; letter-spacing: 0.04em; }
+  .sec { margin-top: 26px; }
+  .sec-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .sec-h h3 { font: 700 12px/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .sec-h .sub { color: var(--ink-2); font-size: 13px; }
+  .sec-h .sp { flex: 1; }
+  .strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .card .pic { height: 96px; background: var(--turf); position: relative; overflow: hidden; }
+  .card .pic svg { width: 100%; height: 100%; display: block; }
+  .card .pic.note { background: var(--surface-2); height: auto; padding: 10px 12px; font-size: 12.5px; color: var(--ink-2); line-height: 1.4; min-height: 76px; }
+  .card .body { padding: 8px 10px 10px; }
+  .card .name { font-weight: 600; font-size: 13px; }
+  .card .sub { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .answers { margin: 6px 0 0 6px; padding-left: 10px; border-left: 2px solid var(--gold); font-size: 12px; color: var(--ink-2); }
+  .answers div { padding: 2px 0; }
+  .field { position: absolute; inset: 0; }
+  .point { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+  .point .t { display: flex; align-items: center; gap: 10px; }
+  .point .t .n { color: var(--muted); font-size: 12px; width: 16px; }
+  .point .t b { font-size: 15px; }
+  .point .call { color: var(--ink-2); font-size: 13px; margin-top: 2px; padding-left: 26px; }
+  .point .counts { color: var(--muted); font-size: 12.5px; margin-left: auto; white-space: nowrap; }
+  .point .inner { margin-top: 10px; padding: 10px 0 0 26px; border-top: 1px dashed var(--line-strong); }
+  .mini { display: flex; gap: 8px; flex-wrap: wrap; align-items: stretch; }
+  .mini .m { width: 104px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; font-size: 11px; color: var(--ink-2); }
+  .mini .m .p { height: 56px; background: var(--turf); }
+  .mini .m .l { padding: 4px 6px; font-weight: 600; color: var(--ink); }
+  .mini .m.note { width: 150px; padding: 6px 8px; background: var(--surface-2); line-height: 1.35; }
+  .hero { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 8px; padding: 18px 20px; display: flex; align-items: center; gap: 20px; }
+  .hero .l { flex: 1; }
+  .hero .o { font: 700 28px/1.1 var(--heading); }
+  .hero .last { color: var(--ink-2); font-size: 13px; margin-top: 6px; }
+  .list { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+  .list .r { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .list .r:last-child { border-bottom: 0; }
+  .list .r .n { font-weight: 600; min-width: 180px; }
+  .list .r .d { color: var(--muted); font-size: 12.5px; }
+  .year { font: 700 12px/1 var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+  .empty { border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; background: var(--surface); }
+  .empty b { display: block; font: 700 15px var(--heading); margin-bottom: 2px; }
+  .empty span { color: var(--ink-2); font-size: 13.5px; }
+  /* tips builder */
+  .tips { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+  @media (max-width: 720px) { .tips { grid-template-columns: 1fr; } }
+  .side { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .side .sh { font: 700 11px/1 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 6px 0 8px; }
+  .side .pt { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-weight: 700; }
+  .side .it { display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 14px; color: var(--ink-2); }
+  .side .it .th { width: 34px; height: 22px; border-radius: 3px; background: var(--turf); flex: none; }
+  .side .it .th.note { background: var(--surface-2); }
+  .side .it .tn, .side .pt .tn { flex: 1; }
+  .side .add { height: 24px; padding: 0 8px; font-size: 11px; border-radius: 5px; border: 1px solid var(--line-strong); background: var(--surface); font-weight: 600; }
+  .side .ok { color: var(--gold); font-weight: 700; font-size: 12px; }
+  .doc { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 26px 30px; }
+  .doc .dt { font: 700 11px/1 var(--body); letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
+  .doc .do { font: 700 26px/1.1 var(--heading); margin: 6px 0 2px; }
+  .doc .dm { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid var(--gold); }
+  .blk { position: relative; padding: 6px 60px 6px 0; border-radius: 4px; }
+  .blk .ctl { position: absolute; right: 0; top: 6px; display: flex; gap: 4px; font-size: 11px; color: var(--muted); }
+  .blk h4 { font: 700 15px var(--heading); margin: 8px 0 2px; }
+  .blk .txt { font-size: 13px; color: var(--ink-2); }
+  .blk ul { margin: 2px 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); }
+  .pics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 6px 0 4px; }
+  .pics div { height: 84px; background: var(--turf); border-radius: 4px; position: relative; }
+  .pics div span { position: absolute; left: 6px; bottom: 4px; font-size: 10.5px; color: #fff; opacity: 0.9; }
+  /* quiz */
+  .qe { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+  @media (max-width: 720px) { .qe { grid-template-columns: 1fr; } }
+  .form { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; font-size: 13px; }
+  .form label { display: block; color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin: 10px 0 4px; font-weight: 700; }
+  .form .in { border: 1px solid var(--line-strong); border-radius: 6px; padding: 8px 10px; background: var(--surface); }
+  .form .vis { display: flex; gap: 8px; }
+  .form .vis .btn { height: 30px; font-size: 12px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font-size: 13px; }
+  .panel .ph { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .panel .pp { margin-top: 10px; }
+  .panel .pp .pn { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .panel .pp .pn .c { font-weight: 500; color: var(--muted); font-size: 12px; flex: 1; }
+  .panel .pi { display: flex; align-items: center; gap: 8px; padding: 6px 0 6px 8px; border-left: 2px solid var(--line-strong); margin-top: 6px; }
+  .panel .pi .th { width: 44px; height: 30px; border-radius: 4px; background: var(--turf); flex: none; }
+  .panel .pi .tn { flex: 1; font-size: 12.5px; }
+  .panel .pi .ref { font-size: 12px; color: var(--ink-2); font-style: italic; }
+  .panel .btn { height: 24px; padding: 0 8px; font-size: 11px; }
+  /* home + phone */
+  .home { display: grid; grid-template-columns: 1fr 280px; gap: 16px; }
+  @media (max-width: 720px) { .home { grid-template-columns: 1fr; } }
+  .phone { width: 300px; border: 8px solid #1B1D22; border-radius: 28px; overflow: hidden; background: var(--bg); margin: 16px auto 0; }
+  .phone .pnav { display: flex; justify-content: space-between; padding: 12px 14px; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 12px; }
+  .phone .pbody { padding: 14px; font-size: 13px; }
+  .phone .bar { display: flex; justify-content: space-around; padding: 10px 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 11px; font-weight: 600; color: var(--ink-2); }
+  .phone .bar .on { color: var(--ink); border-top: 2px solid var(--gold); padding-top: 4px; margin-top: -6px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Peira · Game Plan · refined product definition · 19 Sep 2026</div>
+  <h1>Game Plan Week</h1>
+  <p>Wireframes for the refined definition in <code>docs/DESIGN-game-plan.md</code>. V1 core only: weeks with a label, opponent and date; Scouting and points of emphasis on one page; two item kinds (Motion Lab play, note); answers by Library duplicate; Tips &amp; Reminders as three block kinds; the quiz builder's "From this week" panel; the Home card and the phone entry. Light coach theme; the material is the hero; gold marks the one thing to do next.</p>
+
+  <h2>1 · Landing</h2>
+  <div class="screen">
+    <div class="nav"><span class="brand">PEIRA</span><a class="on">Game Plan</a><a>Quizzes</a><a>Playbooks</a><a>Team</a><span class="sp"></span><span class="acct">Account: beaudry</span></div>
+    <div class="content">
+      <div class="row" style="justify-content:space-between"><h1 class="title" style="font-size:26px">Game Plan</h1><span class="btn">+ New week</span></div>
+      <div class="sec"><div class="sec-h"><h3>This week</h3></div>
+        <div class="hero"><div class="l"><div class="o">Miami (OH)</div><div class="meta">Week 4 · Sat Sep 26</div><div class="last">Last: "Mesh: cut crossers, communicate bunch release" edited Thu 9:40 pm · Tips &amp; Reminders: Draft · Quiz: Not started</div></div><span class="btn gold">Open week</span></div></div>
+      <div class="sec"><div class="sec-h"><h3>Up next</h3></div>
+        <div class="list"><div class="r"><span class="n">Ohio</span><span class="d">Week 5 · Sat Oct 3</span></div><div class="r"><span class="n">Bye</span><span class="d">no date</span></div></div></div>
+      <div class="sec"><div class="year">2026</div>
+        <div class="list">
+          <div class="r"><span class="n">Kent State</span><span class="d">Week 3 · Sep 19</span><span style="flex:1"></span><span class="d">Tips exported · Quiz: Results</span><span class="btn quiet sm">···</span></div>
+          <div class="r"><span class="n">Toledo</span><span class="d">Week 2 · Sep 12</span><span style="flex:1"></span><span class="d">Tips exported · Quiz: Results</span><span class="btn quiet sm">···</span></div>
+          <div class="r"><span class="n">Camp 2</span><span class="d">Aug 10</span><span style="flex:1"></span><span class="d">Tips exported</span><span class="btn quiet sm">···</span></div>
+        </div></div>
+    </div>
+  </div>
+  <div class="cap"><b>New week form:</b> Opponent (optional) · Label ("Week 4", "Camp 2", "Bye") · Date (optional). <b>Row menu:</b> Open · Rename · Delete. Start-from is V1.1.</div>
+
+  <h2>2 · Week page</h2>
+  <p>One header with the two outputs as chips, then two sections. Each point carries its teaching material inline. Source plays show their answers nested.</p>
+  <div class="screen">
+    <div class="nav"><span class="brand">PEIRA</span><a class="on">Game Plan</a><a>Quizzes</a><a>Playbooks</a><a>Team</a><span class="sp"></span><span class="acct">Account: beaudry</span></div>
+    <div class="content">
+      <div class="back">← Game Plan</div>
+      <div class="row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><h1 class="title">Miami (OH)</h1><div class="meta">Week 4 · Sat Sep 26</div></div>
+        <div class="row"><span class="chip gold">Tips &amp; Reminders: <b>Draft</b> ▸</span><span class="chip">Quiz: <b>Not started</b> ▸</span><span class="btn quiet sm">···</span></div></div>
+
+      <div class="sec"><div class="sec-h"><h3>Scouting</h3><span class="sub">What they do</span><span class="sp"></span><span class="btn sm">Add ▾</span></div>
+        <div class="strip">
+          <div class="card"><div class="pic"><svg class="field" viewBox="0 0 168 96" preserveAspectRatio="xMidYMid slice"><rect width="168" height="96" fill="#245A3C"/><g stroke="rgba(255,255,255,.4)" stroke-width="1"><line x1="0" y1="24" x2="168" y2="24"/><line x1="0" y1="48" x2="168" y2="48"/><line x1="0" y1="72" x2="168" y2="72"/></g><line x1="0" y1="60" x2="168" y2="60" stroke="#4da3ff" stroke-dasharray="4 3"/><g fill="#f2f2ee"><circle cx="64" cy="66" r="4"/><circle cx="74" cy="66" r="4"/><circle cx="84" cy="66" r="4"/><circle cx="94" cy="66" r="4"/><circle cx="104" cy="66" r="4"/><circle cx="122" cy="66" r="4"/><circle cx="134" cy="66" r="4"/><circle cx="146" cy="66" r="4"/><circle cx="26" cy="66" r="4"/><circle cx="84" cy="76" r="4"/><circle cx="84" cy="86" r="4"/></g><g stroke="#f2f2ee" stroke-width="1.5" fill="none"><path d="M122 62 L122 40 L144 30"/><path d="M134 62 L134 44 L112 38"/><path d="M146 62 L146 20"/><path d="M26 62 L26 30 L42 24"/></g></svg></div><div class="body"><div class="name">Trips Rt — Mesh</div><div class="sub">3 answers</div><div class="answers"><div>vs Cover 7</div><div>vs Cover 3</div><div>vs Pressure</div></div></div></div>
+          <div class="card"><div class="pic"><svg class="field" viewBox="0 0 168 96" preserveAspectRatio="xMidYMid slice"><rect width="168" height="96" fill="#245A3C"/><line x1="0" y1="60" x2="168" y2="60" stroke="#4da3ff" stroke-dasharray="4 3"/><g fill="#f2f2ee"><circle cx="64" cy="66" r="4"/><circle cx="74" cy="66" r="4"/><circle cx="84" cy="66" r="4"/><circle cx="94" cy="66" r="4"/><circle cx="104" cy="66" r="4"/><circle cx="114" cy="66" r="4"/><circle cx="32" cy="66" r="4"/><circle cx="84" cy="76" r="4"/><circle cx="76" cy="88" r="4"/></g><path d="M76 84 L64 76 L42 50" stroke="#f2f2ee" stroke-width="1.5" fill="none"/></svg></div><div class="body"><div class="name">Jet motion → Toss</div><div class="sub">1 answer</div><div class="answers"><div>vs Spill</div></div></div></div>
+          <div class="card"><div class="pic note">3rd &amp; 4–6: 71% pass, 80% from empty. They check to screen vs. a pressure look.</div><div class="body"><div class="name">3rd down tendencies</div><div class="sub">note</div></div></div>
+          <div class="card"><div class="pic note">11 personnel 68%. 12 on 1st &amp; 10 inside the 30.</div><div class="body"><div class="name">Personnel</div><div class="sub">note</div></div></div>
+        </div></div>
+
+      <div class="sec"><div class="sec-h"><h3>Points of emphasis</h3><span class="sub">What we must know</span><span class="sp"></span><span class="btn sm">+ Point of emphasis</span></div>
+        <div class="point"><div class="t"><span class="n">1</span><b>Mesh: cut crossers, communicate bunch release</b><span class="chip tag">Mesh</span><span class="counts">3 plays · 2 notes</span></div><div class="call">Our call: <b>Push · Cone</b></div>
+          <div class="inner"><div class="mini"><div class="m"><div class="p"></div><div class="l">Mesh vs Cover 7</div></div><div class="m"><div class="p"></div><div class="l">Mesh vs Cover 3</div></div><div class="m"><div class="p"></div><div class="l">Mesh vs Pressure</div></div><div class="m note">Nickel: #2 vertical = carry. Late call = no call.</div><div class="m note">Corner: settle on 3 flat.</div><span class="btn sm quiet" style="align-self:center">Add ▾</span></div></div></div>
+        <div class="point"><div class="t"><span class="n">2</span><b>Jet motion: Toss fits</b><span class="chip tag">Toss</span><span class="counts">1 play</span></div><div class="call">Our call: <b>Spill · force by Will</b></div></div>
+        <div class="point"><div class="t"><span class="n">3</span><b>Red zone: Cover 2 invert</b><span class="chip tag">Cover 2</span><span class="counts">1 note</span></div><div class="call">Our call: <b>Trap 2</b></div></div>
+        <div class="point"><div class="t"><span class="n">4</span><b>Special teams reminders</b><span class="chip tag" style="color:var(--muted)">No concept</span><span class="counts">2 notes</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="cap"><b>Add ▾:</b> From Motion Lab · New play in Motion Lab · Note (a point also offers Add from Scouting and Answer to a scouted play…). <b>Card menu:</b> Open · Add an answer · Move to point… · Edit caption · Remove. <b>Chips:</b> click to open or create the output.</div>
+
+  <h2>3 · Empty week</h2>
+  <div class="two">
+    <div class="screen"><div class="content">
+      <div class="back">← Game Plan</div><h1 class="title">Miami (OH)</h1><div class="meta">Week 4 · Sat Sep 26</div>
+      <div class="row" style="margin-top:8px"><span class="chip">Tips &amp; Reminders: <b>Not started</b> ▸</span><span class="chip">Quiz: <b>Not started</b> ▸</span></div>
+      <div class="sec"><div class="sec-h"><h3>Scouting</h3><span class="sub">What they do</span></div><div class="empty"><b>What do they do?</b><span>Add their plays from Motion Lab, draw a new one, or jot a tendency.</span><div class="row" style="margin-top:10px"><span class="btn sm">Add ▾</span></div></div></div>
+      <div class="sec"><div class="sec-h"><h3>Points of emphasis</h3><span class="sub">What we must know</span></div><div class="empty"><b>What must we know this week?</b><span>Name it the way you'd say it in the meeting. Tie it to a concept so Saturday's questions count toward it.</span><div class="row" style="margin-top:10px"><span class="btn gold sm">+ Point of emphasis</span></div></div></div>
+    </div></div>
+    <div class="screen"><div class="content">
+      <div class="back">← Miami (OH) · Week 4</div><h1 class="title" style="font-size:24px">Tips &amp; Reminders</h1>
+      <div class="sec"><div class="empty"><b>Friday's sheet, from this week.</b><span>Everything you've marked as a point is here to add. Press Export for the whole week, or pick what goes on the sheet.</span><div class="row" style="margin-top:10px"><span class="btn gold sm">Export PDF</span><span class="btn sm">Add heading</span></div></div></div>
+      <div class="sec"><div class="sec-h"><h3>Quiz</h3></div><div class="empty"><b>Saturday's quiz.</b><span>Build it here and the quiz builder can pull this week's plays in as visuals and set the concept for you.</span><div class="row" style="margin-top:10px"><span class="btn sm">Build the quiz</span><span class="btn quiet sm">Link an existing quiz</span></div></div></div>
+    </div></div>
+  </div>
+  <div class="cap">Every empty state is a football sentence and one action. No illustrations, no placeholder boards.</div>
+
+  <h2>4 · Tips &amp; Reminders builder</h2>
+  <p>Three block kinds only: heading, text, picture. Adding a point expands into blocks. Left: Add from this week. Right: the sheet as it prints.</p>
+  <div class="screen">
+    <div class="nav"><span class="brand">PEIRA</span><a class="on">Game Plan</a><a>Quizzes</a><a>Playbooks</a><a>Team</a><span class="sp"></span><span class="acct">Account: beaudry</span></div>
+    <div class="content">
+      <div class="back">← Miami (OH) · Week 4</div>
+      <div class="row" style="justify-content:space-between"><h1 class="title" style="font-size:24px">Tips &amp; Reminders</h1><div class="row"><span class="btn quiet">Preview</span><span class="btn gold">Export PDF</span></div></div>
+      <div class="tips sec">
+        <div class="side">
+          <div class="sh">Add from this week</div>
+          <div class="pt"><span class="tn">Mesh: cut crossers, communicate bunch release</span><span class="ok">Added</span></div>
+          <div class="it"><span class="th"></span><span class="tn">Mesh vs Cover 7</span><span class="ok">✓</span></div>
+          <div class="it"><span class="th"></span><span class="tn">Mesh vs Cover 3</span><span class="add">Add</span></div>
+          <div class="it"><span class="th"></span><span class="tn">Mesh vs Pressure</span><span class="ok">✓</span></div>
+          <div class="it"><span class="th note"></span><span class="tn">Nickel: #2 vertical = carry…</span><span class="ok">✓</span></div>
+          <div class="pt"><span class="tn">Jet motion: Toss fits</span><span class="add">Add point</span></div>
+          <div class="it"><span class="th"></span><span class="tn">Toss vs Spill</span><span class="add">Add</span></div>
+          <div class="pt"><span class="tn">Red zone: Cover 2 invert</span><span class="add">Add point</span></div>
+          <div class="sh" style="margin-top:12px">Scouting</div>
+          <div class="it" style="padding-left:0"><span class="th note"></span><span class="tn">3rd down tendencies</span><span class="add">Add</span></div>
+          <div class="it" style="padding-left:0"><span class="th"></span><span class="tn">Trips Rt — Mesh</span><span class="add">Add</span></div>
+          <div class="row" style="margin-top:12px;gap:6px"><span class="add">Add heading</span><span class="add">Add text</span></div>
+        </div>
+        <div class="doc">
+          <div class="dt">Tips &amp; Reminders</div><div class="do">Miami (OH)</div><div class="dm">Week 4 · Sat Sep 26</div>
+          <div class="blk"><div class="ctl"><span>↑</span><span>↓</span><span>×</span></div><h4>Mesh: cut crossers, communicate bunch release</h4></div>
+          <div class="blk"><div class="ctl"><span>↑</span><span>↓</span><span>×</span></div><div class="txt">Our call: Push · Cone</div></div>
+          <div class="blk"><div class="ctl"><span>↑</span><span>↓</span><span>×</span></div><div class="txt">Communicate the trips call BEFORE the motion. Late call = no call.</div></div>
+          <div class="blk"><div class="ctl"><span>↑</span><span>↓</span><span>×</span></div><div class="pics"><div><span>Mesh vs Cover 7</span></div><div><span>Mesh vs Pressure</span></div></div></div>
+          <div class="blk"><div class="ctl"><span>↑</span><span>↓</span><span>×</span></div><ul><li>Nickel: #2 vertical = carry.</li><li>Corner: settle on 3 flat.</li></ul></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cap"><b>Template decides layout:</b> letter, PEIRA header, headings as rules, text full width, consecutive pictures in two columns, page numbers, week in the footer. Built with the existing ReportLab pipeline; play pictures are rendered in the browser and sent with the export request, since the engine is TypeScript only. No fonts, colors or themes to choose.</div>
+
+  <h2>5 · Quiz builder: From this week</h2>
+  <p>Only when the quiz has a week. Plays become visuals; a point sets the concept; notes are reference, never questions.</p>
+  <div class="screen">
+    <div class="nav"><span class="brand">PEIRA</span><a>Game Plan</a><a class="on">Quizzes</a><a>Playbooks</a><a>Team</a><span class="sp"></span><span class="acct">Account: beaudry</span></div>
+    <div class="content">
+      <div class="back">← All Quizzes</div>
+      <div class="row" style="gap:12px"><h1 class="title" style="font-size:24px">Miami (OH) · Week 4</h1><span class="chip gold">Miami (OH) · Week 4</span></div>
+      <div class="meta">Questions · Roster · Activate · Results</div>
+      <div class="qe sec">
+        <div class="form">
+          <label>Question 9</label><div class="in">Trips right, #3 runs the mesh. Who carries #2 vertical?</div>
+          <label>Type</label><div class="in">Multiple Choice ▾</div>
+          <label>Concept</label><div class="in">Mesh<span style="color:var(--muted)"> · This week</span> ▾</div>
+          <label>Visual (optional)</label><div class="vis"><span class="btn">Upload</span><span class="btn">Choose from Playbook</span><span class="btn">Record a Clip</span></div>
+          <div style="margin-top:10px;height:120px;border-radius:6px;background:var(--turf)"></div><div class="cap">Mesh vs Cover 7 · from this week</div>
+        </div>
+        <div class="panel">
+          <div class="ph">From this week</div>
+          <div class="pp"><div class="pn"><span>Mesh: cut crossers…</span><span class="c">Mesh</span><span class="btn">Use concept</span></div>
+            <div class="pi"><span class="th"></span><span class="tn">Mesh vs Cover 7</span><span class="btn">Use as visual</span></div>
+            <div class="pi"><span class="th"></span><span class="tn">Mesh vs Pressure</span><span class="btn">Use as visual</span></div>
+            <div class="pi"><span class="ref">"Nickel: #2 vertical = carry."</span><span class="btn quiet">Copy</span></div></div>
+          <div class="pp"><div class="pn"><span>Jet motion: Toss fits</span><span class="c">Toss</span><span class="btn">Use concept</span></div>
+            <div class="pi"><span class="th"></span><span class="tn">Toss vs Spill</span><span class="btn">Use as visual</span></div></div>
+          <div class="pp"><div class="pn"><span>Special teams reminders</span><span class="c">No concept</span></div></div>
+          <div class="pp"><div class="pn"><span style="color:var(--muted);font-weight:600">Scouting</span></div>
+            <div class="pi"><span class="th"></span><span class="tn">Trips Rt — Mesh</span><span class="btn">Use as visual</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="cap"><b>Use as visual</b> renders the play's board in the browser to a PNG and hands it to the question editor's existing image door (the Library stores no snapshots), and, if the point has a concept and the field is empty, sets it. Nothing generates a question.</div>
+
+  <h2>6 · Home card and phone entry</h2>
+  <div class="two">
+    <div>
+      <div class="screen"><div class="content">
+        <div class="sec" style="margin-top:0"><div class="sec-h"><h3>This week</h3></div>
+          <div class="hero"><div class="l"><div class="o">Miami (OH)</div><div class="meta">Week 4 · Sat Sep 26</div><div class="last">Last: "Mesh: cut crossers…" edited Thu 9:40 pm<br>Tips &amp; Reminders: Draft · Quiz: Not started</div></div><span class="btn gold">Continue Game Plan</span></div></div>
+        <div class="sec"><div class="sec-h"><h3>Live now</h3></div><div class="empty"><span>Nothing is out with players right now.</span></div></div>
+        <div class="sec"><div class="sec-h"><h3>Your Quizzes</h3></div><div class="list"><div class="r"><span class="n">2026 Season</span><span class="d">folder · 12</span></div><div class="r"><span class="n">Kent State · Week 3</span><span class="d">10 questions · 71%</span></div></div></div>
+      </div></div>
+      <div class="cap"><b>Home:</b> where I left off, not counts. Shown only when a current week exists; nothing else on the dashboard moves.</div>
+    </div>
+    <div>
+      <div class="phone">
+        <div class="pnav"><b>PEIRA</b><span style="color:var(--muted)">Account ▾</span></div>
+        <div class="pbody">
+          <div class="sec-h" style="margin-bottom:6px"><h3>This week</h3></div>
+          <div class="hero" style="padding:12px 14px;flex-direction:column;align-items:flex-start;gap:8px"><div><div class="o" style="font-size:22px">Miami (OH)</div><div class="meta">Week 4 · Sat Sep 26</div><div class="last">Tips: Draft · Quiz: Not started</div></div><span class="btn gold sm">Continue Game Plan</span></div>
+          <div class="sec-h" style="margin:14px 0 6px"><h3>Live now</h3></div>
+          <div class="empty" style="padding:10px 12px"><span>Nothing is out with players right now.</span></div>
+        </div>
+        <div class="bar"><span class="on">Quizzes</span><span>Playbooks</span><span>Team</span></div>
+      </div>
+      <div class="cap"><b>Phone:</b> the bottom bar stays at three. Game Plan is two taps away through the Home card; the account menu adds a "Game Plan" item for other weeks. The week page renders as stacked lists; Motion Lab authoring stays on the computer.</div>
+    </div>
+  </div>
+</div>
