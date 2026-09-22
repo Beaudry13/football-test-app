@@ -1,0 +1,451 @@
+<meta charset="utf-8">
+<title>Motion Lab Editor Redesign</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  :root {
+    --bg: #0f1012; --panel: #17191c; --panel2: #131518; --border: #2a2d32; --text: #e8e8e6; --muted: #8b8f96;
+    --gold: #f7c948; --gold-ink: #1a1400; --off: #f2f2ee; --def: #e2573a; --turf: #1d3b2a; --turf2: #1f402d;
+    --blue: #4da3ff; --red: #e2573a; --orange: #ff8c42;
+    --ink: #e8e8e6; --ink-soft: #b7bac0; --rule: #26292e;
+    color-scheme: dark;
+  }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "IBM Plex Serif", Georgia, serif; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 40px 80px; padding-inline: 20px; }
+  h1, h2, h3, .ui { font-family: Inter, system-ui, sans-serif; }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 22px; font-weight: 800; margin: 56px 0 10px; padding-top: 18px; border-top: 1px solid var(--rule); text-wrap: balance; }
+  h3 { font-size: 15px; font-weight: 700; margin: 26px 0 6px; }
+  .eyebrow { font: 700 11px/1 Inter, system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+  p { max-width: 68ch; margin: 0 0 12px; color: var(--ink-soft); }
+  p strong, li strong { color: var(--ink); font-weight: 600; }
+  ul { max-width: 70ch; padding-left: 20px; color: var(--ink-soft); }
+  li { margin: 4px 0; }
+  .lede { font-size: 17px; color: var(--ink); }
+  .grid { display: grid; gap: 14px; }
+  .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 800px) { .g3, .g2 { grid-template-columns: 1fr; } }
+  .col { border-top: 2px solid var(--border); padding-top: 10px; }
+  .col.hot { border-top-color: var(--gold); }
+  .col h4 { font: 800 12px/1 Inter, system-ui, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; margin: 0 0 8px; }
+  .col ul { padding-left: 16px; margin: 0; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; font: 13.5px/1.4 Inter, system-ui, sans-serif; margin: 10px 0 6px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--muted); font-weight: 700; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .tbl { overflow-x: auto; }
+  .note { border-left: 3px solid var(--gold); padding: 6px 14px; margin: 14px 0; color: var(--ink); max-width: 70ch; }
+  .verdict { font: 600 14px/1.5 Inter, system-ui, sans-serif; color: var(--ink); }
+  .kbd { font: 600 11px/1 Inter, system-ui, sans-serif; background: #202329; border: 1px solid #33373d; border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; color: var(--ink-soft); }
+
+  /* ---------- Mockup frames ---------- */
+  .shot { margin: 18px 0 8px; }
+  .shot .cap { font: 500 12.5px/1.4 Inter, system-ui, sans-serif; color: var(--muted); margin-top: 8px; }
+  .shot .cap b { color: var(--ink); font-weight: 700; }
+  .frame-wrap { position: relative; width: 100%; aspect-ratio: 1366 / 768; overflow: hidden; border: 1px solid #2c2f35; border-radius: 6px; background: #0f1012; }
+  .frame { position: absolute; top: 0; left: 0; width: 1366px; height: 768px; transform-origin: 0 0; font-family: Inter, system-ui, sans-serif; font-size: 13px; color: var(--text); background: var(--bg); display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden; }
+  .frame.present { grid-template-rows: auto 1fr auto; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .bar.top { height: 44px; }
+  .bar.strip { height: 44px; background: var(--panel2); }
+  .bar.dock { height: 56px; border-bottom: 0; border-top: 1px solid var(--border); background: #121417; }
+  .brand { font-weight: 800; letter-spacing: 0.12em; font-size: 12px; text-transform: uppercase; color: var(--muted); margin-right: 6px; }
+  .brand b { color: var(--gold); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 6px; border: 1px solid var(--border); background: #1e2126; color: var(--text); font-weight: 600; font-size: 12.5px; }
+  .btn.quiet { background: transparent; border-color: transparent; color: var(--ink-soft); }
+  .btn.ghost { background: transparent; }
+  .btn.gold { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); font-weight: 800; }
+  .btn.gold-line { background: transparent; border-color: var(--gold); color: var(--gold); }
+  .btn.big { height: 36px; padding: 0 18px; font-size: 14px; }
+  .btn.icon { width: 30px; padding: 0; justify-content: center; }
+  .btn .k { font-size: 10px; color: var(--muted); font-weight: 700; margin-left: 2px; }
+  .btn.gold .k { color: rgba(26,20,0,0.6); }
+  .btn.dis { opacity: 0.4; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; height: 30px; }
+  .seg span { display: inline-flex; align-items: center; padding: 0 10px; font-weight: 600; font-size: 12px; color: var(--ink-soft); border-right: 1px solid var(--border); background: #1e2126; }
+  .seg span:last-child { border-right: 0; }
+  .seg span.on { background: var(--gold); color: var(--gold-ink); font-weight: 800; }
+  .seg.sm { height: 26px; } .seg.sm span { padding: 0 8px; font-size: 11.5px; }
+  .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px 0 6px; border-radius: 999px; font-weight: 800; font-size: 12.5px; }
+  .chip .dot { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; }
+  .chip.off { background: #24262a; } .chip.off .dot { background: var(--off); color: #111; }
+  .chip.def { background: #2a1c18; } .chip.def .dot { background: var(--def); color: #fff; }
+  .saved { font-size: 11.5px; color: var(--muted); font-weight: 500; }
+  .saved.bad { color: var(--red); font-weight: 700; }
+  .hint { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .hint b { color: var(--text); font-weight: 600; }
+  .sp { flex: 1; }
+  .div { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
+  .banner { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; background: #1a1708; border-bottom: 1px solid #3c3410; border-left: 4px solid var(--gold); font-size: 13.5px; }
+  .banner b { color: var(--gold); }
+  .stage { position: relative; display: flex; align-items: center; justify-content: center; padding: 10px 12px; min-height: 0; }
+  .stage svg { width: 100%; height: 100%; max-height: 100%; border-radius: 6px; box-shadow: 0 0 0 1px var(--border), 0 20px 60px rgba(0,0,0,0.5); }
+  .scrub { flex: 1; position: relative; height: 30px; margin: 0 8px; }
+  .scrub .track { position: absolute; left: 0; right: 0; top: 14px; height: 3px; background: #2f3339; border-radius: 2px; }
+  .scrub .fill { position: absolute; left: 0; top: 14px; height: 3px; background: var(--gold); border-radius: 2px; }
+  .scrub .knob { position: absolute; top: 8px; width: 15px; height: 15px; border-radius: 50%; background: var(--gold); margin-left: -7px; }
+  .scrub .snap { position: absolute; top: 2px; bottom: 2px; width: 2px; background: var(--blue); }
+  .scrub .snap i { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); font: 700 9px/1 Inter, sans-serif; color: var(--blue); font-style: normal; letter-spacing: 0.08em; }
+  .time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; min-width: 96px; text-align: right; }
+  .pop { position: absolute; z-index: 5; background: #1b1e23; border: 1px solid #33373d; border-radius: 8px; padding: 6px; box-shadow: 0 16px 50px rgba(0,0,0,0.6); display: flex; flex-direction: column; min-width: 240px; font-size: 13px; }
+  .pop .t { font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
+  .pop .i { padding: 7px 10px; border-radius: 5px; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; }
+  .pop .i.sub { color: var(--ink-soft); font-weight: 500; }
+  .pop .i.on { background: #2a2412; color: var(--gold); }
+  .pop .i.danger { color: var(--red); }
+  .pop .i.hover { background: #262a30; }
+  .pop .i .k { color: var(--muted); font-size: 11px; }
+  .pop .cur { margin: 4px 6px 6px; padding: 8px 10px; border-radius: 6px; background: #22252b; font-size: 13px; }
+  .pop .cur b { color: var(--gold); }
+  .pop hr { border: 0; border-top: 1px solid #2c3036; margin: 4px 0; }
+  .callout { position: absolute; z-index: 6; background: var(--gold); color: var(--gold-ink); font: 800 12px/1 Inter, sans-serif; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(15,16,18,0.9); }
+  .legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; font: 13px/1.45 Inter, system-ui, sans-serif; color: var(--ink-soft); margin-top: 10px; }
+  @media (max-width: 700px) { .legend { grid-template-columns: 1fr; } }
+  .legend div { display: flex; gap: 8px; }
+  .legend i { flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--gold); color: var(--gold-ink); font: 800 11px/18px Inter, sans-serif; text-align: center; font-style: normal; }
+
+  /* wireframes for directions */
+  .wire { position: absolute; inset: 0; display: grid; font: 700 13px/1.2 Inter, sans-serif; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .wire > div { display: flex; align-items: center; justify-content: center; border: 1px dashed #3a3e45; margin: 3px; border-radius: 4px; }
+  .wire .f { background: var(--turf); color: #7fb08f; border: 0; }
+  .wire .hot { border-color: var(--gold); color: var(--gold); }
+  .wire .float { position: absolute; background: #1b1e23; border: 1px solid var(--gold); color: var(--gold); border-radius: 6px; padding: 8px 12px; font-size: 12px; }
+
+  .score { font: 12.5px/1.4 Inter, system-ui, sans-serif; }
+  .score td:first-child { color: var(--muted); }
+  .good { color: #7fd48a; font-weight: 700; } .mid { color: var(--gold); font-weight: 700; } .bad { color: var(--red); font-weight: 700; }
+  .pill { display: inline-block; font: 700 11px/1 Inter, sans-serif; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; background: #22252b; color: var(--ink-soft); }
+  .pill.p0 { background: var(--gold); color: var(--gold-ink); }
+  .pill.p1 { background: #2e2a1a; color: var(--gold); }
+  .toc { font: 13px/1.6 Inter, system-ui, sans-serif; columns: 2; column-gap: 30px; max-width: 760px; margin: 14px 0 0; }
+  .toc a { color: var(--ink-soft); text-decoration: none; }
+  .toc a:hover { color: var(--gold); }
+  @media (max-width: 600px) { .toc { columns: 1; } }
+  .before-after { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font: 13px/1.45 Inter, system-ui, sans-serif; }
+  @media (max-width: 700px) { .before-after { grid-template-columns: 1fr; } }
+  .before-after > div { padding: 10px 12px; border: 1px solid var(--rule); border-radius: 6px; }
+  .before-after h5 { margin: 0 0 6px; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .before-after h5.gold { color: var(--gold); }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  .pulse { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Peira · Motion Lab · UX/UI design sprint · 19 Sep 2026</div>
+  <h1>Motion Lab Editor Redesign</h1>
+  <p class="lede">The engine is finished and proven. This sprint reorganizes the controls that operate it so a coach's mental model, <strong>move players → draw assignments → set the ball → press play</strong>, is what the screen shows, without turning the editor into a wizard or shrinking the field.</p>
+  <p>Everything below was worked in passes: audit of the live editor at 1366×768, a control priority map, three genuinely different layouts, a chosen direction taken through three revisions with a critique between each, then scenario walk-throughs and a laptop check. The full written handoff (22 sections, P0/P1/P2 list) is the companion document; this page is the visual record.</p>
+  <div class="toc">
+    <a href="#audit">1 · Audit of the current editor</a><br>
+    <a href="#priority">2 · Control priority map</a><br>
+    <a href="#directions">3 · Three layout directions</a><br>
+    <a href="#v1">4 · Chosen direction, revision 1</a><br>
+    <a href="#v2">5 · Revision 2 after critique</a><br>
+    <a href="#final">6 · Final design, all states</a><br>
+    <a href="#scenarios">7 · Coaching scenarios, click counts</a><br>
+    <a href="#laptop">8 · Laptop reality check</a><br>
+    <a href="#renames">9 · Renames, promotions, demotions</a><br>
+    <a href="#plan">10 · Implementation priorities</a>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="audit">1 · What the current editor looks like, and where it fights the coach</h2>
+  <p>Measured on the live prototype at 1366×768: three chrome bars (55 + 50 + 54 px) leave the field 585 px tall, 76% of the screen. Twenty-five buttons are visible before anything is selected. The structure is sound. The problems are hierarchy, mode, wording and noise.</p>
+  <div class="shot"><div class="frame-wrap" id="m-current"></div>
+    <div class="cap"><b>Current editor, player Z selected.</b> Numbered callouts are explained below.</div></div>
+  <div class="legend">
+    <div><i>1</i><span><b>Move / Draw is a global mode switch.</b> The most important interaction in the product (draw his assignment) is behind a mode toggle that also changes what dragging a player means. This is the biggest source of "what do I click now".</span></div>
+    <div><i>2</i><span><b>Two hints, both weak.</b> A muted, truncated instruction in the top bar and another in the context row. Neither is where the eye goes.</span></div>
+    <div><i>3</i><span><b>Present and Play compete.</b> Two gold primaries on screen at once; Present is teaching, not authoring, yet it is the loudest control.</span></div>
+    <div><i>4</i><span><b>The ball lives at the top right</b>, far from Play and reading like a settings menu. "🏈 Ball: Play Action → RB → Z · then …" is engine syntax.</span></div>
+    <div><i>5</i><span><b>View switch looks like an editing mode.</b> Overhead / Coach / Player sits between Undo and Move, and switching silently disables editing.</span></div>
+    <div><i>6</i><span><b>Selected-player controls arrive at equal weight.</b> Timing, Speed and End (Auto/Continue/Settle) are three segmented controls with nine buttons, plus Assignment and Engage. Continue/Settle is engine vocabulary.</span></div>
+    <div><i>7</i><span><b>"Clear All Paths" is always on screen</b>, right-aligned and destructive, for something used once a play.</span></div>
+    <div><i>8</i><span><b>Playback bar mixes display preferences</b> (Paths filter, Labels) with transport, and has no step control.</span></div>
+    <div><i>9</i><span><b>Setup items (Players, Look, Situation) share a row with the hint</b>, so the resting state reads as three unrelated menus.</span></div>
+    <div><i>10</i><span><b>Keyboard badges on every button</b> (V, D, B, Space) add texture without teaching much; most coaches will use the mouse.</span></div>
+  </div>
+  <h3>What is right and must stay</h3>
+  <ul>
+    <li>The field is the input: ball targets, catch points, meet points and viewers are picked by clicking on the field, with dashed rings on the legal choices. Keep every one of those flows.</li>
+    <li>Fixed-height bars, so the field never jumps when the selection changes.</li>
+    <li>Football-friendly words already in use: Pre-Snap / On Snap / Delayed, Controlled / Normal / Fast, "QB holds 0.6 s at the top of his drop for Y's timing".</li>
+    <li>Derived orientation. Body and look are computed, shown on the selected player, and never asked of the coach.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="priority">2 · Control priority map</h2>
+  <p>Classified by how often a coach touches each control while building an ordinary play, not by how important the engine thinks it is. Nothing is removed; the levels decide where a control lives and how loud it is.</p>
+  <div class="grid g3">
+    <div class="col hot"><h4>Primary · always one click away</h4><ul>
+      <li>Select and move a player (drag, no mode)</li><li>Draw his assignment</li><li>Ball action</li><li>Play / Pause, Restart, scrub</li><li>Undo / Redo</li><li>Play name and saved state</li></ul></div>
+    <div class="col"><h4>Secondary · visible in context</h4><ul>
+      <li>Timing: Pre-snap / On snap / Delayed</li><li>Blocks… (engage) and Releases</li><li>Adjust route (anchors) / Redraw</li><li>Overhead / Coach / Player view</li><li>Present</li><li>Situation chip</li><li>Formation: saved looks, add / remove player</li><li>Playback rate, Display (paths filter, labels, markings)</li></ul></div>
+    <div class="col"><h4>Advanced · under More or Advanced</h4><ul>
+      <li>Speed tier per player</li><li>After the route: keep running / stop (continue / settle)</li><li>Delay seconds</li><li>Copy to… / Mirror to…</li><li>Throw point (Throw From Here)</li><li>Then… second ball action</li><li>Play-action fake target</li><li>Hash shift, markings on/off</li><li>Rename / Remove player, Clear all routes</li></ul></div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="directions">3 · Three layout directions</h2>
+  <p>Three different answers to "where do controls live", each evaluated against field space at 1366×768 (the field is height-bound there: every horizontal bar costs field height directly), speed, learnability, clutter, discoverability, advanced access, laptop and meeting-room use.</p>
+
+  <div class="grid g3">
+    <div>
+      <div class="frame-wrap" id="w-a"></div>
+      <h3>A · Floating controls near the player</h3>
+      <p style="font-size:14px">One thin top bar, no strip. Selecting a player pops a small card beside him with Draw / Timing / More. The ball and transport share a bottom dock.</p>
+      <div class="tbl"><table class="score"><tr><td>Field space</td><td class="good">Best (no strip)</td></tr><tr><td>Speed</td><td class="good">Controls at the cursor</td></tr><tr><td>Learnability</td><td class="mid">Card jumps around</td></tr><tr><td>Clutter</td><td class="bad">Card covers the play it edits</td></tr><tr><td>Advanced access</td><td class="mid">Nested popovers</td></tr><tr><td>Meeting room</td><td class="bad">Hard to project and point at</td></tr></table></div>
+    </div>
+    <div>
+      <div class="frame-wrap" id="w-b"></div>
+      <h3>B · Tool rail + inspector</h3>
+      <p style="font-size:14px">A vertical rail (Select, Draw, Ball, Block, Present) on the left, a persistent inspector on the right showing the selected player's every property.</p>
+      <div class="tbl"><table class="score"><tr><td>Field space</td><td class="bad">−9% height at 1366, worse at 1440×900</td></tr><tr><td>Speed</td><td class="mid">Everything visible, more travel</td></tr><tr><td>Learnability</td><td class="good">Familiar design-tool pattern</td></tr><tr><td>Clutter</td><td class="bad">Permanent panel, dashboard feel</td></tr><tr><td>Advanced access</td><td class="good">Always exposed</td></tr><tr><td>Meeting room</td><td class="mid">Field shrinks on projection</td></tr></table></div>
+    </div>
+    <div>
+      <div class="frame-wrap" id="w-c"></div>
+      <h3>C · Field-first: one strip above, one dock below</h3>
+      <p style="font-size:14px">Top bar = the play file. A single fixed strip above the field = whoever is selected (or the setup when nobody is). The dock = the ball and the transport, in that order.</p>
+      <div class="tbl"><table class="score"><tr><td>Field space</td><td class="good">+20 px over today; +64 px in Present</td></tr><tr><td>Speed</td><td class="good">Strip is one glance above the field</td></tr><tr><td>Learnability</td><td class="good">Three stable zones</td></tr><tr><td>Clutter</td><td class="good">Strip holds ≤ 7 controls</td></tr><tr><td>Advanced access</td><td class="mid">One click under More</td></tr><tr><td>Meeting room</td><td class="good">Nothing covers the field</td></tr></table></div>
+    </div>
+  </div>
+  <div class="note"><span class="verdict">Chosen: C.</span> A loses on the very thing that matters most, the field it covers, and a card that follows the selection cannot be pointed at from across a room. B is the most discoverable and the most "software": it spends field width permanently to show properties a coach changes once a game. C keeps the current bones (which the coach who built a real play already knows), fixes the hierarchy, and still fits three stable zones a first-timer can name. The rest of the sprint refines C.</div>
+
+  <!-- ============================================================ -->
+  <h2 id="v1">4 · Direction C, revision 1</h2>
+  <p>First pass: move the ball next to Play, drop the Move/Draw switch, turn the selected-player row into a hierarchy, push setup under one Formation menu.</p>
+  <div class="shot"><div class="frame-wrap" id="m-v1"></div><div class="cap"><b>Revision 1, Z selected.</b> Draw is the one gold button in the strip. Ball sits left of Play in the dock.</div></div>
+  <h3>Critique of revision 1</h3>
+  <ul>
+    <li><strong>Still twelve controls in the strip.</strong> Timing and Speed as full segments plus Draw, Adjust, Blocks, More is the old row with better colors. Speed is set by position and rarely changed; it moves to More.</li>
+    <li><strong>"Draw assignment" is gold even when the player already has one.</strong> After drawing, the primary action is no longer drawing; the button should become quiet ("Redraw") and the strip should show what he does instead.</li>
+    <li><strong>Nothing tells the coach how to draw without pressing a button.</strong> A first-timer sees "Draw assignment", clicks it, then has to know to drag on the field. The field itself should offer the drawing affordance on the selected player.</li>
+    <li><strong>The ball button reads "Ball ▾" when empty.</strong> For a play with no ball action, the third step should be visibly unfinished.</li>
+    <li><strong>The Formation menu buries Situation.</strong> Down and distance are read aloud in every meeting; it deserves its own chip.</li>
+    <li><strong>View segment still sits in the top bar with no verb.</strong> A coach reads "Player" as a noun.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="v2">5 · Revision 2</h2>
+  <div class="shot"><div class="frame-wrap" id="m-v2"></div><div class="cap"><b>Revision 2, Z selected with no assignment yet.</b> The route handle on Z (gold grip, pulsing) is new: drag it to draw. Strip is down to seven controls. Ball reads "Set the ball" until it is set.</div></div>
+  <h3>Critique of revision 2</h3>
+  <ul>
+    <li><strong>The handle risks being mistaken for a drag target that moves the player.</strong> Fix: the handle sits outside the marker, is visibly a different shape (a short gold stub with an arrowhead) and the cursor changes to crosshair over it. Drag on the marker itself always moves. Test on first-time users; keep the Draw button and <span class="kbd">D</span> as the second path.</li>
+    <li><strong>Timing segment is the only three-way control left, and it earns it.</strong> Pre-snap motion is visual and common. Keep it.</li>
+    <li><strong>"Blocks…" is wrong for a defender.</strong> The strip verb should follow the side: "Blocks…" for offense, "Engages…" for defense. Same engine flow.</li>
+    <li><strong>Present still gold.</strong> Make it an outlined gold button: important, not the primary. Play is the only solid gold button on the screen outside a drawing or ball banner.</li>
+    <li><strong>Step buttons in the dock.</strong> Coaches ask "go back a tick" constantly in a room. Add ◁ ▷ (0.1 s) beside the scrub; arrow keys do the same.</li>
+    <li><strong>The situation chip belongs to the field, not the strip.</strong> Moved to the dock's right side next to the display toggles, where it stays visible in Present.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="final">6 · Final design</h2>
+  <p>Three stable zones. <strong>Top bar</strong> is the play: name, saved state, undo, how you are watching, Present. <strong>Strip</strong> is whoever is selected, or the formation when nobody is. <strong>Dock</strong> is the play in motion: the ball, then the transport, then how the field is displayed. The field between them is never covered by chrome.</p>
+
+  <div class="shot"><div class="frame-wrap" id="f-rest"></div><div class="cap"><b>Resting.</b> Nobody selected. One quiet sentence says what to do. "Set the ball" is outlined gold because the play has no ball action yet.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-sel"></div><div class="cap"><b>Z selected, no assignment.</b> The strip names him and offers one gold action. His route handle pulses on the field. Timing is visible; everything else is under More.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-draw"></div><div class="cap"><b>Drawing.</b> The strip becomes a gold-edged banner; the cursor is a crosshair; the route is a dashed gold line while the mouse is down. Release finishes it. No sticky mode: after the drag the strip returns to the selected state.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-has"></div><div class="cap"><b>Z selected, assignment drawn.</b> The strip now reads what he does: "Route · 9 yds · out". Draw has gone quiet ("Redraw"), Adjust appears, More holds the rest.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-more"></div><div class="cap"><b>More menu for a selected player.</b> Speed, what he does after the route, copy and mirror, clear, rename, remove. Football words; the engine's "continue / settle" appears only as the explanation.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-ball"></div><div class="cap"><b>Ball menu.</b> One question, five football answers. Once an action exists the menu shows it in a sentence, with Change, Then…, and an Advanced disclosure for the throw point.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-pick"></div><div class="cap"><b>Picking on the field.</b> Same banner treatment as drawing, so "the editor is waiting for a click" always looks the same. Legal targets get the dashed ring; everyone else dims.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-play"></div><div class="cap"><b>Playing.</b> Play becomes Pause, the scrub fills gold, the SNAP tick is blue, time is relative to the snap. Nothing in the strip changes, so the coach can pause and keep editing.</div></div>
+  <div class="shot"><div class="frame-wrap" id="f-present"></div><div class="cap"><b>Present.</b> The strip is gone, the field gains 44 px, the top bar keeps only the play name, views, telestration and Exit. The dock keeps transport, situation and display toggles.</div></div>
+
+  <h3>Reading the final structure</h3>
+  <div class="before-after">
+    <div><h5>Top bar (44 px)</h5>PEIRA Motion Lab · [Inside Zone Rt ▾] Saved · ↶ ↷ · … · VIEW [Overhead | Coach | Player] · [Present]</div>
+    <div><h5 class="gold">Strip (44 px), selected</h5>[Z chip] · [Draw assignment] · [Adjust] · TIMING [Pre-snap | On snap | Delayed] · [Blocks…] · [More ▾] · … · route summary</div>
+    <div><h5>Strip (44 px), resting</h5>[Formation ▾] · "Drag a player to move him. Click a player to give him a job."</div>
+    <div><h5 class="gold">Dock (56 px)</h5>[🏈 Set the ball ▾] │ [⟲] [▶ Play] [◁][▷] scrub with SNAP · −0.5 s · [1× ▾] │ [1st &amp; 10 · own 35 ▾] · [Display ▾]</div>
+  </div>
+
+  <h3>Final simplification pass (what the third look removed)</h3>
+  <ul>
+    <li><strong>Paths filter + Labels → one Display ▾ menu</strong> in the dock (Paths: All / Offense / Defense / None; Labels; Field markings). Two persistent controls become one, and the markings toggle leaves the situation popover where it never belonged.</li>
+    <li><strong>Rate segment → a single 1× ▾ pill.</strong> Three buttons for something changed once a session.</li>
+    <li><strong>Time readout shows only the current time relative to the snap</strong> ("+1.3 s"). The play length was noise; the scrub bar already shows it.</li>
+    <li><strong>Keyboard badges gone from every button</strong>; the key appears in the tooltip. The dock lost eight labels and reads as three groups: ball, transport, display.</li>
+    <li><strong>Resting strip is one button and one sentence.</strong> Players, Look and Clear All Paths are inside Formation ▾ and the play menu.</li>
+  </ul>
+  <p>Persistent control count at rest: <strong>25 today → 14 final</strong> (top bar 8, strip 1, dock 5), with nothing removed from the product.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="scenarios">7 · Coaching scenarios, counted</h2>
+  <p>Interactions counted from a saved play with the men already aligned. A drag is one interaction; a menu open and a menu choice are two.</p>
+  <div class="tbl"><table>
+    <tr><th>Scenario</th><th>Today</th><th>Final</th><th>Where friction went</th></tr>
+    <tr><td><b>A · Pass.</b> QB drops, receiver runs mesh, throw to him, play.</td><td class="num">11</td><td class="num">9</td><td>Two "press D" steps gone (drag the handle). Ball moved next to Play so step 3 leads into step 4.</td></tr>
+    <tr><td><b>B · Run.</b> Handoff to RB, tackle blocks the end, RB continues through the fit.</td><td class="num">12</td><td class="num">9</td><td>"Blocks…" defaults the meet point to where the blocker's path ends, so it is one click (the defender) instead of two. RB keeps running by default; no End control touched.</td></tr>
+    <tr><td><b>C · Coverage teaching.</b> Concept drawn, three defenders' drops drawn, watch from the FS.</td><td class="num">14</td><td class="num">11</td><td>Same handle saving per defender. Player view: choose "Player", click the FS; unchanged and already good.</td></tr>
+    <tr><td><b>D · Quick edit.</b> Open play, move a defender, change one route, change the ball target, watch.</td><td class="num">10</td><td class="num">8</td><td>Open list is one click from the name. Redraw is a handle drag. Ball → Change → Pass to… → click → click.</td></tr>
+  </table></div>
+  <p>The counts move modestly. The bigger change is decisions: in every scenario the coach never chooses a mode, never reads a state hint to find out what dragging will do, and never opens an advanced control.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="laptop">8 · Laptop reality check</h2>
+  <div class="tbl"><table>
+    <tr><th>Screen</th><th>Chrome</th><th>Field (today)</th><th>Field (final)</th><th>Field (Present)</th><th>Notes</th></tr>
+    <tr><td>1366 × 768</td><td>44 + 44 + 56</td><td>1342 × 585</td><td>1342 × 605</td><td>1342 × 649</td><td>Height-bound. Strip holds 7 controls at 30 px; dock fits with the ball label truncated at 220 px.</td></tr>
+    <tr><td>1440 × 900</td><td>44 + 44 + 56</td><td>1416 × 717</td><td>1416 × 732</td><td>1416 × 741</td><td>Width-bound. Field runs nearly edge to edge; no scrolling anywhere.</td></tr>
+    <tr><td>1280 × 720</td><td>44 + 44 + 56</td><td>1256 × 537</td><td>1256 × 557</td><td>1256 × 601</td><td>Top bar drops the VIEW label; ball label truncates to "Pass to Z".</td></tr>
+  </table></div>
+  <ul>
+    <li>Popovers open <em>over</em> the field, never push it. The ball menu opens upward from the dock and the More menu downward from the strip, so neither covers the line of scrimmage.</li>
+    <li>No basic authoring requires scrolling. Only the Open list and the Formation menu scroll inside themselves.</li>
+    <li>Everything a coach touches in a meeting is at least 30 px tall; Play is 36 px.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="renames">9 · Renamed, promoted, demoted</h2>
+  <div class="grid g3">
+    <div class="col"><h4>Renamed</h4><ul>
+      <li>Draw Path → <b>Draw assignment</b> (Redraw once one exists)</li><li>Edit Path → <b>Adjust</b></li><li>Engage… → <b>Blocks…</b> (offense) / <b>Engages…</b> (defense)</li><li>Release → <b>Releases after the block</b></li><li>End: Auto / Continue / Settle → <b>After the route: Keeps running / Stops</b></li><li>Clear Path → <b>Clear assignment</b>; Clear All Paths → <b>Clear all assignments</b></li><li>Throw From Here → <b>Throw point: set on field</b></li><li>Look → <b>Formation</b> (Saved formations)</li><li>Players ▾ → inside <b>Formation ▾</b> as Add player</li><li>Ball: Pass → Z → <b>Pass to Z</b>; empty state <b>Set the ball</b></li><li>Then… → <b>Then…</b> (kept), shown as "then pitch to H"</li><li>Playback "Speed" → <b>Rate</b> (avoids the player Speed tier)</li></ul></div>
+    <div class="col hot"><h4>More prominent</h4><ul>
+      <li>Draw assignment: the one gold button in the strip</li><li>The ball: beside Play, outlined gold until set</li><li>Play: largest control on screen, the only solid gold outside banners</li><li>The route handle on the selected player</li><li>Mode banners for drawing and picking</li><li>What the selected player does, in words, in the strip</li></ul></div>
+    <div class="col"><h4>Less prominent</h4><ul>
+      <li>Move / Draw switch: removed as a persistent control</li><li>Present: outlined, not solid</li><li>Speed tier, After the route, Copy, Mirror: under More</li><li>Clear all assignments: in the play menu</li><li>Keyboard badges: tooltips only</li><li>Top-bar hint: removed; one hint line lives in the strip</li><li>Paths filter, Labels, field markings: one Display ▾ menu in the dock</li></ul></div>
+  </div>
+  <h3>Intentionally not changed</h3>
+  <ul>
+    <li>All field-pick flows (receiver, catch point, carrier, partner, meet point, throw point, viewer). They are the best part of the editor.</li>
+    <li>Fixed-height bars and the rule that the field never moves under the cursor.</li>
+    <li>Timing and speed vocabulary. Derived orientation with no coach-facing control. The catch-adjusted toast. Engagement and ball warnings.</li>
+    <li>The engine, path math, ball logic, engagement logic, persistence and the play/look schema. This is a reorganization of controls, not a rebuild.</li>
+  </ul>
+
+  <!-- ============================================================ -->
+  <h2 id="plan">10 · Implementation priorities</h2>
+  <div class="tbl"><table>
+    <tr><th></th><th>Change</th><th>Why first</th></tr>
+    <tr><td><span class="pill p0">P0</span></td><td>Remove the Move/Draw switch; drag on a marker always moves; drawing starts from the route handle, the Draw button or <span class="kbd">D</span>; drawing ends when the drag ends.</td><td>Removes the one mode a coach can be wrong about.</td></tr>
+    <tr><td><span class="pill p0">P0</span></td><td>Move the ball control into the dock beside Play; "Set the ball" outlined-gold empty state; sentence-form summary.</td><td>Makes step 3 lead into step 4.</td></tr>
+    <tr><td><span class="pill p0">P0</span></td><td>Strip hierarchy: chip · Draw · Adjust · Timing · Blocks… · More. Speed, After the route, Copy, Mirror, Clear, Rename, Remove under More.</td><td>Seven controls instead of twelve at equal weight.</td></tr>
+    <tr><td><span class="pill p0">P0</span></td><td>Mode banners (gold-edged strip) for drawing and every field pick, with one Cancel.</td><td>One look for "the editor is waiting for you".</td></tr>
+    <tr><td><span class="pill p0">P0</span></td><td>Top bar: play file only. Present outlined. Hint removed. Keyboard badges → tooltips.</td><td>One primary per screen.</td></tr>
+    <tr><td><span class="pill p1">P1</span></td><td>Blocks… defaults the meet point to the end of the blocker's path (or halfway to the defender) and lets the coach drag it.</td><td>Saves a click on every block.</td></tr>
+    <tr><td><span class="pill p1">P1</span></td><td>Route summary in the strip ("Route · 9 yds · out", "Drop · 5 yds", "Blocks DE · releases").</td><td>Answers "what is he doing" without reading the field.</td></tr>
+    <tr><td><span class="pill p1">P1</span></td><td>Step buttons and ← → keys (0.1 s). Saving… state. Situation chip and Display ▾ menu in the dock; rate as a pill.</td><td>Meeting-room controls.</td></tr>
+    <tr><td><span class="pill p1">P1</span></td><td>Renames listed in section 9; Formation menu absorbing Looks and Add player.</td><td>Football words everywhere the coach reads.</td></tr>
+    <tr><td><span class="pill">P2</span></td><td>Route handle polish: arrowhead shape, crosshair cursor, first-selection pulse, hidden after the first successful draw of the session.</td><td>Discoverability without permanent noise.</td></tr>
+    <tr><td><span class="pill">P2</span></td><td>Ball menu "Advanced" disclosure (throw point, fake target); hover states, disabled states, transitions at 120 ms; tooltips with the key.</td><td>Polish after structure.</td></tr>
+    <tr><td><span class="pill">P2</span></td><td>Present: top bar collapses further on narrow screens; telestration color kept single.</td><td>Optional.</td></tr>
+  </table></div>
+</div>
+
+<script>
+(function () {
+  // ---------- field data (yards; LOS at y=0, downfield positive) ----------
+  const U = 20, W = 53.33, YMIN = -13, YMAX = 17, MID = 26.67;
+  const O = [['LT',22.7,-1.6],['LG',24.7,-1.6],['C',26.67,-1.6],['RG',28.7,-1.6],['RT',30.7,-1.6],['Y',33.7,-1.6],['QB',26.67,-3.3],['RB',26.67,-6.4],['X',6.8,-1.6],['H',37.5,-1.6],['Z',46,-1.6]];
+  const D = [['DE',22.7,1.3],['DT',24.7,1.3],['NT',27.7,1.3],['DE',30.7,1.3],['LB',24.7,4.5],['LB',28.7,4.5],['NB',37.5,4.5],['CB',6.8,6.2],['CB',46,6.2],['FS',26.67,12.2],['SS',37.5,9]];
+  const vx = x => x * U, vy = y => (YMAX - y) * U;
+  function fieldSVG(opts) {
+    opts = opts || {};
+    const pos = opts.positions || {};
+    const show = opts.show !== false;
+    let s = `<svg viewBox="${-2*U} 0 ${(W+4)*U} ${(YMAX-YMIN)*U}" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, sans-serif">`;
+    s += `<rect x="${-2*U}" y="0" width="${(W+4)*U}" height="${(YMAX-YMIN)*U}" fill="#131a15"/>`;
+    s += `<rect x="0" y="0" width="${W*U}" height="${(YMAX-YMIN)*U}" fill="#1d3b2a"/>`;
+    for (let y = YMIN; y <= YMAX; y++) { const abs = 35 + y; if (abs % 5 === 0 && Math.floor(abs/5) % 2 === 0) s += `<rect x="0" y="${vy(Math.min(y+5,YMAX))}" width="${W*U}" height="${(Math.min(y+5,YMAX)-y)*U}" fill="#1f402d"/>`; }
+    for (let y = YMIN; y <= YMAX; y++) { const abs = 35 + y; if (abs % 5 === 0) s += `<line x1="0" x2="${W*U}" y1="${vy(y)}" y2="${vy(y)}" stroke="rgba(255,255,255,0.5)" stroke-width="${abs===50?3:2}"/>`; else s += `<g stroke="rgba(255,255,255,0.4)" stroke-width="1.5"><line x1="0" x2="12" y1="${vy(y)}" y2="${vy(y)}"/><line x1="${W*U-12}" x2="${W*U}" y1="${vy(y)}" y2="${vy(y)}"/><line x1="${20*U-6}" x2="${20*U+6}" y1="${vy(y)}" y2="${vy(y)}"/><line x1="${(W-20)*U-6}" x2="${(W-20)*U+6}" y1="${vy(y)}" y2="${vy(y)}"/></g>`; }
+    [[5,'40'],[15,'50'],[-5,'30']].forEach(([y,l]) => { s += `<g fill="rgba(255,255,255,0.32)" font-size="44" font-weight="700"><text transform="translate(${7*U} ${vy(y)}) rotate(90)" text-anchor="middle" dominant-baseline="middle">${l}</text><text transform="translate(${(W-7)*U} ${vy(y)}) rotate(-90)" text-anchor="middle" dominant-baseline="middle">${l}</text></g>`; });
+    s += `<line x1="0" x2="0" y1="0" y2="${(YMAX-YMIN)*U}" stroke="#fff" stroke-width="4"/><line x1="${W*U}" x2="${W*U}" y1="0" y2="${(YMAX-YMIN)*U}" stroke="#fff" stroke-width="4"/>`;
+    s += `<line x1="0" x2="${W*U}" y1="${vy(10)}" y2="${vy(10)}" stroke="#f7c948" stroke-width="2" opacity="0.7"/>`;
+    s += `<line x1="0" x2="${W*U}" y1="${vy(0)}" y2="${vy(0)}" stroke="#4da3ff" stroke-width="2.5" stroke-dasharray="10 6" opacity="0.9"/>`;
+    // routes
+    (opts.routes || []).forEach(r => { const pts = r.pts.map(p => `${vx(p[0])},${vy(p[1])}`).join(' '); s += `<polyline points="${pts}" fill="none" stroke="${r.sel ? '#f7c948' : (r.def ? 'rgba(226,87,58,0.85)' : 'rgba(242,242,238,0.75)')}" stroke-width="${r.sel?4.5:3}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${r.dash ? '8 6' : (r.pre ? '2 7' : 'none')}"/>`; if (!r.dash) { const a = r.pts[r.pts.length-1], b = r.pts[r.pts.length-2]; const ang = Math.atan2(vy(a[1])-vy(b[1]), vx(a[0])-vx(b[0])); const ax = vx(a[0]), ay = vy(a[1]); const p1 = [ax - 12*Math.cos(ang-0.5), ay - 12*Math.sin(ang-0.5)], p2 = [ax - 12*Math.cos(ang+0.5), ay - 12*Math.sin(ang+0.5)]; s += `<polygon points="${ax},${ay} ${p1[0]},${p1[1]} ${p2[0]},${p2[1]}" fill="${r.sel ? '#f7c948' : (r.def ? '#e2573a' : '#f2f2ee')}"/>`; } });
+    if (opts.catchPt) { const c = opts.catchPt; s += `<g transform="translate(${vx(c[0])} ${vy(c[1])})"><circle r="9" fill="none" stroke="#f7c948" stroke-width="2.5"/><circle r="3" fill="#f7c948"/></g>`; }
+    const draw = (arr, isOff) => arr.forEach((p, i) => { const id = (isOff?'O':'D') + i; const q = pos[id] || [p[1], p[2]]; const sel = opts.selected === id; const pick = opts.pickable && opts.pickable(id, p[0], isOff); const dim = opts.pickable && !pick && !sel && opts.dimOthers && !(isOff && p[0]==='QB'); const hold = opts.holder === id;
+      s += `<g transform="translate(${vx(q[0])} ${vy(q[1])})" opacity="${dim?0.45:1}">`;
+      if (sel) s += `<circle r="23" fill="none" stroke="#f7c948" stroke-width="3"/>`;
+      if (pick) s += `<circle r="23" fill="none" stroke="#f7c948" stroke-width="2.5" stroke-dasharray="5 4"/>`;
+      s += `<circle r="17" fill="${isOff?'#f2f2ee':'#e2573a'}" stroke="${hold?'#f7c948':(isOff?'#6b6b66':'#7a2412')}" stroke-width="${hold?3:2}"/>`;
+      if (show) s += `<text text-anchor="middle" dominant-baseline="central" font-size="${p[0].length>2?11:13}" font-weight="800" fill="${isOff?'#111':'#fff'}">${p[0]}</text>`;
+      if (sel && opts.handle) s += `<g class="${opts.handlePulse?'pulse':''}"><line x1="0" y1="-19" x2="0" y2="-44" stroke="#f7c948" stroke-width="4" stroke-linecap="round"/><polygon points="0,-54 -7,-42 7,-42" fill="#f7c948"/></g>`;
+      s += `</g>`; });
+    draw(D, false); draw(O, true);
+    if (opts.ball) { const b = opts.ball; s += `<g transform="translate(${vx(b[0])} ${vy(b[1])})"><ellipse rx="10" ry="6" fill="#8a4b1d" stroke="#2c1608" stroke-width="1.5"/><line x1="-4" x2="4" y1="0" y2="0" stroke="#fff" stroke-width="1.5"/></g>`; }
+    if (opts.extra) s += opts.extra;
+    s += '</svg>';
+    return s;
+  }
+  const btn = (t, cls, k) => `<span class="btn ${cls||''}">${t}${k?`<span class="k">${k}</span>`:''}</span>`;
+  const seg = (items, on, sm) => `<span class="seg ${sm?'sm':''}">${items.map(i => `<span class="${i===on?'on':''}">${i}</span>`).join('')}</span>`;
+  const chip = (l, side) => `<span class="chip ${side}"><span class="dot">${l}</span>${side==='off'?'Offense':'Defense'}</span>`;
+  const scrub = (pct, playing) => `<span class="scrub"><span class="track"></span><span class="fill" style="width:${pct}%"></span><span class="snap" style="left:17%"><i>SNAP</i></span><span class="knob" style="left:${pct}%"></span></span>`;
+
+  function mount(id, html, cls) {
+    const w = document.getElementById(id); if (!w) return;
+    w.innerHTML = `<div class="frame ${cls||''}">${html}</div>`;
+    const fit = () => { const f = w.firstElementChild; f.style.transform = `scale(${w.clientWidth / 1366})`; };
+    fit(); window.addEventListener('resize', fit);
+  }
+
+  // ---------- CURRENT (annotated) ----------
+  const curTop = `<div class="bar top" style="height:55px">
+      <span class="brand">Peira <b>Motion Lab</b></span>${btn('Untitled Play ▾','ghost')}<span class="saved">Saved</span>${btn('↶','quiet icon')}${btn('↷','quiet icon')}
+      <span class="hint" style="flex:1"><b>Z</b> selected — press <b>D</b> and draw their path.</span>
+      ${seg(['Overhead','Coach','Player'],'Overhead')}
+      ${seg(['Move  <span class="k">V</span>','Draw  <span class="k">D</span>'],'Move  <span class="k">V</span>')}
+      ${btn('🏈 Ball','ghost','B')}${btn('Present','gold')}</div>
+    <div class="bar strip" style="height:50px">${chip('Z','off')}<span class="hint">No assignment yet — press <b>D</b> and draw one.</span>${btn('Assignment ▾')}${btn('Engage…')}<span class="sp"></span>${btn('Clear All Paths','dis')}</div>
+    <div class="stage">${fieldSVG({selected:'O10'})}</div>
+    <div class="bar dock" style="height:54px">${btn('Reset','dis','R')}${btn('▶ Play','gold dis','Space')}${btn('Restart','dis')}${scrub(0)}<span class="time">—</span><span class="lbl">Speed</span>${seg(['0.5×','1×','1.5×'],'1×',true)}<span class="lbl">Paths</span>${seg(['All','Offense','Defense','None'],'All',true)}${btn('Labels','gold')}</div>
+    <span class="callout" style="left:1000px;top:38px">1</span><span class="callout" style="left:380px;top:38px">2</span><span class="callout" style="left:1330px;top:38px">3</span><span class="callout" style="left:1190px;top:38px">4</span><span class="callout" style="left:800px;top:38px">5</span><span class="callout" style="left:430px;top:88px">6</span><span class="callout" style="left:1290px;top:88px">7</span><span class="callout" style="left:1080px;top:748px">8</span><span class="callout" style="left:50px;top:88px">9</span><span class="callout" style="left:60px;top:748px">10</span>`;
+  mount('m-current', curTop);
+
+  // ---------- WIREFRAMES ----------
+  mount('w-a', `<div class="wire" style="grid-template-rows:44px 1fr 56px"><div>Top bar · play · views · present</div><div class="f">Field<span class="float" style="left:60%;top:35%">Z · Draw · Timing · More ▾</span></div><div class="hot">Ball · Play · scrub</div></div>`);
+  mount('w-b', `<div class="wire" style="grid-template-columns:56px 1fr 280px;grid-template-rows:44px 1fr 56px"><div style="grid-column:1/4">Top bar</div><div class="hot" style="writing-mode:vertical-rl">Select · Draw · Ball · Block · Present</div><div class="f">Field</div><div>Inspector<br>every property</div><div style="grid-column:1/4">Play · scrub</div></div>`);
+  mount('w-c', `<div class="wire" style="grid-template-rows:44px 44px 1fr 56px"><div>Top bar · play file · views · present</div><div class="hot">Strip · the selected player (or the formation)</div><div class="f">Field</div><div class="hot">Dock · ball → play → display</div></div>`);
+
+  // ---------- Shared final pieces ----------
+  const top = (o) => `<div class="bar top">
+      <span class="brand">Peira <b>Motion Lab</b></span>${btn((o.name||'Inside Zone Rt')+' <span style="color:var(--muted)">▾</span>','ghost')}<span class="saved ${o.saved==='bad'?'bad':''}">${o.saved||'Saved'}</span>
+      ${btn('↶','quiet icon')}${btn('↷','quiet icon dis')}<span class="sp"></span>
+      ${o.v1 ? seg(['Overhead','Coach','Player'],'Overhead') : `<span class="lbl">View</span>${seg(['Overhead','Coach','Player'], o.view||'Overhead')}`}
+      ${btn('Present', o.v1 ? 'gold' : 'gold-line')}</div>`;
+  const dockFinal = (o) => `<div class="bar dock">
+      ${o.ball ? btn('🏈 '+o.ball+' <span style="color:var(--muted)">▾</span>','ghost') : btn('🏈 Set the ball <span style="opacity:.6">▾</span>','gold-line')}
+      <span class="div"></span>
+      ${btn('⟲','icon ghost')}${btn(o.playing?'❚❚ Pause':'▶ Play','gold big')}${o.v1?'':btn('◁','icon ghost')+btn('▷','icon ghost')}
+      ${scrub(o.pct||0)}<span class="time">${o.time||'−0.5 s'}</span>${o.v1 ? seg(['0.5×','1×','1.5×'],'1×',true) : btn('1× ▾','ghost')}
+      <span class="div"></span>${o.v1 ? btn('Paths: All ▾','ghost')+btn('Labels','ghost') : btn('1st &amp; 10 · own 35 <span style="color:var(--muted)">▾</span>','ghost')+btn('Display ▾','ghost')}</div>`;
+  const stripRest = `<div class="bar strip">${btn('Formation ▾','ghost')}<span class="hint">Drag a player to move him. Click a player to give him a job.</span></div>`;
+  const stripSel = (o) => `<div class="bar strip">${chip(o.label||'Z',o.side||'off')}
+      ${o.has ? btn('Redraw','ghost') + btn('Adjust','ghost') : btn('✎ Draw assignment','gold')}
+      <span class="lbl">Timing</span>${seg(['Pre-snap','On snap','Delayed'], o.timing||'On snap', true)}
+      ${btn(o.side==='def'?'Engages…':'Blocks…','ghost')}${btn('More ▾','ghost')}
+      <span class="sp"></span><span class="hint">${o.summary || (o.has ? '' : 'No assignment yet.')}</span></div>`;
+
+  // ---------- V1 ----------
+  mount('m-v1', top({v1:true}) + `<div class="bar strip">${chip('Z','off')}${btn('✎ Draw assignment','gold')}${btn('Adjust','ghost dis')}<span class="lbl">Timing</span>${seg(['Pre-snap','On snap','Delayed'],'On snap',true)}<span class="lbl">Speed</span>${seg(['Controlled','Normal','Fast'],'Fast',true)}${btn('Blocks…','ghost')}${btn('More ▾','ghost')}<span class="sp"></span>${btn('Formation ▾','ghost')}</div>`
+    + `<div class="stage">${fieldSVG({selected:'O10'})}</div>` + dockFinal({v1:true, ball:'Ball'}));
+
+  // ---------- V2 ----------
+  mount('m-v2', top({}) + stripSel({}) + `<div class="stage">${fieldSVG({selected:'O10', handle:true, handlePulse:true})}</div>` + dockFinal({}));
+
+  // ---------- FINAL states ----------
+  const zRoute = {pts:[[46,-1.6],[46,8],[52,8]], sel:true};
+  const otherRoutes = [{pts:[[26.67,-3.3],[26.67,-8.5]]},{pts:[[6.8,-1.6],[6.8,10],[2.5,13]]},{pts:[[37.5,-1.6],[41,3]]},{pts:[[26.67,12.2],[24,16]], def:true}];
+  mount('f-rest', top({}) + stripRest + `<div class="stage">${fieldSVG({})}</div>` + dockFinal({}));
+  mount('f-sel', top({}) + stripSel({}) + `<div class="stage">${fieldSVG({selected:'O10', handle:true, handlePulse:true})}</div>` + dockFinal({}));
+  mount('f-draw', top({}) + `<div class="banner">✎ <span>Drawing <b>Z</b>'s assignment. Drag on the field; let go to finish.</span><span class="sp"></span>${btn('Cancel','ghost','Esc')}</div>`
+    + `<div class="stage" style="cursor:crosshair">${fieldSVG({selected:'O10', routes:[{pts:[[46,-1.6],[46,4],[46.5,7.5]], sel:true, dash:true}]})}</div>` + dockFinal({}));
+  mount('f-has', top({}) + stripSel({has:true, summary:'<b>Route</b> · 9 yds up, then out · fast'}) + `<div class="stage">${fieldSVG({selected:'O10', routes:[zRoute, ...otherRoutes]})}</div>` + dockFinal({ball:'Pass to Z'}));
+  mount('f-more', top({}) + stripSel({has:true, summary:'<b>Route</b> · 9 yds up, then out · fast'}) + `<div class="stage">${fieldSVG({selected:'O10', routes:[zRoute, ...otherRoutes]})}</div>` + dockFinal({ball:'Pass to Z'})
+    + `<div class="pop" style="left:568px;top:92px;min-width:300px"><div class="t">Speed</div><div class="i sub" style="padding:2px 6px 8px">${seg(['Controlled','Normal','Fast'],'Fast',true)}</div><div class="t">After the route</div><div class="i on">Keeps running <span class="k">auto</span></div><div class="i">Stops where the route ends</div><hr><div class="i">Copy his assignment to…</div><div class="i">Mirror his assignment to…</div><div class="i">Clear assignment <span class="k">Delete</span></div><hr><div class="i">Rename</div><div class="i danger">Remove from play</div></div>`);
+  mount('f-ball', top({}) + stripRest + `<div class="stage">${fieldSVG({routes:[{pts:[[46,-1.6],[46,8],[52,8]]}, ...otherRoutes], catchPt:[46,7.2]})}</div>` + dockFinal({ball:'Pass to Z'})
+    + `<div class="pop" style="left:14px;bottom:62px;min-width:320px"><div class="cur">Now: <b>Pass to Z</b>, caught 9 yds downfield. QB throws from the top of his drop.</div><div class="t">Change to</div><div class="i">QB keeps it</div><div class="i">Handoff to…</div><div class="i">Pitch to…</div><div class="i hover">Pass to…</div><div class="i">Play action: fake, then pass…</div><hr><div class="t">Then…</div><div class="i">Then hand off / pitch / throw again…</div><hr><div class="i sub">Advanced ▸ <span class="k">throw point · fake target</span></div><div class="i danger">Clear the ball</div></div>`);
+  mount('f-pick', top({}) + `<div class="banner">🏈 <span>Pass. <b>Click the receiver.</b></span><span class="sp"></span>${btn('Cancel','ghost','Esc')}</div>`
+    + `<div class="stage">${fieldSVG({routes:otherRoutes.concat([{pts:[[46,-1.6],[46,8],[52,8]]}]), dimOthers:true, pickable:(id,l,off)=>off && l!=='QB' && !['LT','LG','C','RG','RT'].includes(l)})}</div>` + dockFinal({ball:'Pass to Z'}));
+  mount('f-play', top({}) + stripSel({has:true, summary:'<b>Route</b> · 9 yds up, then out · fast'}) + `<div class="stage">${fieldSVG({selected:'O10', routes:[zRoute, ...otherRoutes], positions:{O10:[46,6.5],O6:[26.67,-7.9],O8:[6.8,8.6],O9:[40.5,2.6],D9:[24.6,15.2],D8:[46,9.5],D6:[39,6.5]}, ball:[38,2.5], catchPt:[46,7.2]})}</div>` + dockFinal({ball:'Pass to Z', playing:true, pct:58, time:'+1.3 s'}));
+  mount('f-present', `<div class="bar top"><span class="brand">Peira <b>Motion Lab</b></span><span style="font-weight:800;font-size:14px">Inside Zone Rt</span><span class="sp"></span><span class="lbl">View</span>${seg(['Overhead','Coach','Player'],'Overhead')}${btn('✎ Draw','ghost')}${btn('Clear marks','ghost dis')}${btn('Exit Present','gold-line')}</div>`
+    + `<div class="stage">${fieldSVG({routes:[{pts:[[46,-1.6],[46,8],[52,8]]}, ...otherRoutes], catchPt:[46,7.2], extra:`<polyline points="${[[10,3],[20,9],[30,6],[38,11]].map(p=>vx(p[0])+','+vy(p[1])).join(' ')}" fill="none" stroke="#fff27a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`})}</div>`
+    + `<div class="bar dock">${btn('⟲','icon ghost')}${btn('▶ Play','gold big')}${btn('◁','icon ghost')}${btn('▷','icon ghost')}${scrub(0)}<span class="time">−0.5 s</span>${btn('1× ▾','ghost')}<span class="div"></span>${btn('1st &amp; 10 · own 35','ghost')}${btn('Display ▾','ghost')}</div>`, 'present');
+})();
+</script>
