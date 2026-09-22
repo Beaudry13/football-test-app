@@ -67,6 +67,35 @@ const MIN_SAMPLE_GAP = 0.15
  * was a tap, not a draw (SPEC §5.4: "drawn length < 1 yd → no change").
  */
 const TAP_SLOP = 1
+
+/**
+ * The route a stroke describes, from the raw samples `[man, press, ...moves]`.
+ *
+ * FROM THE HANDLE, THE FIRST STRETCH IS NOT FOOTBALL. The handle sits 1.3-2.9
+ * yd downfield of the man, so that is where the pointer goes down. Kept, the
+ * press became the route's first anchor: a linebacker dragged from his handle
+ * toward the line blitzed by first stepping two yards deeper, a tackle set
+ * back by first stepping into the line. Dropping only the press point is not
+ * enough - a real pointer sends samples all the way back over the man, and
+ * those make the same hook.
+ *
+ * So until the pointer is further from where it went down than the man is,
+ * nothing it has done is kept: that much travel is the handle's own offset
+ * being used up. From there on, every sample is the coach's. The release
+ * point is always kept, so a short stroke still ends where it was let go.
+ * A press on the man himself (closer than one sample gap) has no offset to
+ * use up and keeps everything, exactly as before; so does an armed stroke,
+ * which never starts on the handle.
+ */
+function routeFromStroke(d: Pt[], fromHandle: boolean): Pt[] {
+  if (!fromHandle || d.length < 3) return d
+  const [man, press] = d
+  const offset = Math.hypot(press.x - man.x, press.y - man.y)
+  if (offset < MIN_SAMPLE_GAP) return d
+  let first = d.findIndex((q, i) => i >= 2 && Math.hypot(q.x - press.x, q.y - press.y) >= offset)
+  if (first === -1) first = d.length - 1
+  return [man, ...d.slice(first)]
+}
 const TAIL = 0.4
 /** A catch-point click further than this from the route is ignored. */
 const CATCH_PICK_RADIUS = 3
@@ -315,6 +344,8 @@ export function MotionLabEditor({
    * draw, so it hands back the state it interrupted rather than disarming.
    */
   const armedAtPressRef = useRef(false)
+  /** Did the stroke in flight start on the route handle? See `routeFromStroke`. */
+  const fromHandleRef = useRef(false)
   const rafRef = useRef(0)
   const lastTsRef = useRef(0)
 
@@ -1099,9 +1130,12 @@ export function MotionLabEditor({
       const start = players.find((p) => p.id === startId)!
       drawTargetRef.current = startId
       armedAtPressRef.current = interaction === 'draw-armed'
-      // The path is always anchored at the player, wherever the pointer went down.
+      fromHandleRef.current = !!handleId
+      // The path is always anchored at the player, wherever the pointer went
+      // down. The raw samples keep the press - the tap test measures from it -
+      // and what is drawn and stored is `routeFromStroke`'s reading of them.
       draftRef.current = [{ x: start.x, y: start.y }, pos]
-      setDraft(draftRef.current)
+      setDraft(routeFromStroke(draftRef.current, fromHandleRef.current))
       setInteraction('drawing')
       svgRef.current!.setPointerCapture(e.pointerId)
       return
@@ -1184,7 +1218,7 @@ export function MotionLabEditor({
       const last = d[d.length - 1]
       if (Math.hypot(pos.x - last.x, pos.y - last.y) < MIN_SAMPLE_GAP) return
       d.push(pos)
-      setDraft(d.slice())
+      setDraft(routeFromStroke(d, fromHandleRef.current).slice())
     }
   }
 
@@ -1216,7 +1250,7 @@ export function MotionLabEditor({
       // his handle is already 1.3-2.9 yd from him, so measuring the route
       // turned every bare tap on the handle into a short one. The press is
       // clamped only for this measurement, into the space every later
-      // sample was recorded in; the route itself is untouched.
+      // sample was recorded in. The route is read separately, below.
       const press = clampToField(d[1])
       const moved = Math.max(...d.slice(1).map((q) => Math.hypot(q.x - press.x, q.y - press.y)))
       if (moved < TAP_SLOP) {
@@ -1224,7 +1258,7 @@ export function MotionLabEditor({
         return
       }
       setInteraction('idle')
-      updatePlayer(drawnFor, { path: simplify(d, ANCHOR_EPS) })
+      updatePlayer(drawnFor, { path: simplify(routeFromStroke(d, fromHandleRef.current), ANCHOR_EPS) })
       // The handle has been found; it no longer needs to wave.
       drewOnce = true
       setPulseHandle(false)

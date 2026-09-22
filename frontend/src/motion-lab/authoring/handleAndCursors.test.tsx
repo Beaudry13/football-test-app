@@ -557,3 +557,58 @@ describe('the window losing focus ends a drag (ML-UX-9)', () => {
     expect(point().x).toBeCloseTo(p0.x + 3, 5)
   })
 })
+
+describe('a route drawn from the handle starts at the man, not at the handle', () => {
+  /**
+   * The handle sits 1.3-2.9 yd downfield of the man, so the pointer goes down
+   * there, not on him. A coach who grabs it and drags the other way - a
+   * linebacker blitzing, a tackle setting back - passes back over the man on
+   * the way. None of that is football: the route starts where the man stands.
+   * These strokes send the samples a real pointer sends on that trip, every
+   * half yard, because a single jump from the handle to the target would hide
+   * the backward stretch.
+   */
+  const trip = (from: { x: number; y: number }, handleY: number, to: { x: number; y: number }): [number, number][] => {
+    const out: [number, number][] = []
+    const steps = Math.ceil(Math.abs(handleY - to.y) / 0.5)
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps
+      out.push([from.x + (to.x - from.x) * t, handleY + (to.y - handleY) * t])
+    }
+    return out
+  }
+
+  it('a linebacker blitzing from his handle: nothing behind him is stored', async () => {
+    open(play)
+    const lb = byLabel(play, 'LB')
+    select(play, lb.id)
+    const [hx, hy] = onHandle(lb.id, lb)
+    const target = { x: lb.x + 0.5, y: 0.2 }
+
+    pressHandle(lb.id, [hx, hy], trip(lb, hy, target))
+    await settle()
+
+    const path = savedMan(play, lb.id).path
+    expect(path[0]).toEqual({ x: lb.x, y: lb.y })
+    for (const anchor of path) expect(anchor.y).toBeLessThanOrEqual(lb.y + 0.01)
+    expect(path[path.length - 1].x).toBeCloseTo(target.x, 5)
+    expect(path[path.length - 1].y).toBeCloseTo(target.y, 5)
+  })
+
+  it('a tackle setting back from his handle: nothing in front of him is stored', async () => {
+    open(play)
+    const lt = byLabel(play, 'LT')
+    select(play, lt.id)
+    const [hx, hy] = onHandle(lt.id, lt)
+    const target = { x: lt.x - 1, y: -3.2 }
+
+    pressHandle(lt.id, [hx, hy], trip(lt, hy, target))
+    await settle()
+
+    const path = savedMan(play, lt.id).path
+    expect(path[0]).toEqual({ x: lt.x, y: lt.y })
+    for (const anchor of path) expect(anchor.y).toBeLessThanOrEqual(lt.y + 0.01)
+    expect(path[path.length - 1].x).toBeCloseTo(target.x, 5)
+    expect(path[path.length - 1].y).toBeCloseTo(target.y, 5)
+  })
+})
