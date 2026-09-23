@@ -1102,6 +1102,23 @@
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
+
+/* THE LEGACY PRE-SNAP MENU (P3.4) hangs from the left of its segment, as More
+   does, and its sentence wraps: the strip's groups are `nowrap`, and a menu
+   inherits that unless it says otherwise - this one ran 1046 px wide. */
+.motion-lab-root .legacy-pop {
+  right: auto;
+  left: 0;
+  width: 300px;
+  white-space: normal;
+}
+.motion-lab-root .legacy-pop .pop-note {
+  margin: 0;
+  padding: 2px 12px 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
 .motion-lab-root .more-row {
   display: flex;
   align-items: center;

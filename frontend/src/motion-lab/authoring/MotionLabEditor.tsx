@@ -2595,12 +2595,16 @@ export function MotionLabEditor({
                 /* A LEGACY line - drawn as pre-snap timing. It opens looking
                    exactly as it was saved, and the gold Pre-snap segment IS
                    the offer to convert it: nothing opens on its own. */
-                <div className="seg seg-sm ball-menu legacy-timing">
-                  <button className="active" aria-expanded={menuOpen === 'legacy'} onClick={() => toggleMenu('legacy')} title="Drawn as pre-snap timing - see the options">
-                    Pre-snap <span className="key">▾</span>
-                  </button>
-                  <button onClick={() => updatePlayer(selected.id, { timing: 'on-snap' })}>On snap</button>
-                  <button onClick={() => updatePlayer(selected.id, { timing: 'delayed' })}>Delayed</button>
+                /* The menu hangs OUTSIDE the segment: `.seg` clips its overflow
+                   for the rounded corners, and would clip the menu to nothing. */
+                <div className="ball-menu legacy-timing">
+                  <div className="seg seg-sm">
+                    <button className="active" aria-expanded={menuOpen === 'legacy'} onClick={() => toggleMenu('legacy')} title="Drawn as pre-snap timing - see the options">
+                      Pre-snap <span className="key">▾</span>
+                    </button>
+                    <button onClick={() => updatePlayer(selected.id, { timing: 'on-snap' })}>On snap</button>
+                    <button onClick={() => updatePlayer(selected.id, { timing: 'delayed' })}>Delayed</button>
+                  </div>
                   {menuOpen === 'legacy' && legacyPop}
                 </div>
               ) : (
