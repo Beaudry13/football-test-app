@@ -1,6 +1,11 @@
 // TESTS ONLY. An in-memory stand-in for the Motion Lab API with the server's
-// rules - revisions, 409 on a stale base, 404 for a missing play - plus the
-// hooks a test needs to hold a request in flight or make it fail.
+// rules - an older client refused, revisions, 409 on a stale base, 404 for a
+// missing play - plus the hooks a test needs to hold a request in flight or
+// make it fail.
+//
+// THE VERSION RULE IS THE SERVER'S, NOT A CONVENIENCE. Without it this fake
+// accepted any schema_version, and an editor that saved every play as v1 -
+// refused by the real server for every play stored at v2 - passed every test.
 
 import { ApiError } from '../../../api/client'
 import type { MotionLookRow, MotionPlayRow } from '../../../api/motionLab'
@@ -55,8 +60,25 @@ export function fakeMotionServer() {
       await gate()
       const row = plays.get(id)
       if (!row) throw new ApiError('Play not found', 404)
+      // backend/app/routes/motion_lab.py save_play, in its order: an older
+      // client first, then a stale base. A save records the version it was
+      // written at, as the server does.
+      if (input.schema_version < row.schema_version) {
+        throw new ApiError(
+          `This play was saved by a newer Motion Lab (v${row.schema_version}); this tab writes v${input.schema_version}. Reload before editing.`,
+          409,
+          undefined,
+          'schema_outdated',
+        )
+      }
       if (row.revision !== input.base_revision) throw new ApiError('This play was changed somewhere else.', 409, undefined, 'revision_conflict')
-      Object.assign(row, { name: input.name, document: structuredClone(input.document), revision: row.revision + 1, updated_at: stamp() })
+      Object.assign(row, {
+        name: input.name,
+        document: structuredClone(input.document),
+        schema_version: input.schema_version,
+        revision: row.revision + 1,
+        updated_at: stamp(),
+      })
       return structuredClone(row)
     },
     async getMotionPlay(id) {

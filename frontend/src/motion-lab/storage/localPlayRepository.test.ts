@@ -44,7 +44,12 @@ describe('LocalPlayRepository', () => {
     const stored = (JSON.parse(entries[PLAYS_KEY]) as { items: Play[] }).items
     const plays = repo.listPlays()
     expect(plays.map((p) => p.id)).toEqual([...stored].sort((a, b) => b.updatedAt - a.updatedAt).map((p) => p.id))
-    expect(plays).toEqual([...stored].sort((a, b) => b.updatedAt - a.updatedAt))
+    // `v` is the READER's stamp - these fixtures were written by version 1,
+    // and P3.1's model is 2 - so it is compared separately from the content
+    // the prototype actually wrote.
+    const expected = [...stored].sort((a, b) => b.updatedAt - a.updatedAt)
+    expect(plays.map((p) => ({ ...p, v: 1 }))).toEqual(expected)
+    expect(plays.every((p) => p.v === SCHEMA_VERSION)).toBe(true)
     expect(repo.listLooks().map((l) => l.name)).toEqual(['Trips Rt'])
     expect(repo.currentPlayId()).toBe(entries[CURRENT_KEY])
   })

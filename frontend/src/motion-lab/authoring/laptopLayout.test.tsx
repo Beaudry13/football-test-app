@@ -87,7 +87,8 @@ describe('the laptop rules (SPEC §14)', () => {
     // Only the word goes: the segment is its own element, untouched by the rule.
     const seg = label.parentElement!.querySelector('.seg')!
     expect(seg.matches('.lbl, .timing-label')).toBe(false)
-    expect([...seg.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Pre-snap', 'On snap', 'Delayed'])
+    // P3.4: Timing is when his ROUTE starts; pre-snap movement is its own phase.
+    expect([...seg.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['On snap', 'Delayed'])
   })
 
   it('Present at 1280 drops "Motion Lab" from the brand, and only that', () => {
@@ -107,5 +108,26 @@ describe('the laptop rules (SPEC §14)', () => {
     expect(CSS).toMatch(/\.motion-lab-root \.bar\.bottom \.sit-chip \{[^}]*max-width: 180px;/)
     expect(CSS).toMatch(/\.motion-lab-root \.bar \.play-name \{[^}]*max-width: 200px;/)
     expect(CSS).toMatch(/\.motion-lab-root \.bar\.bottom \.scrub \{[^}]*min-width: 160px;/)
+  })
+
+  // Found in the P3.4 browser sweep: the menu lived INSIDE the segmented
+  // control, whose `overflow: hidden` clipped it to nothing, and its sentence
+  // inherited the strip's `nowrap` and ran 1046 px off the left of the screen.
+  it("a legacy man's Pre-snap menu is not clipped by the segment, and its sentence wraps", () => {
+    const base = play()
+    const legacy: Play = {
+      ...base,
+      players: base.players.map((p) =>
+        p.id === 'O9' ? { ...p, timing: 'pre-snap', path: [{ x: p.x, y: p.y }, { x: p.x - 7, y: p.y }] } : p,
+      ),
+    }
+    open(legacy)
+    select(legacy, 'O9')
+    fireEvent.click(within(strip()).getByRole('button', { name: /^Pre-snap/ }))
+    const pop = strip().querySelector('.legacy-pop') as HTMLElement
+    expect(pop).not.toBeNull()
+    expect(CSS).toMatch(/\.motion-lab-root \.seg \{[^}]*overflow: hidden;/)
+    expect(pop.closest('.seg')).toBeNull()
+    expect(CSS).toMatch(/\.motion-lab-root \.legacy-pop \{[^}]*white-space: normal;/)
   })
 })

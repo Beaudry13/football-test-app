@@ -14,7 +14,7 @@
 // is: WHERE he throws from is a point on that path (its end unless the coach
 // picks another), and WHEN he throws is simply when he gets there.
 
-import type { Player } from './formation'
+import { roleHolder, type Player } from './formation'
 import type { Pt } from './geometry'
 import { extendUntil, posAt, posBeyond, resolveEnd, timeAtAlong, type ScheduleMap } from './timeline'
 
@@ -122,6 +122,22 @@ export function projectOntoPath(pts: Pt[], cum: number[], p: Pt): { pt: Pt; alon
   return best
 }
 
+/**
+ * The same projection, onto the POST-SNAP route only (P3.4).
+ *
+ * A player with pre-snap motion carries one stitched line: motion, then the
+ * route. A catch, a throw or a block is a post-snap event, so it must never
+ * land on where he was before the snap. With no motion this IS
+ * projectOntoPath, exactly.
+ */
+export function projectOntoRoute(s: { pts: Pt[]; cum: number[]; preLength?: number }, p: Pt): { pt: Pt; along: number; gap: number } {
+  if (!s.preLength) return projectOntoPath(s.pts, s.cum, p)
+  let i = 0
+  while (i < s.cum.length - 1 && s.cum[i] < s.preLength - 1e-9) i++
+  const proj = projectOntoPath(s.pts.slice(i), s.cum.slice(i).map((c) => c - s.cum[i]), p)
+  return { ...proj, along: proj.along + s.cum[i] }
+}
+
 interface Transfer {
   kind: 'handoff' | 'fake' | 'flight' | 'pitch'
   time: number
@@ -161,8 +177,10 @@ export const THEN_KINDS = ['handoff', 'pitch', 'pass'] as const
 
 export function deriveBall(players: Player[], schedule: ScheduleMap, snapAt: number, action: BallAction | null, then: BallAction | null = null): BallTimeline {
   const byId = new Map(players.map((p) => [p.id, p]))
-  const center = players.find((p) => p.side === 'offense' && p.label === 'C')
-  const qb = players.find((p) => p.side === 'offense' && p.label === 'QB')
+  // Who snaps it and who throws it, by ROLE - falling back to the labels this
+  // engine has always used when the play carries no roles (roleHolder).
+  const center = roleHolder(players, 'snapper', 'C')
+  const qb = roleHolder(players, 'passer', 'QB')
 
   // The snap spot is the center's feet, on the line, whatever the formation.
   const spot: Pt = center ? { x: center.x, y: center.y + 1.0 } : { x: 53.33 / 2, y: 0.4 }
@@ -228,7 +246,7 @@ export function deriveBall(players: Player[], schedule: ScheduleMap, snapAt: num
   const releaseTimeFor = (passerId: string, override: Pt | undefined, earliest: number): number => {
     const sq = schedule.get(passerId)
     if (!sq) return Math.max(earliest, earliest + QUICK_GAME_RELEASE - 0.1)
-    const along = override ? projectOntoPath(sq.pts, sq.cum, override).along : sq.length
+    const along = override ? projectOntoRoute(sq, override).along : sq.length
     return Math.max(earliest, timeAtAlong(sq, along))
   }
 
@@ -249,7 +267,7 @@ export function deriveBall(players: Player[], schedule: ScheduleMap, snapAt: num
     let catchAt: Pt
     let requestedTime: number | null = null
     if (s) {
-      const proj = projectOntoPath(s.pts, s.cum, requested)
+      const proj = projectOntoRoute(s, requested)
       catchAt = proj.pt
       requestedCatch = proj.pt
       // His ACTUAL schedule - including any engagement, wait or release on the way.

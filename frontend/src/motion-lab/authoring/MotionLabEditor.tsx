@@ -3,6 +3,12 @@ import { OverheadBoard } from '../view/OverheadBoard'
 import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
 import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
 import { simplify, type EndBehavior, type Pt } from '../engine/geometry'
+import { assignRole, passerIdOf, passerOf, snapperOf, withRoles } from './roles'
+import { clampDelta, groupIds, groupWords, translate, type Movable, type MoveGroup } from './groupMove'
+import {
+  convertToMotion, delayedBlocked, hasMotion, isLegacyPreSnap, motionBlocked, movedTo, releaseBlocked, releases,
+  runOnSnap, snapPoint, withMotion, withMotionAnchor, type Phase,
+} from './phases'
 import { buildSchedule, posAt, resolveEnd } from '../engine/timeline'
 import { ballTargetOf, deriveBall, isPass, projectOntoPath, THEN_KINDS, type BallAction } from '../engine/ball'
 import { catchDepth, fullBallSentence } from './ballSentence'
@@ -10,7 +16,7 @@ import { FieldView } from '../view/FieldView'
 import { COACH_CAMERA, playerCamera } from '../engine/perspective'
 import { buildOrientation, orientationAt } from '../engine/orientation'
 import { applyEngagements, type Engagement } from '../engine/interactions'
-import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
+import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, SCHEMA_VERSION, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
 import type { PlayRepository } from '../storage/playRepository'
 import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
@@ -123,8 +129,13 @@ type PathPick = Extract<Setup, { step: 'pick-catch' | 'pick-release' }>
 
 /** SPEC §11.1's words, sentence case (ML-UX-12). Only the labels: the stored
  *  values and the summary's own "pre-snap" are unchanged. */
+/**
+ * When his ROUTE starts (P3.4). Pre-snap movement is drawn in its own phase
+ * now, so it is not a timing any more; only a legacy player - a line drawn
+ * as pre-snap timing, never converted - still shows it, and there it is the
+ * way into the conversion.
+ */
 const TIMINGS: { value: Timing; label: string }[] = [
-  { value: 'pre-snap', label: 'Pre-snap' },
   { value: 'on-snap', label: 'On snap' },
   { value: 'delayed', label: 'Delayed' },
 ]
@@ -167,6 +178,8 @@ interface DragState {
   index: number
   dx: number
   dy: number
+  /** For an anchor: which of his two lines it belongs to (P3.4). */
+  line?: 'motion' | 'path'
 }
 
 /** The authoring state a play is made of; what autosave writes and undo restores. */
@@ -183,19 +196,37 @@ function Seg<T extends string | number>({
   options,
   onChange,
   size,
+  blocked,
+  onBlocked,
 }: {
   value: T
   options: { value: T; label: string }[]
   onChange: (v: T) => void
   size?: 'sm'
+  /**
+   * Options that cannot be chosen right now, each with the reason. They look
+   * disabled and say why on hover - and, because a finger never hovers, a
+   * tap says it again through `onBlocked` (a toast) instead of doing nothing.
+   */
+  blocked?: Partial<Record<string, string>>
+  onBlocked?: (reason: string) => void
 }) {
   return (
     <div className={`seg${size ? ' seg-sm' : ''}`}>
-      {options.map((o) => (
-        <button key={String(o.value)} className={o.value === value ? 'active' : ''} onClick={() => onChange(o.value)}>
-          {o.label}
-        </button>
-      ))}
+      {options.map((o) => {
+        const why = blocked?.[String(o.value)]
+        return (
+          <button
+            key={String(o.value)}
+            className={`${o.value === value ? 'active' : ''}${why ? ' blocked' : ''}`}
+            aria-disabled={why ? true : undefined}
+            title={why ?? undefined}
+            onClick={() => (why ? onBlocked?.(why) : onChange(o.value))}
+          >
+            {o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -261,7 +292,7 @@ export function MotionLabEditor({
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
   const [playName, setPlayName] = useState('Untitled Play')
-  const [players, setPlayers] = useState<Player[]>(initialPlayers)
+  const [basePlayers, setPlayers] = useState<Player[]>(initialPlayers)
   const [ball, setBall] = useState<BallAction | null>(null)
   /** Optional second football action, run from whoever has it after the first. */
   const [ballThen, setBallThen] = useState<BallAction | null>(null)
@@ -306,7 +337,21 @@ export function MotionLabEditor({
    */
   const [dragging, setDragging] = useState(false)
   const [setup, setSetup] = useState<Setup | null>(null)
-  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'block' | 'viewer' | 'rate' | 'display'>(null)
+  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'block' | 'viewer' | 'rate' | 'display' | 'legacy'>(null)
+  /**
+   * WHICH OF HIS TWO LINES the strip is pointed at (P3.4). Editor state only:
+   * never stored, never saved, and it only means anything for a man who has
+   * motion - everyone else has one line and the strip talks about that.
+   * Back to Route whenever the selection changes: the route is the edit nine
+   * times in ten.
+   */
+  const [phase, setPhase] = useState<Phase>('route')
+  /** "Add pre-snap motion" has armed the first motion stroke for this man. */
+  const [addingMotion, setAddingMotion] = useState(false)
+  /** The phase the stroke in flight is drawing into, fixed when it starts. */
+  const drawPhaseRef = useRef<Phase>('route')
+  /** The active phase, readable from callbacks that outlive a render. */
+  const phaseRef = useRef<Phase>('route')
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look'>(null)
@@ -319,6 +364,30 @@ export function MotionLabEditor({
   const [view, setView] = useState<View>('overhead')
   /** Whose eyes the Player view uses. */
   const [viewerId, setViewerId] = useState<string | null>(null)
+  /**
+   * MOVING A GROUP: armed from the Formation menu, then dragged.
+   *
+   * `delta` is a PREVIEW - the play itself is not touched until the coach
+   * lets go - so Esc costs nothing and one completed move is one undo step,
+   * rather than one per pointer sample.
+   */
+  const [groupMove, setGroupMove] = useState<{ group: MoveGroup; ids: Set<string>; delta: Pt } | null>(null)
+  const groupDragRef = useRef<Pt | null>(null)
+
+  /**
+   * The men as they are right now, including a group move in flight.
+   *
+   * Everything downstream - the schedule, the ball, the board, the strip -
+   * reads this, so a previewed move animates and derives exactly like a
+   * finished one, while the play in state stays untouched until he lets go.
+   */
+  const players = useMemo(
+    () => (groupMove && (groupMove.delta.x || groupMove.delta.y)
+      ? translate({ players: basePlayers, ball, ballThen, engagements }, groupMove.ids, groupMove.delta).players
+      : basePlayers),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [basePlayers, groupMove],
+  )
   const [present, setPresent] = useState(false)
   /** Teaching marks drawn in Present mode. Field yards; never saved; never touch the play. */
   const [strokes, setStrokes] = useState<Pt[][]>([])
@@ -354,7 +423,8 @@ export function MotionLabEditor({
   // drag is one step, not two hundred.
   const historyRef = useRef<{ stack: string[]; idx: number }>({ stack: [], idx: -1 })
   const [historyTick, setHistoryTick] = useState(0)
-  const authoring: Authoring = useMemo(() => ({ players, ball, ballThen, engagements, situation }), [players, ball, ballThen, engagements, situation])
+  // basePlayers, not the preview: a move in flight is not an edit yet.
+  const authoring: Authoring = useMemo(() => ({ players: basePlayers, ball, ballThen, engagements, situation }), [basePlayers, ball, ballThen, engagements, situation])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -426,9 +496,15 @@ export function MotionLabEditor({
     (p: Play) => {
       setPlayId(p.id)
       setPlayName(p.name)
-      applyAuthoring({ players: p.players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })
+      // Roles are NOT written down just for opening a play: a save here would
+      // bump the revision under a teammate with the same play open. A
+      // role-less play reads exactly as it always did (roleHolder's label
+      // fallback), and the first edit that DEPENDS on the jobs - a rename, or
+      // Make passer/snapper - records them.
+      const players = p.players
+      applyAuthoring({ players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })
       setFilter(p.filter)
-      historyRef.current = { stack: [JSON.stringify({ players: p.players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })], idx: 0 }
+      historyRef.current = { stack: [JSON.stringify({ players, ball: p.ball, ballThen: p.ballThen, engagements: p.engagements, situation: p.situation })], idx: 0 }
       setHistoryTick((t) => t + 1)
       setSelectedId(null)
       setSetup(null)
@@ -459,19 +535,21 @@ export function MotionLabEditor({
   // Autosave: the play writes itself shortly after every edit.
   const currentPlay = useCallback(
     (): Play => ({
-      v: 1,
+      v: SCHEMA_VERSION,
       id: playId,
       name: playName,
       createdAt: plays.find((p) => p.id === playId)?.createdAt ?? Date.now(),
       updatedAt: Date.now(),
-      players,
+      // basePlayers: a group move in flight is a preview, and a preview is
+      // not something to save.
+      players: basePlayers,
       ball,
       ballThen,
       engagements,
       situation,
       filter,
     }),
-    [playId, playName, plays, players, ball, ballThen, engagements, situation, filter],
+    [playId, playName, plays, basePlayers, ball, ballThen, engagements, situation, filter],
   )
   // The latest play is always reachable from a ref so a save can be forced
   // at any moment - before switching plays, and when the tab goes away.
@@ -506,7 +584,7 @@ export function MotionLabEditor({
     const id = setTimeout(flushSave, SAVE_DEBOUNCE)
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playId, playName, players, ball, ballThen, engagements, situation, filter])
+  }, [playId, playName, basePlayers, ball, ballThen, engagements, situation, filter])
   useEffect(() => {
     const onHide = () => {
       if (document.visibilityState === 'hidden') flushSave()
@@ -728,6 +806,8 @@ export function MotionLabEditor({
     draftRef.current = null
     drawTargetRef.current = null
     setDraft(null)
+    // An abandoned FIRST motion leaves no motion, so no phase to switch to.
+    setAddingMotion(false)
     setInteraction((i) => (i === 'draw-armed' || i === 'drawing' ? 'idle' : i))
   }, [])
 
@@ -749,12 +829,28 @@ export function MotionLabEditor({
     setPlayers((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
   }, [])
 
+  /**
+   * Clear one of his lines - the one the strip is pointed at.
+   *
+   * With no motion that is simply his assignment, as it always was. With
+   * motion it is the ACTIVE PHASE only: clearing the motion keeps his route
+   * and slides it back to start where he lines up; clearing the route keeps
+   * his motion. `line` names the line outright (More's Clear rows).
+   */
   const clearPath = useCallback(
-    (id: string | null) => {
-      updatePlayer(id, { path: [] })
+    (id: string | null, line?: Phase) => {
+      if (!id) return
+      setPlayers((ps) =>
+        ps.map((p) => {
+          if (p.id !== id) return p
+          if (!hasMotion(p)) return { ...p, path: [] }
+          const which = line ?? phaseRef.current
+          return which === 'motion' ? withMotion(p, undefined) : { ...p, path: [] }
+        }),
+      )
       setInteraction((i) => (i === 'adjusting' ? 'idle' : i))
     },
-    [updatePlayer],
+    [],
   )
 
   const clearAllPaths = useCallback(() => {
@@ -762,7 +858,8 @@ export function MotionLabEditor({
     setInteraction((i) => (i === 'adjusting' ? 'idle' : i))
   }, [])
 
-  const qbId = players.find((p) => p.side === 'offense' && p.label === 'QB')?.id
+  // The passer, by ROLE (see ./roles). His label is the coach's business.
+  const qbId = passerIdOf(players) ?? undefined
   /**
    * Who can take the ball from the QB - handoff, pitch, pass, play action
    * (SPEC §6.4): an offensive player who is not the QB. The ball picks and
@@ -791,13 +888,80 @@ export function MotionLabEditor({
     setRenaming('player')
   }
 
-  /** Remove a man and everything that named him - never leave a dangling reference. */
+  /**
+   * Rename a man, and write the jobs down before doing it.
+   *
+   * Until a play says who throws it and who snaps it, the engine reads its
+   * labels - so changing a label without recording them first is the exact
+   * move that used to leave a play with no quarterback. Recording them is
+   * part of THIS edit, which is why opening a play still writes nothing.
+   */
+  const renamePlayer = (id: string, raw: string) => {
+    setRenaming(null)
+    const man = players.find((p) => p.id === id)
+    const label = raw.slice(0, 4).toUpperCase()
+    if (!man || label === man.label) return
+    setPlayers((ps) => withRoles(ps).map((p) => (p.id === id ? { ...p, label } : p)))
+  }
+
+  /**
+   * Hand a job to this man: he throws it, or he snaps it.
+   *
+   * Explicit, because the alternative is guessing from a label - which is
+   * what roles exist to stop. Whoever held the job loses it; the play always
+   * has one passer and one snapper (./roles).
+   */
+  const makeRole = (id: string, role: 'passer' | 'snapper') => {
+    setMenuOpen(null)
+    const man = players.find((p) => p.id === id)
+    if (!man || (role === 'passer' ? passerOf(players)?.id : snapperOf(players)?.id) === id) return
+    setPlayers((ps) => assignRole(withRoles(ps), id, role))
+    showToast(`${man.label} ${role === 'passer' ? 'throws it now' : 'snaps it now'}.`)
+  }
+
+  /**
+   * Delete a man and everything that named him - never leave a dangling
+   * reference, and never leave the football with nobody to play it.
+   *
+   * Everything else in a play points at him by id (the ball's carrier, target
+   * and fake, engagements, the Player-view camera), so those are simply
+   * dropped. THE TWO JOBS ARE NOT LIKE THAT, because the engine needs them and
+   * no id names them:
+   *
+   *   THE PASSER. The ball assumes him - a pass says who catches it, never who
+   *   throws it - so deleting him would leave a live ball action with "No QB
+   *   on the field" behind it. The action goes with him. Nobody inherits the
+   *   job: the coach says who throws it now (More > Make passer), because
+   *   guessing is what roles exist to stop.
+   *
+   *   THE SNAPPER. His feet ARE the snap spot; with nobody doing the job the
+   *   engine falls back to the middle of the field, which is a play quietly
+   *   changing shape. So this one is refused, and says what to do instead.
+   *   Refusing changes nothing, so it is not an undo step either.
+   */
   const removePlayer = (id: string) => {
-    const label = players.find((p) => p.id === id)?.label ?? '?'
+    const man = players.find((p) => p.id === id)
+    if (!man) return
+    const label = man.label
+    // The JOBS, by the one lookup the whole editor uses: the role when the
+    // play says, the prototype's labels while it has not been asked yet.
+    const isSnapper = snapperOf(players)?.id === id
+    const isPasser = passerOf(players)?.id === id
+    if (isSnapper) {
+      setMenuOpen(null)
+      showToast(`${label} snaps it. Make another player the snapper first, then delete him.`)
+      return
+    }
     setPlayers((ps) => ps.filter((p) => p.id !== id))
     const names = (a: BallAction | null) => (a ? ('carrierId' in a && a.carrierId === id) || ('targetId' in a && a.targetId === id) || ('fakeId' in a && a.fakeId === id) : false)
     const dropped: string[] = []
-    if (names(ball)) {
+    if (isPasser && (ball || ballThen)) {
+      // He threw it. Nothing in the action names him, and that is exactly why
+      // it cannot stay.
+      setBall(null)
+      setBallThen(null)
+      dropped.push('ball action')
+    } else if (names(ball)) {
       setBall(null)
       setBallThen(null)
       dropped.push('ball action')
@@ -812,38 +976,104 @@ export function MotionLabEditor({
     if (selectedId === id) setSelectedId(null)
     if (viewerId === id) setViewerId(null)
     setMenuOpen(null)
-    showToast(dropped.length ? `${label} removed — his ${dropped.join(' and ')} went with him.` : `${label} removed.`)
+    showToast(dropped.length ? `${label} deleted — his ${dropped.join(' and ')} went with him.` : `${label} deleted.`)
   }
 
   /** The same movement, relative to HIS alignment; mirrored across his own centre if asked. */
   const copyAssignment = (sourceId: string, targetId: string, mirror: boolean) => {
     const src = players.find((p) => p.id === sourceId)
     const dst = players.find((p) => p.id === targetId)
-    if (!src || !dst || src.path.length < 2) return
-    const path = src.path.map((q) => {
+    if (!src || !dst || (src.path.length < 2 && !hasMotion(src))) return
+    const carry = (q: Pt) => {
       const rx = q.x - src.x
       const ry = q.y - src.y
       return clampToField({ x: dst.x + (mirror ? -rx : rx), y: dst.y + ry })
-    })
-    updatePlayer(targetId, { path, timing: src.timing, delay: src.delay, speed: src.speed, endBehavior: src.endBehavior })
+    }
+    // Both lines travel, relative to HIS alignment - motion included, so the
+    // copy is the whole assignment, never half of one (P3.4).
+    const motion = hasMotion(src) ? src.motion.map(carry) : undefined
+    const path = src.path.length >= 2 ? src.path.map(carry) : []
+    // The one thing a copy cannot bring: a delay onto a man who motions AND
+    // comes off a block would need two pauses. The copy lands on the snap,
+    // and says so - it is never silent, and never half-applied.
+    const conflict = !!motion && src.timing === 'delayed' && releases(dst, engagements)
+    const timing = conflict ? 'on-snap' : src.timing
+    setPlayers((ps) =>
+      ps.map((p) => {
+        if (p.id !== targetId) return p
+        const { motion: _old, ...rest } = p
+        return { ...rest, ...(motion ? { motion } : null), path, timing, delay: src.delay, speed: src.speed, endBehavior: src.endBehavior }
+      }),
+    )
     setSelectedId(targetId)
-    showToast(`${src.label}'s assignment ${mirror ? 'mirrored' : 'copied'} to ${dst.label}.`)
+    showToast(
+      conflict
+        ? `${src.label}'s assignment ${mirror ? 'mirrored' : 'copied'} to ${dst.label}. ${dst.label} comes off a block, so his delay was left off.`
+        : `${src.label}'s assignment ${mirror ? 'mirrored' : 'copied'} to ${dst.label}.`,
+    )
   }
 
-  /** Move the whole look sideways so the ball sits on the chosen hash. */
+  /** The play as the group functions want it: what moves, and what it names. */
+  const movable = (): Movable => ({ players, ball, ballThen, engagements })
+
+  /** Put a moved play back into state, in one go. */
+  const applyMoved = useCallback((moved: Movable) => {
+    setPlayers(moved.players)
+    setEngagements(moved.engagements)
+    setBall(moved.ball)
+    setBallThen(moved.ballThen)
+  }, [])
+
+  /**
+   * Move the whole look sideways so the ball sits on the chosen hash.
+   *
+   * The delta is worked out for the WHOLE look and then applied to every
+   * point in it. Clamping each point on its own - which is what this used to
+   * do - squashed the formation against a sideline: the widest receiver
+   * stopped at the boundary while everybody else kept sliding.
+   */
   const setHash = (hash: Situation['hash']) => {
-    const center = players.find((p) => p.side === 'offense' && p.label === 'C')
-    const ol = players.filter((p) => p.side === 'offense' && ['LT', 'LG', 'C', 'RG', 'RT'].includes(p.label))
-    const nowX = center ? center.x : ol.length ? ol.reduce((s, p) => s + p.x, 0) / ol.length : FIELD_WIDTH / 2
-    const dx = hashX(hash) - nowX
-    const shift = (q: Pt): Pt => clampToField({ x: q.x + dx, y: q.y })
-    setPlayers((ps) => ps.map((p) => ({ ...p, ...shift(p), path: p.path.map(shift) })))
-    setEngagements((es) => es.map((e) => ({ ...e, point: shift(e.point) })))
-    const shiftBall = (b: BallAction | null): BallAction | null => (isPass(b) ? { ...b, catchPoint: shift(b.catchPoint), releasePoint: b.releasePoint ? shift(b.releasePoint) : undefined } : b)
-    setBall(shiftBall)
-    setBallThen(shiftBall)
+    const snapper = snapperOf(players)
+    const state = movable()
+    const ids = groupIds(players, 'formation').ids
+    const nowX = snapper ? snapper.x : FIELD_WIDTH / 2
+    const delta = clampDelta(state, ids, 'formation', hashX(hash) - nowX, 0)
+    applyMoved(translate(state, ids, delta))
     setSituation((s) => ({ ...s, hash }))
   }
+
+  /**
+   * Arm a group move. The next drag anywhere on the board moves these men.
+   */
+  const startGroupMove = (group: MoveGroup) => {
+    setMenuOpen(null)
+    cancelDrawing()
+    reset()
+    const { ids, refusal } = groupIds(players, group)
+    if (refusal) {
+      showToast(refusal)
+      return
+    }
+    if (view !== 'overhead') setView('overhead')
+    setSelectedId(null)
+    setGroupMove({ group, ids, delta: { x: 0, y: 0 } })
+  }
+
+  /** Let go: the preview becomes the play, in one undo step. */
+  const commitGroupMove = useCallback(() => {
+    if (!groupMove) return
+    const { ids, delta } = groupMove
+    groupDragRef.current = null
+    setGroupMove(null)
+    if (!delta.x && !delta.y) return
+    applyMoved(translate({ players: basePlayers, ball, ballThen, engagements }, ids, delta))
+  }, [groupMove, basePlayers, ball, ballThen, engagements, applyMoved])
+
+  /** Esc: the preview never happened, so there is nothing to undo. */
+  const cancelGroupMove = useCallback(() => {
+    groupDragRef.current = null
+    setGroupMove(null)
+  }, [])
 
   // ---- ball setup -----------------------------------------------------
 
@@ -1019,6 +1249,13 @@ export function MotionLabEditor({
   }
 
   const onPointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    // A group move owns the board while it is armed: a press anywhere starts
+    // dragging the whole group, rather than picking up whoever is under it.
+    if (groupMove) {
+      groupDragRef.current = toField(e)
+      svgRef.current!.setPointerCapture(e.pointerId)
+      return
+    }
     if (e.button !== 0) return
     setMenuOpen(null)
     const pos = toField(e)
@@ -1098,8 +1335,9 @@ export function MotionLabEditor({
       const idx = hitAttr(e.target, 'data-anchor')
       if (idx !== null) {
         const p = players.find((pl) => pl.id === selectedId)!
-        const a = p.path[Number(idx)]
-        dragRef.current = { kind: 'anchor', id: selectedId, index: Number(idx), dx: a.x - pos.x, dy: a.y - pos.y }
+        const line = activePhase === 'motion' && hasMotion(p) ? 'motion' : 'path'
+        const a = (line === 'motion' ? p.motion! : p.path)[Number(idx)]
+        dragRef.current = { kind: 'anchor', id: selectedId, index: Number(idx), dx: a.x - pos.x, dy: a.y - pos.y, line }
         setDragging(true)
         svgRef.current!.setPointerCapture(e.pointerId)
         return
@@ -1131,10 +1369,14 @@ export function MotionLabEditor({
       drawTargetRef.current = startId
       armedAtPressRef.current = interaction === 'draw-armed'
       fromHandleRef.current = !!handleId
-      // The path is always anchored at the player, wherever the pointer went
-      // down. The raw samples keep the press - the tap test measures from it -
-      // and what is drawn and stored is `routeFromStroke`'s reading of them.
-      draftRef.current = [{ x: start.x, y: start.y }, pos]
+      // The line is always anchored where it BEGINS, wherever the pointer went
+      // down: motion at the man, and a route at the end of his motion - where
+      // the snap catches him (P3.4). The raw samples keep the press - the tap
+      // test measures from it - and what is drawn and stored is
+      // `routeFromStroke`'s reading of them.
+      drawPhaseRef.current = startId === selectedId ? phaseRef.current : 'route'
+      const origin = drawPhaseRef.current === 'motion' ? { x: start.x, y: start.y } : snapPoint(start)
+      draftRef.current = [origin, pos]
       setDraft(routeFromStroke(draftRef.current, fromHandleRef.current))
       setInteraction('drawing')
       svgRef.current!.setPointerCapture(e.pointerId)
@@ -1157,6 +1399,16 @@ export function MotionLabEditor({
   }
 
   const onPointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (groupMove && groupDragRef.current) {
+      // One delta for the whole group, clamped once against every point that
+      // is moving - so relative spacing survives a sideline.
+      const from = groupDragRef.current
+      const pos = toField(e)
+      const state: Movable = { players: basePlayers, ball, ballThen, engagements }
+      const delta = clampDelta(state, groupMove.ids, groupMove.group, pos.x - from.x, pos.y - from.y)
+      setGroupMove((m) => (m ? { ...m, delta } : m))
+      return
+    }
     if (teleDraftRef.current) {
       const pos = toField(e)
       const d = teleDraftRef.current
@@ -1183,14 +1435,15 @@ export function MotionLabEditor({
         ps.map((p) => {
           if (p.id !== drag.id) return p
           if (drag.kind === 'anchor') {
+            // A motion anchor keeps the join: its LAST point is where the snap
+            // catches him, and the route slides with it.
+            if (drag.line === 'motion') return withMotionAnchor(p, drag.index, next)
             const path = p.path.slice()
             path[drag.index] = next
             return { ...p, path }
           }
-          // Paths travel with the player so a drawn assignment stays attached.
-          const ddx = next.x - p.x
-          const ddy = next.y - p.y
-          return { ...p, x: next.x, y: next.y, path: p.path.map((q) => ({ x: q.x + ddx, y: q.y + ddy })) }
+          // Both his lines travel with the player so they stay attached.
+          return movedTo(p, next.x, next.y)
         }),
       )
       // A catch point is part of the receiver's assignment and a throw point
@@ -1223,6 +1476,11 @@ export function MotionLabEditor({
   }
 
   const onPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (groupMove) {
+      svgRef.current?.releasePointerCapture(e.pointerId)
+      groupDragRef.current = null
+      return
+    }
     if (teleDraftRef.current) {
       const d = teleDraftRef.current
       teleDraftRef.current = null
@@ -1257,8 +1515,19 @@ export function MotionLabEditor({
         setInteraction(armedAtPressRef.current ? 'draw-armed' : 'idle')
         return
       }
+      setAddingMotion(false)
       setInteraction('idle')
-      updatePlayer(drawnFor, { path: simplify(routeFromStroke(d, fromHandleRef.current), ANCHOR_EPS) })
+      const line = simplify(routeFromStroke(d, fromHandleRef.current), ANCHOR_EPS)
+      if (drawPhaseRef.current === 'motion') {
+        // His motion: the route (if any) slides to start where it now ends.
+        const had = players.find((pl) => pl.id === drawnFor)
+        setPlayers((ps) => ps.map((pl) => (pl.id === drawnFor ? withMotion(pl, line) : pl)))
+        // Point the strip at the line still missing, so the gold says what
+        // to do next: no route yet -> Route; a route already -> stay here.
+        setPhase(had && had.path.length >= 2 ? 'motion' : 'route')
+      } else {
+        updatePlayer(drawnFor, { path: line })
+      }
       // The handle has been found; it no longer needs to wave.
       drewOnce = true
       setPulseHandle(false)
@@ -1268,7 +1537,27 @@ export function MotionLabEditor({
   // ---- keyboard -------------------------------------------------------
 
   const selected = players.find((p) => p.id === selectedId) ?? null
+  // The phase that counts: his, if he has motion; motion while the first
+  // motion stroke is armed; otherwise there is only one line, the route.
+  const activePhase: Phase = hasMotion(selected) ? phase : addingMotion ? 'motion' : 'route'
+  phaseRef.current = activePhase
+  // A new man starts on his Route, and nothing about the last man's first
+  // motion stroke carries over to him.
+  useEffect(() => {
+    setPhase('route')
+    setAddingMotion(false)
+  }, [selectedId])
   const hasPath = !!selected && selected.path.length > 1
+  /** He has anything drawn at all - a route, a motion, or both. */
+  const hasAssignment = hasPath || hasMotion(selected)
+  /** The line the strip is pointed at has something in it. */
+  const hasLine = !!selected && (activePhase === 'motion' ? hasMotion(selected) : hasPath)
+  // Draw names the line it will draw into - but only when there are two to
+  // choose from; a man with one line keeps today's words.
+  const twoLines = hasMotion(selected) || addingMotion
+  const drawNoun = activePhase === 'motion' ? 'motion' : 'route'
+  const drawLabel = twoLines ? (hasLine ? `Redraw ${drawNoun}` : `✎ Draw ${drawNoun}`) : hasPath ? 'Redraw' : '✎ Draw assignment'
+  const drawTitle = twoLines ? `Draw his ${drawNoun} · D` : hasPath ? 'Draw it again · D' : 'Draw what he does · D'
   /** The strip's last word on him (ML-UX-7): read from state, never stored. */
   const summary = selected
     ? playerSummary({ player: selected, players, drawn: drawnSchedule.get(selected.id), engagements, derived: engaged, ball, ballThen })
@@ -1306,7 +1595,7 @@ export function MotionLabEditor({
           break
         case 'e':
         case 'E':
-          if (hasPath && !setup && !watching && !present) {
+          if (hasLine && !setup && !watching && !present) {
             cancelDrawing()
             setInteraction((i) => (i === 'adjusting' ? 'idle' : 'adjusting'))
           }
@@ -1318,11 +1607,17 @@ export function MotionLabEditor({
           // switches back to Overhead on its own (§6.8, ML-UX-3).
           if (!setup && !present) setMenuOpen((o) => (o === 'ball' ? null : 'ball'))
           break
+        case 'Enter':
+          // The way out of a group move that keeps it (§ the banner says so).
+          if (groupMove) commitGroupMove()
+          break
         case 'Escape':
           // First match wins. Drawing comes before arming, and both before
           // anything that would merely change the selection: Esc mid-stroke
-          // has to reach the stroke, not the man it belongs to.
-          if (menuOpen) setMenuOpen(null)
+          // has to reach the stroke, not the man it belongs to. A group move
+          // is a preview, so cancelling it puts nothing in the history.
+          if (groupMove) cancelGroupMove()
+          else if (menuOpen) setMenuOpen(null)
           else if (renaming) setRenaming(null)
           else if (telestrating) setTelestrating(false)
           else if (pickingViewer) setView('overhead')
@@ -1362,7 +1657,7 @@ export function MotionLabEditor({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, hasPath, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, view, present, togglePlay, restart, step, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, flashHint, undo, redo])
+  }, [selectedId, hasPath, hasLine, interaction, setup, menuOpen, renaming, telestrating, pickingViewer, watching, view, present, groupMove, commitGroupMove, cancelGroupMove, togglePlay, restart, step, reset, clearPath, cancelSetup, armDrawing, cancelDrawing, flashHint, undo, redo])
 
   // Leaving the selection empties arming and anchor editing of meaning.
   useEffect(() => {
@@ -1455,6 +1750,54 @@ export function MotionLabEditor({
     setMenuOpen(null)
     setBall((b) => (isPass(b) ? { ...b, releasePoint: undefined } : b))
   }
+  /** More › Add pre-snap motion…: arm the first motion stroke for him. */
+  const startMotion = () => {
+    setMenuOpen(null)
+    setAddingMotion(true)
+    setPhase('motion')
+    armDrawing()
+  }
+
+  /**
+   * THE LEGACY OFFER (P3.4). A line drawn as pre-snap timing becomes his
+   * motion - his route is then still to draw, and the strip points there.
+   * One undo step; until a route exists he runs exactly as before: to the end
+   * of that line before the snap, then stands.
+   */
+  const convertLegacy = () => {
+    if (!selected) return
+    setMenuOpen(null)
+    setPlayers((ps) => ps.map((p) => (p.id === selected.id ? convertToMotion(p) : p)))
+    setPhase('route')
+    showToast(`${selected.label}'s line is now his motion. Draw his route from where it ends.`)
+  }
+
+  /** The other answer: it is an ordinary route after all, run on the snap. */
+  const legacyOnSnap = () => {
+    if (!selected) return
+    setMenuOpen(null)
+    setPlayers((ps) => ps.map((p) => (p.id === selected.id ? runOnSnap(p) : p)))
+  }
+
+  const legacyPop = selected ? (
+    <div className="popover legacy-pop" role="dialog" aria-label="Pre-snap, the old way">
+      <div className="pop-title">Pre-snap, the old way</div>
+      <p className="pop-note">
+        {selected.label}'s line was drawn as pre-snap timing. Motion Lab now keeps pre-snap motion and the route apart, so he can motion and then run one.
+      </p>
+      <button
+        className={motionBlocked(selected, engagements) ? 'blocked' : ''}
+        aria-disabled={motionBlocked(selected, engagements) ? true : undefined}
+        title={motionBlocked(selected, engagements) ?? undefined}
+        onClick={() => (motionBlocked(selected, engagements) ? showToast(motionBlocked(selected, engagements)!) : convertLegacy())}
+      >
+        Make it his motion
+      </button>
+      <button onClick={legacyOnSnap}>Run it on the snap instead</button>
+      <button onClick={() => setMenuOpen(null)}>Leave it</button>
+    </div>
+  ) : null
+
   const startCopy = (mirror: boolean) => {
     if (!selected) return
     setMenuOpen(null)
@@ -1513,12 +1856,25 @@ export function MotionLabEditor({
    * do (ML-UX-4), the pick banners say what to click (ML-UX-3), and the
    * watching and Present sentences live in their own strip branches.
    */
-  const hint =
+  // With two phases the banner names the line being drawn - and, for the
+  // motion, teaches the join: where he is let go is where the snap finds him.
+  const hint = !twoLines ? (
     interaction === 'drawing' ? (
       <>Drawing <b>{selected?.label}</b>'s assignment. Let go to finish. <b>Esc</b> to cancel.</>
     ) : (
       <>Draw <b>{selected?.label}</b>'s assignment: drag on the field. <b>Esc</b> to cancel.</>
     )
+  ) : activePhase === 'motion' ? (
+    interaction === 'drawing' ? (
+      <>Drawing <b>{selected?.label}</b>'s motion. Let go where he should be at the snap. <b>Esc</b> to cancel.</>
+    ) : (
+      <>Draw <b>{selected?.label}</b>'s motion: drag on the field. <b>Esc</b> to cancel.</>
+    )
+  ) : interaction === 'drawing' ? (
+    <>Drawing <b>{selected?.label}</b>'s route. Let go to finish. <b>Esc</b> to cancel.</>
+  ) : (
+    <>Draw <b>{selected?.label}</b>'s route from where his motion ends: drag on the field. <b>Esc</b> to cancel.</>
+  )
 
   /**
    * THE WAITING SENTENCE for a field pick (SPEC §11.2).
@@ -1643,10 +1999,15 @@ export function MotionLabEditor({
         {/* SPEC §7.5: engage-only is the default. One release per block, so
             setting it here takes it off the other man. */}
         <button
-          className={selectedEngagement.release === selected.id ? 'gold-line' : ''}
-          title="Comes off after a moment and continues his own path."
+          className={`${selectedEngagement.release === selected.id ? 'gold-line' : ''}${releaseBlocked(selected) && selectedEngagement.release !== selected.id ? ' blocked' : ''}`}
+          aria-disabled={releaseBlocked(selected) && selectedEngagement.release !== selected.id ? true : undefined}
+          title={releaseBlocked(selected) && selectedEngagement.release !== selected.id ? releaseBlocked(selected)! : 'Comes off after a moment and continues his own path.'}
           onClick={() =>
-            setEngagements((es) =>
+            // Taking a release OFF is always allowed; putting one on is the
+            // second pause for a man who motions and waits (P3.4).
+            releaseBlocked(selected) && selectedEngagement.release !== selected.id
+              ? showToast(releaseBlocked(selected)!)
+              : setEngagements((es) =>
               es.map((x) =>
                 x.id === selectedEngagement.id
                   ? { ...x, release: x.release === selected.id ? undefined : selected.id }
@@ -1846,11 +2207,44 @@ export function MotionLabEditor({
       )}
 
       <div className="pop-title">Assignment</div>
-      <button disabled={!hasPath} onClick={() => startCopy(false)}>Copy his assignment to…</button>
-      <button disabled={!hasPath} onClick={() => startCopy(true)}>Mirror his assignment to…</button>
-      <button className="pop-clear" disabled={!hasPath} onClick={() => { setMenuOpen(null); clearPath(selected.id) }}>
-        Clear assignment <span className="key">Delete</span>
-      </button>
+      {/* FIRST MOTION (P3.4): the way in, until he has some - then the
+          Motion | Route switch in the strip takes over. */}
+      {!hasMotion(selected) && !isLegacyPreSnap(selected) && (
+        <button
+          className={motionBlocked(selected, engagements) ? 'blocked' : ''}
+          aria-disabled={motionBlocked(selected, engagements) ? true : undefined}
+          title={motionBlocked(selected, engagements) ?? 'Draw where he moves before the snap'}
+          onClick={() => (motionBlocked(selected, engagements) ? showToast(motionBlocked(selected, engagements)!) : startMotion())}
+        >
+          Add pre-snap motion…
+        </button>
+      )}
+      {isLegacyPreSnap(selected) && selected.path.length >= 2 && (
+        <button
+          className={motionBlocked(selected, engagements) ? 'blocked' : ''}
+          aria-disabled={motionBlocked(selected, engagements) ? true : undefined}
+          title={motionBlocked(selected, engagements) ?? 'His line runs before the snap - make it his motion'}
+          onClick={() => (motionBlocked(selected, engagements) ? showToast(motionBlocked(selected, engagements)!) : convertLegacy())}
+        >
+          Make his line his motion
+        </button>
+      )}
+      <button disabled={!hasAssignment} onClick={() => startCopy(false)}>Copy his assignment to…</button>
+      <button disabled={!hasAssignment} onClick={() => startCopy(true)}>Mirror his assignment to…</button>
+      {hasMotion(selected) ? (
+        <>
+          <button className="pop-clear" disabled={selected.path.length < 2} onClick={() => { setMenuOpen(null); clearPath(selected.id, 'route') }}>
+            Clear the route {activePhase === 'route' && <span className="key">Delete</span>}
+          </button>
+          <button className="pop-clear" onClick={() => { setMenuOpen(null); clearPath(selected.id, 'motion') }}>
+            Clear the motion {activePhase === 'motion' && <span className="key">Delete</span>}
+          </button>
+        </>
+      ) : (
+        <button className="pop-clear" disabled={!hasPath} onClick={() => { setMenuOpen(null); clearPath(selected.id) }}>
+          Clear assignment <span className="key">Delete</span>
+        </button>
+      )}
 
       {selected.id === qbId && canPickRelease && (
         <>
@@ -1864,7 +2258,15 @@ export function MotionLabEditor({
 
       <div className="pop-title">Player</div>
       <button onClick={() => { setMenuOpen(null); setRenaming('player') }}>Rename…</button>
-      <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Remove from play</button>
+      {/* WHAT HE DOES, not what he is called: the engine finds the passer and
+          the snapper by role, so these stay right through any rename. */}
+      {selected.side === 'offense' && passerOf(players)?.id !== selected.id && (
+        <button onClick={() => makeRole(selected.id, 'passer')}>Make passer</button>
+      )}
+      {selected.side === 'offense' && snapperOf(players)?.id !== selected.id && (
+        <button onClick={() => makeRole(selected.id, 'snapper')}>Make snapper</button>
+      )}
+      <button className="pop-clear" onClick={() => removePlayer(selected.id)}>Delete player</button>
     </div>
   ) : null
 
@@ -2096,6 +2498,21 @@ export function MotionLabEditor({
           </>
         ) : watching ? (
           <span className="hint">Watching from the sideline. Switch to Overhead to edit.</span>
+        ) : groupMove ? (
+          /* A group move is a waiting state like a pick, so it wears the same
+             row: one sentence, and both ways out. */
+          <>
+            <span className="banner">
+              <span className="banner-icon">✥</span>
+              Drag anywhere to move <b>{groupWords(groupMove.group, groupMove.ids.size)}</b>. Enter to finish, Esc to cancel.
+            </span>
+            <button className="gold-line" onClick={commitGroupMove}>
+              Finish<span className="key">Enter</span>
+            </button>
+            <button onClick={cancelGroupMove}>
+              Cancel<span className="key">Esc</span>
+            </button>
+          </>
         ) : setup ? (
           /* A pick is a waiting state, so it wears the same banner a drawing
              does (SPEC §11.2). This branch stays BELOW the drawing one above:
@@ -2122,7 +2539,7 @@ export function MotionLabEditor({
                    More, and a chip that opened a menu was the only place they
                    ever lived. It still hosts the inline rename field. */}
             {renaming === 'player' ? (
-              <InlineName value={selected.label} onCommit={(v) => { updatePlayer(selected.id, { label: v.slice(0, 4).toUpperCase() }); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Label" />
+              <InlineName value={selected.label} onCommit={(v) => { renamePlayer(selected.id, v) }} onCancel={() => setRenaming(null)} placeholder="Label" />
             ) : (
               <span className={`chip ${selected.side} chip-static`}>
                 {selected.label}
@@ -2130,27 +2547,42 @@ export function MotionLabEditor({
               </span>
             )}
 
+            {/* 1b. WHICH OF HIS LINES (P3.4). Only a man with motion has two,
+                   so only he gets this - the documented eighth control. It
+                   scopes Draw, the handle, Adjust and Delete; switching
+                   mid-Adjust swaps the anchors and stays in Adjust. */}
+            {hasMotion(selected) && (
+              <span className="phase-seg" data-phase-seg>
+                <Seg
+                  value={activePhase}
+                  options={[{ value: 'motion', label: 'Motion' }, { value: 'route', label: 'Route' }]}
+                  onChange={(v: Phase) => setPhase(v)}
+                  size="sm"
+                />
+              </span>
+            )}
+
             {/* 2. DRAW. The same arming ML-UX-1 built; solid gold while there
                    is nothing to run, plain once there is. */}
             <button
-              className={`strip-primary${hasPath ? '' : ' primary'}`}
+              className={`strip-primary${hasLine ? '' : ' primary'}`}
               onClick={clicked(armDrawing)}
-              title={hasPath ? 'Draw it again · D' : 'Draw what he does · D'}
+              title={drawTitle}
             >
-              {hasPath ? 'Redraw' : '✎ Draw assignment'}
+              {drawLabel}
             </button>
 
             {/* 3. ADJUST. Only means something once there is a route, and says
                    so itself while it is on - which is why adjusting no longer
                    needs a banner. */}
-            {hasPath && (
+            {hasLine && (
               <button
                 className={interaction === 'adjusting' ? 'gold-line' : ''}
                 onClick={clicked(() => {
                   cancelDrawing()
                   setInteraction((i) => (i === 'adjusting' ? 'idle' : 'adjusting'))
                 })}
-                title="Move the points of his route · E"
+                title={activePhase === 'motion' ? 'Move the points of his motion · E' : 'Move the points of his route · E'}
               >
                 Adjust
               </button>
@@ -2159,7 +2591,32 @@ export function MotionLabEditor({
             {/* 4. WHEN. Always present, path or no path. */}
             <span className="group">
               <label className="lbl timing-label">Timing</label>
-              <Seg value={selected.timing} options={TIMINGS} onChange={(timing) => updatePlayer(selected.id, { timing })} size="sm" />
+              {isLegacyPreSnap(selected) ? (
+                /* A LEGACY line - drawn as pre-snap timing. It opens looking
+                   exactly as it was saved, and the gold Pre-snap segment IS
+                   the offer to convert it: nothing opens on its own. */
+                /* The menu hangs OUTSIDE the segment: `.seg` clips its overflow
+                   for the rounded corners, and would clip the menu to nothing. */
+                <div className="ball-menu legacy-timing">
+                  <div className="seg seg-sm">
+                    <button className="active" aria-expanded={menuOpen === 'legacy'} onClick={() => toggleMenu('legacy')} title="Drawn as pre-snap timing - see the options">
+                      Pre-snap <span className="key">▾</span>
+                    </button>
+                    <button onClick={() => updatePlayer(selected.id, { timing: 'on-snap' })}>On snap</button>
+                    <button onClick={() => updatePlayer(selected.id, { timing: 'delayed' })}>Delayed</button>
+                  </div>
+                  {menuOpen === 'legacy' && legacyPop}
+                </div>
+              ) : (
+                <Seg
+                  value={selected.timing}
+                  options={TIMINGS}
+                  onChange={(timing) => updatePlayer(selected.id, { timing })}
+                  size="sm"
+                  blocked={delayedBlocked(selected, engagements) ? { delayed: delayedBlocked(selected, engagements)! } : undefined}
+                  onBlocked={showToast}
+                />
+              )}
               {selected.timing === 'delayed' && (
                 <span className="delay">
                   <input type="number" min={0} max={5} step={0.1} value={selected.delay} onChange={(e) => updatePlayer(selected.id, { delay: Number(e.target.value) })} />
@@ -2226,6 +2683,17 @@ export function MotionLabEditor({
                       <button className="pop-clear" onClick={() => deleteLook(l)} title="Delete this formation">×</button>
                     </div>
                   ))}
+                  {/* WHERE THE LOOK SITS. The hash is the move a coach asks
+                      for by name, and it lived only in the dock's Situation
+                      chip - a long way from "Formation". It is both places
+                      now; the same one move underneath. */}
+                  <div className="pop-title">Hash</div>
+                  <Seg value={situation.hash} options={HASHES} onChange={(h) => { setHash(h); setMenuOpen(null) }} size="sm" />
+                  <div className="pop-title">Move</div>
+                  <button onClick={() => startGroupMove('formation')}>Move formation…</button>
+                  <button onClick={() => startGroupMove('offense')}>Move offense…</button>
+                  <button onClick={() => startGroupMove('defense')}>Move defense…</button>
+                  <button onClick={() => startGroupMove('line')}>Move offensive line…</button>
                   <div className="pop-title">Players</div>
                   <button onClick={() => addPlayer('offense')}>Add offensive player</button>
                   <button onClick={() => addPlayer('defense')}>Add defensive player</button>
@@ -2296,11 +2764,14 @@ export function MotionLabEditor({
           editingPath={interaction === 'adjusting'}
           showRouteHandle={showRouteHandle}
           draft={draft}
+          draftIsMotion={drawPhaseRef.current === 'motion' && !!draft}
+          phaseLine={activePhase === 'motion' ? 'motion' : 'path'}
+          dimOtherPhase={interaction === 'adjusting'}
           teleDraft={teleDraft}
           hoverCatch={hoverCatch}
           catchTargetId={catchTargetId}
           isPickable={pickable}
-          isDimmed={(p) => !!setup && (catchTargetId ? p.id !== catchTargetId && p.id !== qbId : !pickable(p) && p.id !== qbId && setup.step !== 'copy-to')}
+          isDimmed={(p) => (groupMove ? !groupMove.ids.has(p.id) : !!setup && (catchTargetId ? p.id !== catchTargetId && p.id !== qbId : !pickable(p) && p.id !== qbId && setup.step !== 'copy-to'))}
         />
         )}
       </div>

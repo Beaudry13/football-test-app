@@ -89,8 +89,8 @@ describe('the order never changes', () => {
       .getAllByRole('button')
       .map((b) => b.textContent!.trim())
     // Redraw, Adjust, three Timing segments, Blocks…, More. Speed, End,
-    // Copy, Mirror, Clear, Rename, Remove and Throw point are all under More.
-    for (const gone of ['Speed', 'Copy to…', 'Mirror to…', 'Clear assignment', 'Rename…', 'Remove from play', 'Assignment']) {
+    // Copy, Mirror, Clear, Rename, Delete and Throw point are all under More.
+    for (const gone of ['Speed', 'Copy to…', 'Mirror to…', 'Clear assignment', 'Rename…', 'Delete player', 'Assignment']) {
       expect(names).not.toContain(gone)
     }
   })
@@ -212,7 +212,9 @@ describe('Timing', () => {
     await settle()
     const before = stored(play).players.find((p) => p.id === man.id)!.path
 
-    fireEvent.click(stripBtn('Pre-snap'))
+    fireEvent.click(stripBtn('Delayed'))
+    await settle()
+    fireEvent.click(stripBtn('On snap'))
     await settle()
 
     expect(stored(play).players.find((p) => p.id === man.id)!.path).toEqual(before)
@@ -262,7 +264,7 @@ describe('what makes the strip go away', () => {
     select(play, man.id)
 
     fireEvent.click(stripBtn(/^More/))
-    fireEvent.click(screen.getByRole('button', { name: 'Remove from play' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete player' }))
     await settle()
 
     expect(within(strip()).getByRole('button', { name: /^Formation/ })).toBeInTheDocument()

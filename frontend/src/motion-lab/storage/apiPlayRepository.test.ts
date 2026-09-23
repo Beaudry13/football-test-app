@@ -3,7 +3,7 @@ import { ApiError } from '../../api/client'
 import { createMotionLabSession, RETRY_DELAYS, toDocument, type MotionLabSession } from './apiPlayRepository'
 import { fakeMotionServer, memoryDraftStore, settle } from './testing/fakeMotionApi'
 import { gapPlays } from '../__characterization__/fixtures'
-import { lookFromPlayers, newPlay, type Play } from '../engine/play'
+import { lookFromPlayers, newPlay, SCHEMA_VERSION, type Play } from '../engine/play'
 
 /**
  * THE SAVE LIFECYCLE, pinned. See apiPlayRepository.ts for the design these
@@ -348,5 +348,57 @@ describe('the library the editor sees', () => {
     session.repository.deleteLook(look.id)
     await settle()
     expect(server.looks.size).toBe(0)
+  })
+})
+
+describe('the version a save is written at', () => {
+  // The version sent is the version of the SERIALIZER that wrote the bytes -
+  // this client's `toDocument` - never whatever an in-memory object carries.
+  // The editor built its play with `v: 1` long after the model moved to 2, and
+  // the session trusted it: every play stored at v2 was refused, and a v1
+  // play that gained roles or motion stayed v1, unprotected.
+  const stale = (play: Play): Play => ({ ...play, v: 1 })
+
+  it('a play is created and saved at this client\'s schema version, whatever it claims', async () => {
+    const session = start()
+    const play = gapPlays()[0]
+    session.repository.savePlay(stale(play))
+    await settle()
+    session.repository.savePlay(stale(renamed(play, 'Toss Crack')))
+    await settle()
+    expect(server.calls.map((c) => [c.kind, (c.body as { schema_version: number }).schema_version])).toEqual([
+      ['create', SCHEMA_VERSION],
+      ['save', SCHEMA_VERSION],
+    ])
+    expect([...server.plays.values()][0].schema_version).toBe(SCHEMA_VERSION)
+  })
+
+  it('so does a look', async () => {
+    const session = start()
+    session.repository.saveLook({ ...lookFromPlayers('Trips Rt', newPlay().players), v: 1 })
+    await settle()
+    expect([...server.looks.values()].map((row) => row.schema_version)).toEqual([SCHEMA_VERSION])
+  })
+})
+
+describe('a save refused because a newer Motion Lab wrote the play (P3.1 / P3.4)', () => {
+  it('stops sending, says so, and never retries into the refusal', async () => {
+    const session = start()
+    const play = gapPlays()[0]
+    session.repository.savePlay(play)
+    await settle()
+
+    // What the server answers a tab older than the stored document.
+    server.failNextWith(new ApiError('This play was saved by a newer Motion Lab (v2); this tab writes v1. Reload before editing.', 409, undefined, 'schema_outdated'))
+    session.repository.savePlay(renamed(play, 'Old tab edit'))
+    await settle()
+
+    // Honest: it stops and asks, exactly as for any 409 - no silent retry
+    // loop, and nothing written over the newer play.
+    expect(session.stateOf(play.id).state).toBe('conflict')
+    const saves = server.calls.filter((c) => c.kind === 'save').length
+    session.repository.savePlay(renamed(play, 'Old tab edit, again'))
+    await settle()
+    expect(server.calls.filter((c) => c.kind === 'save')).toHaveLength(saves)
   })
 })

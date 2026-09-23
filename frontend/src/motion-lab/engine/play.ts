@@ -10,10 +10,18 @@
 
 import type { BallAction } from './ball'
 import { HASH_LEFT, HASH_RIGHT, FIELD_WIDTH } from './field'
-import { initialPlayers, type Player } from './formation'
+import { initialPlayers, type Player, type PlayerRole } from './formation'
 import type { Engagement } from './interactions'
 
-export const SCHEMA_VERSION = 1
+/**
+ * 1: the prototype's play. 2: players may carry a `role` (who throws it, who
+ * snaps it), so labels are the coach's to change.
+ *
+ * The number is what stops an OLDER tab from silently undoing this: its
+ * loader rebuilds players without a role and would save them away, so the
+ * server refuses a write whose version is below the one already stored.
+ */
+export const SCHEMA_VERSION = 2
 
 export type Hash = 'left' | 'middle' | 'right'
 export type PathFilter = 'all' | 'offense' | 'defense' | 'none'
@@ -90,14 +98,19 @@ export function newPlay(name = 'Untitled Play', players: Player[] = initialPlaye
   }
 }
 
-/** A look is the arrangement only: paths, timing and end behaviour don't travel. */
+/**
+ * A look is the arrangement only: paths, timing and end behaviour don't
+ * travel. Roles do: who snaps it and who throws it is part of how a formation
+ * lines up, and a coach who saves "Trips Rt" and starts a play from it should
+ * not have to say again which man is the quarterback.
+ */
 export function lookFromPlayers(name: string, players: Player[]): Look {
   return {
     v: SCHEMA_VERSION,
     id: newId('look_'),
     name,
     updatedAt: Date.now(),
-    players: players.map((p) => ({ id: p.id, side: p.side, label: p.label, x: p.x, y: p.y, path: [], timing: 'on-snap', delay: 0.5, speed: p.speed })),
+    players: players.map((p) => ({ id: p.id, side: p.side, label: p.label, x: p.x, y: p.y, path: [], timing: 'on-snap' as const, delay: 0.5, speed: p.speed, ...(p.role ? { role: p.role } : null) })),
   }
 }
 
@@ -114,7 +127,19 @@ function sanitizePlayer(raw: unknown): Player | null {
   const timing = r.timing === 'pre-snap' || r.timing === 'delayed' ? r.timing : 'on-snap'
   const speed = r.speed === 'controlled' || r.speed === 'fast' ? r.speed : 'normal'
   const endBehavior = r.endBehavior === 'continue' || r.endBehavior === 'settle' ? r.endBehavior : undefined
-  return { id: r.id, side, label, x: r.x, y: r.y, path: path.length >= 2 ? path : [], timing, delay: isNum(r.delay) ? r.delay : 0.5, speed, endBehavior }
+  // ROLE: ABSENT STAYS ABSENT, the same rule as Engagement.auto. A play
+  // written before roles existed must come back exactly as it was written, so
+  // the engine keeps reading its labels; writing `role: undefined` in here
+  // would be a change to every one of those documents. Defence carries no
+  // role - nothing reads its labels.
+  const role = side === 'offense' && (r.role === 'passer' || r.role === 'snapper') ? { role: r.role as PlayerRole } : null
+  // MOTION: absent stays absent, and so does anything too short to be one.
+  // With motion his path is the POST-snap route, so a stray 'pre-snap'
+  // timing on the same man can only mean on-snap.
+  const motionPts = Array.isArray(r.motion) ? (r.motion.filter(isPt) as Player['path']) : []
+  const motion = motionPts.length >= 2 ? { motion: motionPts } : null
+  const phased = motion && timing === 'pre-snap' ? 'on-snap' : timing
+  return { id: r.id, side, label, x: r.x, y: r.y, path: path.length >= 2 ? path : [], timing: phased, delay: isNum(r.delay) ? r.delay : 0.5, speed, endBehavior, ...role, ...motion }
 }
 
 /** A ball action is kept only if every player it names still exists. */
@@ -155,6 +180,19 @@ export function sanitizePlay(raw: unknown): Play | null {
   // Duplicate ids would make every reference ambiguous; keep the first.
   const seen = new Set<string>()
   const unique = players.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)))
+  // One passer, one snapper. Two of either would make `roleHolder` depend on
+  // list order - the very thing roles exist to stop - so a second claim is
+  // dropped and the first man keeps the job.
+  const taken = new Set<string>()
+  const withRoles = unique.map((p) => {
+    if (!p.role) return p
+    if (taken.has(p.role)) {
+      const { role: _dropped, ...rest } = p
+      return rest
+    }
+    taken.add(p.role)
+    return p
+  })
   const ids = new Set(unique.map((p) => p.id))
   const ball = sanitizeBall(r.ball, ids)
   const ballThen = ball ? sanitizeBall(r.ballThen, ids) : null
@@ -194,7 +232,7 @@ export function sanitizePlay(raw: unknown): Play | null {
     name: typeof r.name === 'string' && r.name.trim() ? r.name : 'Untitled Play',
     createdAt: isNum(r.createdAt) ? r.createdAt : now,
     updatedAt: isNum(r.updatedAt) ? r.updatedAt : now,
-    players: unique,
+    players: withRoles,
     ball,
     ballThen,
     engagements,

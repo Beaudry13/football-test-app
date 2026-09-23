@@ -8,7 +8,7 @@ import { buildSchedule, posAt, resolveEnd } from '../engine/timeline'
 import { applyEngagements } from '../engine/interactions'
 import { deriveBall, ballTargetOf } from '../engine/ball'
 import { buildOrientation, orientationAt } from '../engine/orientation'
-import { sanitizePlay, sanitizeLook, newPlay } from '../engine/play'
+import { sanitizePlay, sanitizeLook, newPlay, SCHEMA_VERSION } from '../engine/play'
 import { initialPlayers } from '../engine/formation'
 import type { EngineApi } from './capture'
 
@@ -24,4 +24,4 @@ export const engineUnderTest: EngineApi = {
   sanitizePlay,
 }
 
-export const modelUnderTest = { sanitizePlay, sanitizeLook, newPlay, initialPlayers }
+export const modelUnderTest = { sanitizePlay, sanitizeLook, newPlay, initialPlayers, SCHEMA_VERSION }

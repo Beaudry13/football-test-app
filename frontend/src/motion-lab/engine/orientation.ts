@@ -14,7 +14,7 @@
 // override ("face here" / "look here") belongs at the top of `bodyTarget` /
 // `lookTarget`: consult it first, fall through to the rules.
 
-import type { Player } from './formation'
+import { roleHolder, type Player } from './formation'
 import type { Pt } from './geometry'
 import type { BallFrame } from './ball'
 import { posAt, type ScheduleMap } from './timeline'
@@ -69,6 +69,8 @@ interface Situation {
   preSnap: boolean
   ball: BallFrame
   targetIds: string[]
+  /** Is this the man who throws it? By role, not by what he is called. */
+  isPasser: boolean
 }
 
 interface BodyDecision {
@@ -105,7 +107,7 @@ function lookTarget(s: Situation, body: number): number {
   // A receiver the ball is thrown to finds it in the air. Nobody else on
   // offense has ball radar: they look where they are working.
   if ((ball.phase === 'flight' || ball.phase === 'pitch') && targetIds.includes(p.id)) return ballDir
-  if (p.label === 'QB') return ball.phase === 'flight' || ball.phase === 'pitch' ? ballDir : fwd
+  if (s.isPasser) return ball.phase === 'flight' || ball.phase === 'pitch' ? ballDir : fwd
   return speed >= STILL ? angleOf(move) : body
 }
 
@@ -131,6 +133,7 @@ function buildTable(
   targetIds: string[],
   engaged: EngagedWith | undefined,
   byId: Map<string, Player>,
+  isPasser: boolean,
 ): OrientationTable {
   const n = Math.max(2, Math.ceil(end / STEP) + 2)
   const body = new Float32Array(n)
@@ -160,7 +163,7 @@ function buildTable(
       const other = byId.get(engaged.partnerId)
       if (other) partner = toward(at, posAt(schedule, other, t), fwd)
     }
-    const s: Situation = { p, at, partner, fwd, move, speed, movingFor, preSnap: t < snapAt, ball, targetIds }
+    const s: Situation = { p, at, partner, fwd, move, speed, movingFor, preSnap: t < snapAt, ball, targetIds, isPasser }
 
     // Body first. If he is not running and what he wants to see has been
     // outside his head's range for a moment, the body comes round to it.
@@ -193,7 +196,10 @@ export function buildOrientation(
   engagements: Map<string, EngagedWith> = new Map(),
 ): OrientationMap {
   const byId = new Map(players.map((p) => [p.id, p]))
-  return new Map(players.map((p) => [p.id, buildTable(p, schedule, snapAt, end, ballAt, targetIds, engagements.get(p.id), byId)]))
+  // Found once, for the same reason ball.ts does: the passer is a job, not a
+  // label, and a second man called QB must not inherit his eyes.
+  const passerId = roleHolder(players, 'passer', 'QB')?.id ?? null
+  return new Map(players.map((p) => [p.id, buildTable(p, schedule, snapAt, end, ballAt, targetIds, engagements.get(p.id), byId, p.id === passerId)]))
 }
 
 function sample(arr: Float32Array, t: number): number {
