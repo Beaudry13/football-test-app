@@ -272,7 +272,10 @@ export function createMotionLabSession(options: {
     emit()
     const sent = entry.play
     const sentKey = intentKey(sent)
-    const body = { name: sent.name, document: toDocument(sent), schema_version: sent.v || SCHEMA_VERSION }
+    // The version is the one THIS client's model writes - `toDocument` made
+    // these bytes - never whatever the in-memory play claims. It is what the
+    // server's older-tab refusal is keyed on (motion_lab.py _outdated_client).
+    const body = { name: sent.name, document: toDocument(sent), schema_version: SCHEMA_VERSION }
     try {
       const row =
         entry.serverId === null
@@ -333,7 +336,7 @@ export function createMotionLabSession(options: {
       const row = await client.createMotionLook({
         name: record.look.name,
         document: { players: record.look.players },
-        schema_version: record.look.v || SCHEMA_VERSION,
+        schema_version: SCHEMA_VERSION, // as for a play: the writer's version
       })
       record.serverId = row.id
       if (record.deleteAfterCreate) await client.deleteMotionLook(row.id)

@@ -16,7 +16,7 @@ import { FieldView } from '../view/FieldView'
 import { COACH_CAMERA, playerCamera } from '../engine/perspective'
 import { buildOrientation, orientationAt } from '../engine/orientation'
 import { applyEngagements, type Engagement } from '../engine/interactions'
-import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
+import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, SCHEMA_VERSION, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
 import type { PlayRepository } from '../storage/playRepository'
 import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
@@ -535,7 +535,7 @@ export function MotionLabEditor({
   // Autosave: the play writes itself shortly after every edit.
   const currentPlay = useCallback(
     (): Play => ({
-      v: 1,
+      v: SCHEMA_VERSION,
       id: playId,
       name: playName,
       createdAt: plays.find((p) => p.id === playId)?.createdAt ?? Date.now(),

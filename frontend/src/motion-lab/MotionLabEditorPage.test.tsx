@@ -5,8 +5,10 @@ import * as authModule from '../auth/AuthContext'
 import { ApiError } from '../api/client'
 import { resetMotionLabSessions, toDocument } from './storage/apiPlayRepository'
 import { fakeMotionServer, settle } from './storage/testing/fakeMotionApi'
-import { board, dragPlayer, installPointerStubs } from './testing/pointerStubs'
+import { board, dragPlayer, installPointerStubs, playerMarker } from './testing/pointerStubs'
 import { gapPlays } from './__characterization__/fixtures'
+import { U, Y_MAX } from './engine/field'
+import { SCHEMA_VERSION, type Play } from './engine/play'
 
 const server = vi.hoisted(() => ({ current: null as unknown as ReturnType<typeof import('./storage/testing/fakeMotionApi').fakeMotionServer> }))
 vi.mock('../api/motionLab', async (importOriginal) => {
@@ -377,5 +379,150 @@ describe('the save indicator on the server path', () => {
     await act(async () => settle(10))
     expect(statusText()).toBe('Not saved')
     expect(saves()).toHaveLength(sent)
+  })
+})
+
+/**
+ * THE VERSION A SAVE IS WRITTEN AT (P3), against a fake that refuses an older
+ * client exactly as backend/app/routes/motion_lab.py does.
+ *
+ * Found in the P3.4 browser sweep on the real local server: the editor built
+ * every play it saved with `v: 1`, so every play stored at v2 - each one the
+ * P3 Library creates - was refused on its first edit ("this tab writes v1"),
+ * and a v1 play that gained roles or motion was written back as v1, where the
+ * older-tab refusal could never protect it. The fake accepted any version, so
+ * no test saw either.
+ */
+describe('the schema version on the server path (P3)', () => {
+  const client = (x: number, y: number) => ({ clientX: x * U, clientY: (Y_MAX - y) * U })
+  function select(play: Play, id: string) {
+    const p = play.players.find((pl) => pl.id === id)!
+    fireEvent.pointerDown(playerMarker(id), { button: 0, pointerId: 1, ...client(p.x, p.y) })
+    fireEvent.pointerUp(board(), { pointerId: 1, ...client(p.x, p.y) })
+  }
+  const strip = () => document.querySelector('.bar.context') as HTMLElement
+  const quiet = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+      await settle(10)
+    })
+  const saves = () => server.current.calls.filter((c) => c.kind === 'save')
+  const sentVersions = () => saves().map((c) => (c.body as { schema_version: number }).schema_version)
+  type StoredMan = { id: string; label: string; role?: string; motion?: unknown; path: unknown[]; timing: string }
+  const men = (id: number) => server.current.plays.get(id)!.document.players as StoredMan[]
+  const bytes = (id: number) => JSON.stringify(server.current.plays.get(id))
+
+  // "Z jet motion, toss to RB", as the RELEASED client stored it: v1, no
+  // roles, Z's jet drawn the old way - a path with pre-snap timing.
+  const released = () => gapPlays()[0]
+  const Z = 'O10'
+  const QB = 'O6'
+  const C = 'O2'
+  /** The same play as this client writes it: Z's jet is his motion, roles recorded. */
+  function upgraded(play: Play): Play {
+    return {
+      ...play,
+      players: play.players.map((p) => {
+        if (p.id === Z) return { ...p, motion: p.path, path: [], timing: 'on-snap' as const }
+        if (p.id === QB) return { ...p, role: 'passer' as const }
+        if (p.id === C) return { ...p, role: 'snapper' as const }
+        return p
+      }),
+    }
+  }
+  function seed(play: Play, schemaVersion: number) {
+    void server.current.api.createMotionPlay({ name: play.name, document: toDocument(play), schema_version: schemaVersion })
+  }
+  /** What a tab still running the released client sends: its v1 view of the play. */
+  const olderTabSave = (id: number, play: Play) =>
+    server.current.api.saveMotionPlay(id, { name: play.name, document: toDocument(play), schema_version: 1, base_revision: server.current.plays.get(id)!.revision })
+
+  it('A. a play stored at the current version saves at it: the edit lands and the revision moves on', async () => {
+    const play = upgraded(released())
+    seed(play, SCHEMA_VERSION)
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(play.name))
+
+    dragPlayer(play, 'O8', 0, -2)
+    await quiet()
+
+    expect(sentVersions()).toEqual([SCHEMA_VERSION])
+    expect(screen.queryByRole('alert')).toBeNull()
+    await waitFor(() => expect(statusText()).toBe('Saved'))
+    const row = server.current.plays.get(100)!
+    expect(row.revision).toBe(2)
+    expect(row.schema_version).toBe(SCHEMA_VERSION)
+    // The edit landed, and nothing the play already held went missing.
+    expect((men(100).find((p) => p.id === 'O8') as unknown as { y: number }).y).toBeCloseTo(play.players.find((p) => p.id === 'O8')!.y - 2, 6)
+    expect(men(100).find((p) => p.id === Z)!.motion).toEqual(play.players.find((p) => p.id === Z)!.motion)
+    expect(men(100).find((p) => p.id === QB)!.role).toBe('passer')
+  })
+
+  it('B + C. an old play that gains motion and roles is written at the current version, and an older tab can no longer write over it', async () => {
+    const play = released()
+    seed(play, 1)
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(play.name))
+
+    // Z's pre-snap line becomes his motion (P3.4)...
+    select(play, Z)
+    fireEvent.click(within(strip()).getByRole('button', { name: /^Pre-snap/ }))
+    fireEvent.click(within(document.querySelector('.legacy-pop') as HTMLElement).getByRole('button', { name: 'Make it his motion' }))
+    // ...and the quarterback is renamed, the edit that records roles (P3.1).
+    select(play, QB)
+    fireEvent.click(within(strip()).getByRole('button', { name: /^More/ }))
+    fireEvent.click(within(strip().querySelector('.more-pop') as HTMLElement).getByRole('button', { name: 'Rename…' }))
+    const input = document.querySelector('input.inline-name') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Q' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await quiet()
+
+    expect(sentVersions().length).toBeGreaterThan(0)
+    expect(sentVersions().every((v) => v === SCHEMA_VERSION)).toBe(true)
+    expect(screen.queryByRole('alert')).toBeNull()
+    const row = server.current.plays.get(100)!
+    expect(row.schema_version).toBe(SCHEMA_VERSION)
+    const z = men(100).find((p) => p.id === Z)!
+    expect(z.motion).toEqual(play.players.find((p) => p.id === Z)!.path)
+    expect(z.path).toEqual([])
+    expect(z.timing).toBe('on-snap')
+    expect(men(100).find((p) => p.id === QB)).toMatchObject({ label: 'Q', role: 'passer' })
+    expect(men(100).find((p) => p.id === C)!.role).toBe('snapper')
+
+    // C. The released client, still open in another tab, saves its v1 view -
+    // which knows nothing of motion or roles - over the upgraded play.
+    const before = bytes(100)
+    await expect(olderTabSave(100, play)).rejects.toMatchObject({ status: 409, reason: 'schema_outdated' })
+    expect(bytes(100)).toBe(before)
+  })
+
+  it('C. an older tab is refused over a play stored at the current version; role, motion and revision are untouched', async () => {
+    seed(upgraded(released()), SCHEMA_VERSION)
+    await settle()
+    const before = bytes(100)
+    await expect(olderTabSave(100, released())).rejects.toMatchObject({ status: 409, reason: 'schema_outdated' })
+    expect(bytes(100)).toBe(before)
+    expect(server.current.plays.get(100)!.revision).toBe(1)
+  })
+
+  it('D. opening an old play and looking around writes nothing: it stays exactly as stored, at v1', async () => {
+    const play = released()
+    seed(play, 1)
+    await settle()
+    const before = bytes(100)
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(play.name))
+    // Selecting the men the new code reads roles and motion from is not an edit.
+    select(play, Z)
+    select(play, QB)
+    await quiet()
+    await quiet()
+
+    expect(saves()).toHaveLength(0)
+    expect(server.current.calls.filter((c) => c.kind === 'create')).toHaveLength(1) // the seed
+    expect(bytes(100)).toBe(before)
+    expect(server.current.plays.get(100)!.schema_version).toBe(1)
   })
 })
