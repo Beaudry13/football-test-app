@@ -37,6 +37,29 @@ export function roleHolder(players: Player[], role: PlayerRole, legacyLabel: str
   return players.find((p) => p.side === 'offense' && p.label === legacyLabel)
 }
 
+/**
+ * THE PRE-SNAP STANCE (V6): how the coach wants him standing before the snap.
+ *
+ * One canonical vocabulary, shared word for word with the server
+ * (STANCES in backend/app/services/motion_documents.py - a test compares the
+ * two) and with the 3D viewer, which is the only place a stance is drawn.
+ * It is DATA ONLY: no engine module reads it, so it cannot change a schedule,
+ * a snap or a throw. Absent means the coach has not chosen one, and the
+ * viewer stands him in his position's default - which is never written back.
+ */
+export const STANCE_IDS = [
+  'OL_2_POINT', 'OL_3_POINT_LEFT', 'OL_3_POINT_RIGHT', 'CENTER_STANCE', 'OL_4_POINT',
+  'DL_2_POINT', 'DL_3_POINT_LEFT', 'DL_3_POINT_RIGHT', 'DL_4_POINT',
+  'QB_UNDER_CENTER', 'QB_PISTOL', 'QB_SHOTGUN',
+  'WR_STANDARD', 'WR_STAGGERED',
+  'TE_2_POINT', 'TE_3_POINT', 'TE_DETACHED',
+  'RB_BALANCED', 'RB_STAGGERED', 'RB_PISTOL', 'RB_DEEP',
+  'LB_STACK', 'LB_WALKED_UP', 'LB_EDGE',
+  'DB_PRESS', 'DB_OFF', 'DB_SAFETY',
+] as const
+export type StanceId = (typeof STANCE_IDS)[number]
+export const isStanceId = (v: unknown): v is StanceId => typeof v === 'string' && (STANCE_IDS as readonly string[]).includes(v)
+
 /** How the player moves. Tiers, not yards-per-second; a coach picks a word. */
 export type SpeedTier = 'controlled' | 'normal' | 'fast'
 export const SPEED_YPS: Record<SpeedTier, number> = {
@@ -90,6 +113,11 @@ export interface Player {
    * as the prototype ran him, including a legacy `timing: 'pre-snap'` path.
    */
   motion?: Pt[]
+  /**
+   * The stance the COACH chose (see STANCE_IDS). Optional, and absent means
+   * he has not chosen one - never a stored copy of the position default.
+   */
+  presnapStance?: StanceId
 }
 
 const MID = 53.33 / 2

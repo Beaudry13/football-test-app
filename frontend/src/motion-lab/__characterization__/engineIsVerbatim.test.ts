@@ -35,6 +35,20 @@ const VERBATIM_FILES = ['field', 'geometry', 'perspective']
 const ALL_ENGINE_FILES = ['field', 'geometry', 'formation', 'timeline', 'ball', 'orientation', 'perspective', 'interactions', 'play']
 
 /**
+ * APPROVED DIVERGENCE 4 (V6, owner decision, 29 September 2026): PRE-SNAP STANCE.
+ *
+ * A player may carry the stance the coach chose for him before the snap -
+ * one of STANCE_IDS, the vocabulary the server and the 3D viewer share - so a
+ * play opened in 3D stands every man the way the coach said. `presnapStance`
+ * is optional, kept by the loader when it is a known stance (whatever the
+ * man's side), carried by a saved formation, and absent when the coach has
+ * not chosen one. The schema moved to 3 so an older tab cannot strip it.
+ *
+ * WHAT KEEPS THIS SAFE: it is DATA ONLY. No engine module reads it - the test
+ * at the bottom of this block pins that - so no schedule, snap, throw or
+ * facing can change, and the goldens and the engine-against-prototype
+ * comparison below keep proving the old behaviour.
+ *
  * APPROVED DIVERGENCE 3 (P3.4, owner decision, 22 September 2026): MOTION.
  *
  * A player may have PRE-SNAP MOTION and a separate POST-SNAP route. The
@@ -94,6 +108,13 @@ const APPROVED_DIVERGENCE = [
       /^\s*role\?: PlayerRole$/,
       /^\s*motion\?: Pt\[\]$/,
       /^\s*\}$/,
+      // Divergence 4: the stance vocabulary, its type and guard, and the field.
+      /^export const STANCE_IDS = \[$/,
+      /^\s*('[A-Z0-9_]+', )*'[A-Z0-9_]+',$/,
+      /^\] as const$/,
+      /^export type StanceId = \(typeof STANCE_IDS\)\[number\]$/,
+      /^export const isStanceId = \(v: unknown\): v is StanceId => typeof v === 'string' && \(STANCE_IDS as readonly string\[\]\)\.includes\(v\)$/,
+      /^\s*presnapStance\?: StanceId$/,
       /^\s*(\/\*\*.*|\*\/|\*(\s.*)?|\/\/.*)$/,
     ],
     removed: [],
@@ -205,10 +226,12 @@ const APPROVED_DIVERGENCE = [
       /^\s*return \{ id: .*, release, \.\.\.auto \}$/,
       // Roles: kept on read (absent stays absent), one of each, and carried
       // by a saved formation - plus the version that tells an older tab so.
-      /^export const SCHEMA_VERSION = 2$/,
-      /^import \{ initialPlayers, type Player, type PlayerRole \} from '\.\/formation'$/,
+      // (Divergence 4 moved the version to 3 and added the stance guard.)
+      /^export const SCHEMA_VERSION = 3$/,
+      /^import \{ initialPlayers, isStanceId, type Player, type PlayerRole \} from '\.\/formation'$/,
       /^\s*const role = side === 'offense' && \(r\.role === 'passer' \|\| r\.role === 'snapper'\) \? \{ role: r\.role as PlayerRole \} : null$/,
-      /^\s*return \{ id: r\.id, side, label, .*, timing: phased, .*, endBehavior, \.\.\.role, \.\.\.motion \}$/,
+      /^\s*return \{ id: r\.id, side, label, .*, timing: phased, .*, endBehavior, \.\.\.role, \.\.\.motion, \.\.\.stance \}$/,
+      /^\s*const stance = isStanceId\(r\.presnapStance\) \? \{ presnapStance: r\.presnapStance \} : null$/,
       /^\s*const motionPts = Array\.isArray\(r\.motion\) \? \(r\.motion\.filter\(isPt\) as Player\['path'\]\) : \[\]$/,
       /^\s*const motion = motionPts\.length >= 2 \? \{ motion: motionPts \} : null$/,
       /^\s*const phased = motion && timing === 'pre-snap' \? 'on-snap' : timing$/,
@@ -222,7 +245,7 @@ const APPROVED_DIVERGENCE = [
       /^\s*return p$/,
       /^\s*\}\)?$/,
       /^\s*players: withRoles,$/,
-      /^\s*players: players\.map\(\(p\) => \(\{ id: p\.id, .*speed: p\.speed, \.\.\.\(p\.role \? \{ role: p\.role \} : null\) \}\)\),$/,
+      /^\s*players: players\.map\(\(p\) => \(\{ id: p\.id, .*speed: p\.speed, \.\.\.\(p\.role \? \{ role: p\.role \} : null\), \.\.\.\(p\.presnapStance \? \{ presnapStance: p\.presnapStance \} : null\) \}\)\),$/,
       /^\s*(\/\*\*.*|\*\/|\*(\s.*)?|\/\/.*)$/,
     ],
     // The prototype lines these replace, and nothing else in the file.
@@ -293,7 +316,7 @@ describe('engine source', () => {
       formation: [/p\.role === role/, /p\.side === 'offense' && p\.role/, /^\s*role\?: PlayerRole$/, /^export type PlayerRole = /, /^export function roleHolder\(/],
       ball: [/roleHolder\(players, '(passer|snapper)', '(QB|C)'\)/],
       orientation: [/roleHolder\(players, 'passer', 'QB'\)/],
-      play: [/r\.role/, /p\.role/, /const \{ role: _dropped/, /taken\.(has|add)\(p\.role\)/, /endBehavior, \.\.\.role, \.\.\.motion \}$/],
+      play: [/r\.role/, /p\.role/, /const \{ role: _dropped/, /taken\.(has|add)\(p\.role\)/, /endBehavior, \.\.\.role, \.\.\.motion, \.\.\.stance \}$/],
     }
     for (const name of ALL_ENGINE_FILES) {
       const lines = read(resolve(ENGINE, `${name}.ts`))
@@ -315,7 +338,7 @@ describe('engine source', () => {
     const allowed: Record<string, RegExp[]> = {
       formation: [/^\s*motion\?: Pt\[\]$/],
       timeline: [/p\.motion/],
-      play: [/r\.motion/, /const motion = motionPts/, /const phased = motion/, /\.\.\.motion \}$/],
+      play: [/r\.motion/, /const motion = motionPts/, /const phased = motion/, /\.\.\.motion, \.\.\.stance \}$/],
     }
     for (const name of ALL_ENGINE_FILES) {
       const lines = read(resolve(ENGINE, `${name}.ts`))
@@ -325,6 +348,27 @@ describe('engine source', () => {
         expect(
           (allowed[name] ?? []).some((re) => re.test(line)),
           `${name}.ts reads motion outside the approved contract:\n  ${line}`,
+        ).toBe(true)
+      }
+    }
+  })
+
+  it('the stance divergence is data only: declared, loaded and carried, never read by the engine', () => {
+    // A stance is for the 3D viewer to draw. The moment a schedule, the ball
+    // or orientation reads it, a coach's stance could change how a play RUNS -
+    // a different decision, which would need its own divergence.
+    const allowed: Record<string, RegExp[]> = {
+      formation: [/^\s*presnapStance\?: StanceId$/],
+      play: [/const stance = isStanceId\(r\.presnapStance\)/, /\.\.\.\(p\.presnapStance \? \{ presnapStance: p\.presnapStance \} : null\)/],
+    }
+    for (const name of ALL_ENGINE_FILES) {
+      const lines = read(resolve(ENGINE, `${name}.ts`))
+        .split('\n')
+        .filter((l) => /presnapStance/.test(l) && !/^\s*(\/\/|\*|\/\*)/.test(l))
+      for (const line of lines) {
+        expect(
+          (allowed[name] ?? []).some((re) => re.test(line)),
+          `${name}.ts reads presnapStance outside the approved contract:\n  ${line}`,
         ).toBe(true)
       }
     }

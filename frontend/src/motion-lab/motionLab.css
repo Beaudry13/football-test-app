@@ -1480,3 +1480,43 @@
     display: none;
   }
 }
+
+/* ---- V6: the pre-snap stance row (More › Player) ---------------------------
+ * Closed it is one line - "Stance", what he will stand in, a caret - with the
+ * default it means underneath when the coach has not chosen; open, the
+ * choices reuse "After the route"'s radio rows. A stance kept outside his
+ * position's list says so in the warning colour. Nothing here is drawn on the
+ * field: the 3D viewer is where a stance is seen.
+ */
+.motion-lab-root .stance-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+.motion-lab-root .stance-toggle .stance-value {
+  flex: 1 1 auto;
+  color: var(--text);
+}
+.motion-lab-root .stance-toggle .stance-caret {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.motion-lab-root .stance-note {
+  padding: 0 12px 4px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.motion-lab-root .stance-note.stance-warn {
+  color: var(--accent);
+}
+.motion-lab-root .stance-family {
+  padding: 6px 12px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

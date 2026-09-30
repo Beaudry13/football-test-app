@@ -29,6 +29,14 @@ did before. Nothing derived is being persisted - `auto` records whether PEIRA
 chose the meeting point or the coach did, which is coach intent the server
 could not recompute. A field that changed the MEANING of an existing one, or
 that an older client would misread rather than ignore, still needs the bump.
+
+`presnapStance` (V6, schema 3) is NOT another exception. It is coach intent -
+the stance the coach chose for a man before the snap - and an older client
+would not merely ignore it: its loader rebuilds players without it and would
+SAVE them away, silently undoing the coach's choice. That is exactly the case
+the version exists for (the same reason roles moved the document to 2), so
+the field arrived with version 3, and the stored version then refuses the
+older tab's write (409 schema_outdated) instead of letting it strip stances.
 """
 
 from __future__ import annotations
@@ -39,7 +47,7 @@ import math
 from app.errors import ApiError
 
 #: The frontend model's SCHEMA_VERSION values this server accepts.
-SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2})
+SUPPORTED_SCHEMA_VERSIONS = frozenset({1, 2, 3})
 
 #: Serialized size ceilings. A real play is a few KB (22 players, a handful of
 #: anchors each); these leave two orders of magnitude of headroom.
@@ -63,13 +71,28 @@ END_BEHAVIORS = {"continue", "settle"}
 #: Jobs the ENGINE has to be able to find, independent of the coach's label.
 #: One passer and one snapper at most, and only on offense.
 ROLES = {"passer", "snapper"}
+#: The pre-snap stances a coach can choose (V6) - one canonical vocabulary,
+#: shared word for word with STANCE_IDS in
+#: frontend/src/motion-lab/engine/formation.ts (a frontend test reads this
+#: tuple and fails if the two ever differ) and with the 3D viewer. A word
+#: check, not football: whether a stance suits a man is the coach's call.
+STANCES = (
+    "OL_2_POINT", "OL_3_POINT_LEFT", "OL_3_POINT_RIGHT", "CENTER_STANCE", "OL_4_POINT",
+    "DL_2_POINT", "DL_3_POINT_LEFT", "DL_3_POINT_RIGHT", "DL_4_POINT",
+    "QB_UNDER_CENTER", "QB_PISTOL", "QB_SHOTGUN",
+    "WR_STANDARD", "WR_STAGGERED",
+    "TE_2_POINT", "TE_3_POINT", "TE_DETACHED",
+    "RB_BALANCED", "RB_STAGGERED", "RB_PISTOL", "RB_DEEP",
+    "LB_STACK", "LB_WALKED_UP", "LB_EDGE",
+    "DB_PRESS", "DB_OFF", "DB_SAFETY",
+)
 HASHES = {"left", "middle", "right"}
 FILTERS = {"all", "offense", "defense", "none"}
 BALL_KINDS = {"keep", "handoff", "pitch", "pass", "play-action"}
 
 PLAY_KEYS = {"players", "ball", "ballThen", "engagements", "situation", "filter"}
 LOOK_KEYS = {"players"}
-PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior", "role", "motion"}
+PLAYER_KEYS = {"id", "side", "label", "x", "y", "path", "timing", "delay", "speed", "endBehavior", "role", "motion", "presnapStance"}
 BALL_KEYS = {"kind", "carrierId", "targetId", "fakeId", "catchPoint", "releasePoint"}
 ENGAGEMENT_KEYS = {"id", "kind", "a", "b", "point", "release", "auto"}
 SITUATION_KEYS = {"losYard", "hash", "down", "distance", "show"}
@@ -182,6 +205,12 @@ def _players(value, path: str):
             if role in roles_taken:
                 _fail(f"{p}.role", f"is already held by another player ({role})")
             roles_taken.add(role)
+        # ABSENT MEANS "POSITION DEFAULT", and absent is the only way to say
+        # it: the client never writes null, so a null here is not a document
+        # it produced. Any side may carry any stance - suiting the man is the
+        # coach's decision, and refusing it here would lose his work on save.
+        if "presnapStance" in player:
+            _string(player["presnapStance"], f"{p}.presnapStance", choices=set(STANCES))
 
 
 def _ball(value, path: str):

@@ -113,6 +113,16 @@ describe('Motion Lab editor on the server', () => {
     await waitFor(() => expect(statusText()).toBe('Saved'))
   })
 
+  it('offers no "View in 3D" unless a 3D viewer is configured - as in every production build', async () => {
+    // V6's handoff exists only where VITE_MOTION_LAB_3D_URL is set (a local
+    // .env file); with it unset the top bar is exactly what it was.
+    seedPlays()
+    await settle()
+    await openEditor(100)
+    expect(screen.queryByRole('button', { name: 'View in 3D' })).toBeNull()
+    expect(screen.getByRole('button', { name: /Library/ })).toBeTruthy()
+  })
+
   it('an edit inside the quiet period survives switching plays, and the URL follows', async () => {
     const { a, b } = seedPlays()
     await settle()

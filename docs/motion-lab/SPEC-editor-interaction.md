@@ -732,9 +732,20 @@ ASSIGNMENT
 THROW POINT                                                only for the QB when a pass/PA is set and he has a path
   Set on field…  /  Use end of drop                         (the second only when releasePoint exists)
 PLAYER
+  Stance   Position default ▸  (default stance underneath)  V6; opens the choices for his position
   Rename…
   Remove from play                                          red
 ```
+
+**Stance (V6).** One row; closed it reads his chosen stance, or "Position
+default" with the stance that means for him in muted text underneath. Open,
+the choices use After the route's radio rows: "Use position default (…)"
+first, then his family's stances - the center's own stance first for the
+snapper, last for any other lineman; every stance on his side, grouped by
+family, when his label does not identify a position (N, S, a coach's own
+name). "Use position default" CLEARS the stored stance; the default is shown,
+never stored. A stance outside his position's list (he was relabelled) stays
+chosen and says "Not a … stance — kept until you choose another."
 
 Wording for After the route: "Keeps running (auto)" when `endBehavior` is
 undefined and `resolveEnd` says continue; "Stops (auto)" when auto resolves
