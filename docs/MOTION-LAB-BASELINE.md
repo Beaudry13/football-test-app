@@ -397,6 +397,15 @@ A stance change is one ordinary edit: autosaved, undoable, copied by Duplicate
 and the Library copy, carried by a saved formation; Copy/Mirror assignment
 leaves the target's own stance alone (alignment, not assignment).
 
+**Position default (shown, never stored)** - `defaultStanceFor` in
+`authoring/stances.ts`; the 3D viewer runs the same function (vendored) for a
+man with no stance, so the two cannot disagree. A tight end's default follows
+his ALIGNMENT (`authoring/alignment.ts`, read from the men on the line - the
+same `lineIds` the line group-move uses): attached to the line → 3 Point; off
+it, close in (a wing) → 2 Point; more than a split (3.0 yd) outside the end of
+the line → Detached — WR Stance; no line to read → 3 Point. Moving him updates
+the default; an authored stance is never rewritten.
+
 **View in 3D (development only).** With `VITE_MOTION_LAB_3D_URL` set (a local,
 gitignored `.env.development.local`) the editor's top bar offers "View in 3D":
 it opens the PEIRA 3D viewer and, when the viewer says it is ready, posts it

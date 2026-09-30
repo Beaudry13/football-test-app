@@ -15,13 +15,13 @@
 // offered, grouped, rather than a guess.
 //
 // THE POSITION DEFAULT IS SHOWN, NEVER STORED. `defaultStanceFor` is the
-// stance the 3D viewer falls back to for a man with no stance - the same rule
-// the viewer's own resolver applies to what its Motion Lab adapter hands it,
-// which the viewer's QA checks - so the editor can say "Position default: 3
-// Point - Left Hand Down" truthfully. Choosing "Position default" CLEARS the
-// field; it never writes the default in.
+// stance the 3D viewer falls back to for a man with no stance - the viewer
+// runs this very function (vendored verbatim) on the play it is handed - so
+// the editor can say "Position default: 3 Point - Left Hand Down" truthfully.
+// Choosing "Position default" CLEARS the field; it never writes the default in.
 
 import { STANCE_IDS, type Player, type StanceId } from '../engine/formation'
+import { alignmentOf } from './alignment'
 import { passerOf, snapperOf } from './roles'
 
 export type StanceFamily = 'OL' | 'QB' | 'WR' | 'TE' | 'RB' | 'DL' | 'LB' | 'DB'
@@ -60,7 +60,7 @@ export const STANCE: Record<StanceId, { family: StanceFamily; label: string }> =
   WR_STAGGERED: { family: 'WR', label: 'Staggered' },
   TE_2_POINT: { family: 'TE', label: '2 Point' },
   TE_3_POINT: { family: 'TE', label: '3 Point' },
-  TE_DETACHED: { family: 'TE', label: 'Detached' },
+  TE_DETACHED: { family: 'TE', label: 'Detached — WR Stance' },
   RB_BALANCED: { family: 'RB', label: 'Balanced' },
   RB_STAGGERED: { family: 'RB', label: 'Staggered' },
   RB_PISTOL: { family: 'RB', label: 'Pistol' },
@@ -155,10 +155,17 @@ const SHOTGUN_DEPTH = 3
  *
  * Linemen put the OUTSIDE hand down (a man on the ball's right is a right-
  * hand-down player), the center takes his snapping stance, the quarterback
- * is in the gun when he is deeper than the engine's shotgun depth, safeties
- * are in the safety stance, and everyone else in his family's first stance.
- * A man whose label does not say is treated as a receiver on offense and a
- * linebacker on defense - exactly what the viewer does with him.
+ * is in the gun when he is deeper than the engine's shotgun depth, a tight
+ * end stands the way his ALIGNMENT asks (below), safeties are in the safety
+ * stance, and everyone else in his family's first stance. A man whose label
+ * does not say is treated as a receiver on offense and a linebacker on
+ * defense - exactly what the viewer does with him.
+ *
+ * A tight end, from where he lines up (alignment.ts): attached to the line -
+ * the 3-point; off it, close in (a wing) - the square 2-point; split out
+ * where a receiver stands - Detached, the receiver's stance. With no line to
+ * read (nobody snaps it yet) he keeps the 3-point. Move him and the default
+ * follows; a stance the coach chose is never touched.
  */
 export function defaultStanceFor(p: Player, players: Player[]): StanceId {
   const family = stanceFamilyOf(p, players)
@@ -174,8 +181,10 @@ export function defaultStanceFor(p: Player, players: Player[]): StanceId {
       const spotY = snapper ? snapper.y + 1.0 : 0.4
       return spotY - p.y > SHOTGUN_DEPTH ? 'QB_SHOTGUN' : 'QB_UNDER_CENTER'
     }
-    case 'TE':
-      return 'TE_3_POINT'
+    case 'TE': {
+      const at = alignmentOf(p, players)
+      return at === 'wing' ? 'TE_2_POINT' : at === 'split' ? 'TE_DETACHED' : 'TE_3_POINT'
+    }
     case 'RB':
       return 'RB_BALANCED'
     case 'LB':

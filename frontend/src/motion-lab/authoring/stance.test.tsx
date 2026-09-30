@@ -286,3 +286,100 @@ describe('an older play', () => {
     expect(gained.map((p) => [p.id, p.presnapStance])).toEqual([[CB, 'DB_PRESS']])
   })
 })
+
+describe("a tight end's position default follows where he lines up", () => {
+  // Inside Zone Rt has Y attached 2.0 yd outside the right tackle. Two
+  // receivers are relabelled tight ends for this: H set on a wing (a yard
+  // outside Y and off the line), Z left split out wide.
+  const Y = 'O5'
+  const WING = 'O9'
+  const SPLIT = 'O10'
+  const tePlay = (): Play => ({
+    ...play,
+    players: play.players.map((p) =>
+      p.id === WING ? { ...p, label: 'TE', x: 33.3, y: -1.9 } : p.id === SPLIT ? { ...p, label: 'U' } : p,
+    ),
+  })
+  function drag(from: Play, id: string, dx: number, dy: number) {
+    const p = from.players.find((pl) => pl.id === id)!
+    fireEvent.pointerDown(playerMarker(id), { button: 0, pointerId: 1, ...client(p.x, p.y) })
+    fireEvent.pointerMove(board(), { pointerId: 1, ...client(p.x + dx, p.y + dy) })
+    fireEvent.pointerUp(board(), { pointerId: 1, ...client(p.x + dx, p.y + dy) })
+  }
+  /** Open More for him where he stands NOW. */
+  function look(p: Play, id: string) {
+    deselect()
+    select(stored(p), id)
+    more()
+  }
+
+  it.each([
+    [Y, 'attached', '3 Point'],
+    [WING, 'on a wing', '2 Point'],
+    [SPLIT, 'split out', 'Detached — WR Stance'],
+  ])('%s (%s) shows "%s" as his position default, and nothing is stored', async (id, _where, label) => {
+    const p = tePlay()
+    open(p)
+    select(p, id)
+    more()
+    expect(stanceValue()).toBe('Position default')
+    expect(stanceNote()).toEqual([label])
+    fireEvent.click(stanceToggle())
+    expect(choices()).toEqual([`Use position default (${label})`, '2 Point', '3 Point', 'Detached — WR Stance'])
+    await settle()
+    expect('presnapStance' in manIn(p, id)).toBe(false)
+  })
+
+  it('a chosen stance wins over his alignment, and clearing it brings the alignment default back', async () => {
+    const p = tePlay()
+    open(p)
+    await choose(p, WING, /^○?3 Point$/)
+    expect(manIn(p, WING).presnapStance).toBe('TE_3_POINT')
+    expect(stanceValue()).toBe('3 Point')
+    fireEvent.click(stanceToggle())
+    fireEvent.click(within(morePop()).getByRole('radio', { name: /Use position default \(2 Point\)/ }))
+    await settle()
+    expect('presnapStance' in manIn(p, WING)).toBe(false)
+    expect(stanceValue()).toBe('Position default')
+    expect(stanceNote()).toEqual(['2 Point'])
+  })
+
+  it('moving an unauthored tight end changes his default; moving an authored one keeps his stance', async () => {
+    const p = tePlay()
+    open(p)
+    // Y dragged 8 yd out along the line: no longer attached - split out.
+    drag(p, Y, 8, 0)
+    await settle()
+    look(p, Y)
+    expect(stanceValue()).toBe('Position default')
+    expect(stanceNote()).toEqual(['Detached — WR Stance'])
+    expect('presnapStance' in manIn(p, Y)).toBe(false)
+    // The split tight end, given the 2-point and then brought in next to the
+    // tackle: he is attached now, and still in the stance the coach chose.
+    deselect()
+    await choose(p, SPLIT, /^○?2 Point$/)
+    deselect()
+    const split = manIn(p, SPLIT)
+    drag(stored(p), SPLIT, 32.265 - split.x, -0.8 - split.y)
+    await settle()
+    expect(manIn(p, SPLIT).x).toBeCloseTo(32.265, 1)
+    expect(manIn(p, SPLIT).presnapStance).toBe('TE_2_POINT')
+    look(p, SPLIT)
+    expect(stanceValue()).toBe('2 Point')
+  })
+
+  it('survives saving and reopening: the defaults are worked out again, never written', async () => {
+    const p = tePlay()
+    open(p)
+    await choose(p, WING, /^○?Detached — WR Stance$/)
+    deselect()
+    reopen(p)
+    const saved = stored(p)
+    expect(saved.players.filter((q) => 'presnapStance' in q).map((q) => [q.id, q.presnapStance])).toEqual([[WING, 'TE_DETACHED']])
+    select(saved, Y)
+    more()
+    expect(stanceNote()).toEqual(['3 Point'])
+    look(p, SPLIT)
+    expect(stanceNote()).toEqual(['Detached — WR Stance'])
+  })
+})

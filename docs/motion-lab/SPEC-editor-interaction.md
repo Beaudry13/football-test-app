@@ -745,7 +745,10 @@ snapper, last for any other lineman; every stance on his side, grouped by
 family, when his label does not identify a position (N, S, a coach's own
 name). "Use position default" CLEARS the stored stance; the default is shown,
 never stored. A stance outside his position's list (he was relabelled) stays
-chosen and says "Not a … stance — kept until you choose another."
+chosen and says "Not a … stance — kept until you choose another." A tight
+end's default follows where he lines up: attached to the line 3 Point, off it
+close in (a wing) 2 Point, split out beyond 3.0 yd from the end of the line
+Detached — WR Stance; drag him and the default underneath updates.
 
 Wording for After the route: "Keeps running (auto)" when `endBehavior` is
 undefined and `resolveEnd` says continue; "Stops (auto)" when auto resolves

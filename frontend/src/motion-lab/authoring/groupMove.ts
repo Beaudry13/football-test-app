@@ -18,8 +18,9 @@ import { BOUNDS } from '../engine/field'
 import type { Player } from '../engine/formation'
 import type { Pt } from '../engine/geometry'
 import type { Engagement } from '../engine/interactions'
+import { lineIds, type GroupChoice } from './alignment'
 import { inferMeetPoint } from './meetPoint'
-import { passerOf, snapperOf } from './roles'
+import { passerOf } from './roles'
 
 export type MoveGroup = 'formation' | 'offense' | 'defense' | 'line'
 
@@ -30,64 +31,12 @@ export interface Movable {
   engagements: Engagement[]
 }
 
-/** How far off the line of scrimmage a man can be and still be ON it. */
-const ON_LINE = 1.0
-/**
- * The widest gap between two men that still reads as one line.
- *
- * Real splits: 1.8 yd between linemen in the shipped formations, 2.0 yd from
- * the tackle to an attached tight end, 5.7 yd to the next receiver. So this
- * threshold separates the LINE from the men spread away from it - and NOT a
- * tight end from a sixth lineman, which no alignment rule can do, because an
- * attached tight end lines up exactly where a sixth lineman would. The editor
- * says how many men it is about to move, and shows them, rather than
- * pretending to know which of them the coach thinks of as linemen.
- */
-const MAX_SPLIT = 3.0
 /** A man may not be moved onto the other side's half of the line. */
 const LOS_MARGIN = 0.1
 
-/** Everyone the line has to have before it is worth calling a line. */
-const MIN_LINE = 3
-
-export interface GroupChoice {
-  ids: Set<string>
-  /** Why nothing can move, when that is the answer. */
-  refusal?: string
-}
-
-/**
- * THE MEN ON THE LINE, found from the snapper outward.
- *
- * Walk out from the man who snaps it, left and right, taking anyone level
- * with him on the line while the gap to the man already taken is a split
- * rather than a space. That handles an unbalanced line, a sixth lineman, a
- * tackle over and unusual splits without knowing a single position name - and
- * it refuses rather than guessing when there is nobody to start from.
- */
-export function lineIds(players: Player[]): GroupChoice {
-  const snapper = snapperOf(players)
-  if (!snapper) {
-    return { ids: new Set(), refusal: 'Nobody snaps it yet — make a snapper first (More › Make snapper).' }
-  }
-  const online = players
-    .filter((p) => p.side === 'offense' && Math.abs(p.y - snapper.y) <= ON_LINE)
-    .sort((a, b) => a.x - b.x)
-  const at = online.findIndex((p) => p.id === snapper.id)
-  const taken = [online[at]]
-  for (let i = at - 1; i >= 0; i--) {
-    if (taken[0].x - online[i].x > MAX_SPLIT) break
-    taken.unshift(online[i])
-  }
-  for (let i = at + 1; i < online.length; i++) {
-    if (online[i].x - taken[taken.length - 1].x > MAX_SPLIT) break
-    taken.push(online[i])
-  }
-  if (taken.length < MIN_LINE) {
-    return { ids: new Set(), refusal: 'Only the snapper is on the line — move the offense instead.' }
-  }
-  return { ids: new Set(taken.map((p) => p.id)) }
-}
+// The men on the line (lineIds) live in alignment.ts, where a tight end's
+// default stance reads them too - so both always agree about who is on it.
+export { lineIds, type GroupChoice }
 
 /** Who moves, for each group. */
 export function groupIds(players: Player[], group: MoveGroup): GroupChoice {
