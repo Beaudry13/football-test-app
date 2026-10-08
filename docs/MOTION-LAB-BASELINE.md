@@ -364,3 +364,65 @@ owner-confirmed test fixtures. P2 reads none of it and deletes none of it.
 **Merge and cleanup.** Both tables are in `ORG_OWNED_TABLES` and the merge
 counts; `tools/production_cleanup.py` deletes them (before folders and coaches)
 and checks for orphans. Motion folders ride on the existing folder handling.
+
+---
+
+## 9. V6 — the coach's pre-snap stance, and the 3D bridge (feature/v6-stance-bridge)
+
+**What a play stores, added:** `Player.presnapStance?: StanceId` — the stance
+the coach chose for a man before the snap. One canonical vocabulary of 27 ids
+(`STANCE_IDS` in `engine/formation.ts`), word for word the server's
+(`STANCES` in `services/motion_documents.py`; `presnapStance.test.ts` reads the
+Python and compares) and the 3D viewer's. **Absent means "position default"**
+and is the only way to say it: nothing ever writes the default in, and the
+server refuses `null`.
+
+**Schema 3.** An older (v2) tab would rebuild players without the field and
+save it away, so the document moved to 3 and the stored version refuses the
+older write (409 `schema_outdated`) - the same protection roles got. The
+server accepts 1, 2 and 3; nothing is migrated; plays without stances stay
+exactly as written.
+
+**Engine: approved divergence 4, DATA ONLY.** `formation.ts` declares the
+vocabulary and the field; `play.ts` keeps a known stance on read (any side -
+suiting him is the coach's call) and carries it in a saved formation. No
+engine module reads it (`engineIsVerbatim.test.ts` pins that), so no schedule,
+snap, throw or facing can change; `presnapStance.test.ts` runs every preserved
+play with a stance on every man and gets identical results.
+
+**Editor:** More › Player › **Stance** (`authoring/StanceControl.tsx`, words
+and choices in `authoring/stances.ts`). Offered by position - family from the
+role (snapper → line, passer → QB) and then the label - never enforced by it.
+A stance change is one ordinary edit: autosaved, undoable, copied by Duplicate
+and the Library copy, carried by a saved formation; Copy/Mirror assignment
+leaves the target's own stance alone (alignment, not assignment).
+
+**Position default (shown, never stored)** - `defaultStanceFor` in
+`authoring/stances.ts`; the 3D viewer runs the same function (vendored) for a
+man with no stance, so the two cannot disagree. A tight end's default follows
+his ALIGNMENT (`authoring/alignment.ts`, read from the men on the line - the
+same `lineIds` the line group-move uses): attached to the line → 3 Point; off
+it, close in (a wing) → 2 Point; more than a split (3.0 yd) outside the end of
+the line → Detached — WR Stance; no line to read → 3 Point. Moving him updates
+the default; an authored stance is never rewritten.
+
+**View in 3D (development only).** With `VITE_MOTION_LAB_3D_URL` set (a local,
+gitignored `.env.development.local`) the editor's top bar offers "View in 3D":
+it opens the PEIRA 3D viewer and, when the viewer says it is ready, posts it
+the play row **as saved** (fetched from the server; only once the last edit is
+confirmed) to the viewer's origin. Unset - every production build - there is
+no button. Motion Lab knows nothing about 3D beyond that URL: the viewer runs
+Motion Lab's own engine on the row and hands `presnapStance` to its V5.1
+stance resolver, where an authored stance always beats the position fallback.
+
+**Owner decisions (30 September 2026), recorded with V6's approval:**
+- **Motion Lab's authored timing is authoritative in 3D.** The viewer fits its
+  movement to Motion Lab's times and never changes them to make speed look
+  more realistic - even where a short, fast motion then runs quicker than a
+  person could.
+- **A man in motion stops and restarts at the snap in the viewer** (its bake
+  ends pre-snap motion at rest). That is a separate movement-continuity issue
+  for a later, focused 3D pass; V6 does not change the bake.
+- **"View in 3D" stays, local development only.** It exists only where
+  `VITE_MOTION_LAB_3D_URL` is set and must stay absent from production unless
+  that is explicitly enabled.

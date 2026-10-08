@@ -9,7 +9,23 @@
 
 import { ApiError } from '../../../api/client'
 import type { MotionLookRow, MotionPlayRow } from '../../../api/motionLab'
+import { isStanceId } from '../../engine/formation'
 import type { DraftStore, MotionApi } from '../apiPlayRepository'
+
+/**
+ * THE STANCE WORD IS THE SERVER'S TOO (V6). motion_documents.py refuses a
+ * `presnapStance` outside the canonical vocabulary with a 422, so this fake
+ * does the same - otherwise an editor that wrote a made-up stance, or a null
+ * for "position default", would pass every test here and fail every save.
+ */
+function refuseUnknownStance(document: { players: unknown[] }) {
+  document.players.forEach((raw, i) => {
+    const p = raw as Record<string, unknown>
+    if ('presnapStance' in p && !isStanceId(p.presnapStance)) {
+      throw new ApiError('Validation failed', 422, { document: [`players[${i}].presnapStance: must be one of the stance vocabulary`] })
+    }
+  })
+}
 
 type Call = { kind: 'create' | 'save' | 'get' | 'delete' | 'createLook' | 'deleteLook'; id?: number; body?: unknown }
 
@@ -39,6 +55,7 @@ export function fakeMotionServer() {
     async createMotionPlay(input) {
       calls.push({ kind: 'create', body: input })
       await gate()
+      refuseUnknownStance(input.document)
       const now = stamp()
       const row: MotionPlayRow = {
         id: nextId++,
@@ -60,6 +77,7 @@ export function fakeMotionServer() {
       await gate()
       const row = plays.get(id)
       if (!row) throw new ApiError('Play not found', 404)
+      refuseUnknownStance(input.document)
       // backend/app/routes/motion_lab.py save_play, in its order: an older
       // client first, then a stale base. A save records the version it was
       // written at, as the server does.
@@ -96,6 +114,7 @@ export function fakeMotionServer() {
     async createMotionLook(input) {
       calls.push({ kind: 'createLook', body: input })
       await gate()
+      refuseUnknownStance(input.document)
       const now = stamp()
       const row: MotionLookRow = { id: nextId++, name: input.name, document: structuredClone(input.document), schema_version: input.schema_version, revision: 1, created_by_coach_id: 1, created_at: now, updated_at: now }
       looks.set(row.id, row)

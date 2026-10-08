@@ -10,7 +10,7 @@
 
 import type { BallAction } from './ball'
 import { HASH_LEFT, HASH_RIGHT, FIELD_WIDTH } from './field'
-import { initialPlayers, type Player, type PlayerRole } from './formation'
+import { initialPlayers, isStanceId, type Player, type PlayerRole } from './formation'
 import type { Engagement } from './interactions'
 
 /**
@@ -20,8 +20,10 @@ import type { Engagement } from './interactions'
  * The number is what stops an OLDER tab from silently undoing this: its
  * loader rebuilds players without a role and would save them away, so the
  * server refuses a write whose version is below the one already stored.
+ * 3 (V6): players may carry the coach's `presnapStance` - the same reason, the
+ * same protection: a version-2 tab would rebuild them without it.
  */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export type Hash = 'left' | 'middle' | 'right'
 export type PathFilter = 'all' | 'offense' | 'defense' | 'none'
@@ -102,7 +104,8 @@ export function newPlay(name = 'Untitled Play', players: Player[] = initialPlaye
  * A look is the arrangement only: paths, timing and end behaviour don't
  * travel. Roles do: who snaps it and who throws it is part of how a formation
  * lines up, and a coach who saves "Trips Rt" and starts a play from it should
- * not have to say again which man is the quarterback.
+ * not have to say again which man is the quarterback. So does a chosen
+ * stance (V6): how a man stands is part of how the formation lines up.
  */
 export function lookFromPlayers(name: string, players: Player[]): Look {
   return {
@@ -110,7 +113,7 @@ export function lookFromPlayers(name: string, players: Player[]): Look {
     id: newId('look_'),
     name,
     updatedAt: Date.now(),
-    players: players.map((p) => ({ id: p.id, side: p.side, label: p.label, x: p.x, y: p.y, path: [], timing: 'on-snap' as const, delay: 0.5, speed: p.speed, ...(p.role ? { role: p.role } : null) })),
+    players: players.map((p) => ({ id: p.id, side: p.side, label: p.label, x: p.x, y: p.y, path: [], timing: 'on-snap' as const, delay: 0.5, speed: p.speed, ...(p.role ? { role: p.role } : null), ...(p.presnapStance ? { presnapStance: p.presnapStance } : null) })),
   }
 }
 
@@ -139,7 +142,13 @@ function sanitizePlayer(raw: unknown): Player | null {
   const motionPts = Array.isArray(r.motion) ? (r.motion.filter(isPt) as Player['path']) : []
   const motion = motionPts.length >= 2 ? { motion: motionPts } : null
   const phased = motion && timing === 'pre-snap' ? 'on-snap' : timing
-  return { id: r.id, side, label, x: r.x, y: r.y, path: path.length >= 2 ? path : [], timing: phased, delay: isNum(r.delay) ? r.delay : 0.5, speed, endBehavior, ...role, ...motion }
+  // STANCE (V6): absent stays absent - a play written before stances existed
+  // comes back without one, and the viewer's position default is never
+  // stored in its place. A known stance is kept whatever the man's side or
+  // label: whether it suits him is the coach's call, and dropping it here
+  // would lose his choice on the next save.
+  const stance = isStanceId(r.presnapStance) ? { presnapStance: r.presnapStance } : null
+  return { id: r.id, side, label, x: r.x, y: r.y, path: path.length >= 2 ? path : [], timing: phased, delay: isNum(r.delay) ? r.delay : 0.5, speed, endBehavior, ...role, ...motion, ...stance }
 }
 
 /** A ball action is kept only if every player it names still exists. */

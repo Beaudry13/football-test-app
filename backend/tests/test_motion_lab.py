@@ -18,7 +18,7 @@ import pytest
 
 from app.extensions import db
 from app.models import Coach, Folder, MotionLook, MotionPlay
-from app.services.motion_documents import MAX_PATH_ANCHORS, MAX_PLAYERS
+from app.services.motion_documents import MAX_PATH_ANCHORS, MAX_PLAYERS, STANCES
 
 
 # ---------------------------------------------------------------------------
@@ -928,3 +928,135 @@ class TestOlderTabCannotStripMotion:
         assert by_id["O9"]["motion"] == with_motion(play_document())["players"][9]["motion"]
         assert by_id["O6"]["role"] == "passer"
         assert by_id["O2"]["role"] == "snapper"
+
+
+# ---------------------------------------------------------------------------
+# V6 - the coach's pre-snap stance: stored, checked, and never stripped
+# ---------------------------------------------------------------------------
+
+
+def with_stances(document, stances):
+    """The same play with the given men's stances set (id -> stance)."""
+    return {**document, "players": [{**p, "presnapStance": stances[p["id"]]} if p["id"] in stances else p for p in document["players"]]}
+
+
+class TestPresnapStance:
+    """A stance is coach intent, one word from one vocabulary. The server keeps
+    it exactly - including its ABSENCE, which is how a play says the coach has
+    not chosen and the 3D viewer should use the position's default - and
+    refuses any word that is not a stance, so no client can persist one the
+    others cannot read. Whether a stance suits the man is not its business.
+    """
+
+    def post(self, client, owner, document, schema_version=3):
+        body = {"name": "x", "document": document, "schema_version": schema_version}
+        return client.post("/api/motion-lab/plays", json=body, headers=owner["headers"])
+
+    @pytest.mark.parametrize("stance", STANCES)
+    def test_every_stance_is_stored_and_returned_unchanged(self, client, owner, stance):
+        response = self.post(client, owner, with_stances(play_document(), {"O0": stance}))
+        assert response.status_code == 201, response.get_json()
+        play = response.get_json()
+        fetched = client.get(f"/api/motion-lab/plays/{play['id']}", headers=owner["headers"]).get_json()
+        assert fetched["document"]["players"][0]["presnapStance"] == stance
+
+    def test_the_vocabulary_is_the_3d_viewers_27(self):
+        assert len(STANCES) == 27 and len(set(STANCES)) == 27
+
+    def test_a_play_without_stances_has_none_afterwards(self, client, owner):
+        response = self.post(client, owner, play_document())
+        assert response.status_code == 201
+        assert all("presnapStance" not in p for p in response.get_json()["document"]["players"])
+
+    def test_saving_neither_adds_nor_drops_one(self, client, owner):
+        play = self.post(client, owner, with_stances(play_document(), {"O0": "OL_2_POINT"})).get_json()
+        document = with_stances(play_document(), {"O0": "OL_2_POINT", "D2": "DL_4_POINT"})
+        saved = save_play(client, owner["headers"], play, document=document, schema_version=3)
+        assert saved.status_code == 200, saved.get_json()
+        by_id = {p["id"]: p for p in saved.get_json()["document"]["players"]}
+        assert by_id["O0"]["presnapStance"] == "OL_2_POINT"
+        assert by_id["D2"]["presnapStance"] == "DL_4_POINT"
+        assert sum("presnapStance" in p for p in by_id.values()) == 2
+
+    def test_clearing_one_removes_the_key(self, client, owner):
+        play = self.post(client, owner, with_stances(play_document(), {"O0": "OL_2_POINT"})).get_json()
+        saved = save_play(client, owner["headers"], play, document=play_document(), schema_version=3)
+        assert saved.status_code == 200
+        assert "presnapStance" not in saved.get_json()["document"]["players"][0]
+
+    def test_any_side_may_carry_any_stance(self, client, owner):
+        # A defender in an offensive-line stance is odd football and the
+        # coach's call; refusing it would cost him the whole save.
+        response = self.post(client, owner, with_stances(play_document(), {"D1": "OL_4_POINT", "O8": "DB_PRESS"}))
+        assert response.status_code == 201, response.get_json()
+
+    def test_it_reaches_the_jsonb_column_at_version_3(self, client, owner, app):
+        play = self.post(client, owner, with_stances(play_document(), {"O2": "CENTER_STANCE"})).get_json()
+        with app.app_context():
+            row = db.session.get(MotionPlay, play["id"])
+            assert row.document["players"][2]["presnapStance"] == "CENTER_STANCE"
+            assert row.schema_version == 3
+
+    @pytest.mark.parametrize(
+        "value, fragment",
+        [
+            ("MADE_UP", "presnapStance: must be one of"),
+            ("ol_2_point", "presnapStance: must be one of"),
+            (7, "presnapStance: must be a string"),
+            (None, "presnapStance: must be a string"),
+            ({"id": "OL_2_POINT"}, "presnapStance: must be a string"),
+        ],
+    )
+    def test_a_word_that_is_not_a_stance_is_refused(self, client, owner, value, fragment):
+        response = self.post(client, owner, with_stances(play_document(), {"O0": value}))
+        assert response.status_code == 422
+        assert fragment in json.dumps(response.get_json())
+
+    def test_a_saved_formation_carries_it(self, client, owner):
+        players = with_stances(play_document(), {"O0": "OL_2_POINT"})["players"][:11]
+        response = client.post(
+            "/api/motion-lab/looks",
+            json={"name": "Ace", "document": {"players": players}, "schema_version": 3},
+            headers=owner["headers"],
+        )
+        assert response.status_code == 201, response.get_json()
+        assert response.get_json()["document"]["players"][0]["presnapStance"] == "OL_2_POINT"
+
+    def test_a_library_copy_keeps_it(self, client, owner):
+        play = self.post(client, owner, with_stances(play_document(), {"O0": "OL_2_POINT"})).get_json()
+        copied = client.post(f"/api/motion-lab/plays/{play['id']}/copy", json={}, headers=owner["headers"])
+        assert copied.status_code == 201, copied.get_json()
+        assert copied.get_json()["document"]["players"][0]["presnapStance"] == "OL_2_POINT"
+        assert copied.get_json()["schema_version"] == 3
+
+
+class TestOlderTabCannotStripStances:
+    """A tab left open on V5-era Motion Lab (version 2) rebuilds every player
+    without `presnapStance`, so its next autosave would write the coach's
+    stances away. It sends 2; the stored play is 3; the save is refused.
+    """
+
+    def stored(self, client, owner):
+        return client.post(
+            "/api/motion-lab/plays",
+            json={"name": "Ace", "document": with_stances(play_document(), {"O0": "OL_2_POINT"}), "schema_version": 3},
+            headers=owner["headers"],
+        ).get_json()
+
+    def test_the_old_tab_is_refused(self, client, owner):
+        play = self.stored(client, owner)
+        response = save_play(client, owner["headers"], play, document=play_document(), schema_version=2)
+        assert response.status_code == 409
+        assert response.get_json()["reason"] == "schema_outdated"
+
+    def test_the_stance_and_revision_survive(self, client, owner):
+        play = self.stored(client, owner)
+        save_play(client, owner["headers"], play, document=play_document(), schema_version=2)
+        after = client.get(f"/api/motion-lab/plays/{play['id']}", headers=owner["headers"]).get_json()
+        assert after["revision"] == play["revision"]
+        assert after["document"]["players"][0]["presnapStance"] == "OL_2_POINT"
+
+    def test_a_current_tab_saves_normally(self, client, owner):
+        play = self.stored(client, owner)
+        response = save_play(client, owner["headers"], play, document=with_stances(play_document(), {"O0": "OL_3_POINT_LEFT"}), schema_version=3)
+        assert response.status_code == 200, response.get_json()

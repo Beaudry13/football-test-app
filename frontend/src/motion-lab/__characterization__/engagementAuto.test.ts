@@ -85,12 +85,13 @@ describe('what the field did NOT change', () => {
     expect(out.players).toHaveLength(p.players.length)
   })
 
-  it('auto did not move the schema version - roles did', () => {
+  it('auto did not move the schema version - roles did, and then stances', () => {
     // ML-UX-5's point stands: `auto` needed no version, because a reader that
-    // has never heard of it is correct anyway. The version is 2 because P3.1
-    // added roles, which an older reader WOULD strip - and a play read here
-    // still carries its auto exactly as written.
-    expect(SCHEMA_VERSION).toBe(2)
+    // has never heard of it is correct anyway. The version is 3 because P3.1
+    // added roles (2) and V6 added the coach's pre-snap stance (3), each of
+    // which an older reader WOULD strip - and a play read here still carries
+    // its auto exactly as written.
+    expect(SCHEMA_VERSION).toBe(3)
     const back = sanitizePlay(play())!
     expect(back.v).toBe(SCHEMA_VERSION)
     expect(back.engagements).toEqual(play().engagements)

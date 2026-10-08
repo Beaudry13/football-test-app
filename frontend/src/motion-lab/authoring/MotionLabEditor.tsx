@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { OverheadBoard } from '../view/OverheadBoard'
 import { FIELD_WIDTH, clampToField, fromView } from '../engine/field'
-import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type Timing } from '../engine/formation'
+import { defaultSpeed, initialPlayers, type Player, type Side, type SpeedTier, type StanceId, type Timing } from '../engine/formation'
 import { simplify, type EndBehavior, type Pt } from '../engine/geometry'
 import { assignRole, passerIdOf, passerOf, snapperOf, withRoles } from './roles'
 import { clampDelta, groupIds, groupWords, translate, type Movable, type MoveGroup } from './groupMove'
@@ -21,6 +21,8 @@ import type { PlayRepository } from '../storage/playRepository'
 import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
 import { playerSummary } from './playerSummary'
+import { StanceControl } from './StanceControl'
+import { withStance } from './stances'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -827,6 +829,16 @@ export function MotionLabEditor({
   const updatePlayer = useCallback((id: string | null, patch: Partial<Player>) => {
     if (!id) return
     setPlayers((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+  }, [])
+
+  /**
+   * His pre-snap stance (V6), or none. Not updatePlayer: "Use position
+   * default" has to REMOVE the field - absent is how a play says the coach
+   * has not chosen - and a patch can only overwrite it. One man, nobody else,
+   * and an ordinary edit: it autosaves and undoes like any other.
+   */
+  const setStance = useCallback((id: string, stance: StanceId | undefined) => {
+    setPlayers((ps) => ps.map((p) => (p.id === id ? withStance(p, stance) : p)))
   }, [])
 
   /**
@@ -2257,6 +2269,9 @@ export function MotionLabEditor({
       )}
 
       <div className="pop-title">Player</div>
+      {/* V6: how he stands before the snap - drawn by the 3D viewer, not
+          here. Keyed by player so its open list never carries to the next man. */}
+      <StanceControl key={selected.id} player={selected} players={players} onChange={(stance) => setStance(selected.id, stance)} />
       <button onClick={() => { setMenuOpen(null); setRenaming('player') }}>Rename…</button>
       {/* WHAT HE DOES, not what he is called: the engine finds the passer and
           the snapper by role, so these stay right through any rename. */}

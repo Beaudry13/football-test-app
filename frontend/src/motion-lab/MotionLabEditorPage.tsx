@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor } from './authoring/MotionLabEditor'
 import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
+import { VIEWER_3D_URL, viewIn3D } from './viewIn3D'
 import './motionLab.css'
 
 /**
@@ -33,6 +34,8 @@ export default function MotionLabEditorPage() {
   const [editorKey, setEditorKey] = useState(0)
   const [resolving, setResolving] = useState(false)
   const [, rerender] = useReducer((n: number) => n + 1, 0)
+  /** The editor's own "an edit is on screen and not yet handed over" (see saveStatus). */
+  const editPending = useRef(false)
   /** The server id the URL was last set to - so the page can tell the editor
    *  switching plays (follow it) from the coach navigating (load it). */
   const urlPlayId = useRef<number | null>(null)
@@ -160,6 +163,22 @@ export default function MotionLabEditorPage() {
 
   const folderId = current ? session.folderIdOf(current) : null
 
+  /**
+   * V6, development only: open the saved play in the 3D viewer. Offered when
+   * VITE_MOTION_LAB_3D_URL is set; hands over only a play whose last edit the
+   * server has confirmed, because the viewer is shown the SAVED play.
+   */
+  const open3D = () => {
+    const id = session.repository.currentPlayId()
+    const serverId = id ? session.serverIdOf(id) : null
+    const saved = id !== null && session.stateOf(id).state === 'saved' && !editPending.current
+    if (!VIEWER_3D_URL || serverId === null || !saved) {
+      setNotices((all) => [...all, 'Saving… View in 3D shows the saved play - try again in a moment.'])
+      return
+    }
+    if (!viewIn3D(VIEWER_3D_URL, serverId)) setNotices((all) => [...all, 'The 3D viewer window was blocked - allow pop-ups for this site.'])
+  }
+
   let notice = null
   if (status?.state === 'conflict') {
     notice = (
@@ -211,17 +230,25 @@ export default function MotionLabEditorPage() {
         key={editorKey}
         repository={session.repository}
         exit={
-          <button onClick={() => navigate(folderId !== null ? `/motion-lab/folders/${folderId}` : '/motion-lab')} title="Back to the Motion Lab Library">
-            ← Library
-          </button>
+          <>
+            <button onClick={() => navigate(folderId !== null ? `/motion-lab/folders/${folderId}` : '/motion-lab')} title="Back to the Motion Lab Library">
+              ← Library
+            </button>
+            {VIEWER_3D_URL && (
+              <button onClick={open3D} title="Open the saved play in the PEIRA 3D viewer (development)">
+                View in 3D
+              </button>
+            )}
+          </>
         }
-        saveStatus={({ editPending }) => {
+        saveStatus={({ editPending: pending }) => {
+          editPending.current = pending
           // Read the session HERE, not from this render: the editor calls
           // this in its own renders too - on every edit, and at the handoff,
           // where savePlay may change nothing the page would re-render for.
           const id = session.repository.currentPlayId()
           const live = id ? session.stateOf(id) : null
-          return <SaveStatus state={shownSaveState(live?.state ?? 'saved', editPending)} message={live?.message ?? null} />
+          return <SaveStatus state={shownSaveState(live?.state ?? 'saved', pending)} message={live?.message ?? null} />
         }}
         notice={notice}
       />
