@@ -1,5 +1,10 @@
 Flask==3.0.3
 Flask-SQLAlchemy==3.1.1
+# Pinned: Flask-SQLAlchemy only asks for SQLAlchemy>=2.0.16, and SQLAlchemy 2.1
+# made psycopg (v3) the default driver for postgresql:// URLs. This image ships
+# psycopg2-binary, so 2.1 cannot load the app ("No module named 'psycopg'") and
+# Render's pre-deploy `flask db upgrade` fails. 2.0.52 is what the tests run on.
+SQLAlchemy==2.0.52
 Flask-Migrate==4.0.7
 Flask-JWT-Extended==4.6.0
 Flask-Bcrypt==1.0.1
