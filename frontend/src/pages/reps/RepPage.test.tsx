@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.fn() }));
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
-vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn() }));
+vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn(), reorderQuestions: vi.fn() }));
 vi.mock('../../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }));
 import * as repsApi from '../../api/reps';
 import * as codesApi from '../../api/accessCodes';
@@ -283,6 +283,16 @@ describe('A Rep, for the coach', () => {
     // A new wrong answer can still be added.
     fireEvent.click(editor.getByRole('button', { name: '+ Answer' }));
     expect(editor.getByRole('textbox', { name: 'Answer 4' })).toBeInTheDocument();
+  });
+
+  it('moves a decision up or down - the order players meet them in', async () => {
+    vi.mocked(questionsApi.reorderQuestions).mockResolvedValue([] as never);
+    const second = { ...RESULTS.decisions[0], question_id: 12, number: 2, question_text: 'Who has #3 on the seam?' };
+    open({ ...RESULTS, decisions: [RESULTS.decisions[0], second] });
+    expect(await screen.findByRole('button', { name: 'Move decision 1 up' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Move decision 1 down' }));
+    await waitFor(() => expect(questionsApi.reorderQuestions).toHaveBeenCalledWith(5, [12, 11]));
+    await waitFor(() => expect(repsApi.getRepResults).toHaveBeenCalledTimes(2));
   });
 
   it('a decision made from Motion Lab opens its play, for a coach who has Motion Lab', async () => {

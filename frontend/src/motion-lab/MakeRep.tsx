@@ -51,7 +51,18 @@ const blankAnswers = (): Answer[] => [
   { text: '', correct: false },
 ]
 
-export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPlayId: number | null; onClose: () => void }) {
+export function MakeRep({
+  play,
+  motionPlayId,
+  onClose,
+  intoRep = null,
+}: {
+  play: Play
+  motionPlayId: number | null
+  onClose: () => void
+  /** Opened from a Rep's "Add decisions": the decision goes there. */
+  intoRep?: number | null
+}) {
   const navigate = useNavigate()
   /* PICK UP WHERE THE COACH LEFT OFF on this play: the man, his role, the
      concept and the Rep from the last decision made from it. */
@@ -64,7 +75,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
   const [prompt, setPrompt] = useState('')
   const [answers, setAnswers] = useState<Answer[]>(blankAnswers)
   const [concept, setConcept] = useState(same?.concept ?? '')
-  const [rememberedRep] = useState<number | null>(same?.repId ?? null)
+  const [rememberedRep] = useState<number | null>(intoRep ?? same?.repId ?? null)
   /** Reps that already hold a decision from this play - offered first. */
   const [fromThisPlay, setFromThisPlay] = useState<number[]>([])
   const [why, setWhy] = useState('')

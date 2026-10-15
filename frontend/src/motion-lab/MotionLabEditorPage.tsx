@@ -48,8 +48,10 @@ export default function MotionLabEditorPage() {
   const [undoScratch, setUndoScratch] = useState<Play | null>(null)
   /** The "Make question" panel is open. */
   const [asking, setAsking] = useState(false)
+  /** A Rep's "Add decisions" sends the coach here with ?rep=<id>: Make rep opens, aimed at it. */
+  const intoRep = Number(new URLSearchParams(location.search).get('rep')) || null
   /** The "Make rep" panel is open. One panel at a time. */
-  const [repping, setRepping] = useState(false)
+  const [repping, setRepping] = useState(intoRep !== null)
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -358,7 +360,12 @@ export default function MotionLabEditorPage() {
               Make question
             </button>
             {repping && currentPlay && (
-              <MakeRep play={currentPlay} motionPlayId={current ? session.serverIdOf(current) : null} onClose={() => setRepping(false)} />
+              <MakeRep
+                play={currentPlay}
+                motionPlayId={current ? session.serverIdOf(current) : null}
+                onClose={() => setRepping(false)}
+                intoRep={intoRep}
+              />
             )}
             {asking && currentPlay && <MakeQuestion play={currentPlay} onClose={() => setAsking(false)} />}
           </div>

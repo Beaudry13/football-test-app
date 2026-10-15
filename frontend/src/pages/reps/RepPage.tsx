@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
-import { updateQuestion } from '../../api/questions';
+import { reorderQuestions, updateQuestion } from '../../api/questions';
+import { AddDecisions } from './AddDecisions';
 import { createConcept, listConcepts, type Concept } from '../../api/concepts';
 import { ConceptPicker } from '../../components/concepts/ConceptPicker';
 import { resolveConcept } from '../../components/concepts/conceptMatch';
@@ -699,6 +700,22 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   const motionLab = useMayUseMotionLab();
   const [editing, setEditing] = useState<number | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [moving, setMoving] = useState(false);
+  /** Move a decision up or down: the order players meet them in. */
+  const move = async (index: number, by: -1 | 1) => {
+    const ids = results.decisions.map((d) => d.question_id);
+    const to = index + by;
+    if (to < 0 || to >= ids.length) return;
+    [ids[index], ids[to]] = [ids[to], ids[index]];
+    setMoving(true);
+    try {
+      await reorderQuestions(quizId, ids);
+      onChanged();
+    } finally {
+      setMoving(false);
+    }
+  };
   const edit = (id: number) => {
     setEditing(id);
     listConcepts()
@@ -709,15 +726,38 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
     <section className={styles.section} aria-label="Decisions">
       <div className={styles.sectionHead}>
         <h2 className={styles.sectionTitle}>Decisions</h2>
-        <Link to={`/quizzes/${quizId}?tab=questions`} className={styles.edit}>
-          Edit
-        </Link>
+        <button type="button" className={styles.addOpen} aria-expanded={adding} onClick={() => setAdding((open) => !open)}>
+          + Add decisions
+        </button>
       </div>
+      {adding && (
+        <AddDecisions
+          repId={quizId}
+          onAdded={() => {
+            setAdding(false);
+            onChanged();
+          }}
+        />
+      )}
       <ol className={styles.decisions}>
-        {results.decisions.map((d) => {
+        {results.decisions.map((d, i) => {
           const total = d.choices.reduce((n, c) => n + c.count, 0);
           return (
             <li key={d.question_id} className={styles.decision}>
+              <div className={styles.order}>
+                <button type="button" aria-label={`Move decision ${d.number} up`} disabled={moving || i === 0} onClick={() => void move(i, -1)}>
+                  ▲
+                </button>
+                <span className={styles.orderNum}>{d.number}</span>
+                <button
+                  type="button"
+                  aria-label={`Move decision ${d.number} down`}
+                  disabled={moving || i === results.decisions.length - 1}
+                  onClick={() => void move(i, 1)}
+                >
+                  ▼
+                </button>
+              </div>
               {d.image && <img className={styles.thumb} src={resolveMediaUrl(d.image.image_url)} alt="" />}
               <div className={styles.decisionBody}>
                 <div className={styles.decisionTop}>

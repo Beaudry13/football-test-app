@@ -402,6 +402,126 @@
   min-width: 0;
   flex: 1;
 }
+.addOpen {
+  font: inherit;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-accent);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.order {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.order button {
+  font: inherit;
+  font-size: 11px;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--nb-card-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+}
+.order button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.orderNum {
+  font-weight: 800;
+  font-size: 14px;
+}
+.adder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.adderTabs {
+  display: flex;
+  gap: 6px;
+}
+.adderTabs button {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-card-border);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.adderTabs button[aria-selected='true'] {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  font-weight: 700;
+}
+.adderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.adderRow {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font: inherit;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--nb-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+.adderRow:hover {
+  border-color: var(--nb-accent);
+}
+.adderMeta {
+  color: var(--nb-text-muted);
+  font-size: 13px;
+}
+.adderPick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.adderPickHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.adderQuestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.adderQuestionOn {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+}
 .decisionTop {
   display: flex;
   align-items: center;

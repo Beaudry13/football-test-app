@@ -262,6 +262,15 @@ describe('Make a rep from a play', () => {
     expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).not.toHaveProperty('presnap')
   })
 
+  it("opened from a rep's Add decisions, the decision goes into that rep", async () => {
+    render(
+      <MemoryRouter>
+        <MakeRep play={newPlay('Trips Jet')} motionPlayId={14} onClose={vi.fn()} intoRep={8} />
+      </MemoryRouter>,
+    )
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('8'))
+  })
+
   it('cannot be made without a situation and two answers', () => {
     open()
     type('Answer 1', 'Rotate down')
