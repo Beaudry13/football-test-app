@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as authModule from '../../auth/AuthContext';
 import { WeakestConcepts } from './WeakestConcepts';
 import type { ConceptBreakdown, Question } from '../../api/types';
 
@@ -57,6 +58,7 @@ function open(questions: Question[]) {
 
 describe('Teach, on Results', () => {
   it('shows the concept\'s question with the right answer, the reason and what the misses chose', async () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
     open([question]);
     await userEvent.click(screen.getByRole('button', { name: 'Teach it' }));
     const teach = within(screen.getByRole('dialog', { name: 'Teach Force / Contain' }));
