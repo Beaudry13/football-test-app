@@ -18,6 +18,8 @@ export interface TeachSlide {
   wrong: { text: string; count: number } | null;
   /** The Motion Lab play it came from, to open and run. */
   motionPlayId: number | null;
+  /** Shown in place of the image - e.g. the play moving to the snap. */
+  picture?: ReactNode;
 }
 
 /**
@@ -77,7 +79,13 @@ export function TeachView({
         </button>
       </div>
       <div className={styles.body}>
-        {slide.imageUrl && <img className={styles.picture} src={slide.imageUrl} alt="The play" />}
+        {slide.picture ? (
+          <div className={styles.pictureSlot} key={slide.key}>
+            {slide.picture}
+          </div>
+        ) : (
+          slide.imageUrl && <img className={styles.picture} src={slide.imageUrl} alt="The play" />
+        )}
         <div className={styles.side}>
           {slide.role && <span className={styles.role}>You&rsquo;re the {slide.role}</span>}
           <p className={styles.prompt}>{slide.prompt}</p>
