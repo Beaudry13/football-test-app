@@ -19,6 +19,7 @@ const rep = (over: Partial<RepSummary>): RepSummary => ({
   audience_label: 'Safeties',
   is_retest: false,
   worst: { name: 'Motion adjustment', missed: 4, responded: 11, most_common_wrong: 'Stay boundary' },
+  signal: null,
   ...over,
 });
 
@@ -46,6 +47,29 @@ describe('Reps on Home', () => {
     expect(first.textContent).toMatch(/Motion adjustment 4 of 11 safeties missed · most chose “Stay boundary”/);
     expect(list.getByRole('link', { name: /Red zone/ }).textContent).toMatch(/Waiting on players/);
     expect(list.getByRole('link', { name: /Cover 2/ }).textContent).toMatch(/Nobody missed a decision/);
+  });
+
+  it('says how a retest went: still missed after it, fixed, with the change', async () => {
+    vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
+      rep({
+        id: 4,
+        title: 'Motion adjustment - Retest',
+        is_retest: true,
+        signal: { kind: 'retest_missing', concept: 'Motion adjustment', missed: 1, responded: 3, before_pct: 64, now_pct: 67 },
+      }),
+      rep({
+        id: 5,
+        title: 'Red zone - Retest',
+        is_retest: true,
+        signal: { kind: 'retest_fixed', concept: 'Red zone check', missed: 0, responded: 2, before_pct: 50, now_pct: 100 },
+      }),
+    ]);
+    open();
+    const list = within(await screen.findByRole('list'));
+    expect(list.getByRole('link', { name: /Motion adjustment - Retest/ }).textContent).toMatch(
+      /Motion adjustment still missed by 1 of 3 after the retest · 64% → 67%/,
+    );
+    expect(list.getByRole('link', { name: /Red zone - Retest/ }).textContent).toMatch(/Red zone check fixed on the retest · 50% → 100%/);
   });
 
   it('with no reps yet, offers the one thing to do', async () => {

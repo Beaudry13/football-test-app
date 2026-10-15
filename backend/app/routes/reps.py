@@ -269,6 +269,51 @@ def reps_summary():
                     if worst
                     else None
                 ),
+                "signal": _signal(results, worst),
             }
         )
     return jsonify(out)
+
+
+def _pct(responded, missed):
+    return round(100 * (responded - missed) / responded) if responded else None
+
+
+def _signal(results, worst) -> dict | None:
+    """THE ONE THING TO SAY ABOUT THIS REP ON HOME, when there is one:
+
+      retest_fixed     "Motion adjustment - fixed on the retest"   (a retest: nobody misses it now)
+      retest_missing   "Red zone check - still missed by 2 after the retest"
+      improved / not   "Trips recognition 63% -> 91%" rides along on both
+      retested         the original's worst problem already has a retest out:
+                       say how that went instead of asking for another
+
+    None when the plain worst problem (or nothing) is the whole story."""
+    retest_of = results["retest_of"]
+    if retest_of is not None:
+        for c in results["concepts"]:
+            if c["responded"] == 0:
+                continue
+            before = next((b for b in retest_of["concepts"] if b["name"] == c["name"]), None)
+            pct_before = _pct(before["responded_before"], before["missed_before"]) if before and before["responded_before"] else None
+            return {
+                "kind": "retest_fixed" if c["missed"] == 0 else "retest_missing",
+                "concept": c["name"],
+                "missed": c["missed"],
+                "responded": c["responded"],
+                "before_pct": pct_before,
+                "now_pct": _pct(c["responded"], c["missed"]),
+            }
+        return None
+    if worst is not None and worst.get("retest"):
+        again = worst["retest"]
+        return {
+            "kind": "retested",
+            "concept": worst["name"],
+            "retest_id": again["id"],
+            "missed": again["missed"],
+            "responded": again["responded"],
+            "before_pct": _pct(worst["responded"], worst["missed"]),
+            "now_pct": _pct(again["responded"], again["missed"]),
+        }
+    return None

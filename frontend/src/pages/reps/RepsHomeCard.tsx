@@ -12,6 +12,38 @@ import styles from './RepsHomeCard.module.css';
  * most chose 'Stay boundary'". One tap opens the Rep, where View players,
  * Teach and Retest are. With no Reps yet, the one thing to do: make one.
  */
+/** "Red zone check - still missed by 2 after the retest · 63% -> 80%". */
+function Signal({ signal }: { signal: NonNullable<RepSummary['signal']> }) {
+  const change =
+    signal.before_pct !== null && signal.now_pct !== null && signal.responded > 0 ? (
+      <span className={styles.change}>
+        {' '}
+        · {signal.before_pct}% → {signal.now_pct}%
+      </span>
+    ) : null;
+  const fixed = signal.kind === 'retest_fixed' || (signal.kind === 'retested' && signal.responded > 0 && signal.missed === 0);
+  if (fixed) {
+    return (
+      <span className={styles.clean}>
+        ✓ <strong className={styles.problemName}>{signal.concept}</strong> fixed on the retest{change}
+      </span>
+    );
+  }
+  if (signal.kind === 'retested' && signal.responded === 0) {
+    return (
+      <span className={styles.problem}>
+        <strong className={styles.problemName}>{signal.concept}</strong> retest is out - nobody has run it yet
+      </span>
+    );
+  }
+  return (
+    <span className={styles.problem}>
+      <strong className={styles.problemName}>{signal.concept}</strong> still missed by {signal.missed} of {signal.responded} after
+      the retest{change}
+    </span>
+  );
+}
+
 export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boolean }) {
   const [reps, setReps] = useState<RepSummary[] | null>(null);
 
@@ -57,7 +89,9 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
                       {rep.live ? ' · out now' : ''} · {rep.ran} of {rep.invited} ran it
                     </span>
                   </span>
-                  {rep.worst ? (
+                  {rep.signal ? (
+                    <Signal signal={rep.signal} />
+                  ) : rep.worst ? (
                     <span className={styles.problem}>
                       <strong className={styles.problemName}>{rep.worst.name}</strong> {rep.worst.missed} of{' '}
                       {rep.worst.responded} {who} missed

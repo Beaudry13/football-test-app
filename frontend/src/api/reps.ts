@@ -117,6 +117,16 @@ export interface RepSummary {
   audience_label: string | null;
   is_retest: boolean;
   worst: { name: string; missed: number; responded: number; most_common_wrong: string | null } | null;
+  /** How a retest went, when that is the thing to say (see routes/reps._signal). */
+  signal: {
+    kind: 'retest_fixed' | 'retest_missing' | 'retested';
+    concept: string;
+    missed: number;
+    responded: number;
+    before_pct: number | null;
+    now_pct: number | null;
+    retest_id?: number;
+  } | null;
 }
 
 export function getRepsSummary(): Promise<RepSummary[]> {

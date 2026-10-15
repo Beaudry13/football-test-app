@@ -79,6 +79,10 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.change {
+  font-weight: 700;
+  color: var(--nb-text-muted);
+}
 .clean {
   color: var(--peira-success);
   font-weight: 700;

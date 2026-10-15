@@ -449,6 +449,31 @@ class TestHomeSummary:
         assert (top["decisions"], top["ran"], top["invited"], top["live"]) == (2, 1, 4, True)
         assert top["worst"] == {"name": "Motion adjustment", "missed": 1, "responded": 1, "most_common_wrong": "Stay boundary"}
 
+    def test_retests_are_summarised_by_how_they_went(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        rotate = _option(first, "Rotate down")
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {first["id"]: rotate, second["id"]: inside})
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        _play(client, code, "Cam Cole", ids["Cam Cole"], {first["id"]: stay, second["id"]: inside})
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        again = {o["option_text"]: o["id"] for o in copied["options"]}
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: again["Rotate down"]})
+        _play(client, sent, "Cam Cole", ids["Cam Cole"], {copied["id"]: again["Stay boundary"]})
+
+        summary = {s["id"]: s for s in client.get("/api/quizzes/reps-summary", headers=headers).get_json()}
+        assert summary[retest["id"]]["signal"] == {
+            "kind": "retest_missing", "concept": "Motion adjustment", "missed": 1, "responded": 2,
+            "before_pct": 33, "now_pct": 50,
+        }
+        assert summary[rep["id"]]["signal"]["kind"] == "retested"
+        assert summary[rep["id"]]["signal"]["retest_id"] == retest["id"]
+
     def test_another_organizations_reps_are_not_shown(self, client, register_coach, app):
         coach, _, headers = register_coach()
         _built(client, headers, app, coach)
