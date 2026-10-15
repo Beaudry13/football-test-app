@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/play', () => ({
@@ -6,7 +6,9 @@ vi.mock('../../api/play', () => ({
   checkAnswer: vi.fn(),
   submitQuiz: vi.fn(),
 }));
+vi.mock('../../api/reps', () => ({ getRepProgress: vi.fn() }));
 import * as playApi from '../../api/play';
+import * as repsApi from '../../api/reps';
 import type { Question, Quiz } from '../../api/types';
 import { RepRunner } from './RepRunner';
 
@@ -58,6 +60,7 @@ function run(overrides: Partial<Parameters<typeof RepRunner>[0]> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(repsApi.getRepProgress).mockResolvedValue({ previous: null, original: null });
   vi.mocked(playApi.saveAnswer).mockResolvedValue(undefined as never);
   vi.mocked(playApi.submitQuiz).mockResolvedValue({} as never);
   vi.mocked(playApi.checkAnswer).mockImplementation(async ({ question_id }) => ({
@@ -130,6 +133,24 @@ describe('A Situational Rep, for the player', () => {
     await waitFor(() => expect(playApi.checkAnswer).toHaveBeenCalled());
     expect(vi.mocked(playApi.saveAnswer).mock.calls[0][0]).toMatchObject({ question_id: 3, selected_option_id: 301 });
     expect(screen.getByRole('button', { name: 'Tap X' })).toBeDisabled();
+  });
+
+  it('the finish says what he has and what to work on, and how he did against last time', async () => {
+    vi.mocked(repsApi.getRepProgress).mockResolvedValue({
+      previous: { correct: 0, answered: 2, missed_concepts: ['Motion adjustment', 'Seam'], mastered_concepts: [] },
+      original: { title: 'Trips Jet', correct: 0, answered: 2, missed_concepts: ['Seam'], mastered_concepts: [] },
+    });
+    run();
+    fireEvent.click(screen.getByRole('button', { name: 'Stay boundary' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Me' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Finish' }));
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument();
+    expect(within(screen.getByLabelText("You've got")).getByText('✓ Seam')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Work on')).getByText('Motion adjustment')).toBeInTheDocument();
+    expect(await screen.findByText('Last run 0 of 2 → now 1 of 2')).toBeInTheDocument();
+    expect(screen.getByText(/You missed Seam the first time\. Now you.ve got it\./)).toBeInTheDocument();
+    expect(repsApi.getRepProgress).toHaveBeenCalledWith({ access_code_id: 7, player_name: 'Marcus Hill', player_id: 21 });
   });
 
   it('picks up where he left off', () => {

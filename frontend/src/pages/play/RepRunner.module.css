@@ -257,6 +257,23 @@
   font-weight: 700;
   color: var(--peira-text-muted);
 }
+.gotLead {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--peira-success);
+}
+.gotChip {
+  border-color: var(--peira-success);
+}
+.progressLine {
+  margin: 6px 0 0;
+  font-size: 15px;
+  color: var(--peira-text);
+}
+.progressUp {
+  font-weight: 700;
+  color: var(--peira-success);
+}
 .conceptChip {
   font-size: 14px;
   font-weight: 700;

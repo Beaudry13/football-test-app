@@ -31,11 +31,14 @@ from app.models.question import QuestionType
 from app.models.quiz import REP_KIND
 from app.routes.quizzes import _copy_questions_into, _retest_title, _seed_retest_roster
 from app.services.file_storage import StorageError, get_file_storage
-from app.services.rep_results import first_tries, rep_attempts, rep_results
+from app.services.rep_results import first_tries, player_progress, rep_attempts, rep_results
 from app.utils.auth import current_coach, get_visible_quiz
 from app.utils.validation import load_json_body
 
 reps_bp = Blueprint("reps", __name__)
+#: The one player-facing Rep route (registered under /api/play): no JWT -
+#: the player is proven the way every /play write proves him.
+rep_play_bp = Blueprint("rep_play", __name__)
 
 
 def _visible_rep(quiz_id: int):
@@ -317,3 +320,43 @@ def _signal(results, worst) -> dict | None:
             "now_pct": _pct(again["responded"], again["missed"]),
         }
     return None
+
+
+class RepProgressSchema(Schema):
+    access_code_id = fields.Int(required=True)
+    player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
+    player_id = fields.Int(required=False, allow_none=True, load_default=None)
+
+
+@rep_play_bp.post("/rep-progress")
+def rep_progress():
+    """THE PLAYER'S OWN PROGRESS on this Rep, for his finish screen: his run
+    before this one, and - on a Retest - what he missed on the original.
+
+    Read-only, and proven exactly as checking an answer is: a live code, his
+    own attempt on it, and (with PIN enforcement on) his attempt token. It
+    returns only his own results, never anyone else's, and never a correct
+    option - only counts and concept names.
+    """
+    from app.models import AccessCode
+    from app.services import player_enforcement
+    from app.services.access_codes import reason_for_invalid
+    from app.services.attempts import find_attempt
+
+    data = load_json_body(RepProgressSchema())
+    access_code = db.session.get(AccessCode, data["access_code_id"])
+    reason = reason_for_invalid(access_code)
+    if reason is not None:
+        message = "This access code has expired" if reason == "expired" else "Invalid access code"
+        raise ApiError(message, status_code=404, reason=reason)
+    attempt = find_attempt(access_code.id, data["player_name"], data.get("player_id"))
+    if attempt is None:
+        raise ApiError("Start the rep first", status_code=404, reason="attempt_not_found")
+    attempt = player_enforcement.authorize_player_write(access_code, attempt)
+    quiz = access_code.quiz
+    if quiz.kind != REP_KIND:
+        raise ApiError("That is not a Rep", status_code=422, reason="not_a_rep")
+    body = player_progress(quiz, attempt)
+    # Releases the row lock enforcement may have taken; nothing was written.
+    db.session.commit()
+    return jsonify(body)

@@ -1,4 +1,5 @@
 import { api } from './client';
+import { attemptTokenHeaders } from '../pages/play/attemptToken';
 import type { Quiz, QuestionImage } from './types';
 
 /**
@@ -127,6 +128,27 @@ export interface RepSummary {
     now_pct: number | null;
     retest_id?: number;
   } | null;
+}
+
+/** One run of a Rep, for the player who made it. */
+export interface RepRunSummary {
+  correct: number;
+  answered: number;
+  missed_concepts: string[];
+  mastered_concepts: string[];
+}
+
+/** The player's own progress: his run before this one; on a Retest, his first try on the original. */
+export interface RepProgress {
+  previous: RepRunSummary | null;
+  original: (RepRunSummary & { title: string }) | null;
+}
+
+export function getRepProgress(
+  input: { access_code_id: number; player_name: string; player_id?: number },
+  token?: string | null,
+): Promise<RepProgress> {
+  return api.post<RepProgress>('/play/rep-progress', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
 export function getRepsSummary(): Promise<RepSummary[]> {

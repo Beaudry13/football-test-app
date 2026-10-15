@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, submitQuiz } from '../../api/play';
+import { getRepProgress, type RepProgress } from '../../api/reps';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type {
   DeliveredPlayerQuestion,
@@ -94,6 +95,8 @@ export function RepRunner({
   const [error, setError] = useState<string | null>(null);
   const [finished, setFinished] = useState(firstOpen === -1 && decisions.length > 0);
   const [reviewing, setReviewing] = useState<number | null>(null);
+  /** His run before this one, and on a Retest his first try on the original. */
+  const [progress, setProgress] = useState<RepProgress | null>(null);
   const shownAt = useRef(Date.now());
   const authRaised = useRef(false);
   const afterRef = useRef<HTMLDivElement>(null);
@@ -192,6 +195,10 @@ export function RepRunner({
       setBusy(false);
       setFinished(true);
     }
+    // Where he stands against last time - a bonus, never a blocker.
+    getRepProgress({ access_code_id: accessCodeId, player_name: playerName, player_id: playerId }, ...tokenArgs())
+      .then(setProgress)
+      .catch(() => undefined);
   }
 
   if (finished || !decision) {
@@ -212,6 +219,7 @@ export function RepRunner({
         decisions={decisions}
         feedback={feedback}
         taken={taken}
+        progress={progress}
         onReview={(first) => setReviewing(first)}
         onRunAgain={onRunAgain}
       />
@@ -401,12 +409,14 @@ function Summary({
   decisions,
   feedback,
   taken,
+  progress,
   onReview,
   onRunAgain,
 }: {
   decisions: Question[];
   feedback: Record<number, PracticeFeedback>;
   taken: Record<number, Taken>;
+  progress: RepProgress | null;
   onReview: (first: number) => void;
   onRunAgain: () => void;
 }) {
@@ -414,6 +424,16 @@ function Summary({
   const right = judged.filter((q) => feedback[q.id]?.is_correct).length;
   const missed = missedOf(decisions, feedback);
   const concepts = [...new Set(missed.map((q) => q.concept?.name).filter((n): n is string => !!n))];
+  /* GOT IT: a concept every one of whose decisions he got right this run. */
+  const mastered = [
+    ...new Set(judged.map((q) => q.concept?.name).filter((n): n is string => !!n && !concepts.includes(n))),
+  ];
+  const fixedSinceOriginal = progress?.original
+    ? progress.original.missed_concepts.filter((c) => mastered.includes(c))
+    : [];
+  const stillSinceOriginal = progress?.original
+    ? progress.original.missed_concepts.filter((c) => concepts.includes(c))
+    : [];
   const times = decisions.map((q) => taken[q.id]?.ms).filter((ms): ms is number => typeof ms === 'number' && ms > 0);
   const average = times.length ? times.reduce((a, b) => a + b, 0) / times.length : null;
   return (
@@ -426,9 +446,19 @@ function Summary({
         {average !== null && (
           <span className={styles.speed}>{(average / 1000).toFixed(1)} s per decision</span>
         )}
+        {mastered.length > 0 && (
+          <div className={styles.missedConcepts} aria-label="You've got">
+            <span className={styles.gotLead}>You&rsquo;ve got</span>
+            {mastered.map((c) => (
+              <span key={c} className={`${styles.conceptChip} ${styles.gotChip}`}>
+                ✓ {c}
+              </span>
+            ))}
+          </div>
+        )}
         {concepts.length > 0 && (
-          <div className={styles.missedConcepts}>
-            <span className={styles.missedLead}>Missed</span>
+          <div className={styles.missedConcepts} aria-label="Work on">
+            <span className={styles.missedLead}>Work on</span>
             {concepts.map((c) => (
               <span key={c} className={styles.conceptChip}>
                 {c}
@@ -437,6 +467,22 @@ function Summary({
           </div>
         )}
         {missed.length === 0 && judged.length > 0 && <p className={styles.clean}>You knew your job on every snap.</p>}
+        {/* AGAINST LAST TIME: his run before this one, and on a Retest the original. */}
+        {progress?.previous && (
+          <p className={styles.progressLine}>
+            Last run {progress.previous.correct} of {progress.previous.answered} → now {right} of {judged.length}
+          </p>
+        )}
+        {fixedSinceOriginal.length > 0 && (
+          <p className={`${styles.progressLine} ${styles.progressUp}`}>
+            You missed {fixedSinceOriginal.join(', ')} the first time. Now you&rsquo;ve got it.
+          </p>
+        )}
+        {stillSinceOriginal.length > 0 && (
+          <p className={styles.progressLine}>
+            Still working on {stillSinceOriginal.join(', ')} from the first time.
+          </p>
+        )}
       </div>
       <div className={styles.summaryActions}>
         {missed.length > 0 && (

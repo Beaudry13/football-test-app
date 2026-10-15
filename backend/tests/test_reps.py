@@ -487,6 +487,50 @@ class TestHomeSummary:
         assert [(e["quiz_id"], e["quiz_kind"]) for e in live] == [(rep["id"], "REP")]
 
 
+class TestPlayerProgress:
+    def _progress(self, client, code, name, pid):
+        return client.post(
+            "/api/play/rep-progress", json={"access_code_id": code["id"], "player_name": name, "player_id": pid}
+        )
+
+    def test_his_previous_run_and_on_a_retest_the_original(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, rotate, inside = _option(first, "Stay boundary"), _option(first, "Rotate down"), _option(second, "Inside")
+        bo = ("Bo Brown", ids["Bo Brown"])
+        _play(client, code, *bo, {first["id"]: stay, second["id"]: inside})
+        only = self._progress(client, code, *bo).get_json()
+        assert only == {"previous": None, "original": None}
+
+        _play(client, code, *bo, {first["id"]: rotate, second["id"]: inside})
+        again = self._progress(client, code, *bo).get_json()
+        assert again["previous"] == {
+            "correct": 1, "answered": 2, "missed_concepts": ["Motion adjustment"], "mastered_concepts": ["Leverage"],
+        }
+
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        _play(client, sent, *bo, {copied["id"]: next(o["id"] for o in copied["options"] if o["option_text"] == "Rotate down")})
+        on_retest = self._progress(client, sent, *bo).get_json()
+        assert on_retest["previous"] is None
+        assert on_retest["original"]["title"] == rep["title"]
+        assert on_retest["original"]["missed_concepts"] == ["Motion adjustment"]
+
+    def test_only_on_a_rep_and_only_for_a_player_who_started_it(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        assert self._progress(client, code, "Bo Brown", ids["Bo Brown"]).status_code == 404
+        quiz = client.post("/api/quizzes", json={"title": "Install"}, headers=headers).get_json()
+        _decision(client, headers, quiz["id"], "Q?", ["A", "B"])
+        client.post(f"/api/quizzes/{quiz['id']}/roster/members", json={"player_ids": [ids["Bo Brown"]]}, headers=headers)
+        plain = _send(client, headers, quiz["id"], mode="PRACTICE")
+        client.post("/api/play/start", json={"access_code_id": plain["id"], "player_name": "Bo Brown", "player_id": ids["Bo Brown"]})
+        assert self._progress(client, plain, "Bo Brown", ids["Bo Brown"]).status_code == 422
+
+
 class TestTapTheMan:
     TARGETS = [{"x": 0.2, "y": 0.6}, {"x": 0.8, "y": 0.55}]
 

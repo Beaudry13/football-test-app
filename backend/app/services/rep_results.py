@@ -72,6 +72,50 @@ def first_tries(attempts) -> dict:
     return {key: (attempt, made[key]) for key, attempt in first.items()}
 
 
+def run_summary(attempt) -> dict:
+    """One run of a Rep, for the player who made it: how many right, and the
+    concepts he missed and the ones he got every time."""
+    checked = _checked(attempt)
+    judged = [a for a in checked if a.is_correct is not None]
+    missed: list[str] = []
+    got: list[str] = []
+    by_concept: dict = defaultdict(list)
+    for a in judged:
+        concept = a.question.concept.name if a.question is not None and a.question.concept is not None else None
+        if concept:
+            by_concept[concept].append(a.is_correct)
+    for name, verdicts in by_concept.items():
+        (got if all(verdicts) else missed).append(name)
+    return {
+        "correct": sum(1 for a in judged if a.is_correct),
+        "answered": len(judged),
+        "missed_concepts": sorted(missed),
+        "mastered_concepts": sorted(got),
+    }
+
+
+def player_progress(quiz, attempt) -> dict:
+    """WHERE THIS PLAYER STANDS ON THIS REP, for his own finish screen:
+    `previous` - his run before this one, here; `original` - for a Retest, his
+    first try on the Rep it re-asks. Either is None when there is none."""
+    key = PlayerKey.of(attempt)
+    earlier = [
+        a
+        for a in rep_attempts(quiz)
+        if PlayerKey.of(a) == key and a.id != attempt.id and a.started_at <= attempt.started_at and _checked(a)
+    ]
+    original = None
+    parent = quiz.retest_of
+    if parent is not None and parent.kind == quiz.kind:
+        first = first_tries(rep_attempts(parent)).get(key)
+        if first is not None:
+            original = {"title": parent.title, **run_summary(first[0])}
+    return {
+        "previous": run_summary(earlier[-1]) if earlier else None,
+        "original": original,
+    }
+
+
 def _chosen_ids(answer) -> list[int]:
     """The options the player picked - the selection set first, which survives a
     deleted option; the single column as the fallback."""
