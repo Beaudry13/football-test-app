@@ -268,6 +268,7 @@ class TestDiagnostics:
         bo = next(p for p in results["players"] if p["display_name"] == "Bo Brown")
         assert (bo["correct"], bo["answered"], bo["attempts"]) == (1, 2, 2)
         assert results["audience"]["invited"] == 4
+        assert results["audience"]["positions"] == ["S"]
 
     def test_a_player_who_answered_and_left_without_submitting_still_counts(self, client, register_coach, app):
         coach, _, headers = register_coach()

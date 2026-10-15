@@ -8,8 +8,11 @@ import { ConceptPicker } from '../../components/concepts/ConceptPicker';
 import { resolveConcept } from '../../components/concepts/conceptMatch';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { listGroups } from '../../api/groups';
+import { listPlayers } from '../../api/players';
+import { addRosterMembers } from '../../api/roster';
+import { audiencesFrom, pluralFor, suggestedFamily, type Audience } from './audiences';
 import { createRepRetest, getRepResults, type RepConcept, type RepDecision, type RepResults } from '../../api/reps';
-import type { Group } from '../../api/types';
+import type { Group, Player } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { LoadingState } from '../../components/ui/LoadingState';
@@ -110,7 +113,10 @@ export function RepPage() {
 
   const problems = results?.concepts.filter((c) => c.missed > 0) ?? [];
   const solid = results?.concepts.filter((c) => c.missed === 0 && c.responded > 0) ?? [];
-  const who = results?.audience.label ? results.audience.label.toLowerCase() : 'players';
+  // "safeties": the one group's name, else the one position family it went to.
+  const who = results?.audience.label
+    ? results.audience.label.toLowerCase()
+    : (pluralFor(results?.audience.positions ?? []) ?? 'players');
   const roles = [...new Set((results?.decisions ?? []).map((d) => d.subject_role).filter((r): r is string => !!r))];
 
   return (
@@ -190,6 +196,13 @@ export function RepPage() {
 function SendPanel({ results, onSent }: { results: RepResults; onSent: () => void }) {
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [picked, setPicked] = useState<number[]>([]);
+  /* WHO, FROM THE ROSTER: position families ("Safeties - FS, S, SS - 11"),
+     the one the Rep's "You're the..." points at picked for him. */
+  const [players, setPlayers] = useState<Player[]>([]);
+  const audiences = audiencesFrom(players);
+  const likely = suggestedFamily(results.decisions.map((d) => d.subject_role));
+  const [positions, setPositions] = useState<string[] | null>(null);
+  const chosen = positions ?? audiences.filter((a) => a.family && a.family === likely).map((a) => a.key);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -200,6 +213,9 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
     listGroups()
       .then(setGroups)
       .catch(() => setGroups([]));
+    listPlayers({ active: 'true' })
+      .then(setPlayers)
+      .catch(() => setPlayers([]));
   }, [code]);
 
   if (code) {
@@ -233,7 +249,28 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
   return (
     <section className={styles.send} aria-label="Send it">
       <span className={styles.sendLead}>Send it to</span>
-      <div className={styles.groups}>
+      {audiences.length > 0 && (
+        <div className={styles.groups} role="group" aria-label="Positions">
+          {audiences.map((a: Audience) => {
+            const on = chosen.includes(a.key);
+            return (
+              <button
+                key={a.key}
+                type="button"
+                aria-pressed={on}
+                className={on ? `${styles.group} ${styles.groupOn}` : styles.group}
+                onClick={() => setPositions(on ? chosen.filter((k) => k !== a.key) : [...chosen, a.key])}
+              >
+                {a.name}
+                {a.family && <span className={styles.groupCount}> {a.positions.join(', ')}</span>}
+                <span className={styles.groupCount}> · {a.playerIds.length}</span>
+                {a.family && a.family === likely && <span className={styles.suggested}>suggested</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className={styles.groups} role="group" aria-label="Groups">
         {(groups ?? []).map((g) => {
           const on = picked.includes(g.id);
           return (
@@ -259,7 +296,18 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
           setBusy(true);
           setError(null);
           try {
-            await activateQuiz(results.quiz_id, picked, 'PRACTICE');
+            const fromPositions = audiences.filter((a) => chosen.includes(a.key)).flatMap((a) => a.playerIds);
+            if (fromPositions.length > 0) {
+              // Positions go on the Rep's own roster (as Retest does - no
+              // throwaway Group); any picked groups' players join them there.
+              const fromGroups = (groups ?? [])
+                .filter((g) => picked.includes(g.id))
+                .flatMap((g) => g.players.map((p) => p.player?.id).filter((id): id is number => id != null));
+              await addRosterMembers(results.quiz_id, [...new Set([...fromPositions, ...fromGroups])]);
+              await activateQuiz(results.quiz_id, [], 'PRACTICE');
+            } else {
+              await activateQuiz(results.quiz_id, picked, 'PRACTICE');
+            }
             onSent();
           } catch (err) {
             setError(getErrorMessage(err));

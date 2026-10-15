@@ -372,6 +372,10 @@ def _audience(quiz) -> dict:
         # Only a code a player could still use right now.
         "code": code.code if code is not None and reason_for_invalid(code) is None else None,
         "people": [
-            {"player_id": p.get("player_id"), "name": p.get("name")} for p in people
+            {"player_id": p.get("player_id"), "name": p.get("name"), "position": p.get("position")}
+            for p in people
         ],
+        # The positions it went to, as the roster has them - so a Rep sent to
+        # "everyone who plays S" can still say "4 of 11 safeties missed".
+        "positions": sorted({p["position"] for p in people if p.get("position")}),
     }

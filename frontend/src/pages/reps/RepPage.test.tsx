@@ -7,11 +7,15 @@ vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
 vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn(), reorderQuestions: vi.fn() }));
 vi.mock('../../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }));
+vi.mock('../../api/players', () => ({ listPlayers: vi.fn() }));
+vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
 import * as repsApi from '../../api/reps';
 import * as codesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
 import * as questionsApi from '../../api/questions';
 import * as conceptsApi from '../../api/concepts';
+import * as playersApi from '../../api/players';
+import * as rosterApi from '../../api/roster';
 import * as authModule from '../../auth/AuthContext';
 import type { RepResults } from '../../api/reps';
 import { RepPage } from './RepPage';
@@ -103,6 +107,7 @@ function open(results: RepResults = RESULTS, at = '/reps/5') {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  vi.mocked(playersApi.listPlayers).mockResolvedValue([]);
   vi.mocked(groupsApi.listGroups).mockResolvedValue([{ id: 9, name: 'Safeties', players: new Array(11).fill({}) }] as never);
   vi.mocked(codesApi.activateQuiz).mockResolvedValue({ code: 'NEW123' } as never);
   vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 6, player_count: 2 } as never);
@@ -300,6 +305,30 @@ describe('A Rep, for the coach', () => {
     open();
     const decisions = within(await screen.findByRole('region', { name: 'Decisions' }));
     expect(decisions.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
+  });
+
+  it('offers the roster by position, picks the one its roles point at, and sends to them', async () => {
+    vi.mocked(playersApi.listPlayers).mockResolvedValue([
+      { id: 21, position: 'S', is_active: true },
+      { id: 22, position: 'FS', is_active: true },
+      { id: 31, position: 'CB', is_active: true },
+    ] as never);
+    vi.mocked(rosterApi.addRosterMembers).mockResolvedValue({} as never);
+    open({ ...RESULTS, players: [], concepts: [], audience: { label: null, invited: 0, code: null, people: [] } });
+    const positions = within(await screen.findByRole('group', { name: 'Positions' }));
+    const safeties = await positions.findByRole('button', { name: /Safeties/ });
+    expect(safeties).toHaveAttribute('aria-pressed', 'true');
+    expect(safeties.textContent).toMatch(/FS, S · 2\s*suggested/);
+    expect(positions.getByRole('button', { name: /Corners/ })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Send rep' }));
+    await waitFor(() => expect(codesApi.activateQuiz).toHaveBeenCalledWith(5, [], 'PRACTICE'));
+    expect(rosterApi.addRosterMembers).toHaveBeenCalledWith(5, [21, 22]);
+  });
+
+  it('a rep sent to one position family says them by name', async () => {
+    open({ ...RESULTS, audience: { label: null, invited: 11, code: 'KKFFQY', people: [], positions: ['FS', 'S'] } });
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    expect(card.getByText(/safeties missed/)).toBeInTheDocument();
   });
 
   it('a rep not yet sent offers the groups and sends it, always for immediate feedback', async () => {

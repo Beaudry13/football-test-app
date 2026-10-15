@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getRepsSummary, type RepSummary } from '../../api/reps';
 import nb from '../../styles/notebook.module.css';
+import { pluralFor } from './audiences';
 import styles from './RepsHomeCard.module.css';
 
 /**
@@ -79,7 +80,11 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
           <span className={styles.nextLead}>Next up</span>
           <span className={styles.nextProblem}>
             <strong className={styles.problemName}>{fresh.open_problem.name}</strong> {fresh.open_problem.missed} of{' '}
-            {fresh.open_problem.responded} {fresh.audience_label ? fresh.audience_label.toLowerCase() : 'players'} missed
+            {fresh.open_problem.responded}{' '}
+            {fresh.audience_label
+              ? fresh.audience_label.toLowerCase()
+              : (pluralFor(fresh.audience_positions ?? []) ?? 'players')}{' '}
+            missed
           </span>
           <span className={styles.nextActions}>
             <Link to={`/reps/${fresh.id}?teach=${fresh.open_problem.concept_id ?? 'general'}`} className={nb.btnPrimary}>
@@ -112,7 +117,9 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
       ) : (
         <ul className={styles.list}>
           {reps.map((rep) => {
-            const who = rep.audience_label ? rep.audience_label.toLowerCase() : 'players';
+            const who = rep.audience_label
+              ? rep.audience_label.toLowerCase()
+              : (pluralFor(rep.audience_positions ?? []) ?? 'players');
             return (
               <li key={rep.id}>
                 <Link to={`/reps/${rep.id}`} className={rep.worst ? `${styles.row} ${styles.hurting}` : styles.row}>

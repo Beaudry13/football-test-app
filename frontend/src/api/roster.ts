@@ -5,6 +5,11 @@ export function getRoster(quizId: number): Promise<Roster> {
   return api.get<Roster>(`/quizzes/${quizId}/roster`);
 }
 
+/** Put roster Players straight onto a quiz's own roster (idempotent). */
+export function addRosterMembers(quizId: number, playerIds: number[]): Promise<Roster> {
+  return api.post<Roster>(`/quizzes/${quizId}/roster/members`, { player_ids: playerIds });
+}
+
 export function setRoster(quizId: number, players: string[]): Promise<Roster> {
   return api.put<Roster>(`/quizzes/${quizId}/roster`, { players });
 }

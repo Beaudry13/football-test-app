@@ -269,6 +269,7 @@ def reps_summary():
                 "invited": results["audience"]["invited"],
                 "live": results["audience"]["code"] is not None,
                 "audience_label": results["audience"]["label"],
+                "audience_positions": results["audience"]["positions"],
                 "is_retest": results["retest_of"] is not None,
                 "worst": (
                     {

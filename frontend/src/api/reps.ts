@@ -91,7 +91,9 @@ export interface RepResults {
     invited: number;
     /** The live code, when players can still open it. */
     code: string | null;
-    people: { player_id: number | null; name: string | null }[];
+    people: { player_id: number | null; name: string | null; position?: string | null }[];
+    /** The positions it went to, as the roster has them. */
+    positions?: string[];
   };
   /** DID IT STICK? Present on a Rep built by Retest: the Rep it re-asked and,
    *  per concept, how many missed it there. */
@@ -120,6 +122,7 @@ export interface RepSummary {
   invited: number;
   live: boolean;
   audience_label: string | null;
+  audience_positions?: string[];
   is_retest: boolean;
   worst: { name: string; concept_id: number | null; missed: number; responded: number; most_common_wrong: string | null } | null;
   /** The worst problem nobody has retested yet (originals only) - what Next up offers. */
