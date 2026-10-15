@@ -12,6 +12,8 @@ the two things a Rep adds live here:
                                        as a new REP (existing content -> Rep)
   GET  /api/quizzes/reps-summary       the latest Reps, each with its worst
                                        football problem - what Home shows
+  POST /api/quizzes/<rep>/add-decisions  questions from a quiz added to a Rep
+                                       that already exists
 
 RETEST REUSES THE QUIZ RETEST'S PARTS, not its rules. The copy (every field a
 decision carries, its picture included) and the targeted roster are the very
@@ -19,6 +21,8 @@ helpers the quiz retest uses; only "who missed it" differs, because a Rep's
 answers are practice-delivered first tries (services/rep_results), which the
 graded retest rightly never reads.
 """
+
+import re
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
@@ -204,6 +208,8 @@ def make_rep(quiz_id: int):
     copied_keys: list[str] = []
     try:
         _copy_questions_into(original, rep, storage, copied_keys, only_question_ids=chosen)
+        db.session.flush()
+        _roles_from_words(rep.questions)
         db.session.commit()
     except StorageError as exc:
         db.session.rollback()
@@ -360,3 +366,89 @@ def rep_progress():
     # Releases the row lock enforcement may have taken; nothing was written.
     db.session.commit()
     return jsonify(body)
+
+
+#: "You're the boundary safety. Draw your fit." -> "boundary safety"
+_ROLE_IN_WORDS = re.compile(r"^\s*you(?:'|\u2019)re the ([^.?!]{1,60})[.?!]", re.IGNORECASE)
+
+
+def _roles_from_words(questions) -> None:
+    """A question that already says who the player is ("You're the Mike. ...")
+    becomes a decision that knows it - no retyping the role."""
+    for q in questions:
+        if q.subject_role:
+            continue
+        match = _ROLE_IN_WORDS.match(q.question_text or "")
+        if match:
+            role = match.group(1).strip()
+            q.subject_role = role[:1].upper() + role[1:]
+
+
+class AddDecisionsSchema(Schema):
+    from_quiz_id = fields.Int(required=True)
+    question_ids = fields.List(fields.Int(), required=True, validate=validate.Length(min=1))
+
+
+@reps_bp.post("/<int:rep_id>/add-decisions")
+@jwt_required()
+def add_decisions(rep_id: int):
+    """Questions from a quiz, added to a Rep that already exists - after its
+    own decisions, with their pictures, concepts and reasons. Only questions a
+    Rep can judge on the spot; the quiz is untouched."""
+    from app.utils.auth import get_editable_quiz
+
+    rep = get_editable_quiz(rep_id)
+    if rep.kind != REP_KIND:
+        raise ApiError("That is not a Rep", status_code=422, reason="not_a_rep")
+    data = load_json_body(AddDecisionsSchema())
+    source = get_visible_quiz(data["from_quiz_id"])
+    tappable = {
+        q.id
+        for q in source.questions
+        if q.question_type in _TAP_TYPES and not q.allows_multiple_answers and not q.is_retired
+    }
+    chosen = set(data["question_ids"])
+    if chosen - tappable:
+        raise ApiError(
+            "A Rep can only hold tap-an-answer questions (multiple choice or true/false)",
+            status_code=422,
+            reason="question_not_tappable",
+        )
+
+    before = {q.id for q in rep.questions}
+    start = max((q.position for q in rep.questions), default=-1) + 1
+    storage = get_file_storage()
+    copied_keys: list[str] = []
+    try:
+        _copy_questions_into(source, rep, storage, copied_keys, only_question_ids=chosen)
+        db.session.flush()
+        db.session.refresh(rep)
+        added = sorted((q for q in rep.questions if q.id not in before), key=lambda q: (q.position, q.id))
+        for offset, q in enumerate(added):
+            q.position = start + offset
+        _roles_from_words(added)
+        db.session.commit()
+    except StorageError as exc:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise ApiError(
+            "Could not copy the pictures, so nothing was added. Please try again.",
+            status_code=502,
+            reason="image_copy_failed",
+        ) from exc
+    except Exception:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise
+
+    body = rep.to_dict()
+    body["added"] = len(added)
+    return jsonify(body), 201

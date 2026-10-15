@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Quiz } from '../../api/types';
@@ -11,8 +11,9 @@ vi.mock('../../api/questions', () => ({
   retireQuestion: vi.fn().mockResolvedValue({}),
   restoreQuestion: vi.fn().mockResolvedValue({}),
 }));
-vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn() }));
+vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn(), addDecisions: vi.fn() }));
 import * as repsApi from '../../api/reps';
+import * as quizzesApi from '../../api/quizzes';
 import * as authModule from '../../auth/AuthContext';
 import { QuestionsTab } from './QuestionsTab';
 
@@ -74,6 +75,30 @@ describe('Make a rep, in the quiz editor', () => {
   it('is offered to every coach, Motion Lab or not', () => {
     open(false);
     expect(screen.getByRole('button', { name: 'Make a rep' })).toBeInTheDocument();
+  });
+
+  it('one question becomes a new rep from its own menu', async () => {
+    open(false);
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Make a rep from this' }));
+    expect(await screen.findByText('the rep')).toBeInTheDocument();
+    expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(500, [1]);
+  });
+
+  it('one question goes into a rep that already exists', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([
+      { id: 9, title: 'Trips Jet - Boundary safety', kind: 'REP', question_count: 2, updated_at: '2026-10-15' },
+      { id: 3, title: 'Another quiz', kind: 'QUIZ', question_count: 4, updated_at: '2026-10-14' },
+    ] as never);
+    vi.mocked(repsApi.addDecisions).mockResolvedValue({ id: 9, added: 1 } as never);
+    open(false);
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to a rep…' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Add to a rep' }));
+    expect(dialog.queryByRole('button', { name: /Another quiz/ })).toBeNull();
+    fireEvent.click(await dialog.findByRole('button', { name: /Trips Jet - Boundary safety/ }));
+    expect(await screen.findByText('the rep')).toBeInTheDocument();
+    expect(repsApi.addDecisions).toHaveBeenCalledWith(9, 500, [1]);
   });
 
   it('is not offered on something that is already a Rep', () => {

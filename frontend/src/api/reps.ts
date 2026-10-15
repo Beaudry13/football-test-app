@@ -169,6 +169,14 @@ export function makeRepFromQuiz(quizId: number, questionIds?: number[]): Promise
   return api.post<RepFromQuiz>(`/quizzes/${quizId}/make-rep`, questionIds ? { question_ids: questionIds } : {});
 }
 
+/** Questions from a quiz, added to a Rep that already exists (after its own decisions). */
+export function addDecisions(repId: number, fromQuizId: number, questionIds: number[]): Promise<Quiz & { added: number }> {
+  return api.post<Quiz & { added: number }>(`/quizzes/${repId}/add-decisions`, {
+    from_quiz_id: fromQuizId,
+    question_ids: questionIds,
+  });
+}
+
 /** A new Rep: this concept's decisions, for exactly the players who missed it. Built, not sent. */
 export function createRepRetest(quizId: number, conceptId: number | null): Promise<RepRetest> {
   return api.post<RepRetest>(`/quizzes/${quizId}/rep-retest`, { concept_id: conceptId });

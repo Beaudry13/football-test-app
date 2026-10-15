@@ -487,6 +487,58 @@ class TestHomeSummary:
         assert [(e["quiz_id"], e["quiz_kind"]) for e in live] == [(rep["id"], "REP")]
 
 
+class TestFromQuestions:
+    def test_a_question_that_says_who_he_is_makes_a_decision_that_knows_it(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "Week 3 install"}, headers=coach_headers).get_json()
+        said = _decision(client, coach_headers, quiz["id"], "You\u2019re the boundary safety. #3 motions across - your check?", ["Rotate down", "Stay"])
+        _decision(client, coach_headers, quiz["id"], "Identify the coverage.", ["Cover 3", "Cover 2"])
+        rep = client.post(
+            f"/api/quizzes/{quiz['id']}/make-rep", json={"question_ids": [said["id"]]}, headers=coach_headers
+        ).get_json()
+        full = client.get(f"/api/quizzes/{rep['id']}", headers=coach_headers).get_json()
+        assert [q["subject_role"] for q in full["questions"]] == ["Boundary safety"]
+
+    def test_adds_a_quiz_question_to_an_existing_rep_after_its_own_decisions(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        _decision(client, coach_headers, rep["id"], "Your check?", ["Rotate down", "Stay"], role="Boundary safety")
+        quiz = client.post("/api/quizzes", json={"title": "Week 3 install"}, headers=coach_headers).get_json()
+        cover = _decision(client, coach_headers, quiz["id"], "You're the Mike. Identify the coverage.", ["Cover 3", "Cover 2"])
+        written = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={"question_text": "Describe it.", "question_type": "written", "options": []},
+            headers=coach_headers,
+        ).get_json()
+
+        refused = client.post(
+            f"/api/quizzes/{rep['id']}/add-decisions",
+            json={"from_quiz_id": quiz["id"], "question_ids": [written["id"]]},
+            headers=coach_headers,
+        )
+        assert refused.status_code == 422
+
+        added = client.post(
+            f"/api/quizzes/{rep['id']}/add-decisions",
+            json={"from_quiz_id": quiz["id"], "question_ids": [cover["id"]]},
+            headers=coach_headers,
+        )
+        assert added.status_code == 201, added.get_json()
+        assert added.get_json()["added"] == 1
+        full = client.get(f"/api/quizzes/{rep['id']}", headers=coach_headers).get_json()
+        assert [q["question_text"] for q in full["questions"]] == ["Your check?", "You're the Mike. Identify the coverage."]
+        assert [q["subject_role"] for q in full["questions"]] == ["Boundary safety", "Mike"]
+        assert client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["question_count"] == 2
+
+    def test_only_into_a_rep(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "A"}, headers=coach_headers).get_json()
+        other = client.post("/api/quizzes", json={"title": "B"}, headers=coach_headers).get_json()
+        q = _decision(client, coach_headers, other["id"], "Q?", ["A", "B"])
+        response = client.post(
+            f"/api/quizzes/{quiz['id']}/add-decisions", json={"from_quiz_id": other["id"], "question_ids": [q["id"]]},
+            headers=coach_headers,
+        )
+        assert response.status_code == 422
+
+
 class TestPlayerProgress:
     def _progress(self, client, code, name, pid):
         return client.post(

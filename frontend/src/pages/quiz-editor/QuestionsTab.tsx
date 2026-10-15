@@ -31,7 +31,8 @@ import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
-import { makeRepFromQuiz } from '../../api/reps';
+import { addDecisions, makeRepFromQuiz } from '../../api/reps';
+import { listQuizzes } from '../../api/quizzes';
 
 /* Motion Lab's code (its engine and the play picture) loads only when a coach
    opens the picker - the quiz editor does not carry it otherwise. */
@@ -130,6 +131,42 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
   const motionLab = useMayUseMotionLab();
   const [pickingPlay, setPickingPlay] = useState(false);
   const [makingRep, setMakingRep] = useState(false);
+  /* ONE QUESTION -> A REP: the question being added to an existing Rep, and
+     the Reps to choose from. */
+  const [addingToRep, setAddingToRep] = useState<Question | null>(null);
+  const [repChoices, setRepChoices] = useState<Quiz[] | null>(null);
+  /** A question a Rep can judge on the spot: one tap, one right answer. */
+  const repReady = (q: Question) =>
+    quiz.kind !== 'REP' &&
+    !q.is_retired &&
+    (q.question_type === 'true_false' || (q.question_type === 'multiple_choice' && !q.allows_multiple_answers));
+  async function questionToNewRep(q: Question) {
+    setError(null);
+    try {
+      const rep = await makeRepFromQuiz(quiz.id, [q.id]);
+      navigate(`/reps/${rep.id}`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  }
+  function openAddToRep(q: Question) {
+    setAddingToRep(q);
+    setRepChoices(null);
+    listQuizzes()
+      .then((list) => setRepChoices(list.filter((r) => r.kind === 'REP').sort((a, b) => b.updated_at.localeCompare(a.updated_at))))
+      .catch(() => setRepChoices([]));
+  }
+  async function addToRep(rep: Quiz) {
+    if (!addingToRep) return;
+    setError(null);
+    try {
+      await addDecisions(rep.id, quiz.id, [addingToRep.id]);
+      navigate(`/reps/${rep.id}`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setAddingToRep(null);
+    }
+  }
   /* The add form lives at the BOTTOM, because that is where a new question
      lands. The control at the top opens that same form and brings it into
      view, rather than opening a second form somewhere the question will not
@@ -488,6 +525,26 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         </div>
       )}
 
+      {addingToRep && (
+        <Modal onDismiss={() => setAddingToRep(null)} ariaLabel="Add to a rep" showCloseButton>
+          <div className={styles.repPick}>
+            <h2 className={styles.repPickTitle}>Add to a rep</h2>
+            <p className={styles.repPickQuestion}>{addingToRep.question_text}</p>
+            {repChoices === null && <p>Loading your reps…</p>}
+            {repChoices?.length === 0 && <p>No reps yet. Use &ldquo;Make a rep from this&rdquo; to start one.</p>}
+            <ul className={styles.repPickList}>
+              {(repChoices ?? []).map((rep) => (
+                <li key={rep.id}>
+                  <button type="button" className={nb.btnSecondary} onClick={() => void addToRep(rep)}>
+                    {rep.title} <span className={styles.repPickCount}>{rep.question_count}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Modal>
+      )}
+
       {pickingPlay && (
         <Modal onDismiss={() => setPickingPlay(false)} ariaLabel="Add a question from Motion Lab" showCloseButton>
           <Suspense fallback={<p>Loading…</p>}>
@@ -806,6 +863,11 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                         this question" - which changes scoring for players who
                         ALREADY answered - deliberately does not live here; it
                         is on Results, next to the players it affects. */}
+                    {/* QUIZ -> REP, one question at a time. */}
+                    {repReady(question) && (
+                      <MenuItem onSelect={() => void questionToNewRep(question)}>Make a rep from this</MenuItem>
+                    )}
+                    {repReady(question) && <MenuItem onSelect={() => openAddToRep(question)}>Add to a rep…</MenuItem>}
                     {question.is_retired ? (
                       <MenuItem onSelect={() => handleRestore(question.id)}>
                         Start sending it again
