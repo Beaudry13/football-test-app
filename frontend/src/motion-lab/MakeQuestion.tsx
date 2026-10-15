@@ -4,9 +4,9 @@ import { getErrorMessage } from '../api/client'
 import { createQuestion } from '../api/questions'
 import { createQuiz, listQuizzes } from '../api/quizzes'
 import type { Quiz } from '../api/types'
-import { ballTargetOf } from './engine/ball'
 import type { Play } from './engine/play'
-import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
+import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
+import { ballChoices, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
 
 /**
  * MOTION LAB -> QUIZ: turn the play on the field into a quiz question.
@@ -21,30 +21,11 @@ import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
  * play) and opens in the quiz editor, where everything about it can be changed.
  */
 
-type Kind = 'draw' | 'ball'
-
-/** The quarterback and the line: never the answer to "who gets the ball". */
-const NOT_A_TARGET = new Set(['QB', 'C', 'LT', 'LG', 'RG', 'RT', 'OL', 'G', 'T'])
-
-/** The choices for "Who gets the ball?": offensive men who could, by label, once each. */
-function ballChoices(play: Play): { target: string; choices: string[] } | null {
-  const targetId = ballTargetOf(play.ball) ?? (play.ball?.kind === 'handoff' ? play.ball.carrierId : null)
-  const target = play.players.find((p) => p.id === targetId)
-  if (!target) return null
-  const labels: string[] = []
-  for (const p of play.players) {
-    if (p.side !== 'offense' || NOT_A_TARGET.has(p.label.toUpperCase()) || labels.includes(p.label)) continue
-    labels.push(p.label)
-  }
-  if (!labels.includes(target.label) || labels.length < 2) return null
-  return { target: target.label, choices: labels.slice(0, 6).includes(target.label) ? labels.slice(0, 6) : [...labels.slice(0, 5), target.label] }
-}
-
 export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => void }) {
   const navigate = useNavigate()
   const ball = useMemo(() => ballChoices(play), [play])
   const [kind, setKind] = useState<Kind>('draw')
-  const [text, setText] = useState('Draw your assignment on this play.')
+  const [text, setText] = useState(QUESTION_TEXT.draw)
   const [routes, setRoutes] = useState(false)
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null)
   const [quizId, setQuizId] = useState<number | 'new'>('new')
@@ -68,25 +49,18 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
 
   const choose = (next: Kind) => {
     setKind(next)
-    setText(next === 'draw' ? 'Draw your assignment on this play.' : 'Who gets the ball on this play?')
+    setText(QUESTION_TEXT[next])
     // To answer "who gets it" a player reads the concept, so the routes show.
-    setRoutes(next === 'ball')
+    setRoutes(SHOWS_ROUTES[next])
   }
 
   const create = async () => {
     setBusy(true)
     setError(null)
     try {
-      const blob = await playImage(play, { routes })
-      const image = new File([blob], `${play.name.replace(/[^\w-]+/g, '-').slice(0, 40) || 'play'}.png`, { type: 'image/png' })
+      const image = await playImageFile(play, routes)
       const target = quizId === 'new' ? (await createQuiz({ title: play.name })).id : quizId
-      await createQuestion(
-        target,
-        kind === 'ball' && ball
-          ? { question_text: text.trim(), question_type: 'multiple_choice', options: ball.choices.map((c) => ({ option_text: c, is_correct_answer: c === ball.target })) }
-          : { question_text: text.trim(), question_type: 'draw_response', options: [] },
-        image,
-      )
+      await createQuestion(target, playQuestionInput(play, kind, text), image)
       navigate(`/quizzes/${target}`)
     } catch (err) {
       setError(getErrorMessage(err))

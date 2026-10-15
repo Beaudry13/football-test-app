@@ -1,0 +1,97 @@
+/* QUIZ -> MOTION LAB: the play picker, in the quiz editor's own look. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, 100%);
+  max-height: 70vh;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger, #b42318);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+}
+
+.thumb {
+  flex: none;
+  width: 172px;
+  height: 90px;
+  border-radius: 6px;
+  background: #2e6b3c;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.action,
+.cancel {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--color-surface, #fff);
+  color: inherit;
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
+  border-color: var(--color-accent, #c9a227);
+}
+
+.action:disabled,
+.cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.foot {
+  display: flex;
+  justify-content: flex-end;
+}
