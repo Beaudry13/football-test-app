@@ -44,6 +44,22 @@
   color: #d9a441;
   font-weight: 700;
 }
+.action button {
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #d9a441;
+  color: #111;
+  cursor: pointer;
+}
+.action button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .close {
   font: inherit;
   font-size: 26px;

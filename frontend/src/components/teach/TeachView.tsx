@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
@@ -34,11 +34,14 @@ export function TeachView({
   slides,
   start = 0,
   onClose,
+  action,
 }: {
   title: string;
   slides: TeachSlide[];
   start?: number;
   onClose: () => void;
+  /** The next step, right where the teaching happens (e.g. "Retest the 4 who missed"). */
+  action?: ReactNode;
 }) {
   const [at, setAt] = useState(Math.min(Math.max(0, start), Math.max(0, slides.length - 1)));
   // The play link only for coaches who can open Motion Lab.
@@ -68,6 +71,7 @@ export function TeachView({
             Open the play in Motion Lab
           </Link>
         )}
+        {action && <span className={styles.action}>{action}</span>}
         <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
           ×
         </button>
