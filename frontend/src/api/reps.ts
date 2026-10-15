@@ -45,6 +45,8 @@ export interface RepDecision {
   motion_play_id: number | null;
   answer_explanation: string | null;
   image: QuestionImage | null;
+  /** The pre-snap moment (motion-lab/presnap.ts), when the decision has motion. */
+  presnap?: Record<string, unknown> | null;
   is_retired: boolean;
   correct_text: string[];
   responded: number;

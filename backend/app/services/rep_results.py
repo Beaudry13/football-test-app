@@ -262,6 +262,8 @@ def _first_try_results(quiz) -> dict:
                 "motion_play_id": question.motion_play_id,
                 "answer_explanation": question.answer_explanation,
                 "image": question.image.to_dict() if question.image else None,
+                # The pre-snap moment, so Teach can run the motion for the room.
+                "presnap": question.presnap,
                 "is_retired": question.is_retired,
                 "correct_text": [o.option_text for o in question.options if o.is_correct_answer],
                 "responded": len(verdicts),

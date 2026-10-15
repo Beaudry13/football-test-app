@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { updateQuestion } from '../../api/questions';
@@ -11,9 +11,13 @@ import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
+import type { PresnapClip } from '../../motion-lab/presnap';
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
+
+/* Teach runs the motion for the room when a decision has some. */
+const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
 
 /** Which problems this coach has opened Teach on, per Rep - so Retest becomes the next step. */
 const TAUGHT_KEY = 'peira.repTaught.v1';
@@ -448,6 +452,12 @@ function Teach({
       why: d.answer_explanation,
       wrong: wrong ? { text: wrong.text, count: wrong.count } : null,
       motionPlayId: d.motion_play_id ?? problem.motion_play_id,
+      // The play moving to the snap, exactly as the players saw it.
+      picture: d.presnap ? (
+        <Suspense fallback={null}>
+          <PresnapPicture clip={d.presnap as unknown as PresnapClip} />
+        </Suspense>
+      ) : undefined,
     };
   });
   return (
