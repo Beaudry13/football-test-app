@@ -142,7 +142,7 @@ function App() {
               {/* MOTION LAB LIBRARY - the organization's plays and looks in
                   Motion Lab folders. Platform owner only during the P2 pilot. */}
               <Route element={<MotionLabGate />}>
-                <Route path="/motion-lab" element={<MotionLabLibraryRoute />} />
+                <Route path="/motion-lab/library" element={<MotionLabLibraryRoute />} />
                 <Route path="/motion-lab/folders/:folderId" element={<MotionLabLibraryRoute />} />
               </Route>
               <Route path="/documents" element={<DocumentsPage />} />
@@ -183,8 +183,11 @@ function App() {
                 NotebookLayout so the field keeps the screen. The Library is
                 inside NotebookLayout above. PLATFORM-OWNER ONLY during the P2
                 pilot: MotionLabGate sends anyone else to the dashboard, and the
-                Motion Lab API refuses them regardless. */}
+                Motion Lab API refuses them regardless.
+                /motion-lab itself opens straight onto the field: the coach's
+                unsaved scratch play (MotionLabEditorPage). */}
             <Route element={<MotionLabGate />}>
+              <Route path="/motion-lab" element={<MotionLabEditorRoute />} />
               <Route path="/motion-lab/plays/:playId" element={<MotionLabEditorRoute />} />
             </Route>
           </Route>

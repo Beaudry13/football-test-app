@@ -18,6 +18,7 @@ import { buildOrientation, orientationAt } from '../engine/orientation'
 import { applyEngagements, type Engagement } from '../engine/interactions'
 import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, SCHEMA_VERSION, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
 import type { PlayRepository } from '../storage/playRepository'
+import { SCRATCH_NAME } from './scratch'
 import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
 import { playerSummary } from './playerSummary'
@@ -279,17 +280,33 @@ const fmtWhen = (t: number) => {
  * the repository - the 400 ms quiet period, which only the editor knows about.
  * Without it the page's indicator said "Saved" for the whole of that window,
  * because the repository had not yet been told anything had changed.
+ *
+ * MOTION LAB OPENS ON THE FIELD (PEIRA). Three optional props let the page keep
+ * an unsaved scratch play out of storage:
+ *   `isUnsaved(id)`  the play is not saved yet: the top bar says so and offers
+ *                    "Save play" (naming it first if it still has the scratch
+ *                    name); Duplicate and Delete are not offered for it.
+ *   `onSaveUnsaved`  called with that play, named, when the coach saves it.
+ *   `onNewPlay`      "New play" (top bar, play menu, a formation) asks the page
+ *                    for a new play instead of writing one to storage itself.
+ * Without them the editor behaves exactly as before.
  */
 export function MotionLabEditor({
   repository,
   exit,
   saveStatus,
   notice,
+  isUnsaved,
+  onSaveUnsaved,
+  onNewPlay,
 }: {
   repository: PlayRepository
   exit?: ReactNode
   saveStatus?: ReactNode | ((editor: { editPending: boolean }) => ReactNode)
   notice?: ReactNode
+  isUnsaved?: (playId: string) => boolean
+  onSaveUnsaved?: (play: Play) => void
+  onNewPlay?: (fromPlayers: Player[], name?: string) => void
 }) {
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
@@ -356,7 +373,8 @@ export function MotionLabEditor({
   const phaseRef = useRef<Phase>('route')
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look'>(null)
+  /** 'save': naming an unsaved play before it is saved. */
+  const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look' | 'save'>(null)
   const [showLabels, setShowLabels] = useState(true)
 
   // ---- playback / views ------------------------------------------------
@@ -614,6 +632,13 @@ export function MotionLabEditor({
   const createPlay = (fromPlayers: Player[], name = 'Untitled Play') => {
     // A new play keeps the current look (alignment, no assignments) - a
     // coach rarely wants 22 men back at the default.
+    if (onNewPlay) {
+      // PEIRA: the page starts it (unsaved until the coach saves it).
+      flushSave()
+      setMenuOpen(null)
+      onNewPlay(fromPlayers.map((p) => ({ ...p, path: [] })), name === 'Untitled Play' ? undefined : name)
+      return
+    }
     const p = newPlay(name, fromPlayers)
     repository.savePlay(p)
     setPlays(repository.listPlays())
@@ -626,6 +651,26 @@ export function MotionLabEditor({
     setPlays(repository.listPlays())
     switchTo(p)
     setRenaming('play')
+  }
+  /** The play on screen is not saved yet (PEIRA's scratch play). */
+  const unsaved = !!isUnsaved?.(playId)
+  /** Save the unsaved play under `name` - it carries on, now saved. */
+  const commitSave = (name: string) => {
+    setRenaming(null)
+    if (!name.trim() || !onSaveUnsaved) return
+    const play = { ...latestRef.current(), name: name.trim() }
+    dirtyRef.current = false
+    setSaving(false)
+    // Naming it here is part of saving it, not another edit to save.
+    if (play.name !== playName) skipSaveRef.current = true
+    setPlayName(play.name)
+    onSaveUnsaved(play)
+    showToast(`Saved "${play.name}".`)
+  }
+  const startSave = () => {
+    setMenuOpen(null)
+    if (playName === SCRATCH_NAME || !playName.trim()) setRenaming('save')
+    else commitSave(playName)
   }
   const deletePlay = () => {
     if (!window.confirm(`Delete "${playName}"? This cannot be undone.`)) return
@@ -2341,6 +2386,12 @@ export function MotionLabEditor({
             on "← Library" in a meeting would drop the coach out of teaching
             and into the Library. It comes back the moment he exits. */}
         {!present && exit}
+        {/* PEIRA: starting a play is one obvious click, not a menu. */}
+        {!present && onNewPlay && (
+          <button className="new-play-btn" onClick={() => createPlay(players)} title="Start a new play from this formation">
+            + New play
+          </button>
+        )}
         <div className="brand">
           Peira <span>Motion Lab</span>
         </div>
@@ -2352,6 +2403,8 @@ export function MotionLabEditor({
             <span className="play-name present-name" title={playName}>{playName}</span>
           ) : renaming === 'play' ? (
             <InlineName value={playName} onCommit={(v) => { setPlayName(v); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Play name" />
+          ) : renaming === 'save' ? (
+            <InlineName value="" onCommit={commitSave} onCancel={() => setRenaming(null)} placeholder="Name this play, then Enter" />
           ) : (
             <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} aria-expanded={menuOpen === 'play'} title={present ? playName : 'Play: rename, open, duplicate, delete'}>
               <span className="play-name">{playName}</span>
@@ -2362,24 +2415,33 @@ export function MotionLabEditor({
             <div className="popover play-pop">
               <button onClick={() => { setMenuOpen(null); setRenaming('play') }}>Rename…</button>
               <button onClick={() => createPlay(players)}>New play (this formation)</button>
-              <button onClick={duplicatePlay}>Duplicate</button>
+              {unsaved ? <button onClick={startSave}>Save play</button> : <button onClick={duplicatePlay}>Duplicate</button>}
               {/* SPEC §13: it used to sit in the strip, permanently, for
                   something a coach does once in a while and never by accident. */}
               <button disabled={!hasPaths} onClick={() => { setMenuOpen(null); clearAllPaths() }}>Clear all assignments</button>
-              <button className="pop-clear" onClick={deletePlay}>Delete play</button>
+              {!unsaved && <button className="pop-clear" onClick={deletePlay}>Delete play</button>}
               <div className="pop-title">Open</div>
               <div className="play-list">
                 {plays.map((p) => (
                   <button key={p.id} className={`play-row${p.id === playId ? ' active' : ''}`} onClick={() => { if (p.id !== playId) switchTo(p); setMenuOpen(null) }}>
                     <span className="play-row-name">{p.name}</span>
-                    <span className="play-row-when">{fmtWhen(p.updatedAt)}</span>
+                    <span className="play-row-when">{isUnsaved?.(p.id) ? 'not saved' : fmtWhen(p.updatedAt)}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
         </div>
-        {!present &&
+        {/* An unsaved play says so and offers to save it, where "Saved" would be. */}
+        {!present && unsaved && renaming !== 'save' && (
+          <>
+            <span className="saved unsaved" title="This play is only on this device until you save it">Not saved</span>
+            <button className="gold-line save-play-btn" onClick={startSave} title="Save this play to your Motion Lab">
+              Save play
+            </button>
+          </>
+        )}
+        {!present && !unsaved &&
           (typeof saveStatus === 'function' ? saveStatus({ editPending: saving }) : saveStatus ?? (
             // Saving outranks a past failure: the next edit IS the retry
             // (SPEC §3.3), so while it is pending the honest word is

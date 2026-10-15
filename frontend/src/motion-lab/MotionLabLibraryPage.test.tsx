@@ -20,8 +20,9 @@ vi.mock('../api/motionLab', () => ({
 vi.mock('../api/folders', () => ({ renameFolder: vi.fn(), deleteFolder: vi.fn() }))
 import * as motionApi from '../api/motionLab'
 import * as foldersApi from '../api/folders'
+import * as authModule from '../auth/AuthContext'
 import { MotionLabLibraryPage } from './MotionLabLibraryPage'
-import { SCHEMA_VERSION } from './engine/play'
+import { newPlay } from './engine/play'
 
 /**
  * The Motion Lab Library: the organization's plays filed in nested Motion Lab
@@ -67,8 +68,11 @@ const PLAYS = [play(10, 'Inside Zone'), play(11, 'Cover 3 vs Mesh', 3), play(12,
 const LOOKS = [look(20, 'Trips Rt')]
 
 let lastPath = ''
+let lastState: unknown = null
 function PathProbe() {
-  lastPath = useLocation().pathname
+  const location = useLocation()
+  lastPath = location.pathname
+  lastState = location.state
   return null
 }
 
@@ -77,8 +81,9 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <PathProbe />
       <Routes>
-        <Route path="/motion-lab" element={<MotionLabLibraryPage />} />
+        <Route path="/motion-lab/library" element={<MotionLabLibraryPage />} />
         <Route path="/motion-lab/folders/:folderId" element={<MotionLabLibraryPage />} />
+        <Route path="/motion-lab" element={<div>field</div>} />
         <Route path="/motion-lab/plays/:playId" element={<div>editor</div>} />
       </Routes>
     </MemoryRouter>,
@@ -90,12 +95,15 @@ beforeEach(() => {
   vi.mocked(motionApi.listMotionFolders).mockResolvedValue(FOLDERS)
   vi.mocked(motionApi.listMotionPlays).mockResolvedValue(PLAYS)
   vi.mocked(motionApi.listMotionLooks).mockResolvedValue(LOOKS)
+  vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, organization_id: 7 } } as never)
+  window.localStorage.clear()
   lastPath = ''
+  lastState = null
 })
 
 describe('Motion Lab Library', () => {
   it('shows the top level: root folders with play counts, unfiled plays, and looks', async () => {
-    renderAt('/motion-lab')
+    renderAt('/motion-lab/library')
     expect(await screen.findByRole('heading', { name: 'Motion Lab' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Defense\s*2/ })).toHaveAttribute('href', '/motion-lab/folders/1')
     expect(screen.getByRole('link', { name: /Offense\s*0/ })).toBeInTheDocument()
@@ -109,31 +117,43 @@ describe('Motion Lab Library', () => {
     renderAt('/motion-lab/folders/2')
     expect(await screen.findByRole('heading', { name: 'Coverages' })).toBeInTheDocument()
     const path = within(screen.getByRole('navigation', { name: 'Motion Lab folder path' }))
-    expect(path.getByRole('link', { name: 'Motion Lab' })).toHaveAttribute('href', '/motion-lab')
+    expect(path.getByRole('link', { name: 'Motion Lab' })).toHaveAttribute('href', '/motion-lab/library')
     expect(path.getByRole('link', { name: 'Defense' })).toHaveAttribute('href', '/motion-lab/folders/1')
     expect(screen.getByRole('link', { name: /Cover 3\s*1/ })).toHaveAttribute('href', '/motion-lab/folders/3')
     expect(within(screen.getByLabelText('Plays')).getByRole('link', { name: /Tampa 2/ })).toHaveAttribute('href', '/motion-lab/plays/12')
     expect(screen.queryByLabelText('Saved looks')).toBeNull()
   })
 
-  it('a new play is created on the server in this folder and opened', async () => {
-    vi.mocked(motionApi.createMotionPlay).mockResolvedValue(play(99, 'Untitled Play', 2))
+  it('New play opens the field, in this folder - nothing is created until the coach saves it', async () => {
     renderAt('/motion-lab/folders/2')
     await userEvent.click(await screen.findByRole('button', { name: /New play/ }))
-    await waitFor(() => expect(lastPath).toBe('/motion-lab/plays/99'))
-    const body = vi.mocked(motionApi.createMotionPlay).mock.calls[0][0]
-    expect(body).toMatchObject({ name: 'Untitled Play', schema_version: SCHEMA_VERSION, folder_id: 2 })
-    expect(body.document.players).toHaveLength(22)
+    await waitFor(() => expect(lastPath).toBe('/motion-lab'))
+    expect(lastState).toEqual({ fresh: true, folderId: 2 })
+    expect(motionApi.createMotionPlay).not.toHaveBeenCalled()
   })
 
-  it('a look starts a new play from its alignment', async () => {
-    vi.mocked(motionApi.createMotionPlay).mockResolvedValue(play(98, 'Trips Rt — new play'))
-    renderAt('/motion-lab')
+  it('a look opens the field with its alignment - nothing is created until the coach saves it', async () => {
+    renderAt('/motion-lab/library')
     await userEvent.click(within(await screen.findByLabelText('Saved looks')).getByRole('button', { name: 'New play from Trips Rt' }))
-    await waitFor(() => expect(lastPath).toBe('/motion-lab/plays/98'))
-    const body = vi.mocked(motionApi.createMotionPlay).mock.calls[0][0]
-    expect(body.name).toBe('Trips Rt — new play')
-    expect((body.document.players as { label: string }[]).map((p) => p.label)).toEqual(['QB'])
+    await waitFor(() => expect(lastPath).toBe('/motion-lab'))
+    const state = lastState as { fresh: boolean; folderId: number | null; name: string; players: { label: string }[] }
+    expect(state).toMatchObject({ fresh: true, folderId: null, name: 'Trips Rt — new play' })
+    expect(state.players.map((p) => p.label)).toEqual(['QB'])
+    expect(motionApi.createMotionPlay).not.toHaveBeenCalled()
+  })
+
+  it('offers to continue the unsaved play on this device, once it has work in it', async () => {
+    const key = 'peira.motionlab.draft.v1:7:1:scratch'
+    window.localStorage.setItem(key, JSON.stringify({ play: { ...newPlay('Jet sweep idea'), id: 'scratch_1' }, touched: false }))
+    renderAt('/motion-lab/library')
+    await screen.findByRole('heading', { name: 'Motion Lab' })
+    expect(screen.queryByLabelText('Unsaved play')).toBeNull()
+    window.localStorage.setItem(key, JSON.stringify({ play: { ...newPlay('Jet sweep idea'), id: 'scratch_1' }, touched: true }))
+    renderAt('/motion-lab/library')
+    const row = within(await screen.findByLabelText('Unsaved play'))
+    expect(row.getByText('Jet sweep idea')).toBeInTheDocument()
+    await userEvent.click(row.getByRole('button', { name: 'Continue' }))
+    expect(lastPath).toBe('/motion-lab')
   })
 
   it('creates a subfolder inside the current folder', async () => {
@@ -150,7 +170,7 @@ describe('Motion Lab Library', () => {
     vi.mocked(motionApi.copyMotionPlay).mockResolvedValue(play(13, 'Inside Zone (copy)'))
     vi.mocked(motionApi.deleteMotionPlay).mockResolvedValue(undefined)
     vi.mocked(motionApi.listMotionFolders).mockResolvedValue([...FOLDERS].reverse())
-    renderAt('/motion-lab')
+    renderAt('/motion-lab/library')
 
     await user.click(await screen.findByRole('button', { name: 'Play options for Inside Zone' }))
     await user.click(screen.getByRole('menuitem', { name: 'Rename' }))
@@ -186,7 +206,7 @@ describe('Motion Lab Library', () => {
     const user = userEvent.setup()
     vi.mocked(foldersApi.renameFolder).mockResolvedValue(folder(4, 'Offense Library'))
     vi.mocked(foldersApi.deleteFolder).mockResolvedValue(undefined)
-    renderAt('/motion-lab')
+    renderAt('/motion-lab/library')
 
     await user.click(await screen.findByRole('button', { name: 'Folder options for Defense' }))
     expect(screen.getByRole('menuitem', { name: /empty its folders first/ })).toBeDisabled()
@@ -210,7 +230,7 @@ describe('Motion Lab Library', () => {
   it('deletes a look', async () => {
     const user = userEvent.setup()
     vi.mocked(motionApi.deleteMotionLook).mockResolvedValue(undefined)
-    renderAt('/motion-lab')
+    renderAt('/motion-lab/library')
     await user.click(await screen.findByRole('button', { name: 'Look options for Trips Rt' }))
     await user.click(screen.getByRole('menuitem', { name: 'Delete look' }))
     await acceptConfirm(user, 'Delete Look')
@@ -224,7 +244,7 @@ describe('Motion Lab Library', () => {
 
   it('does not claim the Library is empty when every play is filed in a folder', async () => {
     vi.mocked(motionApi.listMotionPlays).mockResolvedValue([play(11, 'Cover 3 vs Mesh', 3)])
-    renderAt('/motion-lab')
+    renderAt('/motion-lab/library')
     expect(await screen.findByRole('link', { name: /Defense\s*1/ })).toBeInTheDocument()
     expect(screen.queryByText('No plays yet. Start one with New play.')).toBeNull()
     expect(screen.queryByLabelText('Plays')).toBeNull()
@@ -234,7 +254,7 @@ describe('Motion Lab Library', () => {
     vi.mocked(motionApi.listMotionFolders).mockResolvedValue([])
     vi.mocked(motionApi.listMotionPlays).mockResolvedValue([])
     vi.mocked(motionApi.listMotionLooks).mockResolvedValue([])
-    renderAt('/motion-lab')
+    renderAt('/motion-lab/library')
     expect(await screen.findByText('No plays yet. Start one with New play.')).toBeInTheDocument()
   })
 })

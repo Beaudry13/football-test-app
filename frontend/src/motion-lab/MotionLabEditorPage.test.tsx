@@ -8,7 +8,7 @@ import { fakeMotionServer, settle } from './storage/testing/fakeMotionApi'
 import { board, dragPlayer, installPointerStubs, playerMarker } from './testing/pointerStubs'
 import { gapPlays } from './__characterization__/fixtures'
 import { U, Y_MAX } from './engine/field'
-import { SCHEMA_VERSION, type Play } from './engine/play'
+import { newPlay, SCHEMA_VERSION, type Play } from './engine/play'
 
 const server = vi.hoisted(() => ({ current: null as unknown as ReturnType<typeof import('./storage/testing/fakeMotionApi').fakeMotionServer> }))
 vi.mock('../api/motionLab', async (importOriginal) => {
@@ -52,14 +52,15 @@ function seedPlays() {
   return { a, b }
 }
 
-async function openEditor(id: number) {
+async function openAt(path: string) {
   vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: OWNER as never } as never)
   render(
-    <MemoryRouter initialEntries={[`/motion-lab/plays/${id}`]}>
+    <MemoryRouter initialEntries={[path]}>
       <PathProbe />
       <Routes>
         <Route path="/motion-lab/plays/:playId" element={<MotionLabEditorPage />} />
-        <Route path="/motion-lab" element={<div>library</div>} />
+        <Route path="/motion-lab" element={<MotionLabEditorPage />} />
+        <Route path="/motion-lab/library" element={<div>library</div>} />
         <Route path="/motion-lab/folders/:folderId" element={<div>library folder</div>} />
       </Routes>
     </MemoryRouter>,
@@ -67,6 +68,7 @@ async function openEditor(id: number) {
   await waitFor(() => expect(document.querySelector('.motion-lab-root svg.board')).not.toBeNull())
   await act(async () => settle())
 }
+const openEditor = (id: number) => openAt(`/motion-lab/plays/${id}`)
 
 const playName = () => document.querySelector('.motion-lab-root .play-name')!.textContent
 const statusText = () => screen.getByRole('status').textContent
@@ -144,9 +146,9 @@ describe('Motion Lab editor on the server', () => {
     await openEditor(100)
     await waitFor(() => expect(playName()).toBe(a.name))
     dragPlayer(a, 'O8', 0, 3)
-    fireEvent.click(screen.getByRole('button', { name: '← Library' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
     await act(async () => settle(10))
-    expect(lastPath).toBe('/motion-lab')
+    expect(lastPath).toBe('/motion-lab/library')
 
     // Another browser: no session, no drafts - only what the server holds.
     cleanup()
@@ -534,5 +536,133 @@ describe('the schema version on the server path (P3)', () => {
     expect(server.current.calls.filter((c) => c.kind === 'create')).toHaveLength(1) // the seed
     expect(bytes(100)).toBe(before)
     expect(server.current.plays.get(100)!.schema_version).toBe(1)
+  })
+})
+
+/**
+ * MOTION LAB OPENS ON THE FIELD. /motion-lab is the editor, on the coach's
+ * unsaved scratch play: nothing reaches the server until "Save play", the
+ * scratch play survives leaving, "+ New play" can be undone, and saved plays
+ * are untouched by any of it.
+ */
+describe('Motion Lab opens on the field', () => {
+  const DEFAULT = newPlay()
+  const creates = () => server.current.calls.filter((c) => c.kind === 'create')
+  const writes = () => server.current.calls.filter((c) => c.kind === 'create' || c.kind === 'save')
+  const markerAt = (id: string) => playerMarker(id).getAttribute('transform')
+  const at = (p: { x: number; y: number }, dy = 0) => `translate(${p.x * 20} ${(17 - (p.y + dy)) * 20})`
+  const o8 = DEFAULT.players.find((p) => p.id === 'O8')!
+  const quiet = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+      await settle(10)
+    })
+
+  it('opens straight onto the field, unsaved, and creates nothing', async () => {
+    await openAt('/motion-lab')
+    expect(playName()).toBe('New play')
+    expect(screen.getByText('Not saved')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ New play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument()
+    expect(lastPath).toBe('/motion-lab')
+    expect(writes()).toHaveLength(0)
+  })
+
+  it('keeps an edit on this device only, and shows it again after leaving', async () => {
+    await openAt('/motion-lab')
+    dragPlayer(DEFAULT, 'O8', 0, 3)
+    await quiet()
+    expect(writes()).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    await act(async () => settle(10))
+    expect(lastPath).toBe('/motion-lab/library')
+    // A fresh page in the same browser: the session is gone, the device kept it.
+    cleanup()
+    resetMotionLabSessions()
+    await openAt('/motion-lab')
+    expect(markerAt('O8')).toBe(at(o8, 3))
+    expect(writes()).toHaveLength(0)
+  })
+
+  it('Save play names it, creates it once, moves to it, and from then on it autosaves', async () => {
+    await openAt('/motion-lab')
+    dragPlayer(DEFAULT, 'O8', 0, 3)
+    await quiet()
+    fireEvent.click(screen.getByRole('button', { name: 'Save play' }))
+    const name = screen.getByPlaceholderText('Name this play, then Enter')
+    fireEvent.change(name, { target: { value: 'Jet Dig' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    await act(async () => settle(10))
+    expect(creates()).toHaveLength(1)
+    const body = creates()[0].body as { name: string; document: { players: { id: string; y: number }[] } }
+    expect(body.name).toBe('Jet Dig')
+    expect(body.document.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(o8.y + 3, 6)
+    await waitFor(() => expect(lastPath).toMatch(/^\/motion-lab\/plays\/\d+$/))
+    expect(playName()).toBe('Jet Dig')
+    expect(screen.queryByRole('button', { name: 'Save play' })).toBeNull()
+    dragPlayer({ ...DEFAULT, players: DEFAULT.players.map((p) => (p.id === 'O8' ? { ...p, y: p.y + 3 } : p)) }, 'O8', 0, 1)
+    await quiet()
+    expect(server.current.calls.filter((c) => c.kind === 'save')).toHaveLength(1)
+    expect(creates()).toHaveLength(1)
+    // Motion Lab now opens on a fresh field: the saved play is no longer the scratch.
+    cleanup()
+    resetMotionLabSessions()
+    await openAt('/motion-lab')
+    expect(playName()).toBe('New play')
+    expect(markerAt('O8')).toBe(at(o8))
+  })
+
+  it('+ New play starts a fresh field, and Undo brings back the work it replaced', async () => {
+    await openAt('/motion-lab')
+    dragPlayer(DEFAULT, 'O8', 0, 3)
+    await quiet()
+    fireEvent.click(screen.getByRole('button', { name: '+ New play' }))
+    await act(async () => settle(10))
+    expect(screen.getByText('New play started.')).toBeInTheDocument()
+    // A new play keeps the formation, not the assignments - O8 stays where he was moved.
+    expect(markerAt('O8')).toBe(at(o8, 3))
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    await act(async () => settle(10))
+    expect(markerAt('O8')).toBe(at(o8, 3))
+    expect(screen.queryByText('New play started.')).toBeNull()
+    expect(writes()).toHaveLength(0)
+  })
+
+  it('+ New play from a saved play leaves it saved and opens a fresh field', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+    const before = server.current.calls.length
+    fireEvent.click(screen.getByRole('button', { name: '+ New play' }))
+    await act(async () => settle(10))
+    expect(lastPath).toBe('/motion-lab')
+    expect(playName()).toBe('New play')
+    expect(screen.getByText('Not saved')).toBeInTheDocument()
+    // Nothing to undo: the field it replaced had no work in it.
+    expect(screen.queryByText('New play started.')).toBeNull()
+    expect(server.current.calls.slice(before).filter((c) => c.kind === 'create' || c.kind === 'save')).toHaveLength(0)
+  })
+
+  it('opening a saved play keeps the unsaved one, and it can be opened again', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openAt('/motion-lab')
+    dragPlayer(DEFAULT, 'O8', 0, 3)
+    await quiet()
+    fireEvent.click(document.querySelector('.motion-lab-root .play-btn')!)
+    fireEvent.click(within(document.querySelector('.play-list') as HTMLElement).getByText(a.name))
+    await act(async () => settle(10))
+    expect(lastPath).toBe('/motion-lab/plays/100')
+    expect(playName()).toBe(a.name)
+    fireEvent.click(document.querySelector('.motion-lab-root .play-btn')!)
+    const rows = within(document.querySelector('.play-list') as HTMLElement)
+    expect(rows.getByText('not saved')).toBeInTheDocument()
+    fireEvent.click(rows.getByText('New play'))
+    await act(async () => settle(10))
+    expect(lastPath).toBe('/motion-lab')
+    expect(markerAt('O8')).toBe(at(o8, 3))
+    expect(creates()).toHaveLength(2) // the seed only
   })
 })

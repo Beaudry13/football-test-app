@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
-import { createMotionLabSession, RETRY_DELAYS, toDocument, type MotionLabSession } from './apiPlayRepository'
+import { createMotionLabSession, peekScratch, RETRY_DELAYS, toDocument, type MotionLabSession } from './apiPlayRepository'
 import { fakeMotionServer, memoryDraftStore, settle } from './testing/fakeMotionApi'
 import { gapPlays } from '../__characterization__/fixtures'
 import { lookFromPlayers, newPlay, SCHEMA_VERSION, type Play } from '../engine/play'
@@ -400,5 +400,79 @@ describe('a save refused because a newer Motion Lab wrote the play (P3.1 / P3.4)
     session.repository.savePlay(renamed(play, 'Old tab edit, again'))
     await settle()
     expect(server.calls.filter((c) => c.kind === 'save')).toHaveLength(saves)
+  })
+})
+
+/**
+ * THE SCRATCH PLAY (Motion Lab opens on the field): one per coach, kept on this
+ * device, never sent until saveScratch - and then sent exactly once, as a new play.
+ */
+describe('the scratch play', () => {
+  const edited = (play: Play): Play => ({ ...play, players: play.players.map((p, i) => (i === 0 ? { ...p, y: p.y - 1 } : p)), updatedAt: play.updatedAt + 1 })
+
+  it('is never sent, however often it is saved, and says it is unsaved', async () => {
+    const session = start()
+    const { id, previous } = session.startScratch()
+    expect(previous).toBeNull()
+    const play = session.repository.listPlays().find((p) => p.id === id)!
+    expect(play.name).toBe('New play')
+    session.repository.savePlay(edited(play))
+    session.repository.savePlay(renamed(edited(play), 'Still scratch'))
+    await settle(10)
+    expect(server.calls).toHaveLength(0)
+    expect(session.stateOf(id).state).toBe('unsaved')
+    expect(session.isScratch(id)).toBe(true)
+    expect(session.scratchTouched()).toBe(true)
+    expect(session.pendingCount()).toBe(0)
+  })
+
+  it('survives a new page in the same browser, and the Library can see it once it has work in it', async () => {
+    const first = start()
+    const { id } = first.startScratch()
+    expect(peekScratch(SCOPE, drafts)).toBeNull()
+    first.repository.savePlay(renamed(edited(first.repository.listPlays().find((p) => p.id === id)!), 'Idea'))
+    const second = start()
+    expect(second.scratchId()).toBe(id)
+    expect(second.scratchTouched()).toBe(true)
+    expect(second.repository.listPlays().find((p) => p.id === id)!.name).toBe('Idea')
+    expect(peekScratch(SCOPE, drafts)).toMatchObject({ name: 'Idea' })
+    await settle(10)
+    expect(server.calls).toHaveLength(0)
+  })
+
+  it('a fresh one hands back the old one only when it had work in it', () => {
+    const session = start()
+    const first = session.startScratch()
+    expect(session.startScratch().previous).toBeNull()
+    const id = session.scratchId()!
+    expect(id).not.toBe(first.id)
+    session.repository.savePlay(edited(session.repository.listPlays().find((p) => p.id === id)!))
+    const replaced = session.startScratch()
+    expect(replaced.previous?.id).toBe(id)
+    expect(session.repository.listPlays().filter((p) => session.isScratch(p.id))).toHaveLength(1)
+    const back = session.restoreScratch(replaced.previous!)
+    expect(back).toBe(id)
+    expect(session.scratchId()).toBe(id)
+  })
+
+  it('saveScratch creates it once on the server, in its folder, and it autosaves like any play after', async () => {
+    const session = start()
+    const { id } = session.startScratch(undefined, undefined, 4)
+    const play = edited(session.repository.listPlays().find((p) => p.id === id)!)
+    session.saveScratch({ ...play, name: 'Jet Dig' })
+    expect(session.scratchId()).toBeNull()
+    expect(session.isScratch(id)).toBe(false)
+    await settle(10)
+    const creates = server.calls.filter((c) => c.kind === 'create')
+    expect(creates).toHaveLength(1)
+    expect(creates[0].body).toMatchObject({ name: 'Jet Dig', folder_id: 4, schema_version: SCHEMA_VERSION })
+    expect(session.serverIdOf(id)).not.toBeNull()
+    expect(session.stateOf(id).state).toBe('saved')
+    expect(draftKeys().filter((k) => k.endsWith(':scratch'))).toHaveLength(0)
+    session.repository.savePlay(renamed(play, 'Jet Dig 2'))
+    await settle(10)
+    expect(server.calls.filter((c) => c.kind === 'save')).toHaveLength(1)
+    // A new page: no scratch any more, and the saved play is an ordinary play.
+    expect(start().scratchId()).toBeNull()
   })
 })
