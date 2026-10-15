@@ -1,0 +1,236 @@
+/* SITUATIONAL REP, the player's screen: the situation is the interface.
+   Big picture, big role, big answers; nothing else competes. */
+.rep {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 32px;
+}
+
+.progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.dot {
+  width: 28px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--peira-border);
+}
+.dotNow {
+  background: var(--peira-accent-text);
+}
+.dotRight {
+  background: var(--peira-success);
+}
+.dotWrong {
+  background: var(--peira-danger);
+}
+.dotDone {
+  background: var(--peira-text-muted);
+}
+
+.role {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+}
+.roleLead {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--peira-text-muted);
+}
+.roleName {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--peira-accent-text);
+}
+
+.picture {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--peira-border);
+  background: #2e6b3c;
+}
+
+.prompt {
+  margin: 0;
+  font-size: 21px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: var(--peira-text);
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.choice {
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: left;
+  min-height: 56px;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 2px solid var(--peira-border);
+  background: var(--peira-surface);
+  color: var(--peira-text);
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms;
+}
+.choice:hover:not(:disabled) {
+  border-color: var(--peira-accent-text);
+}
+.choice:disabled {
+  cursor: default;
+}
+.choice:disabled:not(.chosen) {
+  opacity: 0.55;
+}
+.chosen {
+  border-color: var(--peira-accent-text);
+  background: var(--peira-surface-raised);
+}
+.right {
+  border-color: var(--peira-success);
+  background: var(--peira-success-bg);
+}
+.wrong {
+  border-color: var(--peira-danger);
+  background: var(--peira-danger-bg);
+}
+.static {
+  cursor: default;
+}
+
+.fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.after {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--peira-border);
+  background: var(--peira-surface);
+}
+.verdictRight {
+  border-color: var(--peira-success);
+}
+.verdictWrong {
+  border-color: var(--peira-danger);
+}
+.verdictWord {
+  font-size: 22px;
+  font-weight: 800;
+}
+.verdictRight .verdictWord {
+  color: var(--peira-success);
+}
+.verdictWrong .verdictWord {
+  color: var(--peira-danger);
+}
+.why {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--peira-text);
+}
+.whyLead {
+  font-weight: 700;
+  color: var(--peira-text-muted);
+}
+.next {
+  min-height: 52px;
+  font-size: 17px;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--peira-border);
+  background: var(--peira-surface);
+  text-align: center;
+}
+.summaryLead {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--peira-text-muted);
+}
+.score {
+  font-size: 44px;
+  font-weight: 800;
+  color: var(--peira-text);
+}
+.speed {
+  font-size: 15px;
+  color: var(--peira-text-muted);
+}
+.missedConcepts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.missedLead {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--peira-text-muted);
+}
+.conceptChip {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--peira-danger);
+  color: var(--peira-text);
+}
+.clean {
+  margin: 4px 0 0;
+  color: var(--peira-success);
+  font-weight: 700;
+}
+.summaryActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.summaryActions :global(.btn) {
+  min-height: 52px;
+  font-size: 17px;
+}
+
+.reviewHead {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-text-muted);
+  text-align: center;
+}

@@ -1,0 +1,28 @@
+.card {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  border-radius: 14px;
+  border: 2px solid var(--peira-accent-text);
+  background: var(--peira-surface);
+}
+.lead {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text);
+}
+.title {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--peira-text);
+}
+.meta {
+  font-size: 15px;
+  color: var(--peira-text-muted);
+}

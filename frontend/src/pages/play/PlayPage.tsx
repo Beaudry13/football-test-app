@@ -26,6 +26,8 @@ import {
 import { PracticeCompleteStep } from './PracticeCompleteStep';
 import type { PlayerAnswer } from './QuestionInput';
 import { QuizStep } from './QuizStep';
+import { RepIntro } from './RepIntro';
+import { RepRunner } from './RepRunner';
 import { SubmittedStep } from './SubmittedStep';
 import player from '../../styles/player.module.css';
 import styles from './PlayPage.module.css';
@@ -115,6 +117,28 @@ export function PlayPage() {
       })
       .catch(() => {
         // Tab title is a nice-to-have, not core flow - leave it generic.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlCode]);
+
+  /* A REP LINK GOES STRAIGHT TO THE ASSIGNMENT. A Situational Rep is "tap and
+     go": its link skips the code screen (the code is already in it) and lands
+     on the assigned rep with the names under it. A quiz link is unchanged - it
+     still stops on the code screen. A remembered player is handled below. */
+  useEffect(() => {
+    if (!urlCode || rememberedPlayer(urlCode)) return;
+    let cancelled = false;
+    validateCode(urlCode)
+      .then((joined) => {
+        if (cancelled || joined.quiz.kind !== 'REP') return;
+        setStep((current) =>
+          current.name === 'join' ? { name: 'name', code: urlCode, joined, remembered: null } : current,
+        );
+      })
+      .catch(() => {
+        // The code screen explains an expired or unknown code.
       });
     return () => {
       cancelled = true;
@@ -246,6 +270,22 @@ export function PlayPage() {
     }
   }
 
+  /** A Rep's "Run it again": a fresh practice attempt, as Try again starts one. */
+  async function handleRunRepAgain() {
+    if (step.name !== 'quiz') return;
+    try {
+      const outcome = await enterAsPlayer({
+        code: step.code,
+        accessCodeId: step.joined.access_code_id,
+        player: step.player,
+        continuing: true,
+      });
+      follow(step.code, step.joined, step.player, outcome, step.run + 1);
+    } catch {
+      setStep({ name: 'name', code: step.code, joined: step.joined, remembered: step.player });
+    }
+  }
+
   function handleAuthRequired(reason: string | undefined, answers: Record<number, PlayerAnswer>) {
     setStep((current) => {
       if (current.name !== 'quiz' || current.player.playerId === null) return current;
@@ -271,9 +311,11 @@ export function PlayPage() {
       </div>
       {step.name === 'loading' && <LoadingState label="Loading…" />}
       {step.name === 'join' && <JoinStep initialCode={urlCode ?? ''} onJoined={handleJoined} />}
+      {/* SITUATIONAL REP: the assignment first, big - then tap your name and go. */}
+      {step.name === 'name' && step.joined.quiz.kind === 'REP' && <RepIntro quiz={step.joined.quiz} />}
       {step.name === 'name' && (
         <NameStep
-          quizTitle={step.joined.quiz.title}
+          quizTitle={step.joined.quiz.kind === 'REP' ? 'Who are you?' : step.joined.quiz.title}
           rosterPlayers={step.joined.roster_players_v2}
           remembered={step.remembered}
           onForgetRemembered={() => {
@@ -311,7 +353,25 @@ export function PlayPage() {
           }}
         />
       )}
-      {step.name === 'quiz' && (
+      {step.name === 'quiz' && step.joined.quiz.kind === 'REP' && (
+        <RepRunner
+          key={`${step.run}:${step.attemptId}`}
+          quiz={step.joined.quiz}
+          deliveredQuestions={step.deliveredQuestions}
+          questionOrder={step.questionOrder}
+          accessCodeId={step.joined.access_code_id}
+          playerName={step.player.name}
+          playerId={step.player.playerId ?? undefined}
+          initialAnswers={step.initialAnswers}
+          initialFeedback={step.initialFeedback}
+          attemptToken={() =>
+            step.player.playerId === null ? null : readAttemptToken(step.code, step.player.playerId)
+          }
+          onAuthRequired={handleAuthRequired}
+          onRunAgain={() => void handleRunRepAgain()}
+        />
+      )}
+      {step.name === 'quiz' && step.joined.quiz.kind !== 'REP' && (
         <QuizStep
           key={`${step.run}:${step.attemptId}`}
           quiz={step.joined.quiz}

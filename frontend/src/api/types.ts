@@ -201,6 +201,8 @@ export interface RetestContext {
   stopped_in_parent: number;
 }
 
+export type QuizKind = 'QUIZ' | 'REP';
+
 export interface Quiz {
   id: number;
   retest_of?: RetestContext;
@@ -210,6 +212,9 @@ export interface Quiz {
   created_by_username: string | null;
   title: string;
   description: string | null;
+  /** QUIZ, or REP for a Situational Rep (one decision per screen, immediate
+   *  feedback). Absent from older payloads, which are all quizzes. */
+  kind?: QuizKind;
   one_question_at_a_time: boolean;
   require_all_answers: boolean;
   folder_id: number | null;
@@ -293,6 +298,10 @@ export interface Question {
   position: number;
   options: QuestionOption[];
   image: QuestionImage | null;
+  /** SITUATIONAL REP: who the player is in this decision ("Boundary safety"). */
+  subject_role?: string | null;
+  /** The Motion Lab play the decision was made from. Coach payload only. */
+  motion_play_id?: number | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {

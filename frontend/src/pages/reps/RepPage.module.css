@@ -1,0 +1,467 @@
+/* A SITUATIONAL REP for the coach: the football problem first, big. */
+.back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  color: var(--nb-text-muted);
+  text-decoration: none;
+  font-size: var(--peira-text-meta);
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-5);
+}
+.head h1 {
+  margin: 0;
+}
+.kicker {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text);
+}
+.meta {
+  color: var(--nb-text-muted);
+}
+
+.send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.sendLead {
+  font-weight: 700;
+}
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+.group {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.groupOn {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  font-weight: 700;
+}
+.groupCount {
+  color: var(--nb-text-muted);
+  font-weight: 400;
+}
+.hint {
+  color: var(--nb-text-muted);
+  font-size: 14px;
+}
+.liveRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.livePip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--peira-success);
+}
+.liveText {
+  font-weight: 700;
+}
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+.code {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.link {
+  flex: 1;
+  min-width: 200px;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--nb-card-border);
+  background: var(--color-surface-input);
+  color: var(--nb-text);
+}
+
+.waiting,
+.allClear {
+  padding: var(--space-5);
+  border-radius: var(--peira-radius-md);
+  border: 1px dashed var(--nb-card-border);
+  color: var(--nb-text-muted);
+}
+.allClear {
+  border-style: solid;
+  border-color: var(--peira-success);
+  color: var(--nb-text);
+  font-weight: 700;
+}
+
+.problem {
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--nb-card-border);
+  border-left: 4px solid var(--peira-danger);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.problemName {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.problemLine {
+  margin: 0 0 var(--space-3);
+  font-size: 17px;
+  color: var(--nb-text);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+.chip {
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--peira-chip, var(--color-accent-bg));
+  color: var(--nb-text);
+}
+.more {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+  align-self: center;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-bg);
+}
+.confirm span {
+  flex: 1 1 240px;
+  font-weight: 600;
+}
+
+.table {
+  width: 100%;
+  margin-top: var(--space-4);
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+.table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+.qNum {
+  color: var(--nb-text-muted);
+}
+.pos {
+  color: var(--nb-text-muted);
+  font-size: 12px;
+}
+.missedCell {
+  color: var(--peira-danger);
+  font-weight: 700;
+}
+
+.solid {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.solid li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-card-border);
+}
+.tick {
+  color: var(--peira-success);
+  font-weight: 800;
+}
+.solidCount {
+  color: var(--nb-text-muted);
+  font-size: 13px;
+}
+
+.section {
+  margin-top: var(--space-7);
+}
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.sectionTitle {
+  margin: 0 0 var(--space-3);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+.edit {
+  font-size: var(--peira-text-meta);
+  color: inherit;
+}
+.decisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.decision {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.thumb {
+  flex: none;
+  width: 180px;
+  height: auto;
+  align-self: flex-start;
+  border-radius: 6px;
+}
+.decisionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.decisionPrompt {
+  font-weight: 600;
+}
+.decisionRole {
+  color: var(--peira-accent-text);
+}
+.bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bar,
+.barRight {
+  display: grid;
+  grid-template-columns: minmax(90px, 160px) 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.barRight .barLabel {
+  font-weight: 700;
+  color: var(--peira-success);
+}
+.barTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--nb-card-border);
+  overflow: hidden;
+}
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--peira-danger);
+}
+.barRight .barFill {
+  background: var(--peira-success);
+}
+.barCount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.median {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+}
+@media (max-width: 640px) {
+  .decision {
+    flex-direction: column;
+  }
+  .thumb {
+    width: 100%;
+  }
+}
+
+/* TEACH: the meeting-room view. Full screen, the picture as big as it goes. */
+.teach {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: #0f1012;
+  color: #f2f2ee;
+}
+.teachBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #2a2d32;
+}
+.teachTitle {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.teachSteps {
+  display: flex;
+  gap: 4px;
+}
+.teachSteps button {
+  font: inherit;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #2a2d32;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.teachSteps .stepOn {
+  border-color: #d9a441;
+  color: #d9a441;
+}
+.teachPlay {
+  margin-left: auto;
+  color: #d9a441;
+  font-weight: 700;
+}
+.teachClose {
+  font: inherit;
+  font-size: 26px;
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.teachBody {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  min-height: 0;
+}
+.teachPicture {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+}
+.teachSide {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.teachRole {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #d9a441;
+}
+.teachPrompt {
+  margin: 0;
+  color: #f2f2ee;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.teachRight {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #6fcf8a;
+}
+.teachRight span {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9aa0a6;
+}
+.teachWhy {
+  margin: 0;
+  color: #f2f2ee;
+  font-size: 18px;
+  line-height: 1.4;
+}
+.teachWrong {
+  margin: 0;
+  font-size: 16px;
+  color: #ff9b85;
+}
+@media (max-width: 900px) {
+  .teachBody {
+    flex-direction: column;
+  }
+  .teachSide {
+    flex: none;
+  }
+}

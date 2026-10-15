@@ -38,6 +38,14 @@ export const SECTION_LINKS: SectionLink[] = [
     isActive: (path) => path.startsWith('/motion-lab'),
     visibleTo: mayUseMotionLab,
   },
+  // SITUATIONAL REP (experimental) - made from Motion Lab, so it has the same
+  // audience while it is an experiment.
+  {
+    to: '/reps',
+    label: 'Reps',
+    isActive: (path) => path.startsWith('/reps'),
+    visibleTo: mayUseMotionLab,
+  },
   {
     to: '/documents',
     label: 'Playbooks',

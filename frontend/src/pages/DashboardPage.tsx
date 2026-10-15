@@ -65,7 +65,8 @@ export function DashboardPage() {
   async function refresh() {
     try {
       const [quizList, folderList] = await Promise.all([listQuizzes(), listFolders()]);
-      setQuizzes(quizList);
+      // Situational Reps have their own page (/reps); the worklist is quizzes.
+      setQuizzes(quizList.filter((q) => q.kind !== 'REP'));
       setFolders(folderList);
     } catch (err) {
       setError(getErrorMessage(err));

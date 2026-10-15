@@ -20,6 +20,8 @@ import { JoinOrgPage } from './pages/JoinOrgPage';
 import { BetaInvitePage } from './pages/BetaInvitePage';
 import { RequestAccessPage } from './pages/RequestAccessPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
+import { RepPage } from './pages/reps/RepPage';
+import { RepsPage } from './pages/reps/RepsPage';
 import { GradeResponsesPage } from './pages/quiz-editor/GradeResponsesPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
@@ -158,6 +160,10 @@ function App() {
               <Route path="/groups/:groupId" element={<GroupDetailPage />} />
               <Route path="/players/:playerName/history" element={<PlayerHistoryPage />} />
               <Route path="/quizzes/:quizId" element={<QuizEditorPage />} />
+              {/* SITUATIONAL REP (experimental): a Rep is a quiz with kind REP.
+                  Its own page shows the football problems, not the grades. */}
+              <Route path="/reps" element={<RepsPage />} />
+              <Route path="/reps/:quizId" element={<RepPage />} />
               {/* Inside NotebookLayout, unlike annotation: grading is a
                   destination a coach navigates to and back from, not a mode
                   that takes over the screen. It keeps the header and the way

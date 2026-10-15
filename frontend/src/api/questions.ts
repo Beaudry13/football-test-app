@@ -22,6 +22,10 @@ export interface QuestionInput {
    *  never before. Sent as an empty string to clear it; the server stores
    *  that as null so "no explanation" has one representation, not two. */
   answer_explanation?: string | null;
+  /** SITUATIONAL REP: who the player is ("Boundary safety"), and the Motion
+   *  Lab play the decision came from. Optional on any question. */
+  subject_role?: string | null;
+  motion_play_id?: number | null;
   /** A PLAYBOOK PAGE AS THIS QUESTION'S PICTURE. Optional, and independent of
    *  `question_type` - a page says what the player SEES, never how they
    *  answer. */
