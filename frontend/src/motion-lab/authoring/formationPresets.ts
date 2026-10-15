@@ -35,9 +35,9 @@ const OL: Man[] = [
 const mirror = (men: Man[]): Man[] => men.map(([label, dx, y]) => [label, -dx, y])
 
 export const OFFENSE_PRESETS: FormationPreset[] = [
-  { id: 'spread', name: 'Spread', side: 'offense', men: [...OL, ['QB', 0, -5], ['RB', 1.6, -5], ['X', -18.7, -0.8], ['H', -9.5, -1.6], ['SL', 9.5, -1.6], ['Z', 18.7, -0.8]] },
-  { id: 'trips-rt', name: 'Trips Rt', side: 'offense', men: [...OL, ['QB', 0, -5], ['RB', -1.6, -5], ['X', -18.7, -0.8], ['Y', 5.6, -0.8], ['H', 10.5, -1.6], ['Z', 18.7, -1.6]] },
-  { id: 'trips-lt', name: 'Trips Lt', side: 'offense', men: [...OL, ['QB', 0, -5], ['RB', 1.6, -5], ['Z', 18.7, -0.8], ...mirror([['Y', 5.6, -0.8], ['H', 10.5, -1.6], ['X', 18.7, -1.6]])] },
+  { id: 'spread', name: 'Spread', side: 'offense', men: [...OL, ['QB', 0, -5], ['RB', 2, -5], ['X', -18.7, -0.8], ['H', -9.5, -1.6], ['SL', 9.5, -1.6], ['Z', 18.7, -0.8]] },
+  { id: 'trips-rt', name: 'Trips Rt', side: 'offense', men: [...OL, ['QB', 0, -5], ['RB', -2, -5], ['X', -18.7, -0.8], ['Y', 5.6, -0.8], ['H', 10.5, -1.6], ['Z', 18.7, -1.6]] },
+  { id: 'trips-lt', name: 'Trips Lt', side: 'offense', men: [...OL, ['QB', 0, -5], ['RB', 2, -5], ['Z', 18.7, -0.8], ...mirror([['Y', 5.6, -0.8], ['H', 10.5, -1.6], ['X', 18.7, -1.6]])] },
   { id: 'i-form', name: 'I-Form', side: 'offense', men: [...OL, ['QB', 0, -2.2], ['FB', 0, -4.2], ['RB', 0, -6.8], ['Y', 5.6, -0.8], ['X', -16, -0.8], ['Z', 16, -1.6]] },
   { id: 'ace', name: 'Ace', side: 'offense', men: [...OL, ['QB', 0, -2.2], ['RB', 0, -6.2], ['Y', 5.6, -0.8], ['U', -5.6, -0.8], ['X', -16, -1.6], ['Z', 16, -1.6]] },
   { id: 'pistol', name: 'Pistol', side: 'offense', men: [...OL, ['QB', 0, -3.6], ['RB', 0, -6.8], ['Y', 5.6, -0.8], ['X', -18.7, -0.8], ['H', -9.5, -1.6], ['Z', 18.7, -1.6]] },
