@@ -18,8 +18,8 @@ import { QuestionsTab } from './QuestionsTab';
 
 /**
  * EXISTING CONTENT -> SITUATIONAL REP. One tap in the quiz editor copies the
- * quiz's tap-an-answer questions into a new Rep and opens it. Coaches outside
- * the Reps pilot never see it, and a Rep does not offer to become a Rep.
+ * quiz's tap-an-answer questions into a new Rep and opens it - for every
+ * coach. A Rep does not offer to become a Rep.
  */
 
 const question = {
@@ -71,9 +71,9 @@ describe('Make a rep, in the quiz editor', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Make a rep' })).toBeEnabled());
   });
 
-  it('is not offered outside the pilot, or on a Rep', () => {
+  it('is offered to every coach, Motion Lab or not', () => {
     open(false);
-    expect(screen.queryByRole('button', { name: 'Make a rep' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Make a rep' })).toBeInTheDocument();
   });
 
   it('is not offered on something that is already a Rep', () => {

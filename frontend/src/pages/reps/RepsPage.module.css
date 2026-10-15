@@ -55,3 +55,43 @@
   font-size: 14px;
   white-space: nowrap;
 }
+.makeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.picker {
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.pickerHint {
+  margin: 0 0 var(--space-3);
+  color: var(--nb-text-muted);
+}
+.pickList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+.pickRow .title {
+  flex: 1 1 200px;
+}
+.rowError {
+  flex-basis: 100%;
+  color: var(--peira-danger);
+  font-size: 14px;
+}

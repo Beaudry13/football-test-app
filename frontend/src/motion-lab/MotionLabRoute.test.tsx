@@ -113,8 +113,8 @@ describe('Motion Lab in the navigation', () => {
     expect(sectionLinksFor(OWNER).map((l) => l.label)).toEqual(['Quizzes', 'Motion Lab', 'Reps', 'Playbooks', 'Team'])
   })
 
-  it('is not there for any other coach - they keep exactly three', () => {
-    expect(sectionLinksFor(COACH).map((l) => l.label)).toEqual(['Quizzes', 'Playbooks', 'Team'])
+  it('is not there for any other coach - they get Reps, not Motion Lab', () => {
+    expect(sectionLinksFor(COACH).map((l) => l.label)).toEqual(['Quizzes', 'Reps', 'Playbooks', 'Team'])
   })
 
   it('the phone bar follows the same rule', () => {

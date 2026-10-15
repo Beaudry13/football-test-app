@@ -54,6 +54,17 @@ describe('Reps on Home', () => {
     expect(await screen.findByRole('link', { name: 'Make a rep' })).toHaveAttribute('href', '/motion-lab');
   });
 
+  it('with no reps, stays away from a coach who cannot make one from a play', async () => {
+    vi.mocked(repsApi.getRepsSummary).mockResolvedValue([]);
+    render(
+      <MemoryRouter>
+        <RepsHomeCard inviteWhenEmpty={false} />
+      </MemoryRouter>,
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.queryByRole('region', { name: 'Reps' })).toBeNull();
+  });
+
   it('stays out of the way when the summary cannot be loaded', async () => {
     vi.mocked(repsApi.getRepsSummary).mockRejectedValue(new Error('offline'));
     open();

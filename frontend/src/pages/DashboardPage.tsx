@@ -288,8 +288,9 @@ export function DashboardPage() {
               </Suspense>
             )}
             {/* Situational Reps: each recent Rep's worst football problem, one
-                tap from Teach and Retest. Same pilot audience as Reps. */}
-            {motionLab && <RepsHomeCard />}
+                tap from Teach and Retest. Every coach; it stays away until
+                there is a Rep, unless the coach can make one from a play. */}
+            <RepsHomeCard inviteWhenEmpty={motionLab} />
 
         {/* Tour target. An attribute rather than a class, so restyling this
             header can never silently unhook the Dashboard Tour - see

@@ -464,9 +464,8 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
             </button>
           )}
           {/* EXISTING CONTENT -> SITUATIONAL REP: this quiz's tap-an-answer
-              questions, copied into a new Rep (the quiz is untouched). Same
-              pilot audience as Reps. */}
-          {motionLab && quiz.kind !== 'REP' && (
+              questions, copied into a new Rep (the quiz is untouched). */}
+          {quiz.kind !== 'REP' && (
             <button
               className={nb.btnSecondary}
               disabled={makingRep}

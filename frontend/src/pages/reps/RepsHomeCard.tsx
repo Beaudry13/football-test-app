@@ -12,7 +12,7 @@ import styles from './RepsHomeCard.module.css';
  * most chose 'Stay boundary'". One tap opens the Rep, where View players,
  * Teach and Retest are. With no Reps yet, the one thing to do: make one.
  */
-export function RepsHomeCard() {
+export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boolean }) {
   const [reps, setReps] = useState<RepSummary[] | null>(null);
 
   useEffect(() => {
@@ -27,6 +27,7 @@ export function RepsHomeCard() {
   }, []);
 
   if (reps === null) return null;
+  if (reps.length === 0 && !inviteWhenEmpty) return null;
 
   return (
     <section className={styles.card} aria-label="Reps">

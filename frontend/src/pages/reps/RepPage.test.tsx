@@ -10,6 +10,7 @@ import * as repsApi from '../../api/reps';
 import * as codesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
 import * as questionsApi from '../../api/questions';
+import * as authModule from '../../auth/AuthContext';
 import type { RepResults } from '../../api/reps';
 import { RepPage } from './RepPage';
 
@@ -136,6 +137,7 @@ describe('A Rep, for the coach', () => {
   });
 
   it('TEACH shows the decision with the right answer and the reason, and the play it came from', async () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
     open();
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
@@ -146,6 +148,16 @@ describe('A Rep, for the coach', () => {
     expect(teach.getByRole('link', { name: 'Open the play in Motion Lab' })).toHaveAttribute('href', '/motion-lab/plays/14');
     fireEvent.click(teach.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('TEACH offers the Motion Lab play only to a coach who can open Motion Lab', async () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 2, is_platform_owner: false } } as never);
+    open();
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
+    expect(teach.getByText('Rotate down')).toBeInTheDocument();
+    expect(teach.queryByRole('link', { name: 'Open the play in Motion Lab' })).toBeNull();
   });
 
   it('RETEST sends that concept straight back to the players who missed it and opens the new rep', async () => {

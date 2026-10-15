@@ -85,13 +85,14 @@ describe('DashboardPage', () => {
     // forced to mock it individually. See ActiveQuizStatus.test.tsx for
     // that section's own dedicated coverage.
     vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([]);
+    // Every coach's Home asks for the Reps summary; none by default.
+    vi.spyOn(repsApi, 'getRepsSummary').mockResolvedValue([]);
     mockAuth();
   });
 
   it('shows the Motion Lab card to a coach who has Motion Lab, and only to him', async () => {
     vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
     const plays = vi.spyOn(motionApi, 'listMotionPlays').mockResolvedValue([]);
-    vi.spyOn(repsApi, 'getRepsSummary').mockResolvedValue([]);
     mockAuth({ is_platform_owner: true });
     renderDashboard();
     expect(await screen.findByRole('link', { name: 'Draw a play' })).toHaveAttribute('href', '/motion-lab');
