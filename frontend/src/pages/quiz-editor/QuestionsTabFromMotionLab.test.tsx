@@ -23,7 +23,7 @@ import * as questionsApi from '../../api/questions';
 import * as motionApi from '../../api/motionLab';
 import * as authModule from '../../auth/AuthContext';
 import { QuestionsTab } from './QuestionsTab';
-import { newPlay } from '../../motion-lab/engine/play';
+import { newPlay, type Play } from '../../motion-lab/engine/play';
 import { toDocument } from '../../motion-lab/storage/apiPlayRepository';
 
 /**
@@ -36,7 +36,7 @@ import { toDocument } from '../../motion-lab/storage/apiPlayRepository';
 const quiz = { id: 500, title: 'Week 3', questions: [], question_count: 0 } as unknown as Quiz;
 const jetDig = { ...newPlay('Jet Dig'), ball: { kind: 'pass' as const, targetId: 'O8', catchPoint: { x: 17, y: 11 } } };
 const runPlay = newPlay('Inside Zone');
-const row = (id: number, play: typeof jetDig, updated: string) => ({
+const row = (id: number, play: Play, updated: string) => ({
   id,
   name: play.name,
   document: toDocument(play),
