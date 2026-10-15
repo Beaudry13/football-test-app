@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import styles from './TeachView.module.css';
 
 /** One thing to put on the screen in the meeting room. */
@@ -40,6 +41,8 @@ export function TeachView({
   onClose: () => void;
 }) {
   const [at, setAt] = useState(Math.min(Math.max(0, start), Math.max(0, slides.length - 1)));
+  // The play link only for coaches who can open Motion Lab.
+  const motionLab = useMayUseMotionLab();
   const slide = slides[at];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -60,7 +63,7 @@ export function TeachView({
             ))}
           </span>
         )}
-        {slide.motionPlayId !== null && (
+        {motionLab && slide.motionPlayId !== null && (
           <Link to={`/motion-lab/plays/${slide.motionPlayId}`} className={styles.play}>
             Open the play in Motion Lab
           </Link>
