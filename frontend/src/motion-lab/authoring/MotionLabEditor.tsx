@@ -23,7 +23,8 @@ import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
 import { playerSummary } from './playerSummary'
 import { StanceControl } from './StanceControl'
-import { withStance } from './stances'
+import { snapX, withStance } from './stances'
+import { DEFENSE_PRESETS, OFFENSE_PRESETS, presetPlayers, type FormationPreset } from './formationPresets'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -251,6 +252,22 @@ function InlineName({ value, onCommit, onCancel, placeholder }: { value: string;
       }}
       onBlur={() => onCommit(v.trim() || value)}
     />
+  )
+}
+
+/**
+ * A quick formation, drawn small: the line of scrimmage, the offense below it
+ * or the defense above it - the shape a coach recognises before the name.
+ */
+function PresetThumb({ preset }: { preset: FormationPreset }) {
+  const offense = preset.side === 'offense'
+  return (
+    <svg className="preset-thumb" viewBox="0 0 46 26" width="46" height="26" aria-hidden="true">
+      <line x1="1" x2="45" y1={offense ? 4 : 22} y2={offense ? 4 : 22} className="preset-los" />
+      {preset.men.map(([label, dx, y], i) => (
+        <circle key={`${label}${i}`} cx={23 + dx * 1.1} cy={offense ? 4 - y * 2.6 : 22 - y * 1.45} r={1.7} className={offense ? 'preset-off' : 'preset-def'} />
+      ))}
+    </svg>
   )
 }
 
@@ -698,6 +715,21 @@ export function MotionLabEditor({
     setSelectedId(null)
     reset()
     showToast(`Formation "${l.name}" loaded — assignments and the ball were cleared.`)
+  }
+  /** A quick formation replaces one side; the other side keeps its men and its jobs. */
+  const applyPreset = (preset: FormationPreset) => {
+    const men = presetPlayers(preset, snapX(players))
+    const others = players.filter((p) => p.side !== preset.side)
+    setPlayers(preset.side === 'offense' ? [...men, ...others] : [...others, ...men])
+    // Blocks name men from both sides; the ball names offensive men only.
+    setEngagements([])
+    if (preset.side === 'offense') {
+      setBall(null)
+      setBallThen(null)
+    }
+    setSelectedId(null)
+    reset()
+    showToast(`${preset.name} — ${preset.side === 'offense' ? 'offense lined up; its jobs and the ball were cleared' : 'defense lined up; its jobs were cleared'}. ↶ puts it back.`)
   }
   const deleteLook = (l: Look) => {
     if (!window.confirm(`Delete formation "${l.name}"?`)) return
@@ -2744,6 +2776,25 @@ export function MotionLabEditor({
               </button>
               {menuOpen === 'formation' && (
                 <div className="popover play-pop-left formation-pop" onKeyDown={(e) => e.stopPropagation()}>
+                  {/* One click to a real formation, instead of dragging eleven men. */}
+                  <div className="pop-title">Line up the offense</div>
+                  <div className="preset-row" aria-label="Offensive formations">
+                    {OFFENSE_PRESETS.map((preset) => (
+                      <button key={preset.id} className="preset-chip" onClick={() => { applyPreset(preset); setMenuOpen(null) }} title={`Line the offense up in ${preset.name}`}>
+                        <PresetThumb preset={preset} />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pop-title">Line up the defense</div>
+                  <div className="preset-row" aria-label="Defensive fronts">
+                    {DEFENSE_PRESETS.map((preset) => (
+                      <button key={preset.id} className="preset-chip" onClick={() => { applyPreset(preset); setMenuOpen(null) }} title={`Line the defense up in ${preset.name}`}>
+                        <PresetThumb preset={preset} />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
                   <div className="pop-title">Save this arrangement</div>
                   {renaming === 'look' ? (
                     <InlineName value="" placeholder="e.g. Trips Right vs Over" onCommit={(v) => { if (v) saveLook(v); setRenaming(null) }} onCancel={() => setRenaming(null)} />
