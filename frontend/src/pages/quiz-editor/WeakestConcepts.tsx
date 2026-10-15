@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { resolveMediaUrl } from '../../api/client';
+import { useNavigate } from 'react-router-dom';
+import { getErrorMessage, resolveMediaUrl } from '../../api/client';
+import { createRetest } from '../../api/retests';
 import type { ConceptBreakdown, Question } from '../../api/types';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { RetestAction } from './RetestAction';
@@ -46,6 +48,40 @@ function teachSlides(concept: ConceptBreakdown, questions: Question[]): TeachSli
         : null,
     motionPlayId: q.motion_play_id ?? null,
   }));
+}
+
+/** TEACH -> RETEST without leaving the teaching screen: the same draft
+ *  "Retest these N" builds, for the same players. */
+function TeachRetest({ quizId, concept }: { quizId: number; concept: ConceptBreakdown }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+  const n = concept.players_missed.length;
+  if (n === 0 || concept.retestable_question_count === 0 || concept.concept_id === null) return null;
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      title={failed ?? undefined}
+      onClick={async () => {
+        setBusy(true);
+        setFailed(null);
+        try {
+          const draft = await createRetest(quizId, {
+            concept_id: concept.concept_id as number,
+            player_ids: concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null),
+            player_names: concept.players_missed.filter((p) => p.player_id === null).map((p) => p.player_name),
+          });
+          navigate(`/quizzes/${draft.id}?tab=questions`);
+        } catch (err) {
+          setFailed(getErrorMessage(err));
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? 'Building…' : failed ? 'Retest failed - try again' : n === 1 ? 'Retest this player' : `Retest these ${n}`}
+    </button>
+  );
 }
 
 export function WeakestConcepts({
@@ -259,7 +295,12 @@ export function WeakestConcepts({
         </ul>
       )}
       {teaching && (
-        <TeachView title={teaching.concept_name ?? 'General'} slides={teachSlides(teaching, questions)} onClose={() => setTeaching(null)} />
+        <TeachView
+          title={teaching.concept_name ?? 'General'}
+          slides={teachSlides(teaching, questions)}
+          onClose={() => setTeaching(null)}
+          action={<TeachRetest quizId={quizId} concept={teaching} />}
+        />
       )}
     </section>
   );

@@ -1,8 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import * as authModule from '../../auth/AuthContext';
+import * as retestsApi from '../../api/retests';
 import { WeakestConcepts } from './WeakestConcepts';
 import type { ConceptBreakdown, Question } from '../../api/types';
 
@@ -68,6 +69,26 @@ describe('Teach, on Results', () => {
     expect(teach.getByText('4 chose “Spill”')).toBeInTheDocument();
     expect(teach.getByRole('img', { name: 'The play' })).toHaveAttribute('src', expect.stringContaining('/uploads/toss.png'));
     expect(teach.getByRole('link', { name: 'Open the play in Motion Lab' })).toHaveAttribute('href', '/motion-lab/plays/14');
+  });
+
+  it('retests the players who missed it right from the teaching screen', async () => {
+    const created = vi.spyOn(retestsApi, 'createRetest').mockResolvedValue({ id: 77 } as never);
+    const missed = [
+      { player_id: 4, player_name: 'Bo Brown', display_name: 'Bo Brown', position_at_attempt: 'S', jersey_number: null },
+      { player_id: null, player_name: 'Walk On', display_name: 'Walk On', position_at_attempt: null, jersey_number: null },
+    ];
+    render(
+      <MemoryRouter initialEntries={['/quizzes/9']}>
+        <Routes>
+          <Route path="/quizzes/9" element={<WeakestConcepts concepts={[concept({ players_missed: missed as never })]} quizId={9} questions={[question]} />} />
+          <Route path="/quizzes/77" element={<p>the retest draft</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Teach it' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Teach Force / Contain' })).getByRole('button', { name: 'Retest these 2' }));
+    expect(await screen.findByText('the retest draft')).toBeInTheDocument();
+    expect(created).toHaveBeenCalledWith(9, { concept_id: 1, player_ids: [4], player_names: ['Walk On'] });
   });
 
   it('is not offered when the questions are not to hand', () => {
