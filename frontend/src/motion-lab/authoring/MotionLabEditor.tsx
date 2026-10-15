@@ -25,6 +25,7 @@ import { playerSummary } from './playerSummary'
 import { StanceControl } from './StanceControl'
 import { snapX, withStance } from './stances'
 import { DEFENSE_PRESETS, OFFENSE_PRESETS, presetPlayers, type FormationPreset } from './formationPresets'
+import { flipPlay } from './flip'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -736,6 +737,17 @@ export function MotionLabEditor({
     setSelectedId(null)
     reset()
     showToast(`${preset.name} — ${preset.side === 'offense' ? 'offense lined up; its jobs and the ball were cleared' : 'defense lined up; its jobs were cleared'}. ↶ puts it back.`)
+  }
+  /** Trips Right -> Trips Left: the whole play mirrored, hash and all (see flip.ts). */
+  const flipTheplay = () => {
+    const flipped = flipPlay({ players, ball, ballThen, engagements, situation })
+    setPlayers(flipped.players)
+    setBall(flipped.ball)
+    setBallThen(flipped.ballThen)
+    setEngagements(flipped.engagements)
+    setSituation(flipped.situation)
+    reset()
+    showToast('Flipped - every route and motion with it. ↶ flips it back.')
   }
   const deleteLook = (l: Look) => {
     if (!window.confirm(`Delete formation "${l.name}"?`)) return
@@ -2783,6 +2795,10 @@ export function MotionLabEditor({
               </button>
               {menuOpen === 'formation' && (
                 <div className="popover play-pop-left formation-pop" onKeyDown={(e) => e.stopPropagation()}>
+                  {/* The oldest shortcut in a playbook. */}
+                  <button className="flip-btn" onClick={() => { flipTheplay(); setMenuOpen(null) }} title="Mirror the whole play: Trips Right becomes Trips Left">
+                    ⇄ Flip the play
+                  </button>
                   {/* One click to a real formation, instead of dragging eleven men. */}
                   <div className="pop-title">Line up the offense</div>
                   <div className="preset-row" aria-label="Offensive formations">

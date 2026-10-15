@@ -236,6 +236,21 @@ describe('quick formations', () => {
   })
 })
 
+describe('flip the play', () => {
+  it('is first in the Formation menu and mirrors the play, undoably', async () => {
+    open(play)
+    const before = repo.listPlays().find((p) => p.id === play.id)!
+    fireEvent.click(formationBtn())
+    fireEvent.click(item(/Flip the play/))
+    await settle()
+    const after = repo.listPlays().find((p) => p.id === play.id)!
+    const rb0 = before.players.find((p) => p.label === 'RB')!
+    const rb1 = after.players.find((p) => p.id === rb0.id)!
+    expect(rb1.x).toBeCloseTo(53.33 - rb0.x)
+    expect(screen.getByText(/Flipped/)).toBeInTheDocument()
+  })
+})
+
 describe('an empty play starts from a formation', () => {
   const startRow = () => screen.queryByLabelText('Start from a formation')
 
