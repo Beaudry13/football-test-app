@@ -26,6 +26,8 @@ export interface QuestionInput {
    *  Lab play the decision came from. Optional on any question. */
   subject_role?: string | null;
   motion_play_id?: number | null;
+  /** One {x, y} (fractions of the picture) per option, so a player taps the man. */
+  tap_targets?: { x: number; y: number }[] | null;
   /** A PLAYBOOK PAGE AS THIS QUESTION'S PICTURE. Optional, and independent of
    *  `question_type` - a page says what the player SEES, never how they
    *  answer. */

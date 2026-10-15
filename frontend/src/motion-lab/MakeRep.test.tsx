@@ -135,6 +135,32 @@ describe('Make a rep from a play', () => {
     expect(path).toBe('/reps/8')
   })
 
+  it('answers that are men in the play become spots the player taps', async () => {
+    const play = open()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick answers' })).getByRole('button', { name: 'Players' }))
+    expect(screen.getByText('Players tap the man in the picture.')).toBeInTheDocument()
+    type('The situation', 'Who gets the ball?')
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.tap_targets).toHaveLength(input.options.length)
+    const x = play.players.find((p) => p.label === 'X')!
+    const at = input.options.findIndex((o) => o.option_text === 'X')
+    expect(input.tap_targets![at].x).toBeCloseTo(px(x).x / 1376)
+    expect(input.tap_targets![at].y).toBeCloseTo(px(x).y / 720)
+  })
+
+  it('typed answers that are not men have no spots', async () => {
+    open()
+    type('The situation', 'Your check?')
+    type('Answer 1', 'Rotate down')
+    type('Answer 2', 'Stay boundary')
+    expect(screen.queryByText('Players tap the man in the picture.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).not.toHaveProperty('tap_targets')
+  })
+
   it('cannot be made without a situation and two answers', () => {
     open()
     type('Answer 1', 'Rotate down')

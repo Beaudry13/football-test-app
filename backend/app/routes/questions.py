@@ -103,6 +103,18 @@ def _validated_motion_play_id(quiz, motion_play_id):
     return play.id
 
 
+def _validated_tap_targets(targets, option_count: int):
+    """One target per option, or none at all. A count that does not match the
+    options would let a tap land on the wrong answer - refused, not guessed."""
+    if not targets:
+        return None
+    if len(targets) != option_count:
+        raise ApiError(
+            "Give one tap target per answer, or none", status_code=422, reason="tap_targets_mismatch"
+        )
+    return [{"x": float(t["x"]), "y": float(t["y"])} for t in targets]
+
+
 def _clean_role(role):
     """'  Boundary safety ' -> 'Boundary safety'; blank -> None."""
     role = (role or "").strip()
@@ -464,6 +476,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
 
     # Validated before the insert, like everything above (see the ordering rule).
     motion_play_id = _validated_motion_play_id(quiz, data.get("motion_play_id"))
+    tap_targets = _validated_tap_targets(data.get("tap_targets"), len(data["options"]))
 
     question = Question(
         quiz_id=quiz.id,
@@ -475,6 +488,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         concept_id=_validated_concept_id(quiz, data.get("concept_id")),
         subject_role=_clean_role(data.get("subject_role")),
         motion_play_id=motion_play_id,
+        tap_targets=tap_targets,
     )
     db.session.add(question)
     db.session.flush()
@@ -766,6 +780,13 @@ def update_question(quiz_id: int, question_id: int):
         question.subject_role = _clean_role(data.get("subject_role"))
     if "motion_play_id" in data:
         question.motion_play_id = _validated_motion_play_id(question.quiz, data.get("motion_play_id"))
+    if "tap_targets" in data:
+        count = len(data["options"]) if "options" in data else len(question.options)
+        question.tap_targets = _validated_tap_targets(data.get("tap_targets"), count)
+    elif "options" in data and question.tap_targets and len(question.tap_targets) != len(data["options"]):
+        # The answers changed under the targets: drop them rather than let a
+        # tap land on the wrong man. The buttons still work.
+        question.tap_targets = None
 
     # Deliberately NOT guarded by _reject_if_already_answered: the explanation
     # is teaching material shown after the fact, so improving it changes

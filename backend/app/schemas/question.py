@@ -46,6 +46,9 @@ class QuestionCreateSchema(Schema):
         required=False, load_default=None, allow_none=True, validate=validate.Length(max=60)
     )
     motion_play_id = fields.Int(required=False, load_default=None, allow_none=True)
+    tap_targets = fields.List(
+        fields.Nested(lambda: TapTargetSchema()), required=False, load_default=None, allow_none=True
+    )
     document_page_id = fields.Int(required=False, load_default=None, allow_none=True)
     region = fields.Nested(lambda: RegionSchema(), required=False, load_default=None, allow_none=True)
     expected_answers = fields.List(
@@ -75,6 +78,14 @@ class QuestionUpdateSchema(Schema):
     # them must not clear them.
     subject_role = fields.Str(required=False, allow_none=True, validate=validate.Length(max=60))
     motion_play_id = fields.Int(required=False, allow_none=True)
+    tap_targets = fields.List(fields.Nested(lambda: TapTargetSchema()), required=False, allow_none=True)
+
+
+class TapTargetSchema(Schema):
+    """Where one answer stands in the picture, as fractions of its size."""
+
+    x = fields.Float(required=True, validate=validate.Range(min=0, max=1))
+    y = fields.Float(required=True, validate=validate.Range(min=0, max=1))
 
 
 class RegionSchema(Schema):

@@ -7,8 +7,8 @@ import { createQuiz, listQuizzes } from '../api/quizzes'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
-import { playerAt } from './playImageLayout'
-import { ANSWER_SETS, hasMotion, repTitle, roleName } from './playRep'
+import { playerAt, px } from './playImageLayout'
+import { ANSWER_SETS, hasMotion, repTitle, roleName, tapTargets } from './playRep'
 
 /**
  * MOTION LAB -> SITUATIONAL REP: "put me in the play, make me prove I know my job."
@@ -71,6 +71,18 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
     drawPlay(ctx, play, { routes, motion, highlight: who })
   }, [play, routes, motion, who])
 
+  /* Answers that are men in the play ("Players", or typed labels) become
+     spots in the picture the player taps. */
+  const targets = useMemo(
+    () =>
+      tapTargets(
+        play,
+        answers.filter((a) => a.text.trim()).map((a) => a.text),
+        (p) => ({ x: px(p).x / IMAGE_WIDTH, y: px(p).y / IMAGE_HEIGHT }),
+      ),
+    [play, answers],
+  )
+
   const ready = useMemo(() => {
     const filled = answers.filter((a) => a.text.trim())
     return !!prompt.trim() && filled.length >= 2 && filled.some((a) => a.correct)
@@ -123,6 +135,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
           subject_role: role.trim() || null,
           motion_play_id: motionPlayId,
           answer_explanation: why.trim() || null,
+          ...(targets ? { tap_targets: targets } : {}),
         },
         image,
       )
@@ -239,6 +252,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
             )}
           </div>
         ))}
+        {targets && <div className="make-q-note">Players tap the man in the picture.</div>}
         {answers.length < 5 && (
           <button type="button" className="make-rep-add" onClick={() => setAnswers((list) => [...list, { text: '', correct: false }])}>
             + Answer

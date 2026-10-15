@@ -141,6 +141,10 @@ class Question(db.Model):
     motion_play_id = db.Column(
         db.Integer, db.ForeignKey("motion_plays.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: TAP THE MAN: for a decision whose answers are players, one {x, y} per
+    #: option (in option order) as fractions of the picture, so the player taps
+    #: the man instead of a button. Null on every other question.
+    tap_targets = db.Column(JSONB, nullable=True)
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -269,6 +273,9 @@ class Question(db.Model):
             # Who the player is in this decision. Not a secret - it is the
             # first thing a player must read.
             "subject_role": self.subject_role,
+            # Where each answer stands in the picture - what the player taps.
+            # Not a secret: every answer is a target, the right one is not marked.
+            "tap_targets": self.tap_targets,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must
             # not receive it. The play routes decide when to include it - in

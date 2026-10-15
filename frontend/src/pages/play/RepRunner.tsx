@@ -225,7 +225,13 @@ export function RepRunner({
   return (
     <div className={styles.rep}>
       <Progress total={decisions.length} at={index} feedback={feedback} decisions={decisions} />
-      <Decision question={decision} />
+      <Decision
+        question={decision}
+        onTap={tappable ? (optionId) => void lockIn(decision, { selected_option_id: optionId }) : undefined}
+        chosen={taken[decision.id]?.optionIds}
+        tone={verdict ? (verdict.is_correct ? 'right' : verdict.is_correct === false ? 'wrong' : null) : null}
+        disabled={busy || !!verdict}
+      />
 
       {tappable ? (
         <div className={styles.choices} role="group" aria-label="Your answer">
@@ -310,9 +316,23 @@ function Progress({
   );
 }
 
-/** Who you are, the picture, the question - the whole situation. */
-function Decision({ question }: { question: Question }) {
+/** Who you are, the picture, the question - the whole situation. With
+ *  `onTap`, each answer is a man in the picture to tap. */
+function Decision({
+  question,
+  onTap,
+  chosen,
+  tone,
+  disabled,
+}: {
+  question: Question;
+  onTap?: (optionId: number) => void;
+  chosen?: number[];
+  tone?: 'right' | 'wrong' | null;
+  disabled?: boolean;
+}) {
   const role = roleOf(question);
+  const targets = tapTargetsOf(question);
   return (
     <>
       {role && (
@@ -322,11 +342,36 @@ function Decision({ question }: { question: Question }) {
         </div>
       )}
       {question.image && (
-        <img className={styles.picture} src={resolveMediaUrl(question.image.image_url)} alt="The play" />
+        <div className={styles.pictureWrap}>
+          <img className={styles.picture} src={resolveMediaUrl(question.image.image_url)} alt="The play" />
+          {onTap &&
+            targets &&
+            question.options.map((option, i) => {
+              const on = chosen?.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`${styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
+                  style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
+                  aria-label={`Tap ${option.option_text}`}
+                  disabled={disabled}
+                  onClick={() => onTap(option.id)}
+                />
+              );
+            })}
+        </div>
       )}
       <h1 className={styles.prompt}>{question.question_text}</h1>
+      {onTap && targets && <span className={styles.tapHint}>Tap the man in the picture</span>}
     </>
   );
+}
+
+/** The decision's tap spots, when there is one per answer. */
+function tapTargetsOf(question: Question): { x: number; y: number }[] | null {
+  const t = question.tap_targets;
+  return t && t.length === question.options.length && question.image ? t : null;
 }
 
 function Verdict({ feedback }: { feedback: PracticeFeedback }) {

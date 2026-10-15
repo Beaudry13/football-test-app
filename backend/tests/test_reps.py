@@ -435,3 +435,51 @@ class TestHomeSummary:
         rep, *_ = _built(client, headers, app, coach)
         live = client.get("/api/quizzes/active-status", headers=headers).get_json()
         assert [(e["quiz_id"], e["quiz_kind"]) for e in live] == [(rep["id"], "REP")]
+
+
+class TestTapTheMan:
+    TARGETS = [{"x": 0.2, "y": 0.6}, {"x": 0.8, "y": 0.55}]
+
+    def _tap_decision(self, client, headers, quiz_id, targets=None):
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            json={
+                "question_text": "Who gets the ball?",
+                "question_type": "multiple_choice",
+                "options": [{"option_text": "X", "is_correct_answer": True}, {"option_text": "Z"}],
+                "tap_targets": self.TARGETS if targets is None else targets,
+            },
+            headers=headers,
+        )
+
+    def test_each_answer_has_a_spot_in_the_picture_and_the_player_gets_them(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._tap_decision(client, coach_headers, rep["id"]).get_json()
+        assert made["tap_targets"] == self.TARGETS
+        _players(client, coach_headers, rep["id"])
+        code = _send(client, coach_headers, rep["id"])
+        delivered = client.post("/api/play/validate-code", json={"code": code["code"]}).get_json()
+        assert delivered["quiz"]["questions"][0]["tap_targets"] == self.TARGETS
+        copy = client.post(f"/api/quizzes/{rep['id']}/duplicate", headers=coach_headers).get_json()
+        assert copy["questions"][0]["tap_targets"] == self.TARGETS
+
+    def test_one_target_per_answer_or_none(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        response = self._tap_decision(client, coach_headers, rep["id"], targets=[{"x": 0.5, "y": 0.5}])
+        assert response.status_code == 422
+        assert response.get_json()["reason"] == "tap_targets_mismatch"
+        off_picture = self._tap_decision(client, coach_headers, rep["id"], targets=[{"x": 1.5, "y": 0.5}, {"x": 0.1, "y": 0.1}])
+        assert off_picture.status_code == 422
+
+    def test_changing_the_answers_drops_targets_that_no_longer_line_up(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._tap_decision(client, coach_headers, rep["id"]).get_json()
+        url = f"/api/quizzes/{rep['id']}/questions/{made['id']}"
+        kept = client.patch(url, json={"question_text": "Who gets it?"}, headers=coach_headers).get_json()
+        assert kept["tap_targets"] == self.TARGETS
+        edited = client.patch(
+            url,
+            json={"options": [{"option_text": "X", "is_correct_answer": True}, {"option_text": "Z"}, {"option_text": "H"}]},
+            headers=coach_headers,
+        ).get_json()
+        assert edited["tap_targets"] is None

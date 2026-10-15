@@ -117,6 +117,21 @@ describe('A Situational Rep, for the player', () => {
     expect(onRunAgain).toHaveBeenCalled();
   });
 
+  it('a decision about men is answered by tapping the man in the picture', async () => {
+    const tap = {
+      ...decision(3, 'Who gets the ball?', ['X', 'Z'], 'Ball'),
+      tap_targets: [{ x: 0.1, y: 0.5 }, { x: 0.9, y: 0.5 }],
+    } as unknown as Question;
+    run({ quiz: { ...QUIZ, questions: [tap] } as unknown as Quiz });
+    expect(screen.getByText('Tap the man in the picture')).toBeInTheDocument();
+    const z = screen.getByRole('button', { name: 'Tap Z' });
+    expect(z).toHaveStyle({ left: '90%', top: '50%' });
+    fireEvent.click(z);
+    await waitFor(() => expect(playApi.checkAnswer).toHaveBeenCalled());
+    expect(vi.mocked(playApi.saveAnswer).mock.calls[0][0]).toMatchObject({ question_id: 3, selected_option_id: 301 });
+    expect(screen.getByRole('button', { name: 'Tap X' })).toBeDisabled();
+  });
+
   it('picks up where he left off', () => {
     run({
       initialAnswers: [{ question_id: 1, selected_option_id: 101, selected_option_ids: [101], answer_text: null, checked: true }],

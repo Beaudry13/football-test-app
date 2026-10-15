@@ -77,6 +77,23 @@ export const ANSWER_SETS: AnswerSet[] = [
   },
 ]
 
+/**
+ * TAP THE MAN: when every answer names exactly one man in the play ("X",
+ * "Z", "H"), where each stands in the picture - one {x, y} per answer, as
+ * fractions of the picture - so the player can tap him instead of a button.
+ * Null when any answer is not a man, or names two (two "WR"s).
+ */
+export function tapTargets(play: Play, answers: string[], at: (p: Player) => { x: number; y: number }): { x: number; y: number }[] | null {
+  if (answers.length < 2) return null
+  const out: { x: number; y: number }[] = []
+  for (const text of answers) {
+    const men = play.players.filter((p) => p.label.toUpperCase() === text.trim().toUpperCase())
+    if (men.length !== 1) return null
+    out.push(at(men[0]))
+  }
+  return out
+}
+
 /** Whether anyone in the play moves before the snap (so the picture should show it). */
 export function hasMotion(play: Play): boolean {
   return play.players.some((p) => (p.motion?.length ?? 0) >= 2)

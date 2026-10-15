@@ -52,6 +52,60 @@
   color: var(--peira-accent-text);
 }
 
+/* TAP THE MAN: the picture carries a target on each answer. */
+.pictureWrap {
+  position: relative;
+}
+.target {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  border: 3px solid rgba(217, 164, 65, 0.85);
+  background: rgba(217, 164, 65, 0.12);
+  cursor: pointer;
+  animation: rep-target-pulse 1.6s ease-in-out infinite;
+}
+.target:disabled {
+  cursor: default;
+  animation: none;
+  opacity: 0.35;
+}
+.targetOn,
+.target:disabled.targetOn {
+  opacity: 1;
+  border-color: var(--peira-accent-text);
+  background: rgba(217, 164, 65, 0.3);
+}
+.targetRight,
+.target:disabled.targetRight {
+  border-color: var(--peira-success);
+  background: rgba(111, 207, 138, 0.3);
+}
+.targetWrong,
+.target:disabled.targetWrong {
+  border-color: var(--peira-danger);
+  background: rgba(226, 87, 58, 0.3);
+}
+@keyframes rep-target-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .target {
+    animation: none;
+  }
+}
+.tapHint {
+  margin-top: -6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text);
+}
+
 .picture {
   width: 100%;
   height: auto;

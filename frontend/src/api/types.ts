@@ -302,6 +302,8 @@ export interface Question {
   subject_role?: string | null;
   /** The Motion Lab play the decision was made from. Coach payload only. */
   motion_play_id?: number | null;
+  /** TAP THE MAN: one spot per option (option order), as fractions of the picture. */
+  tap_targets?: { x: number; y: number }[] | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {
