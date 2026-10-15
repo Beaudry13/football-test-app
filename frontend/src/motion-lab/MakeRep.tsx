@@ -62,6 +62,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
   const [prompt, setPrompt] = useState('')
   const [answers, setAnswers] = useState<Answer[]>(blankAnswers)
   const [concept, setConcept] = useState(same?.concept ?? '')
+  const [rememberedRep] = useState<number | null>(same?.repId ?? null)
   const [why, setWhy] = useState('')
   const [motion, setMotion] = useState(() => hasMotion(play))
   const [routes, setRoutes] = useState(false)
@@ -79,13 +80,13 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
         const found = list.filter((q) => q.kind === 'REP').sort((a, b) => b.updated_at.localeCompare(a.updated_at))
         setReps(found)
         // The Rep the last decision from this play went into, if it is still there.
-        if (same?.repId && found.some((r) => r.id === same.repId)) setRepId(same.repId)
+        if (rememberedRep !== null && found.some((r) => r.id === rememberedRep)) setRepId(rememberedRep)
       })
       .catch(() => setReps([]))
     listConcepts()
       .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
       .catch(() => setConcepts([]))
-  }, [])
+  }, [rememberedRep])
 
   useEffect(() => {
     const canvas = preview.current
@@ -141,7 +142,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
   }
 
   /* A prompt fills its answers too, unless the coach has typed his own. */
-  const usePrompt = (p: (typeof SITUATION_PROMPTS)[number]) => {
+  const applyPrompt = (p: (typeof SITUATION_PROMPTS)[number]) => {
     setPrompt((now) => addPrompt(now, p.text))
     const set = p.answers ? ANSWER_SETS.find((s) => s.id === p.answers) : null
     if (set && answers.every((a) => !a.text.trim())) quickFill(set.answers(play), set.id)
@@ -252,7 +253,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
       </label>
       <div className="make-rep-sets" role="group" aria-label="Quick questions">
         {SITUATION_PROMPTS.map((p) => (
-          <button key={p.label} type="button" onClick={() => usePrompt(p)}>
+          <button key={p.label} type="button" onClick={() => applyPrompt(p)}>
             {p.label}
           </button>
         ))}

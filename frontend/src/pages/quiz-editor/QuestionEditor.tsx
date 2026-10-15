@@ -4,6 +4,7 @@ import type { QuestionType } from '../../api/types';
 import type { QuestionInput, QuestionOptionInput } from '../../api/questions';
 import { ApiError, getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { createConcept, listConcepts, type Concept } from '../../api/concepts';
+import { nearDuplicate, resolveConcept } from '../../components/concepts/conceptMatch';
 import { useCoarsePointer } from '../../hooks/useCoarsePointer';
 import { IMAGE_FILE_ACCEPT, describeUnsupportedImage } from '../../utils/imageFormat';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -212,10 +213,25 @@ export function QuestionEditor({
     return rows.sort((a, b) => a.name.localeCompare(b.name));
   })();
 
+  /** Pick a concept the team already has instead of naming a new one. */
+  function pickExistingConcept(existing: Concept) {
+    setConceptId(existing.id);
+    setIsNamingConcept(false);
+    setNewConceptName('');
+    setConceptError(null);
+  }
+
   async function handleCreateConcept() {
     const name = newConceptName.trim();
     if (!name) {
       setConceptError('Give the concept a name.');
+      return;
+    }
+    // ONE CONCEPT, NOT A SECOND SPELLING. The server already folds case;
+    // "Force-Contain" or "force  contain" is the same concept too.
+    const existing = resolveConcept(name, concepts);
+    if (existing) {
+      pickExistingConcept(existing);
       return;
     }
     setIsSavingConcept(true);
@@ -581,6 +597,20 @@ export function QuestionEditor({
                 }
               }}
             />
+            {(() => {
+              const same = resolveConcept(newConceptName, concepts);
+              const near = same ? null : nearDuplicate(newConceptName, concepts);
+              const match = same ?? near;
+              return match ? (
+                <p className={styles.conceptMatch}>
+                  {same ? 'You already have ' : 'Did you mean '}
+                  <button type="button" className={styles.conceptMatchUse} onClick={() => pickExistingConcept(match)}>
+                    {match.name}
+                  </button>
+                  {same ? '.' : '?'}
+                </p>
+              ) : null;
+            })()}
             <div className={styles.conceptCreateActions}>
               <button
                 type="button"
