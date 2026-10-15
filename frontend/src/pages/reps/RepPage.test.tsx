@@ -237,6 +237,13 @@ describe('A Rep, for the coach', () => {
     expect(card.getByText('Fixed on the retest: all 4 got it.')).toBeInTheDocument();
   });
 
+  it('a decision made from Motion Lab opens its play, for a coach who has Motion Lab', async () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
+    open();
+    const decisions = within(await screen.findByRole('region', { name: 'Decisions' }));
+    expect(decisions.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
+  });
+
   it('a rep not yet sent offers the groups and sends it, always for immediate feedback', async () => {
     open({ ...RESULTS, players: [], concepts: [], audience: { label: null, invited: 0, code: null, people: [] } });
     expect(await screen.findByText(/No one has run it yet/)).toBeInTheDocument();

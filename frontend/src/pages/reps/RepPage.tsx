@@ -10,6 +10,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
@@ -547,6 +548,7 @@ function RoleField({ quizId, decision, onChanged }: { quizId: number; decision: 
 }
 
 function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId: number; onChanged: () => void }) {
+  const motionLab = useMayUseMotionLab();
   return (
     <section className={styles.section} aria-label="Decisions">
       <div className={styles.sectionHead}>
@@ -578,7 +580,18 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                     </li>
                   ))}
                 </ul>
-                {d.median_ms !== null && <span className={styles.median}>{(d.median_ms / 1000).toFixed(1)} s to decide</span>}
+                <span className={styles.median}>
+                  {d.median_ms !== null && `${(d.median_ms / 1000).toFixed(1)} s to decide`}
+                  {/* REP RESULT -> MOTION LAB: the play this decision was made from. */}
+                  {motionLab && d.motion_play_id !== null && (
+                    <>
+                      {d.median_ms !== null && ' · '}
+                      <Link to={`/motion-lab/plays/${d.motion_play_id}`} className={styles.edit}>
+                        Open the play
+                      </Link>
+                    </>
+                  )}
+                </span>
               </div>
             </li>
           );
