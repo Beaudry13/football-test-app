@@ -118,6 +118,8 @@ export interface RepSummary {
   audience_label: string | null;
   is_retest: boolean;
   worst: { name: string; concept_id: number | null; missed: number; responded: number; most_common_wrong: string | null } | null;
+  /** The worst problem nobody has retested yet (originals only) - what Next up offers. */
+  open_problem?: { name: string; concept_id: number | null; missed: number; responded: number } | null;
   /** How a retest went, when that is the thing to say (see routes/reps._signal). */
   signal: {
     kind: 'retest_fixed' | 'retest_missing' | 'retested';

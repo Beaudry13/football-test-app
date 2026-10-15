@@ -258,6 +258,8 @@ def reps_summary():
     for rep in reps:
         results = rep_results(rep)
         worst = next((c for c in results["concepts"] if c["missed"] > 0), None)
+        # The worst problem nobody has retested yet - what "Next up" is for.
+        open_problem = next((c for c in results["concepts"] if c["missed"] > 0 and not c.get("retest")), None)
         out.append(
             {
                 "id": rep.id,
@@ -281,6 +283,16 @@ def reps_summary():
                     else None
                 ),
                 "signal": _signal(results, worst),
+                "open_problem": (
+                    {
+                        "name": open_problem["name"],
+                        "concept_id": (open_problem["concept"] or {}).get("id"),
+                        "missed": open_problem["missed"],
+                        "responded": open_problem["responded"],
+                    }
+                    if open_problem and results["retest_of"] is None
+                    else None
+                ),
             }
         )
     return jsonify(out)

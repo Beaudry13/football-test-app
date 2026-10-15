@@ -63,7 +63,7 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
 
   /* NEXT UP: the one football problem to deal with now - a miss nobody has
      retested yet, else a retest that still has misses. */
-  const fresh = reps.find((r) => r.worst && !r.signal);
+  const fresh = reps.find((r) => r.open_problem);
   const lingering = fresh ? null : reps.find((r) => r.signal?.kind === 'retest_missing');
 
   return (
@@ -74,15 +74,15 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
           All reps
         </Link>
       </div>
-      {fresh?.worst && (
+      {fresh?.open_problem && (
         <div className={styles.nextUp} aria-label="Next up">
           <span className={styles.nextLead}>Next up</span>
           <span className={styles.nextProblem}>
-            <strong className={styles.problemName}>{fresh.worst.name}</strong> {fresh.worst.missed} of {fresh.worst.responded}{' '}
-            {fresh.audience_label ? fresh.audience_label.toLowerCase() : 'players'} missed
+            <strong className={styles.problemName}>{fresh.open_problem.name}</strong> {fresh.open_problem.missed} of{' '}
+            {fresh.open_problem.responded} {fresh.audience_label ? fresh.audience_label.toLowerCase() : 'players'} missed
           </span>
           <span className={styles.nextActions}>
-            <Link to={`/reps/${fresh.id}?teach=${fresh.worst.concept_id ?? 'general'}`} className={nb.btnPrimary}>
+            <Link to={`/reps/${fresh.id}?teach=${fresh.open_problem.concept_id ?? 'general'}`} className={nb.btnPrimary}>
               Teach it
             </Link>
           </span>

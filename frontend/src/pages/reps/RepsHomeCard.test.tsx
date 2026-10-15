@@ -74,12 +74,17 @@ describe('Reps on Home', () => {
 
   it('leads with the one problem to deal with now, one tap from teaching it', async () => {
     vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
-      rep({ id: 7, worst: { name: 'Motion adjustment', concept_id: 3, missed: 4, responded: 11, most_common_wrong: 'Stay boundary' } }),
+      rep({
+        id: 7,
+        worst: { name: 'Motion adjustment', concept_id: 3, missed: 4, responded: 11, most_common_wrong: 'Stay boundary' },
+        open_problem: { name: 'Coverage ID', concept_id: 5, missed: 3, responded: 11 },
+      }),
     ]);
     open();
     const next = within(await screen.findByLabelText('Next up'));
-    expect(next.getByText(/4 of 11 safeties missed/)).toBeInTheDocument();
-    expect(next.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/reps/7?teach=3');
+    expect(next.getByText(/3 of 11 safeties missed/)).toBeInTheDocument();
+    expect(next.getByText('Coverage ID')).toBeInTheDocument();
+    expect(next.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/reps/7?teach=5');
   });
 
   it('with no reps yet, offers the one thing to do', async () => {

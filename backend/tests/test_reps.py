@@ -447,6 +447,7 @@ class TestHomeSummary:
         assert [s["id"] for s in summary] == [rep["id"]]
         top = summary[0]
         assert (top["decisions"], top["ran"], top["invited"], top["live"]) == (2, 1, 4, True)
+        assert top["open_problem"] == {"name": "Motion adjustment", "concept_id": first["concept"]["id"], "missed": 1, "responded": 1}
         assert top["worst"] == {
             "name": "Motion adjustment", "concept_id": first["concept"]["id"], "missed": 1, "responded": 1,
             "most_common_wrong": "Stay boundary",
@@ -476,6 +477,9 @@ class TestHomeSummary:
         }
         assert summary[rep["id"]]["signal"]["kind"] == "retested"
         assert summary[rep["id"]]["signal"]["retest_id"] == retest["id"]
+        # Motion adjustment has been retested; nothing else was missed, so nothing is open.
+        assert summary[rep["id"]]["open_problem"] is None
+        assert summary[retest["id"]]["open_problem"] is None
 
     def test_another_organizations_reps_are_not_shown(self, client, register_coach, app):
         coach, _, headers = register_coach()
