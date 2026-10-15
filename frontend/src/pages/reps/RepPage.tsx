@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { updateQuestion } from '../../api/questions';
@@ -8,6 +7,7 @@ import { listGroups } from '../../api/groups';
 import { createRepRetest, getRepResults, type RepConcept, type RepDecision, type RepResults } from '../../api/reps';
 import type { Group } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { playLink } from '../quiz-editor/playUrl';
@@ -325,63 +325,24 @@ function ProblemCard({
   );
 }
 
-/** TEACH: the decision, big enough for the meeting room, with the coach's own truth. */
+/** TEACH: the problem's decisions in the meeting-room view, worst first. */
 function Teach({ problem, decisions, onClose }: { problem: RepConcept; decisions: RepDecision[]; onClose: () => void }) {
   const inProblem = decisions.filter((d) => problem.question_ids.includes(d.question_id));
-  const [at, setAt] = useState(() => {
-    const worst = [...inProblem].sort((a, b) => b.missed - a.missed)[0];
-    return Math.max(0, inProblem.indexOf(worst));
+  const worst = [...inProblem].sort((a, b) => b.missed - a.missed)[0];
+  const slides: TeachSlide[] = inProblem.map((d) => {
+    const wrong = d.choices.filter((c) => !c.is_correct && c.count > 0).sort((a, b) => b.count - a.count)[0];
+    return {
+      key: d.question_id,
+      imageUrl: d.image ? resolveMediaUrl(d.image.image_url) : null,
+      role: d.subject_role,
+      prompt: d.question_text,
+      right: d.correct_text,
+      why: d.answer_explanation,
+      wrong: wrong ? { text: wrong.text, count: wrong.count } : null,
+      motionPlayId: d.motion_play_id ?? problem.motion_play_id,
+    };
   });
-  const decision = inProblem[at];
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  if (!decision) return null;
-  const wrong = [...decision.choices].filter((c) => !c.is_correct && c.count > 0).sort((a, b) => b.count - a.count)[0];
-  // A portal: the meeting-room view covers the whole screen, PEIRA's own header included.
-  return createPortal(
-    <div className={styles.teach} role="dialog" aria-modal="true" aria-label={`Teach ${problem.name}`}>
-      <div className={styles.teachBar}>
-        <span className={styles.teachTitle}>{problem.name}</span>
-        {inProblem.length > 1 && (
-          <span className={styles.teachSteps}>
-            {inProblem.map((d, i) => (
-              <button key={d.question_id} type="button" className={i === at ? styles.stepOn : ''} onClick={() => setAt(i)}>
-                {i + 1}
-              </button>
-            ))}
-          </span>
-        )}
-        {problem.motion_play_id !== null && (
-          <Link to={`/motion-lab/plays/${decision.motion_play_id ?? problem.motion_play_id}`} className={styles.teachPlay}>
-            Open the play in Motion Lab
-          </Link>
-        )}
-        <button type="button" className={styles.teachClose} onClick={onClose} aria-label="Close">
-          ×
-        </button>
-      </div>
-      <div className={styles.teachBody}>
-        {decision.image && <img className={styles.teachPicture} src={resolveMediaUrl(decision.image.image_url)} alt="The play" />}
-        <div className={styles.teachSide}>
-          {decision.subject_role && <span className={styles.teachRole}>You&rsquo;re the {decision.subject_role}</span>}
-          <p className={styles.teachPrompt}>{decision.question_text}</p>
-          <p className={styles.teachRight}>
-            <span>Right answer</span> {decision.correct_text.join(', ')}
-          </p>
-          {decision.answer_explanation && <p className={styles.teachWhy}>{decision.answer_explanation}</p>}
-          {wrong && (
-            <p className={styles.teachWrong}>
-              {wrong.count} chose “{wrong.text}”
-            </p>
-          )}
-        </div>
-      </div>
-    </div>,
-    document.body,
-  );
+  return <TeachView title={problem.name} slides={slides} start={Math.max(0, inProblem.indexOf(worst))} onClose={onClose} />;
 }
 
 /** A RETEST'S FIRST QUESTION: did the teaching stick? Before, and now. */
