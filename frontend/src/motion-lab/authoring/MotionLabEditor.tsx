@@ -271,6 +271,9 @@ function PresetThumb({ preset }: { preset: FormationPreset }) {
   )
 }
 
+/** The sets offered on an empty play's strip: the four shapes a coach starts from most. */
+const START_PRESETS = OFFENSE_PRESETS.filter((p) => ['spread', 'trips-rt', 'i-form', 'empty'].includes(p.id))
+
 const fmtWhen = (t: number) => {
   const d = new Date(t)
   const today = new Date().toDateString() === d.toDateString()
@@ -2829,7 +2832,23 @@ export function MotionLabEditor({
                 </div>
               )}
             </div>
-            <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
+            {/* AN EMPTY PLAY STARTS FROM A FORMATION. Until the first job is
+                drawn, the strip offers the common sets as one-click diagrams -
+                the same quick formations as the menu - instead of a sentence. */}
+            {!hasPaths && !ball && !ballNote ? (
+              <div className="start-row" aria-label="Start from a formation">
+                <span className="start-label">Start from</span>
+                {START_PRESETS.map((preset) => (
+                  <button key={preset.id} className="start-chip" onClick={() => applyPreset(preset)} title={`Line the offense up in ${preset.name}`}>
+                    <PresetThumb preset={preset} />
+                    {preset.name}
+                  </button>
+                ))}
+                <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>or drag a player to move him · click one to give him a job</span>
+              </div>
+            ) : (
+              <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
+            )}
           </>
         )}
       </div>

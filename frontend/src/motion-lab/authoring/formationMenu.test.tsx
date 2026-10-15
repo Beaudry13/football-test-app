@@ -4,7 +4,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { installPointerStubs } from '../testing/pointerStubs'
-import type { Play } from '../engine/play'
+import { newPlay, type Play } from '../engine/play'
 
 /**
  * FORMATION (ML-UX-4, SPEC §13).
@@ -233,5 +233,27 @@ describe('quick formations', () => {
     fireEvent.click(screen.getByRole('button', { name: '↶' }))
     await settle()
     expect(JSON.stringify(men('offense'))).toBe(JSON.stringify(play.players.filter((p) => p.side === 'offense')))
+  })
+})
+
+describe('an empty play starts from a formation', () => {
+  const startRow = () => screen.queryByLabelText('Start from a formation')
+
+  it('offers the common sets on the strip until the first job is drawn', async () => {
+    const empty = newPlay('Blank')
+    open(empty)
+    const row = within(startRow()!)
+    expect(row.getAllByRole('button').map((b) => b.textContent)).toEqual(['Spread', 'Trips Rt', 'I-Form', 'Empty'])
+    fireEvent.click(row.getByRole('button', { name: 'I-Form' }))
+    await settle()
+    const offense = repo.listPlays().find((p) => p.id === empty.id)!.players.filter((p) => p.side === 'offense')
+    expect(offense.map((p) => p.label)).toContain('FB')
+    // Still empty of jobs, so still offered.
+    expect(startRow()).not.toBeNull()
+  })
+
+  it('is not there once the play has jobs in it', () => {
+    open(play)
+    expect(startRow()).toBeNull()
   })
 })
