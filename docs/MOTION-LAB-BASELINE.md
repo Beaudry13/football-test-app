@@ -407,13 +407,21 @@ the line → Detached — WR Stance; no line to read → 3 Point. Moving him upd
 the default; an authored stance is never rewritten.
 
 **View in 3D (development only).** With `VITE_MOTION_LAB_3D_URL` set (a local,
-gitignored `.env.development.local`) the editor's top bar offers "View in 3D":
-it opens the PEIRA 3D viewer and, when the viewer says it is ready, posts it
-the play row **as saved** (fetched from the server; only once the last edit is
-confirmed) to the viewer's origin. Unset - every production build - there is
-no button. Motion Lab knows nothing about 3D beyond that URL: the viewer runs
-Motion Lab's own engine on the row and hands `presnapStance` to its V5.1
-stance resolver, where an authored stance always beats the position fallback.
+gitignored `.env.development.local`) the editor's top bar offers "View in 3D"
+(only once the last edit is confirmed saved). It opens the PEIRA 3D viewer at
+`?source=peira&play=<id>`; the viewer asks for that play with a request id
+once per page load, and each request is answered once, to the viewer's origin
+only, with the row **as saved at that moment** (fetched from the server), in a
+versioned contract: `{ contract: 'peira-motion-lab-3d', version: 1, play: { id,
+revision, name, schemaVersion, updatedAt }, document }` - the document
+untouched (`viewIn3D.ts`). So a refresh of the viewer shows the latest save; a
+newer View in 3D takes the viewer window over (the earlier handoff stops
+answering); the handoff ends when the window closes. The viewer checks the
+payload strictly and refuses a malformed play rather than repairing it.
+Unset - every production build - there is no button. Motion Lab knows nothing
+about 3D beyond that URL: the viewer runs Motion Lab's own engine on the
+document and hands `presnapStance` to its V5.1 stance resolver, where an
+authored stance always beats the position fallback.
 
 **Owner decisions (30 September 2026), recorded with V6's approval:**
 - **Motion Lab's authored timing is authoritative in 3D.** The viewer fits its
