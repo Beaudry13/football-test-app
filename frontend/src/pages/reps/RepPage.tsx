@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { updateQuestion } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
@@ -59,6 +59,8 @@ export function RepPage() {
   const [results, setResults] = useState<RepResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [teaching, setTeaching] = useState<RepConcept | null>(null);
+  /** ?teach=<concept id | general>: arrive straight in Teach (Home's "Teach it"). */
+  const [params, setParams] = useSearchParams();
   /** Problems already taught here: their next step is Retest. */
   const [taught, setTaught] = useState<string[]>(() => readTaught(id));
   const teach = (problem: RepConcept) => {
@@ -87,6 +89,16 @@ export function RepPage() {
     setResults(null);
     load();
   }, [load]);
+
+  // Home's "Teach it" lands here: open that problem's Teach once, then drop the ask.
+  const teachAsk = params.get('teach');
+  useEffect(() => {
+    if (!results || !teachAsk) return;
+    const asked = results.concepts.find((c) => conceptKey(c) === teachAsk && c.missed > 0);
+    if (asked) teach(asked);
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, teachAsk]);
 
   const problems = results?.concepts.filter((c) => c.missed > 0) ?? [];
   const solid = results?.concepts.filter((c) => c.missed === 0 && c.responded > 0) ?? [];

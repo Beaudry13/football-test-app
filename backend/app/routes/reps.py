@@ -271,6 +271,8 @@ def reps_summary():
                 "worst": (
                     {
                         "name": worst["name"],
+                        # For a deep link straight into Teach on this problem.
+                        "concept_id": (worst["concept"] or {}).get("id"),
                         "missed": worst["missed"],
                         "responded": worst["responded"],
                         "most_common_wrong": (worst["most_common_wrong"] or {}).get("text"),

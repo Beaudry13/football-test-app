@@ -117,7 +117,7 @@ export interface RepSummary {
   live: boolean;
   audience_label: string | null;
   is_retest: boolean;
-  worst: { name: string; missed: number; responded: number; most_common_wrong: string | null } | null;
+  worst: { name: string; concept_id: number | null; missed: number; responded: number; most_common_wrong: string | null } | null;
   /** How a retest went, when that is the thing to say (see routes/reps._signal). */
   signal: {
     kind: 'retest_fixed' | 'retest_missing' | 'retested';

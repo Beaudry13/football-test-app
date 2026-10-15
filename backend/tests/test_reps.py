@@ -447,7 +447,10 @@ class TestHomeSummary:
         assert [s["id"] for s in summary] == [rep["id"]]
         top = summary[0]
         assert (top["decisions"], top["ran"], top["invited"], top["live"]) == (2, 1, 4, True)
-        assert top["worst"] == {"name": "Motion adjustment", "missed": 1, "responded": 1, "most_common_wrong": "Stay boundary"}
+        assert top["worst"] == {
+            "name": "Motion adjustment", "concept_id": first["concept"]["id"], "missed": 1, "responded": 1,
+            "most_common_wrong": "Stay boundary",
+        }
 
     def test_retests_are_summarised_by_how_they_went(self, client, register_coach, app):
         coach, _, headers = register_coach()

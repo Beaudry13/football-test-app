@@ -18,7 +18,7 @@ const rep = (over: Partial<RepSummary>): RepSummary => ({
   live: true,
   audience_label: 'Safeties',
   is_retest: false,
-  worst: { name: 'Motion adjustment', missed: 4, responded: 11, most_common_wrong: 'Stay boundary' },
+  worst: { name: 'Motion adjustment', concept_id: 3, missed: 4, responded: 11, most_common_wrong: 'Stay boundary' },
   signal: null,
   ...over,
 });
@@ -70,6 +70,16 @@ describe('Reps on Home', () => {
       /Motion adjustment still missed by 1 of 3 after the retest · 64% → 67%/,
     );
     expect(list.getByRole('link', { name: /Red zone - Retest/ }).textContent).toMatch(/Red zone check fixed on the retest · 50% → 100%/);
+  });
+
+  it('leads with the one problem to deal with now, one tap from teaching it', async () => {
+    vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
+      rep({ id: 7, worst: { name: 'Motion adjustment', concept_id: 3, missed: 4, responded: 11, most_common_wrong: 'Stay boundary' } }),
+    ]);
+    open();
+    const next = within(await screen.findByLabelText('Next up'));
+    expect(next.getByText(/4 of 11 safeties missed/)).toBeInTheDocument();
+    expect(next.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/reps/7?teach=3');
   });
 
   it('with no reps yet, offers the one thing to do', async () => {

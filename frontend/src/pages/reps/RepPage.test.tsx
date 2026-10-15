@@ -86,10 +86,10 @@ function Landed() {
   return <p>the retest&apos;s page</p>;
 }
 
-function open(results: RepResults = RESULTS) {
+function open(results: RepResults = RESULTS, at = '/reps/5') {
   vi.mocked(repsApi.getRepResults).mockResolvedValue(results);
   render(
-    <MemoryRouter initialEntries={['/reps/5']}>
+    <MemoryRouter initialEntries={[at]}>
       <Routes>
         <Route path="/reps/:quizId" element={<RepPage />} />
         <Route path="/reps/6" element={<Landed />} />
@@ -235,6 +235,11 @@ describe('A Rep, for the coach', () => {
     open({ ...RESULTS, concepts: [{ ...RESULTS.concepts[0], retest }, RESULTS.concepts[1]] });
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
     expect(card.getByText('Fixed on the retest: all 4 got it.')).toBeInTheDocument();
+  });
+
+  it("arrives straight in Teach from Home's \"Teach it\"", async () => {
+    open(RESULTS, '/reps/5?teach=3');
+    expect(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' })).toBeInTheDocument();
   });
 
   it('a decision made from Motion Lab opens its play, for a coach who has Motion Lab', async () => {

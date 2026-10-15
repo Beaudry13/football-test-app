@@ -61,6 +61,11 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
   if (reps === null) return null;
   if (reps.length === 0 && !inviteWhenEmpty) return null;
 
+  /* NEXT UP: the one football problem to deal with now - a miss nobody has
+     retested yet, else a retest that still has misses. */
+  const fresh = reps.find((r) => r.worst && !r.signal);
+  const lingering = fresh ? null : reps.find((r) => r.signal?.kind === 'retest_missing');
+
   return (
     <section className={styles.card} aria-label="Reps">
       <div className={styles.head}>
@@ -69,6 +74,34 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
           All reps
         </Link>
       </div>
+      {fresh?.worst && (
+        <div className={styles.nextUp} aria-label="Next up">
+          <span className={styles.nextLead}>Next up</span>
+          <span className={styles.nextProblem}>
+            <strong className={styles.problemName}>{fresh.worst.name}</strong> {fresh.worst.missed} of {fresh.worst.responded}{' '}
+            {fresh.audience_label ? fresh.audience_label.toLowerCase() : 'players'} missed
+          </span>
+          <span className={styles.nextActions}>
+            <Link to={`/reps/${fresh.id}?teach=${fresh.worst.concept_id ?? 'general'}`} className={nb.btnPrimary}>
+              Teach it
+            </Link>
+          </span>
+        </div>
+      )}
+      {lingering?.signal && (
+        <div className={styles.nextUp} aria-label="Next up">
+          <span className={styles.nextLead}>Next up</span>
+          <span className={styles.nextProblem}>
+            <strong className={styles.problemName}>{lingering.signal.concept}</strong> still missed by {lingering.signal.missed} after the
+            retest
+          </span>
+          <span className={styles.nextActions}>
+            <Link to={`/reps/${lingering.id}`} className={nb.btnPrimary}>
+              Open it
+            </Link>
+          </span>
+        </div>
+      )}
       {reps.length === 0 ? (
         <div className={styles.empty}>
           <span>Put a player in a play. See who knows his job.</span>
