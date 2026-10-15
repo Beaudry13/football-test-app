@@ -39,6 +39,9 @@
 }
 
 .actions a {
+  /* Links dressed as the notebook's buttons: centre the words the way a <button> does. */
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
 }
 
