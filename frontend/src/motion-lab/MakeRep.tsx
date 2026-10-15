@@ -6,6 +6,7 @@ import { ConceptPicker } from '../components/concepts/ConceptPicker'
 import { resolveConcept } from '../components/concepts/conceptMatch'
 import { createQuestion } from '../api/questions'
 import { createQuiz, listQuizzes } from '../api/quizzes'
+import { getRepsForPlay } from '../api/reps'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
@@ -63,6 +64,8 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
   const [answers, setAnswers] = useState<Answer[]>(blankAnswers)
   const [concept, setConcept] = useState(same?.concept ?? '')
   const [rememberedRep] = useState<number | null>(same?.repId ?? null)
+  /** Reps that already hold a decision from this play - offered first. */
+  const [fromThisPlay, setFromThisPlay] = useState<number[]>([])
   const [why, setWhy] = useState('')
   const [motion, setMotion] = useState(() => hasMotion(play))
   const [routes, setRoutes] = useState(false)
@@ -83,10 +86,20 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
         if (rememberedRep !== null && found.some((r) => r.id === rememberedRep)) setRepId(rememberedRep)
       })
       .catch(() => setReps([]))
+    // Without that memory (another device, a cleared browser), the newest Rep
+    // already made from this play is the likely home for the next decision.
+    if (motionPlayId !== null) {
+      getRepsForPlay(motionPlayId)
+        .then((list) => {
+          setFromThisPlay(list.map((r) => r.id))
+          if (rememberedRep === null && list.length > 0) setRepId(list[0].id)
+        })
+        .catch(() => undefined)
+    }
     listConcepts()
       .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
       .catch(() => setConcepts([]))
-  }, [rememberedRep])
+  }, [rememberedRep, motionPlayId])
 
   useEffect(() => {
     const canvas = preview.current
@@ -326,11 +339,13 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
         <span>Put it in</span>
         <select value={repId} onChange={(e) => setRepId(e.target.value === 'new' ? 'new' : Number(e.target.value))}>
           <option value="new">A new rep: “{repTitle(play, role)}”</option>
-          {reps.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.title} ({r.question_count})
-            </option>
-          ))}
+          {[...reps]
+            .sort((a, b) => Number(fromThisPlay.includes(b.id)) - Number(fromThisPlay.includes(a.id)))
+            .map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title} ({r.question_count}){fromThisPlay.includes(r.id) ? ' - from this play' : ''}
+              </option>
+            ))}
         </select>
       </label>
       {error && <div className="make-q-error" role="alert">{error}</div>}

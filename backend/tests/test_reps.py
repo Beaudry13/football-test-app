@@ -494,6 +494,21 @@ class TestHomeSummary:
         assert [(e["quiz_id"], e["quiz_kind"]) for e in live] == [(rep["id"], "REP")]
 
 
+class TestRepsForAPlay:
+    def test_lists_the_reps_holding_a_decision_from_this_play(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        play_id = _motion_play(app, coach["organization_id"])
+        other_play = _motion_play(app, coach["organization_id"], name="Other")
+        with_play = _rep(client, headers, title="Trips Jet - Boundary safety")
+        _decision(client, headers, with_play["id"], "Your check?", ["A", "B"], play_id=play_id)
+        without = _rep(client, headers, title="Red zone")
+        _decision(client, headers, without["id"], "Your check?", ["A", "B"], play_id=other_play)
+        found = client.get(f"/api/quizzes/reps-for-play/{play_id}", headers=headers).get_json()
+        assert found == [{"id": with_play["id"], "title": "Trips Jet - Boundary safety", "question_count": 1}]
+        _, _, rival = register_coach(username="coach2", email="coach2@example.com", organization="Rivals")
+        assert client.get(f"/api/quizzes/reps-for-play/{play_id}", headers=rival).get_json() == []
+
+
 class TestFromQuestions:
     def test_a_question_that_says_who_he_is_makes_a_decision_that_knows_it(self, client, coach_headers):
         quiz = client.post("/api/quizzes", json={"title": "Week 3 install"}, headers=coach_headers).get_json()

@@ -1630,6 +1630,15 @@
   max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
+/* Make rep stays in reach however tall the panel gets. */
+.motion-lab-root .make-rep-pop .make-q-actions {
+  position: sticky;
+  bottom: -12px;
+  margin: 0 -12px -12px;
+  padding: 10px 12px 12px;
+  background: #1d2024;
+  border-top: 1px solid var(--border);
+}
 .motion-lab-root .make-q-check-row {
   display: flex;
   gap: 14px;

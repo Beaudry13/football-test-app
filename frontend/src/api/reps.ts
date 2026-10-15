@@ -153,6 +153,11 @@ export function getRepProgress(
   return api.post<RepProgress>('/play/rep-progress', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
+/** The Reps already holding a decision made from this Motion Lab play, newest first. */
+export function getRepsForPlay(playId: number): Promise<{ id: number; title: string; question_count: number }[]> {
+  return api.get(`/quizzes/reps-for-play/${playId}`);
+}
+
 export function getRepsSummary(): Promise<RepSummary[]> {
   return api.get<RepSummary[]>('/quizzes/reps-summary');
 }

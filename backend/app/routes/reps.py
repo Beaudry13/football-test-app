@@ -466,3 +466,25 @@ def add_decisions(rep_id: int):
     body = rep.to_dict()
     body["added"] = len(added)
     return jsonify(body), 201
+
+
+@reps_bp.get("/reps-for-play/<int:play_id>")
+@jwt_required()
+def reps_for_play(play_id: int):
+    """The Reps that already hold a decision made from this Motion Lab play,
+    newest first - so Make rep can offer "the rep for this play" first."""
+    from app.models import Question
+
+    coach = current_coach()
+    reps = (
+        Quiz.query.join(Question, Question.quiz_id == Quiz.id)
+        .filter(
+            Quiz.organization_id == coach.organization_id,
+            Quiz.kind == REP_KIND,
+            Question.motion_play_id == play_id,
+        )
+        .distinct()
+        .order_by(Quiz.updated_at.desc(), Quiz.id.desc())
+        .all()
+    )
+    return jsonify([{"id": r.id, "title": r.title, "question_count": len(r.questions)} for r in reps])

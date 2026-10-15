@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/quizzes', () => ({ listQuizzes: vi.fn(), createQuiz: vi.fn() }))
 vi.mock('../api/questions', () => ({ createQuestion: vi.fn() }))
 vi.mock('../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }))
+vi.mock('../api/reps', () => ({ getRepsForPlay: vi.fn() }))
 // jsdom cannot draw; the picture is playImage's business.
 vi.mock('./playImage', () => ({
   IMAGE_WIDTH: 1376,
@@ -15,6 +16,7 @@ vi.mock('./playImage', () => ({
 import * as quizzesApi from '../api/quizzes'
 import * as questionsApi from '../api/questions'
 import * as conceptsApi from '../api/concepts'
+import * as repsApi from '../api/reps'
 import * as image from './playImage'
 import { MakeRep } from './MakeRep'
 import { newPlay, type Play } from './engine/play'
@@ -57,6 +59,7 @@ beforeEach(() => {
   vi.mocked(questionsApi.createQuestion).mockResolvedValue({ id: 900 } as never)
   vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 2, name: 'Leverage', is_archived: false }])
   vi.mocked(conceptsApi.createConcept).mockResolvedValue({ id: 5, name: 'Motion adjustment', is_archived: false })
+  vi.mocked(repsApi.getRepsForPlay).mockResolvedValue([])
 })
 
 const type = (label: RegExp | string, value: string, role: 'textbox' | 'combobox' = 'textbox') =>
@@ -217,6 +220,15 @@ describe('Make a rep from a play', () => {
     expect(screen.getByRole('textbox', { name: /You’re the/ })).toHaveValue('Boundary safety')
     expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Motion adjustment')
     await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('40'))
+  })
+
+  it('the Rep already made from this play is offered first, and chosen', async () => {
+    vi.mocked(repsApi.getRepsForPlay).mockResolvedValue([{ id: 8, title: 'Red zone - Mike', question_count: 2 }])
+    open()
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('8'))
+    const options = within(screen.getByRole('combobox', { name: /Put it in/ })).getAllByRole('option')
+    expect(options[1].textContent).toBe('Red zone - Mike (2) - from this play')
+    expect(repsApi.getRepsForPlay).toHaveBeenCalledWith(14)
   })
 
   it('cannot be made without a situation and two answers', () => {
