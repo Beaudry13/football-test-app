@@ -37,6 +37,7 @@ from app.models import (
 )
 from app.schemas.retest import RetestCreateSchema
 from app.schemas.quiz import QuizCreateSchema, QuizUpdateSchema
+from app.models.quiz import REP_KIND
 from app.services.access_codes import (
     effective_roster_people_for_quiz,
     effective_roster_players,
@@ -354,7 +355,9 @@ def create_quiz():
         coach_id=coach.id,
         title=data["title"],
         description=data["description"],
-        one_question_at_a_time=data["one_question_at_a_time"],
+        kind=data["kind"],
+        # A Rep is one decision per screen, always - that is what it is.
+        one_question_at_a_time=True if data["kind"] == REP_KIND else data["one_question_at_a_time"],
         require_all_answers=data["require_all_answers"],
     )
     db.session.add(quiz)
@@ -680,6 +683,8 @@ def duplicate_quiz(quiz_id: int):
         coach_id=coach.id,
         title=f"{original.title} (Copy)",
         description=original.description,
+        # A copy of a Rep is a Rep.
+        kind=original.kind,
         one_question_at_a_time=original.one_question_at_a_time,
         require_all_answers=original.require_all_answers,
         folder_id=original.folder_id,
@@ -799,6 +804,10 @@ def _copy_questions_into(
             # one organization - the copy belongs to the coach who made it, in
             # their own org, and concepts are scoped to exactly that.
             concept_id=question.concept_id,
+            # Situational Rep: who the decision is about and the play it came
+            # from travel with it, or a copied Rep forgets both.
+            subject_role=question.subject_role,
+            motion_play_id=question.motion_play_id,
         )
         db.session.add(copy_question)
         db.session.flush()

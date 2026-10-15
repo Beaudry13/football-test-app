@@ -3,6 +3,14 @@
 from app.extensions import db
 from app.models.mixins import TimestampMixin
 
+#: WHAT KIND OF THING THIS IS FOR A PLAYER. Every quiz is a QUIZ unless a coach
+#: made it as a REP: a Situational Rep, delivered one decision at a time with
+#: immediate feedback ("put me in the play"). A string with a CHECK, for the
+#: reason assessment_mode gives. See migration c5e1a9d47b20.
+QUIZ_KIND = "QUIZ"
+REP_KIND = "REP"
+QUIZ_KINDS = (QUIZ_KIND, REP_KIND)
+
 
 class Quiz(TimestampMixin, db.Model):
     __tablename__ = "quizzes"
@@ -19,6 +27,7 @@ class Quiz(TimestampMixin, db.Model):
     )
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
+    kind = db.Column(db.String(8), nullable=False, default=QUIZ_KIND, server_default=QUIZ_KIND)
     one_question_at_a_time = db.Column(db.Boolean, nullable=False, default=True)
     # When true, /play/submit rejects a submission that leaves any question
     # unanswered - enforced server-side (see submit_quiz), not just by the
@@ -92,6 +101,7 @@ class Quiz(TimestampMixin, db.Model):
             "created_by_username": self.coach.username if self.coach else None,
             "title": self.title,
             "description": self.description,
+            "kind": self.kind,
             "one_question_at_a_time": self.one_question_at_a_time,
             "require_all_answers": self.require_all_answers,
             "folder_id": self.folder_id,

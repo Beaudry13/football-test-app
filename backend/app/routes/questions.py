@@ -37,6 +37,7 @@ from app.models import (
 from app.models import CompetitionSession, QuestionClip
 from app.models.competition import LOBBY
 from app.models.question_region import RegionRole
+from app.models.motion_lab import MotionPlay
 from app.schemas.question import (
     AnnotationsUpdateSchema,
     QuestionCreateSchema,
@@ -86,6 +87,26 @@ def _validated_concept_id(quiz, concept_id):
     if concept is None or concept.organization_id != quiz.organization_id:
         raise ApiError("That concept does not exist", status_code=422)
     return concept.id
+
+
+def _validated_motion_play_id(quiz, motion_play_id):
+    """A Motion Lab play id proven to belong to this quiz's organization, or None.
+
+    Same rule as concepts: an id from a client is never trusted across a
+    tenant boundary.
+    """
+    if motion_play_id is None:
+        return None
+    play = db.session.get(MotionPlay, motion_play_id)
+    if play is None or play.organization_id != quiz.organization_id:
+        raise ApiError("That Motion Lab play does not exist", status_code=422)
+    return play.id
+
+
+def _clean_role(role):
+    """'  Boundary safety ' -> 'Boundary safety'; blank -> None."""
+    role = (role or "").strip()
+    return role or None
 
 
 def _replace_options(question: Question, options: list[dict]) -> None:
@@ -441,6 +462,9 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
     if next_position is None:
         next_position = len(quiz.questions)
 
+    # Validated before the insert, like everything above (see the ordering rule).
+    motion_play_id = _validated_motion_play_id(quiz, data.get("motion_play_id"))
+
     question = Question(
         quiz_id=quiz.id,
         question_text=data["question_text"],
@@ -449,6 +473,8 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         position=next_position,
         allows_multiple_answers=allows_multiple,
         concept_id=_validated_concept_id(quiz, data.get("concept_id")),
+        subject_role=_clean_role(data.get("subject_role")),
+        motion_play_id=motion_play_id,
     )
     db.session.add(question)
     db.session.flush()
@@ -736,6 +762,10 @@ def update_question(quiz_id: int, question_id: int):
         # deliberately has no load_default, so an edit that never mentions the
         # concept leaves the key absent and the existing tag alone.
         question.concept_id = _validated_concept_id(question.quiz, data.get("concept_id"))
+    if "subject_role" in data:
+        question.subject_role = _clean_role(data.get("subject_role"))
+    if "motion_play_id" in data:
+        question.motion_play_id = _validated_motion_play_id(question.quiz, data.get("motion_play_id"))
 
     # Deliberately NOT guarded by _reject_if_already_answered: the explanation
     # is teaching material shown after the fact, so improving it changes

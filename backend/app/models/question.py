@@ -132,6 +132,15 @@ class Question(db.Model):
     )
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+    #: SITUATIONAL REP: who the player IS in this decision ("Boundary safety"),
+    #: as the coach says it. Shown to the player above the picture. Optional on
+    #: any question; a Rep's decisions normally carry one.
+    subject_role = db.Column(db.String(60), nullable=True)
+    #: The Motion Lab play this decision was made from, so the coach's "Teach"
+    #: opens it. Provenance only - the question's picture is its own copy.
+    motion_play_id = db.Column(
+        db.Integer, db.ForeignKey("motion_plays.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -257,6 +266,9 @@ class Question(db.Model):
                 else None
             ),
             "position": self.position,
+            # Who the player is in this decision. Not a secret - it is the
+            # first thing a player must read.
+            "subject_role": self.subject_role,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must
             # not receive it. The play routes decide when to include it - in
@@ -305,6 +317,7 @@ class Question(db.Model):
         # player would hand them the answer to a question whose whole purpose
         # is that they cannot see it.
         if include_correct_answers:
+            data["motion_play_id"] = self.motion_play_id
             data["answer_explanation"] = self.answer_explanation
             data["expected_answers"] = self.expected_answers or []
             data["answer_matching"] = self.answer_matching

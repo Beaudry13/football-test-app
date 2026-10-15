@@ -24,6 +24,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.owner import owner_bp
     from app.routes.competition import competition_bp
     from app.routes.motion_lab import motion_lab_bp
+    from app.routes.reps import reps_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -33,6 +34,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(question_exclusions_bp, url_prefix="/api/quizzes")
     app.register_blueprint(rosters_bp, url_prefix="/api/quizzes")
     app.register_blueprint(access_codes_bp, url_prefix="/api/quizzes")
+    app.register_blueprint(reps_bp, url_prefix="/api/quizzes")
     app.register_blueprint(play_bp, url_prefix="/api/play")
     app.register_blueprint(concepts_bp, url_prefix="/api")
     app.register_blueprint(grading_bp, url_prefix="/api")
