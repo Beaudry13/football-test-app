@@ -2,6 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { updateQuestion } from '../../api/questions';
+import { createConcept, listConcepts, type Concept } from '../../api/concepts';
+import { ConceptPicker } from '../../components/concepts/ConceptPicker';
+import { resolveConcept } from '../../components/concepts/conceptMatch';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { listGroups } from '../../api/groups';
 import { createRepRetest, getRepResults, type RepConcept, type RepDecision, type RepResults } from '../../api/reps';
@@ -569,8 +572,139 @@ function RoleField({ quizId, decision, onChanged }: { quizId: number; decision: 
   );
 }
 
+/**
+ * EDIT A DECISION RIGHT HERE: the situation, the answers and which is right,
+ * the concept, the reason. Once a player has received it, the answers can be
+ * reworded or added to but the right one is locked - changing it would quietly
+ * change results players already have.
+ */
+function DecisionEditor({
+  quizId,
+  decision,
+  concepts,
+  onSaved,
+  onCancel,
+}: {
+  quizId: number;
+  decision: RepDecision;
+  concepts: Concept[];
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const locked = !!decision.delivered;
+  const [prompt, setPrompt] = useState(decision.question_text);
+  const [answers, setAnswers] = useState(decision.choices.map((c) => ({ text: c.text, correct: c.is_correct })));
+  const [concept, setConcept] = useState(decision.concept?.name ?? '');
+  const [why, setWhy] = useState(decision.answer_explanation ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const kept = decision.choices.length;
+  const filled = answers.filter((a) => a.text.trim());
+  const ready = !!prompt.trim() && filled.length >= 2 && filled.some((a) => a.correct);
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const name = concept.trim();
+      const conceptId = name ? (resolveConcept(name, concepts) ?? (await createConcept(name))).id : null;
+      await updateQuestion(quizId, decision.question_id, {
+        question_text: prompt.trim(),
+        options: (locked ? answers : filled).map((a) => ({ option_text: a.text.trim(), is_correct_answer: a.correct })),
+        concept_id: conceptId,
+        answer_explanation: why.trim(),
+      });
+      onSaved();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={styles.editor} role="group" aria-label={`Edit decision ${decision.number}`}>
+      <label className={styles.editField}>
+        <span>The situation</span>
+        <textarea value={prompt} rows={2} onChange={(e) => setPrompt(e.target.value)} aria-label="The situation" />
+      </label>
+      <div className={styles.editField}>
+        <span>Answers {locked ? '- players have this one, so the right answer is locked' : '- tap the circle on the right one'}</span>
+        {answers.map((a, i) => (
+          <div key={i} className={styles.editAnswer}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={a.correct}
+              aria-label={`Answer ${i + 1} is the right one`}
+              className={a.correct ? `${styles.editRight} ${styles.editRightOn}` : styles.editRight}
+              disabled={locked}
+              onClick={() => setAnswers((list) => list.map((x, j) => ({ ...x, correct: j === i })))}
+            >
+              {a.correct ? '✓' : ''}
+            </button>
+            <input
+              value={a.text}
+              aria-label={`Answer ${i + 1}`}
+              maxLength={500}
+              onChange={(e) => setAnswers((list) => list.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+            />
+            {!(locked && i < kept) && answers.length > 2 && (
+              <button
+                type="button"
+                className={styles.editDrop}
+                aria-label={`Remove answer ${i + 1}`}
+                onClick={() =>
+                  setAnswers((list) => {
+                    const next = list.filter((_, j) => j !== i);
+                    return next.some((x) => x.correct) ? next : next.map((x, j) => ({ ...x, correct: j === 0 }));
+                  })
+                }
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+        {answers.length < 5 && (
+          <button type="button" className={styles.editAdd} onClick={() => setAnswers((list) => [...list, { text: '', correct: false }])}>
+            + Answer
+          </button>
+        )}
+      </div>
+      <ConceptPicker
+        label="Concept"
+        value={concept}
+        onChange={setConcept}
+        concepts={concepts}
+        classes={{ field: styles.editField, chips: styles.editChips, chip: styles.editChip, strong: styles.editMean, note: styles.editNote }}
+      />
+      <label className={styles.editField}>
+        <span>Why (he sees it after he answers)</span>
+        <textarea value={why} rows={2} onChange={(e) => setWhy(e.target.value)} aria-label="Why" />
+      </label>
+      <ErrorBanner message={error} />
+      <div className={styles.editActions}>
+        <button type="button" className={nb.btnPrimary} disabled={busy || !ready} onClick={() => void save()}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" className={nb.btnSm} onClick={onCancel} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId: number; onChanged: () => void }) {
   const motionLab = useMayUseMotionLab();
+  const [editing, setEditing] = useState<number | null>(null);
+  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const edit = (id: number) => {
+    setEditing(id);
+    listConcepts()
+      .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
+      .catch(() => setConcepts([]));
+  };
   return (
     <section className={styles.section} aria-label="Decisions">
       <div className={styles.sectionHead}>
@@ -586,9 +720,30 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
             <li key={d.question_id} className={styles.decision}>
               {d.image && <img className={styles.thumb} src={resolveMediaUrl(d.image.image_url)} alt="" />}
               <div className={styles.decisionBody}>
-                <RoleField quizId={quizId} decision={d} onChanged={onChanged} />
-                <span className={styles.decisionPrompt}>{d.question_text}</span>
-                <ul className={styles.bars}>
+                <div className={styles.decisionTop}>
+                  <RoleField quizId={quizId} decision={d} onChanged={onChanged} />
+                  {editing !== d.question_id && (
+                    <button type="button" className={styles.editOpen} onClick={() => edit(d.question_id)} aria-label={`Edit decision ${d.number}`}>
+                      Edit
+                    </button>
+                  )}
+                </div>
+                {editing === d.question_id ? (
+                  <DecisionEditor
+                    quizId={quizId}
+                    decision={d}
+                    concepts={concepts}
+                    onCancel={() => setEditing(null)}
+                    onSaved={() => {
+                      setEditing(null);
+                      onChanged();
+                    }}
+                  />
+                ) : (
+                  <span className={styles.decisionPrompt}>{d.question_text}</span>
+                )}
+                {editing !== d.question_id && d.concept && <span className={styles.decisionConcept}>{d.concept.name}</span>}
+                <ul className={styles.bars} hidden={editing === d.question_id}>
                   {d.choices.map((c) => (
                     <li key={c.option_id} className={c.is_correct ? styles.barRight : styles.bar}>
                       <span className={styles.barLabel}>

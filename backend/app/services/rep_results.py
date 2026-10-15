@@ -41,6 +41,7 @@ from statistics import median
 from app.models import PlayerAttempt
 from app.models.assessment_mode import PRACTICE
 from app.services.player_identity import PlayerKey
+from app.services.question_snapshots import has_history
 
 
 def rep_attempts(quiz) -> list:
@@ -264,6 +265,9 @@ def _first_try_results(quiz) -> dict:
                 "image": question.image.to_dict() if question.image else None,
                 # The pre-snap moment, so Teach can run the motion for the room.
                 "presnap": question.presnap,
+                # Received by a player already: its answers can be reworded or
+                # added to, but which one is right is locked (routes/questions).
+                "delivered": has_history(question),
                 "is_retired": question.is_retired,
                 "correct_text": [o.option_text for o in question.options if o.is_correct_answer],
                 "responded": len(verdicts),

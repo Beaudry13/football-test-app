@@ -6,10 +6,12 @@ vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.f
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
 vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn() }));
+vi.mock('../../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }));
 import * as repsApi from '../../api/reps';
 import * as codesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
 import * as questionsApi from '../../api/questions';
+import * as conceptsApi from '../../api/concepts';
 import * as authModule from '../../auth/AuthContext';
 import type { RepResults } from '../../api/reps';
 import { RepPage } from './RepPage';
@@ -240,6 +242,47 @@ describe('A Rep, for the coach', () => {
   it("arrives straight in Teach from Home's \"Teach it\"", async () => {
     open(RESULTS, '/reps/5?teach=3');
     expect(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' })).toBeInTheDocument();
+  });
+
+  it('edits a decision right on the page: situation, answers, the right one, concept, reason', async () => {
+    vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 3, name: 'Motion adjustment', is_archived: false }]);
+    vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    const editor = within(screen.getByRole('group', { name: 'Edit decision 1' }));
+    fireEvent.change(editor.getByRole('textbox', { name: 'The situation' }), { target: { value: '#3 motions across. Your check?' } });
+    fireEvent.change(editor.getByRole('textbox', { name: 'Answer 3' }), { target: { value: 'Bail to the deep half' } });
+    fireEvent.click(editor.getByRole('radio', { name: 'Answer 2 is the right one' }));
+    fireEvent.change(editor.getByRole('textbox', { name: 'Concept' }), { target: { value: 'motion-adjustment' } });
+    fireEvent.change(editor.getByRole('textbox', { name: 'Why' }), { target: { value: 'Stay over the top.' } });
+    await waitFor(() => expect(conceptsApi.listConcepts).toHaveBeenCalled());
+    fireEvent.click(editor.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    expect(questionsApi.updateQuestion).toHaveBeenCalledWith(5, 11, {
+      question_text: '#3 motions across. Your check?',
+      options: [
+        { option_text: 'Rotate down', is_correct_answer: false },
+        { option_text: 'Stay boundary', is_correct_answer: true },
+        { option_text: 'Bail to the deep half', is_correct_answer: false },
+      ],
+      concept_id: 3,
+      answer_explanation: 'Stay over the top.',
+    });
+    expect(conceptsApi.createConcept).not.toHaveBeenCalled();
+    await waitFor(() => expect(repsApi.getRepResults).toHaveBeenCalledTimes(2));
+  });
+
+  it('once players have a decision, its right answer is locked and its answers cannot be removed', async () => {
+    vi.mocked(conceptsApi.listConcepts).mockResolvedValue([]);
+    open({ ...RESULTS, decisions: [{ ...RESULTS.decisions[0], delivered: true }] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    const editor = within(screen.getByRole('group', { name: 'Edit decision 1' }));
+    expect(editor.getByText(/the right answer is locked/)).toBeInTheDocument();
+    expect(editor.getByRole('radio', { name: 'Answer 1 is the right one' })).toBeDisabled();
+    expect(editor.queryByRole('button', { name: 'Remove answer 1' })).toBeNull();
+    // A new wrong answer can still be added.
+    fireEvent.click(editor.getByRole('button', { name: '+ Answer' }));
+    expect(editor.getByRole('textbox', { name: 'Answer 4' })).toBeInTheDocument();
   });
 
   it('a decision made from Motion Lab opens its play, for a coach who has Motion Lab', async () => {
