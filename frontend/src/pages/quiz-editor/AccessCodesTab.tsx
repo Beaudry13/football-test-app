@@ -75,10 +75,16 @@ const MODE_OPTIONS: { value: AssessmentMode; label: string; hint: string }[] = [
 function ModePicker({
   mode,
   onChange,
+  rep = false,
 }: {
   mode: AssessmentMode;
   onChange: (mode: AssessmentMode) => void;
+  /** A Situational Rep: always sent for immediate feedback, so no choice. */
+  rep?: boolean;
 }) {
+  if (rep) {
+    return <p className={styles.modePicker}>A Rep always goes out for immediate feedback: each player sees right or wrong, and your reason, as he answers.</p>;
+  }
   return (
     <fieldset className={styles.modePicker}>
       <legend>How should this count?</legend>
@@ -115,7 +121,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   // GRADED is the default, and reverting to it after each activation is
   // deliberate: sending a practice quiz is the deliberate act, and a sticky
   // PRACTICE would make the next real assessment silently not count.
-  const [mode, setMode] = useState<AssessmentMode>('GRADED');
+  const [mode, setMode] = useState<AssessmentMode>(quiz.kind === 'REP' ? 'PRACTICE' : 'GRADED');
   // Practice-only. Reset when the coach switches back to graded so a
   // toggle left on cannot travel silently into a graded activation.
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
@@ -345,6 +351,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 </p>
                 <AvailableUntil value={availableUntil} onChange={setAvailableUntil} />
                 <ModePicker
+                  rep={quiz.kind === 'REP'}
                   mode={mode}
                   onChange={(next) => {
                     setMode(next);
@@ -412,6 +419,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
 
             <>
               <ModePicker
+                rep={quiz.kind === 'REP'}
                 mode={mode}
                 onChange={(next) => {
                   setMode(next);

@@ -233,7 +233,17 @@
   gap: 6px;
   margin-bottom: var(--space-4);
 }
+.waitingOn {
+  margin: calc(-1 * var(--space-4)) 0 var(--space-5);
+  font-size: 14px;
+  color: var(--nb-text-muted);
+}
+.waitingLead {
+  font-weight: 700;
+  color: var(--nb-text);
+}
 .chip {
+  text-decoration: none;
   font-size: 13px;
   padding: 3px 10px;
   border-radius: 999px;

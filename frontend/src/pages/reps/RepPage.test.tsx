@@ -117,6 +117,14 @@ describe('A Rep, for the coach', () => {
     expect((screen.getByRole('textbox', { name: 'Rep link' }) as HTMLInputElement).value).toContain('/play/KKFFQY');
   });
 
+  it("while it is out, says who hasn't run it", async () => {
+    open({
+      ...RESULTS,
+      audience: { ...RESULTS.audience, people: [{ player_id: null, name: 'Marcus Hill' }, { player_id: null, name: 'Kobe Shaw' }] },
+    });
+    expect((await screen.findByText(/Hasn.t run it:/)).parentElement!.textContent).toMatch(/Kobe Shaw$/);
+  });
+
   it('VIEW PLAYERS shows who missed it and what each one answered', async () => {
     open();
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));

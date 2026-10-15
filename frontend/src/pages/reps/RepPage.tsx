@@ -76,6 +76,7 @@ export function RepPage() {
             </header>
 
             <SendPanel results={results} onSent={load} />
+            <Waiting results={results} />
 
             {results.retest_of && <DidItStick results={results} />}
 
@@ -249,11 +250,17 @@ function ProblemCard({
         )}
       </p>
       <div className={styles.chips}>
-        {shown.map((p) => (
-          <span key={p.key} className={styles.chip}>
-            {p.display_name}
-          </span>
-        ))}
+        {shown.map((p) =>
+          p.player_id !== null ? (
+            <Link key={p.key} to={`/roster/${p.player_id}`} className={styles.chip}>
+              {p.display_name}
+            </Link>
+          ) : (
+            <span key={p.key} className={styles.chip}>
+              {p.display_name}
+            </span>
+          ),
+        )}
         {more > 0 && <span className={styles.more}>and {more} more</span>}
       </div>
       <div className={styles.actions}>
@@ -343,6 +350,21 @@ function Teach({ problem, decisions, onClose }: { problem: RepConcept; decisions
     };
   });
   return <TeachView title={problem.name} slides={slides} start={Math.max(0, inProblem.indexOf(worst))} onClose={onClose} />;
+}
+
+/** WHO HASN'T RUN IT - while the Rep is out, the names to nudge. */
+function Waiting({ results }: { results: RepResults }) {
+  if (!results.audience.code) return null;
+  const ran = new Set(results.players.map((p) => (p.player_id !== null ? `p${p.player_id}` : p.display_name.toLowerCase())));
+  const waiting = results.audience.people.filter(
+    (p) => !ran.has(p.player_id !== null ? `p${p.player_id}` : (p.name ?? '').toLowerCase()),
+  );
+  if (waiting.length === 0 || results.players.length === 0) return null;
+  return (
+    <p className={styles.waitingOn}>
+      <span className={styles.waitingLead}>Hasn&rsquo;t run it:</span> {waiting.map((p) => p.name).join(', ')}
+    </p>
+  );
 }
 
 /** A RETEST'S FIRST QUESTION: did the teaching stick? Before, and now. */
