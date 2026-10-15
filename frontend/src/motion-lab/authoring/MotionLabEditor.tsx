@@ -319,6 +319,7 @@ export function MotionLabEditor({
   isUnsaved,
   onSaveUnsaved,
   onNewPlay,
+  actions,
 }: {
   repository: PlayRepository
   exit?: ReactNode
@@ -327,6 +328,8 @@ export function MotionLabEditor({
   isUnsaved?: (playId: string) => boolean
   onSaveUnsaved?: (play: Play) => void
   onNewPlay?: (fromPlayers: Player[], name?: string) => void
+  /** PEIRA's own actions on the play (Make question), at the right of the top bar. */
+  actions?: ReactNode
 }) {
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
@@ -2498,6 +2501,7 @@ export function MotionLabEditor({
           It belongs with the man it is talking about, so it moved to the strip.
         */}
         <div className="spacer" />
+        {!present && actions}
 
         {/* "How I am watching", never an editing mode - hence the label
             (SPEC §2, §11.1). ML-UX-2 added the rule that hides it below

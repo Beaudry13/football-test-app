@@ -1594,3 +1594,64 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* MOTION LAB -> QUIZ: the "Make question" panel. */
+.motion-lab-root .popover.make-q-pop {
+  width: 380px;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+.motion-lab-root .make-q-kinds {
+  display: flex;
+  gap: 6px;
+}
+.motion-lab-root .make-q-kinds button {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.motion-lab-root .make-q-preview {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #2e6b3c;
+}
+.motion-lab-root .make-q-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.motion-lab-root .make-q-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.motion-lab-root .make-q-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.motion-lab-root .make-q-field textarea,
+.motion-lab-root .make-q-field select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  resize: vertical;
+}
+.motion-lab-root .make-q-error {
+  font-size: 12px;
+  color: var(--defense);
+}
+.motion-lab-root .make-q-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

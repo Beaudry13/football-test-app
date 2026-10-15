@@ -5,6 +5,7 @@ import { listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor } from './authoring/MotionLabEditor'
+import { MakeQuestion } from './MakeQuestion'
 import type { Player } from './engine/formation'
 import type { Play } from './engine/play'
 import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
@@ -44,6 +45,8 @@ export default function MotionLabEditorPage() {
   const fresh = (location.state as { fresh?: boolean; players?: Player[]; name?: string; folderId?: number | null } | null) ?? null
   /** A replaced scratch play the coach can still get back. */
   const [undoScratch, setUndoScratch] = useState<Play | null>(null)
+  /** The "Make question" panel is open. */
+  const [asking, setAsking] = useState(false)
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -243,6 +246,7 @@ export default function MotionLabEditorPage() {
     setEditorKey((key) => key + 1)
   }
   const onScratch = current !== null && session.isScratch(current)
+  const currentPlay = current ? session.repository.listPlays().find((p) => p.id === current) ?? null : null
 
   let notice = null
   if (status?.state === 'conflict') {
@@ -326,6 +330,14 @@ export default function MotionLabEditorPage() {
           return <SaveStatus state={shownSaveState(live?.state ?? 'saved', pending)} message={live?.message ?? null} />
         }}
         notice={notice}
+        actions={
+          <div className="ball-menu">
+            <button className={asking ? 'active' : ''} aria-expanded={asking} onClick={() => setAsking((open) => !open)} title="Turn this play into a quiz question">
+              Make question
+            </button>
+            {asking && currentPlay && <MakeQuestion play={currentPlay} onClose={() => setAsking(false)} />}
+          </div>
+        }
         isUnsaved={(id) => session.isScratch(id)}
         onSaveUnsaved={(play) => session.saveScratch(play)}
         onNewPlay={startNewPlay}
