@@ -100,6 +100,7 @@ function open(results: RepResults = RESULTS) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
   vi.mocked(groupsApi.listGroups).mockResolvedValue([{ id: 9, name: 'Safeties', players: new Array(11).fill({}) }] as never);
   vi.mocked(codesApi.activateQuiz).mockResolvedValue({ code: 'NEW123' } as never);
   vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 6, player_count: 2 } as never);
@@ -198,6 +199,42 @@ describe('A Rep, for the coach', () => {
     fireEvent.change(role, { target: { value: 'Field safety' } });
     fireEvent.blur(role);
     await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalledWith(5, 11, { subject_role: 'Field safety' }));
+  });
+
+  it('the next step is said: Teach first, then Retest - and Retest is right there in Teach', async () => {
+    open();
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    // Before teaching, Teach leads.
+    expect(card.getByRole('button', { name: 'Teach' }).className).toMatch(/btnPrimary/);
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
+    fireEvent.click(teach.getByRole('button', { name: 'Close' }));
+    // Taught: Retest leads, and the card says so.
+    expect(card.getByText('Taught it. Now see if it stuck.')).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Retest' }).className).toMatch(/btnPrimary/);
+    // And from the teaching screen, one tap sends it.
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retest the 2 who missed' }));
+    await waitFor(() => expect(screen.getByText("the retest's page")).toBeInTheDocument());
+    expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
+    expect(codesApi.activateQuiz).toHaveBeenCalledWith(6, [], 'PRACTICE');
+  });
+
+  it('once retested, the card says how it went and opens the retest', async () => {
+    const retest = { id: 6, title: 'Motion adjustment - Retest', invited: 4, ran: 3, responded: 3, missed: 1 };
+    open({ ...RESULTS, concepts: [{ ...RESULTS.concepts[0], retest }, RESULTS.concepts[1]] });
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    expect(card.getByText(/Retest: 1 of 3 still missing\./)).toBeInTheDocument();
+    expect(card.getByText(/1 to go/)).toBeInTheDocument();
+    expect(card.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/reps/6');
+    expect(card.queryByRole('button', { name: 'Retest' })).toBeNull();
+  });
+
+  it('a problem the retest fixed says so', async () => {
+    const retest = { id: 6, title: 'Motion adjustment - Retest', invited: 4, ran: 4, responded: 4, missed: 0 };
+    open({ ...RESULTS, concepts: [{ ...RESULTS.concepts[0], retest }, RESULTS.concepts[1]] });
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    expect(card.getByText('Fixed on the retest: all 4 got it.')).toBeInTheDocument();
   });
 
   it('a rep not yet sent offers the groups and sends it, always for immediate feedback', async () => {

@@ -69,6 +69,8 @@ export interface RepConcept {
   question_ids: number[];
   /** The Motion Lab play to teach it from, when a decision came from one. */
   motion_play_id: number | null;
+  /** THE NEXT STEP: the latest Retest of this concept and how it went (first tries). */
+  retest?: { id: number; title: string; invited: number; ran: number; responded: number; missed: number } | null;
 }
 
 export interface RepResults {

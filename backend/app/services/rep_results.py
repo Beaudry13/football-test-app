@@ -102,7 +102,39 @@ def rep_results(quiz) -> dict:
     result = _first_try_results(quiz)
     result["audience"] = _audience(quiz)
     result["retest_of"] = _retest_of(quiz, result["concepts"])
+    _attach_retests(quiz, result["concepts"])
     return result
+
+
+def _attach_retests(quiz, concepts: list[dict]) -> None:
+    """THE NEXT STEP, ON EACH PROBLEM: has it been retested, and how did that
+    go? Each concept gets `retest` - the latest Rep built by Retest from this
+    one that re-asks it - with how many ran it and how many still miss it
+    (first tries, as everywhere here). None when it has not been retested."""
+    from app.models import Quiz
+
+    children = (
+        Quiz.query.filter(Quiz.retest_of_quiz_id == quiz.id, Quiz.kind == quiz.kind)
+        .order_by(Quiz.created_at.desc(), Quiz.id.desc())
+        .all()
+    )
+    latest: dict = {}
+    for child in children:
+        child_results = _first_try_results(child)
+        for c in child_results["concepts"]:
+            key = (c["concept"] or {}).get("id")
+            if key in latest:
+                continue
+            latest[key] = {
+                "id": child.id,
+                "title": child.title,
+                "invited": _audience(child)["invited"],
+                "ran": len(child_results["players"]),
+                "responded": c["responded"],
+                "missed": c["missed"],
+            }
+    for c in concepts:
+        c["retest"] = latest.get((c["concept"] or {}).get("id"))
 
 
 def _retest_of(quiz, concepts: list[dict]) -> dict | None:

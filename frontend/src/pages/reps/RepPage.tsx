@@ -14,6 +14,26 @@ import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
 
+/** Which problems this coach has opened Teach on, per Rep - so Retest becomes the next step. */
+const TAUGHT_KEY = 'peira.repTaught.v1';
+const conceptKey = (c: RepConcept) => String(c.concept?.id ?? 'general');
+function readTaught(repId: number): string[] {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(TAUGHT_KEY) ?? '{}') as Record<string, string[]>;
+    return all[repId] ?? [];
+  } catch {
+    return [];
+  }
+}
+function writeTaught(repId: number, keys: string[]): void {
+  try {
+    const all = JSON.parse(window.localStorage.getItem(TAUGHT_KEY) ?? '{}') as Record<string, string[]>;
+    window.localStorage.setItem(TAUGHT_KEY, JSON.stringify({ ...all, [repId]: keys }));
+  } catch {
+    // Private window: Teach still works, Retest is just not pushed forward.
+  }
+}
+
 /**
  * A SITUATIONAL REP, FOR THE COACH: send it, then see the FOOTBALL PROBLEM.
  *
@@ -38,6 +58,22 @@ export function RepPage() {
   const [results, setResults] = useState<RepResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [teaching, setTeaching] = useState<RepConcept | null>(null);
+  /** Problems already taught here: their next step is Retest. */
+  const [taught, setTaught] = useState<string[]>(() => readTaught(id));
+  const teach = (problem: RepConcept) => {
+    setTeaching(problem);
+    if (!taught.includes(conceptKey(problem))) {
+      const next = [...taught, conceptKey(problem)];
+      setTaught(next);
+      writeTaught(id, next);
+    }
+  };
+  /** Retest = a new Rep of this concept for exactly the players who missed it, sent, opened. */
+  const retest = async (problem: RepConcept) => {
+    const made = await createRepRetest(id, problem.concept?.id ?? null);
+    await activateQuiz(made.id, [], 'PRACTICE');
+    navigate(`/reps/${made.id}`);
+  };
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
 
   const load = useCallback(() => {
@@ -93,12 +129,9 @@ export function RepPage() {
                     problem={problem}
                     who={who}
                     decisions={results.decisions}
-                    onTeach={() => setTeaching(problem)}
-                    onRetest={async () => {
-                      const retest = await createRepRetest(id, problem.concept?.id ?? null);
-                      await activateQuiz(retest.id, [], 'PRACTICE');
-                      navigate(`/reps/${retest.id}`);
-                    }}
+                    taught={taught.includes(conceptKey(problem))}
+                    onTeach={() => teach(problem)}
+                    onRetest={() => retest(problem)}
                   />
                 ))}
                 {solid.length > 0 && (
@@ -122,7 +155,12 @@ export function RepPage() {
         )}
       </div>
       {teaching && results && (
-        <Teach problem={teaching} decisions={results.decisions} onClose={() => setTeaching(null)} />
+        <Teach
+          problem={teaching}
+          decisions={results.decisions}
+          onClose={() => setTeaching(null)}
+          onRetest={teaching.retest ? undefined : () => retest(teaching)}
+        />
       )}
     </div>
   );
@@ -219,15 +257,21 @@ function ProblemCard({
   problem,
   who,
   decisions,
+  taught,
   onTeach,
   onRetest,
 }: {
   problem: RepConcept;
   who: string;
   decisions: RepDecision[];
+  /** Teach has been opened on it here: Retest is the next step. */
+  taught: boolean;
   onTeach: () => void;
   onRetest: () => Promise<void>;
 }) {
+  const again = problem.retest ?? null;
+  const fixed = !!again && again.responded > 0 && again.missed === 0;
+  const toGo = again ? again.invited - again.ran : 0;
   const [viewing, setViewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -236,7 +280,7 @@ function ProblemCard({
   const more = problem.players_missed.length - shown.length;
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
   return (
-    <article className={styles.problem} aria-label={problem.name}>
+    <article className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem} aria-label={problem.name}>
       <h2 className={styles.problemName}>{problem.name}</h2>
       <p className={styles.problemLine}>
         <strong>
@@ -263,16 +307,47 @@ function ProblemCard({
         )}
         {more > 0 && <span className={styles.more}>and {more} more</span>}
       </div>
+      {/* THE NEXT STEP, SAID. Taught -> retest; retested -> how it went. */}
+      {again ? (
+        <p className={fixed ? `${styles.nextLine} ${styles.nextFixed}` : styles.nextLine}>
+          {again.ran === 0
+            ? `Retest is out to ${again.invited} - nobody has run it yet.`
+            : fixed
+              ? `Fixed on the retest: all ${again.responded} got it.`
+              : `Retest: ${again.missed} of ${again.responded} still missing.`}
+          {again.ran > 0 && toGo > 0 && <span className={styles.toGo}> {toGo} to go</span>}
+        </p>
+      ) : (
+        taught && <p className={styles.nextLine}>Taught it. Now see if it stuck.</p>
+      )}
       <div className={styles.actions}>
         <button type="button" className={nb.btnSecondary} aria-expanded={viewing} onClick={() => setViewing((v) => !v)}>
           View players
         </button>
-        <button type="button" className={nb.btnSecondary} onClick={onTeach}>
-          Teach
-        </button>
-        <button type="button" className={nb.btnPrimary} onClick={() => setConfirming(true)} disabled={busy}>
-          Retest
-        </button>
+        {again ? (
+          <>
+            <button type="button" className={nb.btnSecondary} onClick={onTeach}>
+              Teach
+            </button>
+            <Link to={`/reps/${again.id}`} className={`${nb.btnPrimary} ${styles.linkButton}`}>
+              Open retest
+            </Link>
+          </>
+        ) : (
+          <>
+            <button type="button" className={taught ? nb.btnSecondary : nb.btnPrimary} onClick={onTeach}>
+              Teach
+            </button>
+            <button
+              type="button"
+              className={taught ? nb.btnPrimary : nb.btnSecondary}
+              onClick={() => setConfirming(true)}
+              disabled={busy}
+            >
+              Retest
+            </button>
+          </>
+        )}
       </div>
       {confirming && (
         <div className={styles.confirm} role="group" aria-label="Retest">
@@ -333,7 +408,20 @@ function ProblemCard({
 }
 
 /** TEACH: the problem's decisions in the meeting-room view, worst first. */
-function Teach({ problem, decisions, onClose }: { problem: RepConcept; decisions: RepDecision[]; onClose: () => void }) {
+function Teach({
+  problem,
+  decisions,
+  onClose,
+  onRetest,
+}: {
+  problem: RepConcept;
+  decisions: RepDecision[];
+  onClose: () => void;
+  /** Absent once it has been retested. */
+  onRetest?: () => Promise<void>;
+}) {
+  const [sending, setSending] = useState(false);
+  const n = problem.players_missed.length;
   const inProblem = decisions.filter((d) => problem.question_ids.includes(d.question_id));
   const worst = [...inProblem].sort((a, b) => b.missed - a.missed)[0];
   const slides: TeachSlide[] = inProblem.map((d) => {
@@ -349,7 +437,32 @@ function Teach({ problem, decisions, onClose }: { problem: RepConcept; decisions
       motionPlayId: d.motion_play_id ?? problem.motion_play_id,
     };
   });
-  return <TeachView title={problem.name} slides={slides} start={Math.max(0, inProblem.indexOf(worst))} onClose={onClose} />;
+  return (
+    <TeachView
+      title={problem.name}
+      slides={slides}
+      start={Math.max(0, inProblem.indexOf(worst))}
+      onClose={onClose}
+      action={
+        onRetest && n > 0 ? (
+          <button
+            type="button"
+            disabled={sending}
+            onClick={async () => {
+              setSending(true);
+              try {
+                await onRetest();
+              } catch {
+                setSending(false);
+              }
+            }}
+          >
+            {sending ? 'Sending…' : `Retest the ${n} who missed`}
+          </button>
+        ) : undefined
+      }
+    />
+  );
 }
 
 /** WHO HASN'T RUN IT - while the Rep is out, the names to nudge. */

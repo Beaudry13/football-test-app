@@ -215,6 +215,26 @@
   border-radius: var(--peira-radius-md);
   background: var(--peira-surface);
 }
+.problemFixed {
+  border-left-color: var(--peira-success);
+}
+.nextLine {
+  margin: 0 0 var(--space-3);
+  font-weight: 700;
+  color: var(--peira-accent-text);
+}
+.nextFixed {
+  color: var(--peira-success);
+}
+.toGo {
+  font-weight: 400;
+  color: var(--nb-text-muted);
+}
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
 .problemName {
   margin: 0 0 6px;
   font-size: 22px;

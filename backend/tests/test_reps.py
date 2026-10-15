@@ -367,6 +367,31 @@ class TestDidItStick:
         assert (results["concepts"][0]["missed"], results["concepts"][0]["responded"]) == (0, 1)
         assert rotate  # the original's answer key is untouched
 
+    def test_the_original_shows_each_problem_s_retest_and_how_it_went(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        _play(client, code, "Cam Cole", ids["Cam Cole"], {first["id"]: stay, second["id"]: inside})
+        before = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=headers).get_json()
+        assert before["concepts"][0]["retest"] is None
+
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        still = next(o["id"] for o in copied["options"] if o["option_text"] == "Stay boundary")
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: still})
+
+        after = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=headers).get_json()
+        motion = next(c for c in after["concepts"] if c["name"] == "Motion adjustment")
+        assert motion["retest"] == {
+            "id": retest["id"], "title": "Motion adjustment - Retest", "invited": 2, "ran": 1, "responded": 1, "missed": 1,
+        }
+        leverage = next(c for c in after["concepts"] if c["name"] == "Leverage")
+        assert leverage["retest"] is None
+
     def test_an_ordinary_rep_is_not_a_retest(self, client, register_coach, app):
         coach, _, headers = register_coach()
         rep, *_ = _built(client, headers, app, coach)
