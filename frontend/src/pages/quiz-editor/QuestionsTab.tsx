@@ -31,6 +31,7 @@ import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
+import { makeRepFromQuiz } from '../../api/reps';
 
 /* Motion Lab's code (its engine and the play picture) loads only when a coach
    opens the picker - the quiz editor does not carry it otherwise. */
@@ -128,6 +129,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
      coaches who have Motion Lab. */
   const motionLab = useMayUseMotionLab();
   const [pickingPlay, setPickingPlay] = useState(false);
+  const [makingRep, setMakingRep] = useState(false);
   /* The add form lives at the BOTTOM, because that is where a new question
      lands. The control at the top opens that same form and brings it into
      view, rather than opening a second form somewhere the question will not
@@ -459,6 +461,29 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
           {motionLab && (
             <button className={nb.btnSecondary} onClick={() => setPickingPlay(true)}>
               From Motion Lab
+            </button>
+          )}
+          {/* EXISTING CONTENT -> SITUATIONAL REP: this quiz's tap-an-answer
+              questions, copied into a new Rep (the quiz is untouched). Same
+              pilot audience as Reps. */}
+          {motionLab && quiz.kind !== 'REP' && (
+            <button
+              className={nb.btnSecondary}
+              disabled={makingRep}
+              onClick={async () => {
+                setMakingRep(true);
+                setError(null);
+                try {
+                  const rep = await makeRepFromQuiz(quiz.id);
+                  navigate(`/reps/${rep.id}`);
+                } catch (err) {
+                  setError(getErrorMessage(err));
+                  setMakingRep(false);
+                }
+              }}
+              title="Copy this quiz's tap-an-answer questions into a Situational Rep"
+            >
+              {makingRep ? 'Making rep…' : 'Make a rep'}
             </button>
           )}
         </div>

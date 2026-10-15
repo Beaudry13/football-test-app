@@ -99,6 +99,38 @@ def _concept_ref(question) -> dict | None:
 
 def rep_results(quiz) -> dict:
     """Everything the coach's Rep page shows, computed from the first tries."""
+    result = _first_try_results(quiz)
+    result["audience"] = _audience(quiz)
+    result["retest_of"] = _retest_of(quiz, result["concepts"])
+    return result
+
+
+def _retest_of(quiz, concepts: list[dict]) -> dict | None:
+    """DID THE TEACHING STICK? For a Rep built by Retest: the Rep it re-asked,
+    and - per concept - how many missed it there. Read beside this Rep's own
+    numbers it answers "4 missed before; now 1 of 3". The parent's own
+    lineage is not walked: one step back is the comparison a coach makes."""
+    parent = quiz.retest_of
+    if parent is None or parent.kind != quiz.kind:
+        return None
+    before = {(c["concept"] or {}).get("id"): c for c in _first_try_results(parent)["concepts"]}
+    return {
+        "id": parent.id,
+        "title": parent.title,
+        "concepts": [
+            {
+                "concept": c["concept"],
+                "name": c["name"],
+                "missed_before": before[key]["missed"] if key in before else None,
+                "responded_before": before[key]["responded"] if key in before else None,
+            }
+            for c in concepts
+            for key in [(c["concept"] or {}).get("id")]
+        ],
+    }
+
+
+def _first_try_results(quiz) -> dict:
     questions = sorted(quiz.questions, key=lambda q: (q.position, q.id))
     tries = first_tries(rep_attempts(quiz))
 
@@ -179,7 +211,6 @@ def rep_results(quiz) -> dict:
         "players": players,
         "decisions": decisions,
         "concepts": _concepts(decisions),
-        "audience": _audience(quiz),
     }
 
 

@@ -341,3 +341,70 @@ class TestRetest:
         assert response.get_json()["reason"] == "nobody_missed"
         with app.app_context():
             assert Quiz.query.filter_by(retest_of_quiz_id=rep["id"]).count() == 0
+
+
+class TestDidItStick:
+    def test_a_retest_says_how_many_missed_the_concept_before(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, rotate = _option(first, "Stay boundary"), _option(first, "Rotate down")
+        inside = _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        _play(client, code, "Cam Cole", ids["Cam Cole"], {first["id"]: stay, second["id"]: inside})
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        again = next(o["id"] for o in copied["options"] if o["option_text"] == "Rotate down")
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: again})
+
+        results = client.get(f"/api/quizzes/{retest['id']}/rep-results", headers=headers).get_json()
+        assert results["retest_of"]["id"] == rep["id"]
+        stuck = results["retest_of"]["concepts"][0]
+        assert stuck["name"] == "Motion adjustment"
+        assert (stuck["missed_before"], stuck["responded_before"]) == (2, 2)
+        assert (results["concepts"][0]["missed"], results["concepts"][0]["responded"]) == (0, 1)
+        assert rotate  # the original's answer key is untouched
+
+    def test_an_ordinary_rep_is_not_a_retest(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, *_ = _built(client, headers, app, coach)
+        results = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=headers).get_json()
+        assert results["retest_of"] is None
+
+
+class TestMakeRepFromAQuiz:
+    def _quiz(self, client, headers):
+        quiz = client.post("/api/quizzes", json={"title": "Week 3 install"}, headers=headers).get_json()
+        concept = _concept(client, headers, "Coverage ID")
+        tap = _decision(client, headers, quiz["id"], "Identify the coverage.", ["Cover 3", "Cover 2"], concept=concept,
+                        why="One deep.")
+        written = client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={"question_text": "Describe your fit.", "question_type": "written", "options": []},
+            headers=headers,
+        ).get_json()
+        return quiz, tap, written
+
+    def test_copies_the_tap_an_answer_questions_into_a_new_rep_and_leaves_the_quiz_alone(self, client, coach_headers):
+        quiz, tap, _written = self._quiz(client, coach_headers)
+        response = client.post(f"/api/quizzes/{quiz['id']}/make-rep", json={}, headers=coach_headers)
+        assert response.status_code == 201, response.get_json()
+        rep = response.get_json()
+        assert rep["kind"] == "REP"
+        assert rep["title"] == "Week 3 install - Rep"
+        assert rep["left_behind"] == 1
+        full = client.get(f"/api/quizzes/{rep['id']}", headers=coach_headers).get_json()
+        assert [q["question_text"] for q in full["questions"]] == ["Identify the coverage."]
+        assert full["questions"][0]["concept"]["name"] == "Coverage ID"
+        assert full["questions"][0]["answer_explanation"] == "One deep."
+        assert client.get(f"/api/quizzes/{quiz['id']}", headers=coach_headers).get_json()["question_count"] == 2
+
+    def test_refuses_a_question_a_rep_cannot_judge(self, client, coach_headers):
+        quiz, _tap, written = self._quiz(client, coach_headers)
+        response = client.post(
+            f"/api/quizzes/{quiz['id']}/make-rep", json={"question_ids": [written["id"]]}, headers=coach_headers
+        )
+        assert response.status_code == 422
+        assert response.get_json()["reason"] == "question_not_tappable"

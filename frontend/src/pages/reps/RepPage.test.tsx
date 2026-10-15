@@ -5,9 +5,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.fn() }));
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
+vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn() }));
 import * as repsApi from '../../api/reps';
 import * as codesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
+import * as questionsApi from '../../api/questions';
 import type { RepResults } from '../../api/reps';
 import { RepPage } from './RepPage';
 
@@ -76,6 +78,7 @@ const RESULTS: RepResults = {
     },
   ],
   audience: { label: 'Safeties', invited: 11, code: 'KKFFQY', people: [] },
+  retest_of: null,
 };
 
 function Landed() {
@@ -146,6 +149,35 @@ describe('A Rep, for the coach', () => {
     await waitFor(() => expect(screen.getByText("the retest's page")).toBeInTheDocument());
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
     expect(codesApi.activateQuiz).toHaveBeenCalledWith(6, [], 'PRACTICE');
+  });
+
+  it('a retest answers "did it stick?": how many missed before, how many still miss now', async () => {
+    open({
+      ...RESULTS,
+      title: 'Motion adjustment - Retest',
+      concepts: [{ ...RESULTS.concepts[0], responded: 3, missed: 1 }],
+      audience: { label: null, invited: 4, code: 'MYTH7W', people: [] },
+      retest_of: {
+        id: 5,
+        title: 'Trips Jet - Boundary safety',
+        concepts: [{ concept: { id: 3, name: 'Motion adjustment' }, name: 'Motion adjustment', missed_before: 4, responded_before: 11 }],
+      },
+    });
+    const stick = within(await screen.findByRole('region', { name: 'Did it stick' }));
+    expect(stick.getByRole('link', { name: 'Trips Jet - Boundary safety' })).toHaveAttribute('href', '/reps/5');
+    expect(stick.getByText('4 missed before')).toBeInTheDocument();
+    expect(stick.getByText('1 of 3 still missing')).toBeInTheDocument();
+    expect(stick.getByText('1 to go')).toBeInTheDocument();
+  });
+
+  it("fixes who the player is right on the decision", async () => {
+    vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);
+    open();
+    const role = await screen.findByRole('textbox', { name: 'Who the player is in decision 1' });
+    expect(role).toHaveValue('Boundary safety');
+    fireEvent.change(role, { target: { value: 'Field safety' } });
+    fireEvent.blur(role);
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalledWith(5, 11, { subject_role: 'Field safety' }));
   });
 
   it('a rep not yet sent offers the groups and sends it, always for immediate feedback', async () => {

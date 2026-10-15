@@ -86,6 +86,18 @@ export interface RepResults {
     code: string | null;
     people: { player_id: number | null; name: string | null }[];
   };
+  /** DID IT STICK? Present on a Rep built by Retest: the Rep it re-asked and,
+   *  per concept, how many missed it there. */
+  retest_of: {
+    id: number;
+    title: string;
+    concepts: {
+      concept: { id: number; name: string } | null;
+      name: string;
+      missed_before: number | null;
+      responded_before: number | null;
+    }[];
+  } | null;
 }
 
 export function getRepResults(quizId: number): Promise<RepResults> {
@@ -94,6 +106,16 @@ export function getRepResults(quizId: number): Promise<RepResults> {
 
 export interface RepRetest extends Quiz {
   player_count: number;
+}
+
+export interface RepFromQuiz extends Quiz {
+  /** Questions a Rep cannot judge on the spot (draw, written...), left in the quiz. */
+  left_behind: number;
+}
+
+/** EXISTING CONTENT -> REP: a quiz's tap-an-answer questions, copied into a new Rep. */
+export function makeRepFromQuiz(quizId: number, questionIds?: number[]): Promise<RepFromQuiz> {
+  return api.post<RepFromQuiz>(`/quizzes/${quizId}/make-rep`, questionIds ? { question_ids: questionIds } : {});
 }
 
 /** A new Rep: this concept's decisions, for exactly the players who missed it. Built, not sent. */

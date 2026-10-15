@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
+import { updateQuestion } from '../../api/questions';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { listGroups } from '../../api/groups';
 import { createRepRetest, getRepResults, type RepConcept, type RepDecision, type RepResults } from '../../api/reps';
@@ -76,6 +77,8 @@ export function RepPage() {
 
             <SendPanel results={results} onSent={load} />
 
+            {results.retest_of && <DidItStick results={results} />}
+
             {results.players.length === 0 ? (
               <p className={styles.waiting}>No one has run it yet. Results land here the moment they do.</p>
             ) : (
@@ -112,7 +115,7 @@ export function RepPage() {
               </section>
             )}
 
-            <Decisions results={results} quizId={id} />
+            <Decisions results={results} quizId={id} onChanged={load} />
             {results.players.length > 0 && <Players results={results} />}
           </>
         )}
@@ -381,7 +384,73 @@ function Teach({ problem, decisions, onClose }: { problem: RepConcept; decisions
   );
 }
 
-function Decisions({ results, quizId }: { results: RepResults; quizId: number }) {
+/** A RETEST'S FIRST QUESTION: did the teaching stick? Before, and now. */
+function DidItStick({ results }: { results: RepResults }) {
+  const parent = results.retest_of!;
+  return (
+    <section className={styles.stick} aria-label="Did it stick">
+      <span className={styles.stickLead}>
+        Retest of <Link to={`/reps/${parent.id}`}>{parent.title}</Link>
+      </span>
+      <ul className={styles.stickList}>
+        {parent.concepts.map((c) => {
+          const now = results.concepts.find((x) => (x.concept?.id ?? null) === (c.concept?.id ?? null));
+          const waiting = results.audience.invited - (now?.responded ?? 0);
+          return (
+            <li key={c.concept?.id ?? 'general'} className={styles.stickRow}>
+              <span className={styles.stickName}>{c.name}</span>
+              <span className={styles.stickBefore}>{c.missed_before ?? '-'} missed before</span>
+              <span className={styles.stickArrow} aria-hidden="true">
+                →
+              </span>
+              <span className={now && now.responded > 0 && now.missed === 0 ? styles.stickFixed : styles.stickNow}>
+                {now && now.responded > 0
+                  ? now.missed === 0
+                    ? `all ${now.responded} got it`
+                    : `${now.missed} of ${now.responded} still missing`
+                  : 'not run yet'}
+              </span>
+              {waiting > 0 && now && now.responded > 0 && <span className={styles.stickWaiting}>{waiting} to go</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** "You're the ___" on a decision, fixable right here - a Rep made from a quiz starts without one. */
+function RoleField({ quizId, decision, onChanged }: { quizId: number; decision: RepDecision; onChanged: () => void }) {
+  const [value, setValue] = useState(decision.subject_role ?? '');
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (value.trim() === (decision.subject_role ?? '')) return;
+    setSaving(true);
+    try {
+      await updateQuestion(quizId, decision.question_id, { subject_role: value.trim() || null });
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <label className={styles.roleField}>
+      <span>You&rsquo;re the</span>
+      <input
+        value={value}
+        placeholder="Boundary safety"
+        maxLength={60}
+        disabled={saving}
+        aria-label={`Who the player is in decision ${decision.number}`}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      />
+    </label>
+  );
+}
+
+function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId: number; onChanged: () => void }) {
   return (
     <section className={styles.section} aria-label="Decisions">
       <div className={styles.sectionHead}>
@@ -397,10 +466,8 @@ function Decisions({ results, quizId }: { results: RepResults; quizId: number })
             <li key={d.question_id} className={styles.decision}>
               {d.image && <img className={styles.thumb} src={resolveMediaUrl(d.image.image_url)} alt="" />}
               <div className={styles.decisionBody}>
-                <span className={styles.decisionPrompt}>
-                  {d.subject_role && <span className={styles.decisionRole}>{d.subject_role}: </span>}
-                  {d.question_text}
-                </span>
+                <RoleField quizId={quizId} decision={d} onChanged={onChanged} />
+                <span className={styles.decisionPrompt}>{d.question_text}</span>
                 <ul className={styles.bars}>
                   {d.choices.map((c) => (
                     <li key={c.option_id} className={c.is_correct ? styles.barRight : styles.bar}>

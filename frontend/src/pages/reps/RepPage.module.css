@@ -108,6 +108,91 @@
   color: var(--nb-text);
 }
 
+/* DID IT STICK - a retest's first answer. */
+.stick {
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--nb-card-border);
+  border-left: 4px solid var(--nb-accent);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.stickLead {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--nb-text-muted);
+}
+.stickLead a {
+  color: inherit;
+  font-weight: 700;
+}
+.stickList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 16px;
+}
+.stickName {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stickBefore {
+  color: var(--peira-danger);
+}
+.stickArrow {
+  color: var(--nb-text-muted);
+}
+.stickNow {
+  font-weight: 700;
+}
+.stickFixed {
+  font-weight: 800;
+  color: var(--peira-success);
+}
+.stickWaiting {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}
+
+.roleField {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--peira-accent-text);
+  font-weight: 700;
+}
+.roleField input {
+  font: inherit;
+  font-weight: 700;
+  color: var(--peira-accent-text);
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 0;
+  width: 16ch;
+}
+.roleField input:hover,
+.roleField input:focus {
+  border-color: var(--nb-card-border);
+  outline: none;
+}
+.roleField input::placeholder {
+  color: var(--nb-text-muted);
+  font-weight: 400;
+}
+
 .waiting,
 .allClear {
   padding: var(--space-5);

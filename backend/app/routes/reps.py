@@ -8,6 +8,8 @@ the two things a Rep adds live here:
   POST /api/quizzes/<id>/rep-retest    the missed concept, back out to the players
                                        who missed it - a new REP built from the
                                        same decisions, ready to send
+  POST /api/quizzes/<id>/make-rep      an existing quiz's tap-an-answer questions
+                                       as a new REP (existing content -> Rep)
 
 RETEST REUSES THE QUIZ RETEST'S PARTS, not its rules. The copy (every field a
 decision carries, its picture included) and the targeted roster are the very
@@ -18,11 +20,12 @@ graded retest rightly never reads.
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
-from marshmallow import Schema, fields
+from marshmallow import Schema, fields, validate
 
 from app.errors import ApiError
 from app.extensions import db
 from app.models import Concept, Quiz
+from app.models.question import QuestionType
 from app.models.quiz import REP_KIND
 from app.routes.quizzes import _copy_questions_into, _retest_title, _seed_retest_roster
 from app.services.file_storage import StorageError, get_file_storage
@@ -133,4 +136,91 @@ def create_rep_retest(quiz_id: int):
 
     body = retest.to_dict()
     body["player_count"] = len(missed_attempts)
+    return jsonify(body), 201
+
+
+#: What a Rep can judge on the spot: one tap, one right answer.
+_TAP_TYPES = (QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE)
+
+
+class MakeRepSchema(Schema):
+    #: Narrow to these questions; absent means every tap-an-answer question.
+    question_ids = fields.List(fields.Int(), required=False, load_default=None, allow_none=True)
+    title = fields.Str(required=False, load_default=None, allow_none=True, validate=validate.Length(max=255))
+
+
+@reps_bp.post("/<int:quiz_id>/make-rep")
+@jwt_required()
+def make_rep(quiz_id: int):
+    """EXISTING CONTENT -> REP. A new Rep holding copies of a quiz's
+    tap-an-answer questions (pictures, concepts and explanations travel), so a
+    coach turns what he already wrote into a Rep in one tap. The quiz itself is
+    untouched. Draw and written questions stay behind: a Rep judges on the
+    spot, and they cannot be."""
+    original = get_visible_quiz(quiz_id)
+    coach = current_coach()
+    data = load_json_body(MakeRepSchema())
+
+    tappable = {
+        q.id
+        for q in original.questions
+        if q.question_type in _TAP_TYPES and not q.allows_multiple_answers and not q.is_retired
+    }
+    chosen = tappable
+    if data["question_ids"] is not None:
+        requested = set(data["question_ids"])
+        if requested - tappable:
+            raise ApiError(
+                "A Rep can only hold tap-an-answer questions (multiple choice or true/false)",
+                status_code=422,
+                reason="question_not_tappable",
+            )
+        chosen = requested
+    if not chosen:
+        raise ApiError(
+            "This quiz has no tap-an-answer questions to make a Rep from",
+            status_code=422,
+            reason="no_tap_questions",
+        )
+
+    rep = Quiz(
+        organization_id=coach.organization_id,
+        coach_id=coach.id,
+        title=(data["title"] or f"{original.title} - Rep")[:255],
+        kind=REP_KIND,
+        one_question_at_a_time=True,
+        require_all_answers=False,
+        folder_id=original.folder_id,
+    )
+    db.session.add(rep)
+    db.session.flush()
+
+    storage = get_file_storage()
+    copied_keys: list[str] = []
+    try:
+        _copy_questions_into(original, rep, storage, copied_keys, only_question_ids=chosen)
+        db.session.commit()
+    except StorageError as exc:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise ApiError(
+            "Could not copy the pictures, so the Rep was not created. Please try again.",
+            status_code=502,
+            reason="image_copy_failed",
+        ) from exc
+    except Exception:
+        db.session.rollback()
+        for key in copied_keys:
+            try:
+                storage.delete_image(key)
+            except Exception:
+                pass
+        raise
+
+    body = rep.to_dict()
+    body["left_behind"] = len([q for q in original.questions if not q.is_retired]) - len(chosen)
     return jsonify(body), 201
