@@ -10,6 +10,7 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepsPage.module.css';
+import { ConceptTrends } from './ConceptTrends';
 
 /**
  * EVERY SITUATIONAL REP - newest first, each one tap from its football
@@ -97,6 +98,8 @@ export function RepsPage() {
         </section>
       )}
 
+      {/* Is it getting better? One line per football problem. */}
+      <ConceptTrends />
       {reps === null && !error && <LoadingState />}
       {reps?.length === 0 && !picking && (
         <p className={styles.empty}>

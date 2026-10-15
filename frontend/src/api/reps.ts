@@ -165,6 +165,21 @@ export function getRepsForPlay(playId: number): Promise<{ id: number; title: str
   return api.get(`/quizzes/reps-for-play/${playId}`);
 }
 
+/** One football problem across recent Reps: first try on the first and the latest. */
+export interface ConceptTrend {
+  concept_id: number;
+  name: string;
+  reps: number;
+  first_pct: number | null;
+  last_pct: number | null;
+  last_missed: number;
+  last_rep_id: number;
+}
+
+export function getConceptTrends(): Promise<ConceptTrend[]> {
+  return api.get<ConceptTrend[]>('/quizzes/concept-trends');
+}
+
 export function getRepsSummary(): Promise<RepSummary[]> {
   return api.get<RepSummary[]>('/quizzes/reps-summary');
 }

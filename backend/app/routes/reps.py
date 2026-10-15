@@ -489,3 +489,54 @@ def reps_for_play(play_id: int):
         .all()
     )
     return jsonify([{"id": r.id, "title": r.title, "question_count": len(r.questions)} for r in reps])
+
+
+#: How many recent Reps a concept trend reads. Enough for a season's arc,
+#: small enough to stay a glance.
+TREND_REPS = 20
+
+
+@reps_bp.get("/concept-trends")
+@jwt_required()
+def concept_trends():
+    """IS IT GETTING BETTER? Per concept, across the organization's recent
+    Reps (oldest first): first-try percent on the first Rep that tested it and
+    on the latest, how many Reps tested it, and how many still missed it on the
+    latest. Five, most recently tested first. A glance, not a dashboard."""
+    from app.services.rep_results import _first_try_results
+
+    coach = current_coach()
+    reps = (
+        Quiz.query.filter(Quiz.organization_id == coach.organization_id, Quiz.kind == REP_KIND)
+        .order_by(Quiz.created_at.desc(), Quiz.id.desc())
+        .limit(TREND_REPS)
+        .all()
+    )
+    series: dict = {}
+    for order, rep in enumerate(reversed(reps)):
+        for c in _first_try_results(rep)["concepts"]:
+            if c["responded"] == 0 or c["concept"] is None:
+                continue
+            series.setdefault(c["concept"]["id"], {"name": c["name"], "points": []})["points"].append(
+                {"order": order, "rep_id": rep.id, "pct": _pct(c["responded"], c["missed"]), "missed": c["missed"]}
+            )
+    out = []
+    for concept_id, entry in series.items():
+        points = entry["points"]
+        first, last = points[0], points[-1]
+        out.append(
+            {
+                "concept_id": concept_id,
+                "name": entry["name"],
+                "reps": len(points),
+                "first_pct": first["pct"],
+                "last_pct": last["pct"],
+                "last_missed": last["missed"],
+                "last_rep_id": last["rep_id"],
+                "_recent": last["order"],
+            }
+        )
+    out.sort(key=lambda t: -t["_recent"])
+    for t in out:
+        del t["_recent"]
+    return jsonify(out[:5])

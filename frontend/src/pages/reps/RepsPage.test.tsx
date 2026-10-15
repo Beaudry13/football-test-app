@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/quizzes', () => ({ listQuizzes: vi.fn() }));
-vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn() }));
+vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn(), getConceptTrends: vi.fn().mockResolvedValue([]) }));
 import * as quizzesApi from '../../api/quizzes';
 import * as repsApi from '../../api/reps';
 import * as authModule from '../../auth/AuthContext';

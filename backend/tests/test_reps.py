@@ -495,6 +495,30 @@ class TestHomeSummary:
         assert [(e["quiz_id"], e["quiz_kind"]) for e in live] == [(rep["id"], "REP")]
 
 
+class TestConceptTrends:
+    def test_first_try_percent_on_the_first_rep_and_the_latest(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, rotate, inside = _option(first, "Stay boundary"), _option(first, "Rotate down"), _option(second, "Inside")
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {first["id"]: rotate, second["id"]: inside})
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: next(o["id"] for o in copied["options"] if o["option_text"] == "Rotate down")})
+
+        trends = client.get("/api/quizzes/concept-trends", headers=headers).get_json()
+        motion = next(t for t in trends if t["name"] == "Motion adjustment")
+        assert (motion["reps"], motion["first_pct"], motion["last_pct"], motion["last_missed"]) == (2, 50, 100, 0)
+        assert motion["last_rep_id"] == retest["id"]
+        leverage = next(t for t in trends if t["name"] == "Leverage")
+        assert (leverage["reps"], leverage["first_pct"], leverage["last_pct"]) == (1, 100, 100)
+        # Most recently tested first.
+        assert trends[0]["name"] == "Motion adjustment"
+
+
 class TestRepsForAPlay:
     def test_lists_the_reps_holding_a_decision_from_this_play(self, client, register_coach, app):
         coach, _, headers = register_coach()

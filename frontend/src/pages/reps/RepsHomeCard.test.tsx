@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../api/reps', () => ({ getRepsSummary: vi.fn() }));
+vi.mock('../../api/reps', () => ({ getRepsSummary: vi.fn(), getConceptTrends: vi.fn().mockResolvedValue([]) }));
 import * as repsApi from '../../api/reps';
 import type { RepSummary } from '../../api/reps';
 import { RepsHomeCard } from './RepsHomeCard';

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getRepsSummary, type RepSummary } from '../../api/reps';
 import nb from '../../styles/notebook.module.css';
 import { pluralFor } from './audiences';
+import { ConceptTrends } from './ConceptTrends';
 import styles from './RepsHomeCard.module.css';
 
 /**
@@ -107,6 +108,7 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
           </span>
         </div>
       )}
+      {reps.length > 0 && <ConceptTrends limit={3} />}
       {reps.length === 0 ? (
         <div className={styles.empty}>
           <span>Put a player in a play. See who knows his job.</span>
