@@ -24,7 +24,10 @@ import styles from './WeakestConcepts.module.css';
  *  coach's right answer, the reason, and what the misses chose when that is
  *  one question's story. Empty when the quiz's questions are not to hand. */
 function teachSlides(concept: ConceptBreakdown, questions: Question[]): TeachSlide[] {
-  const inConcept = questions.filter((q) => q.concept?.id === concept.concept_id && !q.is_retired);
+  // Who the player is and the Motion Lab play, when a question carries them
+  // (Situational Rep sets both); read without depending on that feature.
+  type Taught = Question & { subject_role?: string | null; motion_play_id?: number | null };
+  const inConcept = questions.filter((q) => q.concept?.id === concept.concept_id && !q.is_retired) as Taught[];
   return inConcept.map((q) => ({
     key: q.id,
     imageUrl: q.image ? resolveMediaUrl(q.image.image_url) : null,
