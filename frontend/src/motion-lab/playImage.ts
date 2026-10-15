@@ -14,17 +14,16 @@ import { FIELD_WIDTH, HASH_LEFT, HASH_RIGHT, Y_MAX, Y_MIN } from './engine/field
 import type { Player } from './engine/formation'
 import type { Pt } from './engine/geometry'
 import { lineToGainY, type Play } from './engine/play'
+import { IMAGE_HEIGHT, IMAGE_WIDTH, px, U } from './playImageLayout'
+
+export { IMAGE_HEIGHT, IMAGE_WIDTH } from './playImageLayout'
 
 export interface PlayImageOptions {
   /** Draw each man's route and pre-snap motion. */
   routes: boolean
+  /** The man the question is about ("You're the X"): ringed in gold. */
+  highlight?: string | null
 }
-
-/** Pixels per yard. 24 gives a 1376 x 720 picture: sharp, and well inside the upload limit. */
-const U = 24
-const MARGIN = 2
-export const IMAGE_WIDTH = Math.round((FIELD_WIDTH + 2 * MARGIN) * U)
-export const IMAGE_HEIGHT = Math.round((Y_MAX - Y_MIN) * U)
 
 const COLORS = {
   grass: '#2e6b3c',
@@ -39,9 +38,8 @@ const COLORS = {
   route: '#f7c948',
   defenseRoute: '#ff9b85',
   ball: '#8a4b20',
+  highlight: '#f7c948',
 }
-
-const px = (p: Pt) => ({ x: (p.x + MARGIN) * U, y: (Y_MAX - p.y) * U })
 
 function arrowHead(ctx: CanvasRenderingContext2D, from: Pt, to: Pt) {
   const a = px(from)
@@ -185,6 +183,17 @@ export function drawPlay(ctx: CanvasRenderingContext2D, play: Play, options: Pla
     ctx.stroke()
     ctx.fillStyle = offense ? COLORS.offenseInk : COLORS.defenseInk
     ctx.fillText(p.label, c.x, c.y + 1)
+  }
+
+  // The man the question is about, ringed so a player finds himself at a glance.
+  const marked = options.highlight ? play.players.find((p) => p.id === options.highlight) : undefined
+  if (marked) {
+    const c = px(marked)
+    ctx.strokeStyle = COLORS.highlight
+    ctx.lineWidth = 0.24 * U
+    ctx.beginPath()
+    ctx.arc(c.x, c.y, 1.32 * U, 0, Math.PI * 2)
+    ctx.stroke()
   }
 }
 

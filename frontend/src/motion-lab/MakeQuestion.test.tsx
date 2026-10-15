@@ -16,6 +16,7 @@ import * as questionsApi from '../api/questions'
 import * as image from './playImage'
 import { MakeQuestion } from './MakeQuestion'
 import { newPlay, type Play } from './engine/play'
+import { px } from './playImageLayout'
 
 /**
  * MOTION LAB -> QUIZ. The play on the field becomes a quiz question in one
@@ -94,6 +95,53 @@ describe('Make a quiz question from a play', () => {
     // The default offense's skill men: Y, RB, X, H, Z - never the QB or the line.
     expect(input.options.map((o) => o.option_text)).toEqual(['Y', 'RB', 'X', 'H', 'Z'])
     expect(input.options.filter((o) => o.is_correct_answer).map((o) => o.option_text)).toEqual(['X'])
+    expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: true })
+  })
+
+  it('names the man a Draw question is about - picked or tapped - ringed in the picture and named in the words', async () => {
+    const play = newPlay('Jet Dig')
+    open(play)
+    const whose = screen.getByRole('combobox', { name: /Whose job/ })
+    const words = screen.getByRole('textbox', { name: 'Question' })
+    fireEvent.change(whose, { target: { value: 'O8' } })
+    expect(words).toHaveValue("You're the X. Draw your assignment.")
+    expect(vi.mocked(image.drawPlay).mock.lastCall![2]).toEqual({ routes: false, highlight: 'O8' })
+
+    // A tap on a man in the picture makes it his question; a second tap lets go.
+    const picture = screen.getByLabelText('The picture players will see')
+    picture.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1376, height: 720, right: 1376, bottom: 720, x: 0, y: 0, toJSON: () => ({}) })
+    const rb = play.players.find((p) => p.label === 'RB')!
+    fireEvent.click(picture, { clientX: px(rb).x + 6, clientY: px(rb).y - 4 })
+    expect(whose).toHaveValue(rb.id)
+    expect(words).toHaveValue("You're the RB. Draw your assignment.")
+    fireEvent.click(picture, { clientX: px(rb).x, clientY: px(rb).y })
+    expect(whose).toHaveValue('')
+    expect(words).toHaveValue('Draw your assignment on this play.')
+
+    fireEvent.change(whose, { target: { value: 'O8' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(lastPath).toBe('/quizzes/31'))
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.question_text).toBe("You're the X. Draw your assignment.")
+    expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: false, highlight: 'O8' })
+  })
+
+  it("keeps the coach's own words when he names a man", () => {
+    open(newPlay('Jet Dig'))
+    const words = screen.getByRole('textbox', { name: 'Question' })
+    fireEvent.change(words, { target: { value: 'Show me your fit against this front.' } })
+    fireEvent.change(screen.getByRole('combobox', { name: /Whose job/ }), { target: { value: 'D0' } })
+    expect(words).toHaveValue('Show me your fit against this front.')
+  })
+
+  it('"Who gets the ball?" marks nobody', async () => {
+    open(passTo('O8'))
+    fireEvent.change(screen.getByRole('combobox', { name: /Whose job/ }), { target: { value: 'O9' } })
+    fireEvent.click(screen.getByRole('radio', { name: 'Who gets the ball?' }))
+    expect(screen.queryByRole('combobox', { name: /Whose job/ })).toBeNull()
+    expect(vi.mocked(image.drawPlay).mock.lastCall![2]).toEqual({ routes: true, highlight: null })
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: true })
   })
 

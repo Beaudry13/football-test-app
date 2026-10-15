@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
 import { createQuestion } from '../api/questions'
@@ -6,14 +6,17 @@ import { createQuiz, listQuizzes } from '../api/quizzes'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
-import { ballChoices, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
+import { playerAt } from './playImageLayout'
+import { ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
 
 /**
  * MOTION LAB -> QUIZ: turn the play on the field into a quiz question.
  *
  * Two questions a coach asks about a play, built from it in one click:
  *   "Draw your assignment"  a Draw question on a picture of the formation -
- *                           routes hidden, so the picture is not the answer;
+ *                           routes hidden, so the picture is not the answer.
+ *                           Tap a man (or pick him) and it becomes HIS
+ *                           question: "You're the X." with X ringed;
  *   "Who gets the ball?"    multiple choice, offered when the play gives the
  *                           ball to someone: the receivers and backs are the
  *                           choices and the play's own target is the answer.
@@ -27,6 +30,8 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
   const [kind, setKind] = useState<Kind>('draw')
   const [text, setText] = useState(QUESTION_TEXT.draw)
   const [routes, setRoutes] = useState(false)
+  /** The man a Draw question is about, if the coach names one. */
+  const [who, setWho] = useState<string | null>(null)
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null)
   const [quizId, setQuizId] = useState<number | 'new'>('new')
   const [busy, setBusy] = useState(false)
@@ -44,12 +49,30 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
     const ctx = preview.current?.getContext('2d')
     if (!ctx) return
     ctx.setTransform(preview.current!.width / IMAGE_WIDTH, 0, 0, preview.current!.height / IMAGE_HEIGHT, 0, 0)
-    drawPlay(ctx, play, { routes })
-  }, [play, routes])
+    drawPlay(ctx, play, { routes, highlight: kind === 'draw' ? who : null })
+  }, [play, routes, kind, who])
+
+  const offense = play.players.filter((p) => p.side === 'offense')
+  const defense = play.players.filter((p) => p.side === 'defense')
+
+  /** Make it his question - rewriting the words only if they are still ours. */
+  const mark = (id: string | null) => {
+    setWho(id)
+    if (isBuiltDrawText(text)) setText(drawText(play.players.find((p) => p.id === id)?.label))
+  }
+
+  /** A tap on the picture picks the man under it; a second tap on him lets go. */
+  const tapPicture = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (kind !== 'draw') return
+    const box = e.currentTarget.getBoundingClientRect()
+    if (!box.width || !box.height) return
+    const id = playerAt(play, { x: ((e.clientX - box.left) / box.width) * IMAGE_WIDTH, y: ((e.clientY - box.top) / box.height) * IMAGE_HEIGHT })
+    if (id) mark(id === who ? null : id)
+  }
 
   const choose = (next: Kind) => {
     setKind(next)
-    setText(QUESTION_TEXT[next])
+    setText(next === 'draw' ? drawText(play.players.find((p) => p.id === who)?.label) : QUESTION_TEXT[next])
     // To answer "who gets it" a player reads the concept, so the routes show.
     setRoutes(SHOWS_ROUTES[next])
   }
@@ -58,7 +81,7 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
     setBusy(true)
     setError(null)
     try {
-      const image = await playImageFile(play, routes)
+      const image = await playImageFile(play, routes, kind === 'draw' ? who : null)
       const target = quizId === 'new' ? (await createQuiz({ title: play.name })).id : quizId
       await createQuestion(target, playQuestionInput(play, kind, text), image)
       navigate(`/quizzes/${target}`)
@@ -81,7 +104,36 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
           </button>
         )}
       </div>
-      <canvas ref={preview} className="make-q-preview" width={344} height={180} aria-label="The picture players will see" />
+      <canvas
+        ref={preview}
+        className={kind === 'draw' ? 'make-q-preview tappable' : 'make-q-preview'}
+        width={344}
+        height={180}
+        aria-label="The picture players will see"
+        onClick={tapPicture}
+      />
+      {kind === 'draw' && (
+        <label className="make-q-field">
+          <span>Whose job? Tap him in the picture, or pick him</span>
+          <select value={who ?? ''} onChange={(e) => mark(e.target.value || null)}>
+            <option value="">Anyone - nobody marked</option>
+            <optgroup label="Offense">
+              {offense.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label="Defense">
+              {defense.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </optgroup>
+          </select>
+        </label>
+      )}
       <label className="make-q-check">
         <input type="checkbox" checked={routes} onChange={(e) => setRoutes(e.target.checked)} /> Show the routes
       </label>

@@ -3,6 +3,8 @@
 //
 //   draw  "Draw your assignment": a Draw question on a picture of the
 //         formation. Routes are hidden, so the picture is not the answer.
+//         The coach can name the man it is about ("You're the X."), and the
+//         picture rings him.
 //   ball  "Who gets the ball?": multiple choice, offered when the play gives
 //         the ball to someone. The receivers and backs (never the QB or the
 //         line) are the choices; the play's own target is the answer. The
@@ -18,6 +20,16 @@ export type PlayQuestionKind = 'draw' | 'ball'
 export const QUESTION_TEXT: Record<PlayQuestionKind, string> = {
   draw: 'Draw your assignment on this play.',
   ball: 'Who gets the ball on this play?',
+}
+
+/** The Draw question's words: about one man when the coach names him. */
+export function drawText(label?: string | null): string {
+  return label ? `You're the ${label}. Draw your assignment.` : QUESTION_TEXT.draw
+}
+
+/** Whether `text` is words this builder wrote (so naming a man may rewrite them), not the coach's own. */
+export function isBuiltDrawText(text: string): boolean {
+  return text.trim() === QUESTION_TEXT.draw || /^You're the .+\. Draw your assignment\.$/.test(text.trim())
 }
 
 /** Whether the picture shows the routes, by default, for each kind. */
@@ -51,7 +63,7 @@ export function playQuestionInput(play: Play, kind: PlayQuestionKind, text = QUE
 }
 
 /** The play's picture, as the PNG file the question is created with. */
-export async function playImageFile(play: Play, routes: boolean): Promise<File> {
-  const blob = await playImage(play, { routes })
+export async function playImageFile(play: Play, routes: boolean, highlight: string | null = null): Promise<File> {
+  const blob = await playImage(play, highlight ? { routes, highlight } : { routes })
   return new File([blob], `${play.name.replace(/[^\w-]+/g, '-').slice(0, 40) || 'play'}.png`, { type: 'image/png' })
 }

@@ -1617,6 +1617,9 @@
   border: 1px solid var(--border);
   background: #2e6b3c;
 }
+.motion-lab-root .make-q-preview.tappable {
+  cursor: pointer;
+}
 .motion-lab-root .make-q-check {
   display: flex;
   align-items: center;
