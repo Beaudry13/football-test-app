@@ -49,6 +49,7 @@ class QuestionCreateSchema(Schema):
     tap_targets = fields.List(
         fields.Nested(lambda: TapTargetSchema()), required=False, load_default=None, allow_none=True
     )
+    presnap = fields.Dict(required=False, load_default=None, allow_none=True)
     document_page_id = fields.Int(required=False, load_default=None, allow_none=True)
     region = fields.Nested(lambda: RegionSchema(), required=False, load_default=None, allow_none=True)
     expected_answers = fields.List(
@@ -79,6 +80,7 @@ class QuestionUpdateSchema(Schema):
     subject_role = fields.Str(required=False, allow_none=True, validate=validate.Length(max=60))
     motion_play_id = fields.Int(required=False, allow_none=True)
     tap_targets = fields.List(fields.Nested(lambda: TapTargetSchema()), required=False, allow_none=True)
+    presnap = fields.Dict(required=False, allow_none=True)
 
 
 class TapTargetSchema(Schema):

@@ -115,6 +115,39 @@ def _validated_tap_targets(targets, option_count: int):
     return [{"x": float(t["x"]), "y": float(t["y"])} for t in targets]
 
 
+#: Keys a pre-snap man may carry - the pre-snap part of a Motion Lab player.
+_PRESNAP_MAN_KEYS = {"id", "side", "label", "x", "y", "speed", "timing", "motion", "path"}
+
+
+def _validated_presnap(presnap):
+    """The pre-snap moment, kept to what it is for: a small list of men with
+    alignments and authored motion, and the situation. Anything else - a post-
+    snap route, the ball, blocks - is refused, because on a player's screen it
+    would answer the question. Size-capped: it rides in every delivery."""
+    if not presnap:
+        return None
+    men = presnap.get("players")
+    if not isinstance(men, list) or not 1 <= len(men) <= 30:
+        raise ApiError("The pre-snap moment needs its players", status_code=422, reason="presnap_invalid")
+    for man in men:
+        if not isinstance(man, dict) or set(man) - _PRESNAP_MAN_KEYS:
+            raise ApiError("The pre-snap moment holds alignment and motion only", status_code=422, reason="presnap_invalid")
+        if not isinstance(man.get("x"), (int, float)) or not isinstance(man.get("y"), (int, float)):
+            raise ApiError("Every man in the pre-snap moment needs a spot", status_code=422, reason="presnap_invalid")
+        for key in ("motion", "path"):
+            pts = man.get(key)
+            if pts is not None and (not isinstance(pts, list) or len(pts) > 200):
+                raise ApiError("A motion path is too long", status_code=422, reason="presnap_invalid")
+        # A path is stored only when it IS pre-snap motion (legacy timing).
+        if man.get("path") and man.get("timing") != "pre-snap":
+            raise ApiError("Routes after the snap do not belong in the pre-snap moment", status_code=422, reason="presnap_invalid")
+    if set(presnap) - {"v", "situation", "players", "highlight"}:
+        raise ApiError("The pre-snap moment holds alignment and motion only", status_code=422, reason="presnap_invalid")
+    if len(json.dumps(presnap)) > 64_000:
+        raise ApiError("The pre-snap moment is too large", status_code=422, reason="presnap_invalid")
+    return presnap
+
+
 def _clean_role(role):
     """'  Boundary safety ' -> 'Boundary safety'; blank -> None."""
     role = (role or "").strip()
@@ -477,6 +510,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
     # Validated before the insert, like everything above (see the ordering rule).
     motion_play_id = _validated_motion_play_id(quiz, data.get("motion_play_id"))
     tap_targets = _validated_tap_targets(data.get("tap_targets"), len(data["options"]))
+    presnap = _validated_presnap(data.get("presnap"))
 
     question = Question(
         quiz_id=quiz.id,
@@ -489,6 +523,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         subject_role=_clean_role(data.get("subject_role")),
         motion_play_id=motion_play_id,
         tap_targets=tap_targets,
+        presnap=presnap,
     )
     db.session.add(question)
     db.session.flush()
@@ -780,6 +815,8 @@ def update_question(quiz_id: int, question_id: int):
         question.subject_role = _clean_role(data.get("subject_role"))
     if "motion_play_id" in data:
         question.motion_play_id = _validated_motion_play_id(question.quiz, data.get("motion_play_id"))
+    if "presnap" in data:
+        question.presnap = _validated_presnap(data.get("presnap"))
     if "tap_targets" in data:
         count = len(data["options"]) if "options" in data else len(question.options)
         question.tap_targets = _validated_tap_targets(data.get("tap_targets"), count)

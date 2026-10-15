@@ -154,7 +154,7 @@ export function writeRepMemory(memory: RepMemory): void {
 
 /** Whether anyone in the play moves before the snap (so the picture should show it). */
 export function hasMotion(play: Play): boolean {
-  return play.players.some((p) => (p.motion?.length ?? 0) >= 2)
+  return play.players.some((p) => (p.motion?.length ?? 0) >= 2 || (p.timing === 'pre-snap' && p.path.length >= 2))
 }
 
 /** The new Rep's name: "Trips Jet - Boundary safety". */

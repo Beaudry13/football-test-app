@@ -11,6 +11,7 @@ import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
 import { playerAt, px } from './playImageLayout'
+import { presnapOf, snapSpots } from './presnap'
 import {
   addPrompt,
   ANSWER_SETS,
@@ -109,17 +110,23 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
     drawPlay(ctx, play, { routes, motion, highlight: who })
   }, [play, routes, motion, who])
 
+  /* THE PRE-SNAP MOMENT: with "Show motion" on, the player watches the
+     authored motion play out and decides at the snap. */
+  const presnap = useMemo(() => (motion ? presnapOf(play, who) : null), [play, who, motion])
   /* Answers that are men in the play ("Players", or typed labels) become
-     spots in the picture the player taps. */
-  const targets = useMemo(
-    () =>
-      tapTargets(
-        play,
-        answers.filter((a) => a.text.trim()).map((a) => a.text),
-        (p) => ({ x: px(p).x / IMAGE_WIDTH, y: px(p).y / IMAGE_HEIGHT }),
-      ),
-    [play, answers],
-  )
+     spots in the picture the player taps - where they stand AT THE SNAP when
+     the motion plays, since that is the picture he taps on. */
+  const targets = useMemo(() => {
+    const spots = presnap ? snapSpots(presnap) : null
+    return tapTargets(
+      play,
+      answers.filter((a) => a.text.trim()).map((a) => a.text),
+      (p) => {
+        const at = spots?.get(p.id) ?? p
+        return { x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT }
+      },
+    )
+  }, [play, answers, presnap])
 
   const ready = useMemo(() => {
     const filled = answers.filter((a) => a.text.trim())
@@ -184,6 +191,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
           motion_play_id: motionPlayId,
           answer_explanation: why.trim() || null,
           ...(targets ? { tap_targets: targets } : {}),
+          ...(presnap ? { presnap } : {}),
         },
         image,
       )
@@ -317,6 +325,7 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
           </div>
         ))}
         {targets && <div className="make-q-note">Players tap the man in the picture.</div>}
+        {presnap && <div className="make-q-note">Players watch the motion, then decide at the snap.</div>}
         {answers.length < 5 && (
           <button type="button" className="make-rep-add" onClick={() => setAnswers((list) => [...list, { text: '', correct: false }])}>
             + Answer

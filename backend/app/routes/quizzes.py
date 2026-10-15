@@ -812,6 +812,7 @@ def _copy_questions_into(
             subject_role=question.subject_role,
             motion_play_id=question.motion_play_id,
             tap_targets=question.tap_targets,
+            presnap=question.presnap,
         )
         db.session.add(copy_question)
         db.session.flush()

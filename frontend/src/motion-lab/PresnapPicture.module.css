@@ -1,0 +1,39 @@
+.wrap {
+  position: relative;
+}
+.picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #2e6b3c;
+}
+.snap {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(15, 16, 18, 0.75);
+  color: #f7c948;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.again {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(15, 16, 18, 0.75);
+  color: #f2f2ee;
+  cursor: pointer;
+}

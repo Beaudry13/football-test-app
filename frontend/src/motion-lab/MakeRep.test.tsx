@@ -231,6 +231,37 @@ describe('Make a rep from a play', () => {
     expect(repsApi.getRepsForPlay).toHaveBeenCalledWith(14)
   })
 
+  it('a play with motion carries its pre-snap moment, and the tap spots are where the men stand at the snap', async () => {
+    const play = newPlay('Jet')
+    const h = play.players.find((p) => p.label === 'H')!
+    h.motion = [{ x: h.x, y: h.y }, { x: h.x - 14, y: h.y }]
+    open(play)
+    expect(screen.getByRole('checkbox', { name: /Show motion/ })).toBeChecked()
+    expect(screen.getByText('Players watch the motion, then decide at the snap.')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Who gets the ball?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    const clip = input.presnap as { players: { id: string; motion?: unknown }[] }
+    expect(clip.players.find((p) => p.id === h.id)!.motion).toHaveLength(2)
+    const at = input.options.findIndex((o) => o.option_text === 'H')
+    expect(input.tap_targets![at].x).toBeCloseTo(px({ x: h.x - 14, y: h.y }).x / 1376)
+  })
+
+  it('without motion shown, there is no pre-snap moment', async () => {
+    const play = newPlay('Jet')
+    const h = play.players.find((p) => p.label === 'H')!
+    h.motion = [{ x: h.x, y: h.y }, { x: h.x - 14, y: h.y }]
+    open(play)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show motion/ }))
+    type('The situation', 'Your check?')
+    type('Answer 1', 'Rotate down')
+    type('Answer 2', 'Stay')
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).not.toHaveProperty('presnap')
+  })
+
   it('cannot be made without a situation and two answers', () => {
     open()
     type('Answer 1', 'Rotate down')

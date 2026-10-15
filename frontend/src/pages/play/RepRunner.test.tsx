@@ -7,6 +7,18 @@ vi.mock('../../api/play', () => ({
   submitQuiz: vi.fn(),
 }));
 vi.mock('../../api/reps', () => ({ getRepProgress: vi.fn() }));
+// The moving picture's own business is tested in motion-lab; here it is a
+// stand-in the test can bring to the snap.
+vi.mock('../../motion-lab/PresnapPicture', () => ({
+  default: ({ onDone, children }: { onDone?: () => void; children?: unknown }) => (
+    <div>
+      <button type="button" onClick={onDone}>
+        bring it to the snap
+      </button>
+      {children as never}
+    </div>
+  ),
+}));
 import * as playApi from '../../api/play';
 import * as repsApi from '../../api/reps';
 import type { Question, Quiz } from '../../api/types';
@@ -151,6 +163,20 @@ describe('A Situational Rep, for the player', () => {
     expect(await screen.findByText('Last run 0 of 2 → now 1 of 2')).toBeInTheDocument();
     expect(screen.getByText(/You missed Seam the first time\. Now you.ve got it\./)).toBeInTheDocument();
     expect(repsApi.getRepProgress).toHaveBeenCalledWith({ access_code_id: 7, player_name: 'Marcus Hill', player_id: 21 });
+  });
+
+  it('plays the motion first: the answers wait for the snap', async () => {
+    const moving = {
+      ...decision(4, '#3 motions across. What is your check?', ['Rotate down', 'Stay boundary'], 'Motion adjustment'),
+      presnap: { v: 1, situation: {}, highlight: null, players: [] },
+    } as unknown as Question;
+    run({ quiz: { ...QUIZ, questions: [moving] } as unknown as Quiz });
+    expect(await screen.findByText('Watch the motion…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Rotate down' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'bring it to the snap' }));
+    expect(screen.queryByText('Watch the motion…')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Rotate down' }));
+    await waitFor(() => expect(playApi.saveAnswer).toHaveBeenCalled());
   });
 
   it('picks up where he left off', () => {

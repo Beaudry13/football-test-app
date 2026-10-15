@@ -605,6 +605,54 @@ class TestPlayerProgress:
         assert self._progress(client, plain, "Bo Brown", ids["Bo Brown"]).status_code == 422
 
 
+class TestThePresnapMoment:
+    CLIP = {
+        "v": 1,
+        "situation": {"losYard": 35, "hash": "middle", "down": 1, "distance": 10, "show": True},
+        "highlight": "D9",
+        "players": [
+            {"id": "O8", "side": "offense", "label": "H", "x": 38, "y": -1.6, "speed": "fast", "timing": "on-snap",
+             "motion": [{"x": 38, "y": -1.6}, {"x": 20, "y": -1.6}]},
+            {"id": "D9", "side": "defense", "label": "FS", "x": 26, "y": 12, "speed": "fast", "timing": "on-snap"},
+        ],
+    }
+
+    def _make(self, client, headers, quiz_id, presnap):
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            json={
+                "question_text": "#3 motions across. Your check?",
+                "question_type": "multiple_choice",
+                "options": [{"option_text": "Rotate down", "is_correct_answer": True}, {"option_text": "Stay"}],
+                "presnap": presnap,
+            },
+            headers=headers,
+        )
+
+    def test_the_motion_rides_with_the_decision_to_the_player_and_into_copies(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._make(client, coach_headers, rep["id"], self.CLIP)
+        assert made.status_code == 201, made.get_json()
+        assert made.get_json()["presnap"] == self.CLIP
+        _players(client, coach_headers, rep["id"])
+        code = _send(client, coach_headers, rep["id"])
+        delivered = client.post("/api/play/validate-code", json={"code": code["code"]}).get_json()
+        assert delivered["quiz"]["questions"][0]["presnap"] == self.CLIP
+        copy = client.post(f"/api/quizzes/{rep['id']}/duplicate", headers=coach_headers).get_json()
+        assert copy["questions"][0]["presnap"] == self.CLIP
+
+    def test_nothing_that_would_answer_the_question_is_accepted(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        with_route = {**self.CLIP, "players": [{**self.CLIP["players"][0], "path": [{"x": 20, "y": -1.6}, {"x": 20, "y": 10}]}]}
+        assert self._make(client, coach_headers, rep["id"], with_route).status_code == 422
+        with_ball = {**self.CLIP, "ball": {"kind": "pass", "targetId": "O8"}}
+        assert self._make(client, coach_headers, rep["id"], with_ball).status_code == 422
+        stray_key = {**self.CLIP, "players": [{**self.CLIP["players"][0], "engagement": "x"}]}
+        assert self._make(client, coach_headers, rep["id"], stray_key).status_code == 422
+        legacy_pre_snap = {**self.CLIP, "players": [{**self.CLIP["players"][1], "timing": "pre-snap", "path": [{"x": 26, "y": 12}, {"x": 30, "y": 8}]}]}
+        assert self._make(client, coach_headers, rep["id"], legacy_pre_snap).status_code == 201
+
+
 class TestTapTheMan:
     TARGETS = [{"x": 0.2, "y": 0.6}, {"x": 0.8, "y": 0.55}]
 

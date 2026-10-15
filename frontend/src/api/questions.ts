@@ -28,6 +28,8 @@ export interface QuestionInput {
   motion_play_id?: number | null;
   /** One {x, y} (fractions of the picture) per option, so a player taps the man. */
   tap_targets?: { x: number; y: number }[] | null;
+  /** The pre-snap moment to play before the question (motion-lab/presnap.ts). */
+  presnap?: object | null;
   /** A PLAYBOOK PAGE AS THIS QUESTION'S PICTURE. Optional, and independent of
    *  `question_type` - a page says what the player SEES, never how they
    *  answer. */

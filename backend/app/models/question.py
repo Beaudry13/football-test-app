@@ -145,6 +145,11 @@ class Question(db.Model):
     #: option (in option order) as fractions of the picture, so the player taps
     #: the man instead of a button. Null on every other question.
     tap_targets = db.Column(JSONB, nullable=True)
+    #: THE PRE-SNAP MOMENT: for a decision made from a Motion Lab play with
+    #: authored motion, that play's pre-snap part (alignment, motion, speeds,
+    #: situation) so the player's screen runs the motion and freezes at the
+    #: snap. Never routes, ball or blocks - they would answer the question.
+    presnap = db.Column(JSONB, nullable=True)
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -276,6 +281,9 @@ class Question(db.Model):
             # Where each answer stands in the picture - what the player taps.
             # Not a secret: every answer is a target, the right one is not marked.
             "tap_targets": self.tap_targets,
+            # The pre-snap motion to play before the question - alignment and
+            # motion only, nothing that answers it.
+            "presnap": self.presnap,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must
             # not receive it. The play routes decide when to include it - in

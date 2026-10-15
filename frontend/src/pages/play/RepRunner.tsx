@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, submitQuiz } from '../../api/play';
 import { getRepProgress, type RepProgress } from '../../api/reps';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
@@ -14,7 +14,11 @@ import { applyDeliveredContent } from './deliveredQuestions';
 import { orderQuestions } from './questionOrder';
 import { isAuthRefusal } from './playerEntry';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
+import type { PresnapClip } from '../../motion-lab/presnap';
 import styles from './RepRunner.module.css';
+
+/* The moving picture loads only for a decision that has motion to play. */
+const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
 
 /**
  * SITUATIONAL REP, AS THE PLAYER LIVES IT: "put me in the play".
@@ -97,6 +101,8 @@ export function RepRunner({
   const [reviewing, setReviewing] = useState<number | null>(null);
   /** His run before this one, and on a Retest his first try on the original. */
   const [progress, setProgress] = useState<RepProgress | null>(null);
+  /** Decisions whose pre-snap motion has played out to the snap. */
+  const [motionDone, setMotionDone] = useState<Record<number, boolean>>({});
   const shownAt = useRef(Date.now());
   const authRaised = useRef(false);
   const afterRef = useRef<HTMLDivElement>(null);
@@ -121,6 +127,8 @@ export function RepRunner({
 
   const decision = decisions[index] as Question | undefined;
   const judged = decision ? !!feedback[decision.id] : false;
+  /* THE QUESTION WAITS FOR THE SNAP: while the motion plays, no answers. */
+  const watching = !!decision?.presnap && !motionDone[decision.id] && !judged;
 
   // On a phone the verdict lands below the answers: bring it (and Next) into view.
   useEffect(() => {
@@ -235,13 +243,20 @@ export function RepRunner({
       <Progress total={decisions.length} at={index} feedback={feedback} decisions={decisions} />
       <Decision
         question={decision}
-        onTap={tappable ? (optionId) => void lockIn(decision, { selected_option_id: optionId }) : undefined}
+        onTap={tappable && !watching ? (optionId) => void lockIn(decision, { selected_option_id: optionId }) : undefined}
         chosen={taken[decision.id]?.optionIds}
         tone={verdict ? (verdict.is_correct ? 'right' : verdict.is_correct === false ? 'wrong' : null) : null}
         disabled={busy || !!verdict}
+        still={judged}
+        onMotionDone={() => {
+          // The decision clock starts at the snap, not while he watches.
+          shownAt.current = Date.now();
+          setMotionDone((m) => ({ ...m, [decision.id]: true }));
+        }}
       />
+      {watching && <p className={styles.watching}>Watch the motion…</p>}
 
-      {tappable ? (
+      {watching ? null : tappable ? (
         <div className={styles.choices} role="group" aria-label="Your answer">
           {decision.options.map((option) => {
             const chosen = taken[decision.id]?.optionIds.includes(option.id);
@@ -332,15 +347,37 @@ function Decision({
   chosen,
   tone,
   disabled,
+  still = false,
+  onMotionDone,
 }: {
   question: Question;
   onTap?: (optionId: number) => void;
   chosen?: number[];
   tone?: 'right' | 'wrong' | null;
   disabled?: boolean;
+  /** Show the frozen snap without playing the motion (a review, an answered decision). */
+  still?: boolean;
+  onMotionDone?: () => void;
 }) {
   const role = roleOf(question);
   const targets = tapTargetsOf(question);
+  const overlay =
+    onTap &&
+    targets &&
+    question.options.map((option, i) => {
+      const on = chosen?.includes(option.id);
+      return (
+        <button
+          key={option.id}
+          type="button"
+          className={`${styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
+          style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
+          aria-label={`Tap ${option.option_text}`}
+          disabled={disabled}
+          onClick={() => onTap(option.id)}
+        />
+      );
+    });
   return (
     <>
       {role && (
@@ -349,26 +386,31 @@ function Decision({
           <span className={styles.roleName}>{role}</span>
         </div>
       )}
-      {question.image && (
-        <div className={styles.pictureWrap}>
-          <img className={styles.picture} src={resolveMediaUrl(question.image.image_url)} alt="The play" />
-          {onTap &&
-            targets &&
-            question.options.map((option, i) => {
-              const on = chosen?.includes(option.id);
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`${styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
-                  style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
-                  aria-label={`Tap ${option.option_text}`}
-                  disabled={disabled}
-                  onClick={() => onTap(option.id)}
-                />
-              );
-            })}
-        </div>
+      {question.presnap ? (
+        /* THE PLAY, MOVING: the pre-snap motion, then the freeze at the snap. */
+        <Suspense
+          fallback={
+            question.image ? (
+              <img className={styles.picture} src={resolveMediaUrl(question.image.image_url)} alt="The play" />
+            ) : null
+          }
+        >
+          <PresnapPicture
+            key={question.id}
+            clip={question.presnap as unknown as PresnapClip}
+            still={still}
+            onDone={onMotionDone}
+          >
+            {overlay}
+          </PresnapPicture>
+        </Suspense>
+      ) : (
+        question.image && (
+          <div className={styles.pictureWrap}>
+            <img className={styles.picture} src={resolveMediaUrl(question.image.image_url)} alt="The play" />
+            {overlay}
+          </div>
+        )
       )}
       <h1 className={styles.prompt}>{question.question_text}</h1>
       {onTap && targets && <span className={styles.tapHint}>Tap the man in the picture</span>}
@@ -379,7 +421,7 @@ function Decision({
 /** The decision's tap spots, when there is one per answer. */
 function tapTargetsOf(question: Question): { x: number; y: number }[] | null {
   const t = question.tap_targets;
-  return t && t.length === question.options.length && question.image ? t : null;
+  return t && t.length === question.options.length && (question.image || question.presnap) ? t : null;
 }
 
 function Verdict({ feedback }: { feedback: PracticeFeedback }) {
@@ -539,7 +581,7 @@ function Review({
       <div className={styles.reviewHead}>
         Missed {position + 1} of {missed.length}
       </div>
-      <Decision question={question} />
+      <Decision question={question} still />
       {chose.length > 0 && (
         <div className={`${styles.choice} ${styles.chosen} ${styles.wrong} ${styles.static}`}>
           You chose: {chose.join(', ')}
