@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
 import { AnswerKeyDialog } from '../components/AnswerKeyDialog';
 import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
@@ -19,11 +19,17 @@ import { ActiveQuizStatusSection } from './ActiveQuizStatus';
 import { DashboardRail, DashboardQuietNote } from './DashboardRail';
 import { useActiveStatus } from '../hooks/useActiveStatus';
 import { FirstSuccessChecklist } from '../components/onboarding/FirstSuccessChecklist';
+import { useMayUseMotionLab } from '../motion-lab/motionLabAccess';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
+/* Motion Lab's card loads only for coaches who have Motion Lab - nobody else
+   downloads the play picture code. */
+const MotionLabHomeCard = lazy(() => import('../motion-lab/MotionLabHomeCard'));
+
 export function DashboardPage() {
   const { coach } = useAuth();
+  const motionLab = useMayUseMotionLab();
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
   /** The answer-key picker. Opened from the toolbar rather than living on
    *  each card, so no coach sees a checkbox they did not ask for. */
@@ -270,6 +276,15 @@ export function DashboardPage() {
                 ordinary day. */}
             <ActiveQuizStatusSection entries={activeEntries} />
             <DashboardQuietNote entries={activeEntries} />
+
+            {/* The way onto the field, for coaches with Motion Lab: draw a
+                play, pick up an unsaved one, open a recent one. After the live
+                card, so it never pushes time-critical work down. */}
+            {motionLab && (
+              <Suspense fallback={null}>
+                <MotionLabHomeCard />
+              </Suspense>
+            )}
 
         {/* Tour target. An attribute rather than a class, so restyling this
             header can never silently unhook the Dashboard Tour - see

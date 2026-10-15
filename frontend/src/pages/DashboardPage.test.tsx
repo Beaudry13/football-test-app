@@ -7,6 +7,7 @@ import { DashboardPage } from './DashboardPage';
 import { FolderPage } from './FolderPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
+import * as motionApi from '../api/motionLab';
 import * as authContext from '../auth/AuthContext';
 import { openRowMenu } from '../test/rowMenu';
 import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
@@ -84,6 +85,25 @@ describe('DashboardPage', () => {
     // that section's own dedicated coverage.
     vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([]);
     mockAuth();
+  });
+
+  it('shows the Motion Lab card to a coach who has Motion Lab, and only to him', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    const plays = vi.spyOn(motionApi, 'listMotionPlays').mockResolvedValue([]);
+    mockAuth({ is_platform_owner: true });
+    renderDashboard();
+    expect(await screen.findByRole('link', { name: 'Draw a play' })).toHaveAttribute('href', '/motion-lab');
+    expect(screen.getByRole('region', { name: 'Motion Lab' })).toBeInTheDocument();
+    await waitFor(() => expect(plays).toHaveBeenCalled());
+  });
+
+  it('shows no Motion Lab card, and asks for no plays, for a coach without Motion Lab', async () => {
+    vi.spyOn(quizzesApi, 'listQuizzes').mockResolvedValue([]);
+    const plays = vi.spyOn(motionApi, 'listMotionPlays').mockResolvedValue([]);
+    renderDashboard();
+    expect(await screen.findByText(/No Quizzes yet/)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Motion Lab' })).toBeNull();
+    expect(plays).not.toHaveBeenCalled();
   });
 
   it('shows the empty state when there are no quizzes', async () => {

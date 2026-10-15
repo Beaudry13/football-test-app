@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getErrorMessage } from '../api/client'
 import { listMotionPlays } from '../api/motionLab'
 import type { QuestionInput } from '../api/questions'
 import type { Play } from './engine/play'
-import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
+import { PlayThumb } from './PlayThumb'
 import { ballChoices, playImageFile, playQuestionInput, SHOWS_ROUTES, type PlayQuestionKind } from './playQuestion'
 import { playFromRow } from './storage/apiPlayRepository'
 import styles from './MotionLabPlayPicker.module.css'
@@ -51,7 +51,7 @@ export default function MotionLabPlayPicker({ onPick, onClose }: { onPick: (inpu
       <ul className={styles.list} aria-label="Motion Lab plays">
         {(plays ?? []).map((play) => (
           <li key={play.id} className={styles.row}>
-            <Thumb play={play} />
+            <PlayThumb play={play} width={172} height={90} className={styles.thumb} />
             <div className={styles.body}>
               <span className={styles.name}>{play.name}</span>
               <div className={styles.actions}>
@@ -75,16 +75,4 @@ export default function MotionLabPlayPicker({ onPick, onClose }: { onPick: (inpu
       </div>
     </div>
   )
-}
-
-/** The play, small: what the coach recognises before the name. */
-function Thumb({ play }: { play: Play }) {
-  const ref = useRef<HTMLCanvasElement>(null)
-  useEffect(() => {
-    const ctx = ref.current?.getContext('2d')
-    if (!ctx) return
-    ctx.setTransform(ref.current!.width / IMAGE_WIDTH, 0, 0, ref.current!.height / IMAGE_HEIGHT, 0, 0)
-    drawPlay(ctx, play, { routes: true })
-  }, [play])
-  return <canvas ref={ref} className={styles.thumb} width={172} height={90} aria-hidden="true" />
 }
