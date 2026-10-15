@@ -1691,6 +1691,18 @@
   color: var(--muted);
   font-size: 16px;
 }
+.motion-lab-root .make-rep-concept label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.motion-lab-root .make-rep-mean {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+}
 .motion-lab-root .make-rep-done {
   display: flex;
   align-items: center;

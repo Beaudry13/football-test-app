@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -47,6 +47,7 @@ function open(play: Play = newPlay('Trips Jet'), motionPlayId: number | null = 1
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
   path = ''
   vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([
     { id: 3, title: 'Week 3 install', kind: 'QUIZ', question_count: 4, updated_at: '2026-10-01' },
@@ -81,7 +82,7 @@ describe('Make a rep from a play', () => {
     type('Answer 3', 'Bail deep')
     // The right one is the second circle tapped, not the default.
     fireEvent.click(screen.getByRole('radio', { name: 'Answer 1 is the right one' }))
-    type(/Concept/, 'Motion adjustment', 'combobox')
+    type(/Concept/, 'Motion adjustment')
     type(/Why/, 'He is the new #3.')
     const make = screen.getByRole('button', { name: 'Make rep' })
     await waitFor(() => expect(make).toBeEnabled())
@@ -120,7 +121,7 @@ describe('Make a rep from a play', () => {
     expect(screen.getByRole('textbox', { name: 'Answer 4' })).toHaveValue('Quarters')
     fireEvent.click(screen.getByRole('radio', { name: 'Answer 3 is the right one' }))
     type('The situation', 'Identify the coverage.')
-    type(/Concept/, 'leverage', 'combobox')
+    type(/Concept/, 'leverage')
     await waitFor(() => expect(within(screen.getByRole('combobox', { name: /Put it in/ })).getAllByRole('option')).toHaveLength(2))
     fireEvent.change(screen.getByRole('combobox', { name: /Put it in/ }), { target: { value: '8' } })
     fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
@@ -159,6 +160,63 @@ describe('Make a rep from a play', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).not.toHaveProperty('tap_targets')
+  })
+
+  it('a quick question fills the situation and its answers in one tap', () => {
+    open()
+    type('The situation', '#3 motions across.')
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'The coverage?' }))
+    expect(screen.getByRole('textbox', { name: 'The situation' })).toHaveValue('#3 motions across. Identify the coverage.')
+    expect(screen.getByRole('textbox', { name: 'Answer 1' })).toHaveValue('Cover 1')
+    expect(screen.getByRole('textbox', { name: 'Answer 4' })).toHaveValue('Quarters')
+    // Tapped again, the question is not added twice.
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'The coverage?' }))
+    expect(screen.getByRole('textbox', { name: 'The situation' })).toHaveValue('#3 motions across. Identify the coverage.')
+  })
+
+  it('"Who gets the ball?" knows the right answer from the play', () => {
+    const play = { ...newPlay('Jet Dig'), ball: { kind: 'pass' as const, targetId: 'O9', catchPoint: { x: 30, y: 10 } } }
+    open(play)
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Who gets the ball?' }))
+    const target = play.players.find((p) => p.id === 'O9')!.label
+    const answers = screen.getAllByRole('textbox', { name: /^Answer \d$/ }) as HTMLInputElement[]
+    const right = screen.getAllByRole('radio', { name: /is the right one/ }).findIndex((r) => r.getAttribute('aria-checked') === 'true')
+    expect(answers[right].value).toBe(target)
+  })
+
+  it('offers the concept the team already has instead of a near-copy', async () => {
+    vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 2, name: 'Motion adjustment', is_archived: false }])
+    open()
+    await waitFor(() => expect(conceptsApi.listConcepts).toHaveBeenCalled())
+    type(/Concept/, 'Motion Adjust')
+    fireEvent.click(await screen.findByRole('button', { name: 'Motion adjustment' }))
+    expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Motion adjustment')
+    type('The situation', 'Your check?')
+    type('Answer 1', 'Rotate down')
+    type('Answer 2', 'Stay boundary')
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    expect(conceptsApi.createConcept).not.toHaveBeenCalled()
+    expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1].concept_id).toBe(2)
+  })
+
+  it('the next decision from the same play starts with the role, concept and rep from the last one', async () => {
+    const play = open()
+    type(/You’re the/, 'Boundary safety')
+    type('The situation', 'Your check?')
+    type('Answer 1', 'Rotate down')
+    type('Answer 2', 'Stay boundary')
+    type(/Concept/, 'Motion adjustment')
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    expect(await screen.findByText(/Decision 1 added to/)).toBeInTheDocument()
+    cleanup()
+    vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([
+      { id: 40, title: 'Trips Jet - Boundary safety', kind: 'REP', question_count: 1, updated_at: '2026-10-15' },
+    ] as never)
+    open(play)
+    expect(screen.getByRole('textbox', { name: /You’re the/ })).toHaveValue('Boundary safety')
+    expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Motion adjustment')
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('40'))
   })
 
   it('cannot be made without a situation and two answers', () => {

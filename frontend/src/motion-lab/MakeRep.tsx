@@ -2,13 +2,26 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
 import { createConcept, listConcepts, type Concept } from '../api/concepts'
+import { ConceptPicker } from '../components/concepts/ConceptPicker'
+import { resolveConcept } from '../components/concepts/conceptMatch'
 import { createQuestion } from '../api/questions'
 import { createQuiz, listQuizzes } from '../api/quizzes'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
 import { playerAt, px } from './playImageLayout'
-import { ANSWER_SETS, hasMotion, repTitle, roleName, tapTargets } from './playRep'
+import {
+  addPrompt,
+  ANSWER_SETS,
+  ballTargetLabel,
+  hasMotion,
+  readRepMemory,
+  repTitle,
+  roleName,
+  SITUATION_PROMPTS,
+  tapTargets,
+  writeRepMemory,
+} from './playRep'
 
 /**
  * MOTION LAB -> SITUATIONAL REP: "put me in the play, make me prove I know my job."
@@ -38,11 +51,17 @@ const blankAnswers = (): Answer[] => [
 
 export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPlayId: number | null; onClose: () => void }) {
   const navigate = useNavigate()
-  const [who, setWho] = useState<string | null>(null)
-  const [role, setRole] = useState('')
+  /* PICK UP WHERE THE COACH LEFT OFF on this play: the man, his role, the
+     concept and the Rep from the last decision made from it. */
+  const [memory] = useState(() => readRepMemory())
+  const same = memory?.playId === play.id ? memory : null
+  const [who, setWho] = useState<string | null>(() =>
+    same?.who && play.players.some((p) => p.id === same.who) ? same.who : null,
+  )
+  const [role, setRole] = useState(same?.role ?? '')
   const [prompt, setPrompt] = useState('')
   const [answers, setAnswers] = useState<Answer[]>(blankAnswers)
-  const [concept, setConcept] = useState('')
+  const [concept, setConcept] = useState(same?.concept ?? '')
   const [why, setWhy] = useState('')
   const [motion, setMotion] = useState(() => hasMotion(play))
   const [routes, setRoutes] = useState(false)
@@ -56,7 +75,12 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
 
   useEffect(() => {
     listQuizzes()
-      .then((list) => setReps(list.filter((q) => q.kind === 'REP').sort((a, b) => b.updated_at.localeCompare(a.updated_at))))
+      .then((list) => {
+        const found = list.filter((q) => q.kind === 'REP').sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+        setReps(found)
+        // The Rep the last decision from this play went into, if it is still there.
+        if (same?.repId && found.some((r) => r.id === same.repId)) setRepId(same.repId)
+      })
       .catch(() => setReps([]))
     listConcepts()
       .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
@@ -107,9 +131,20 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
       list.map((a, j) => (patch.correct ? { ...a, correct: j === i } : j === i ? { ...a, ...patch } : a)),
     )
 
-  const quickFill = (texts: string[]) => {
+  /* One tap of answers. For the play's own men, the right one is the man the
+     play gives the ball to, when PEIRA knows it. */
+  const quickFill = (texts: string[], setId?: string) => {
     if (texts.length < 2) return
-    setAnswers(texts.map((text, i) => ({ text, correct: i === 0 })))
+    const target = setId === 'players' ? ballTargetLabel(play) : null
+    const right = target && texts.includes(target) ? target : texts[0]
+    setAnswers(texts.map((text) => ({ text, correct: text === right })))
+  }
+
+  /* A prompt fills its answers too, unless the coach has typed his own. */
+  const usePrompt = (p: (typeof SITUATION_PROMPTS)[number]) => {
+    setPrompt((now) => addPrompt(now, p.text))
+    const set = p.answers ? ANSWER_SETS.find((s) => s.id === p.answers) : null
+    if (set && answers.every((a) => !a.text.trim())) quickFill(set.answers(play), set.id)
   }
 
   async function make() {
@@ -117,9 +152,8 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
     setError(null)
     try {
       const conceptName = concept.trim()
-      const conceptId = conceptName
-        ? (concepts.find((c) => c.name.toLowerCase() === conceptName.toLowerCase()) ?? (await createConcept(conceptName))).id
-        : null
+      // The concept the team already has, however it was typed; a new one only when it is new.
+      const conceptId = conceptName ? (resolveConcept(conceptName, concepts) ?? (await createConcept(conceptName))).id : null
       let target = repId === 'new' ? null : reps.find((r) => r.id === repId) ?? null
       if (!target) target = await createQuiz({ title: repTitle(play, role), kind: 'REP' })
       const blob = await playImage(play, { routes, motion, highlight: who })
@@ -147,6 +181,15 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
       if (conceptId !== null && !concepts.some((c) => c.id === conceptId)) {
         setConcepts((list) => [...list, { id: conceptId, name: conceptName, is_archived: false }])
       }
+      const usedConcept = concepts.find((c) => c.id === conceptId)?.name ?? conceptName
+      writeRepMemory({
+        playId: play.id,
+        who,
+        role: role.trim(),
+        concept: usedConcept,
+        repId: target.id,
+        recentConcepts: [usedConcept, ...(memory?.recentConcepts ?? []).filter((c) => c !== usedConcept)].filter(Boolean).slice(0, 5),
+      })
     } catch (err) {
       setError(getErrorMessage(err))
     } finally {
@@ -207,11 +250,18 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
         <span>The situation</span>
         <textarea value={prompt} rows={2} onChange={(e) => setPrompt(e.target.value)} placeholder="#3 motions across. What is your check?" />
       </label>
+      <div className="make-rep-sets" role="group" aria-label="Quick questions">
+        {SITUATION_PROMPTS.map((p) => (
+          <button key={p.label} type="button" onClick={() => usePrompt(p)}>
+            {p.label}
+          </button>
+        ))}
+      </div>
       <div className="make-q-field">
         <span>Answers - tap the circle on the right one</span>
         <div className="make-rep-sets" role="group" aria-label="Quick answers">
           {ANSWER_SETS.map((set) => (
-            <button key={set.id} type="button" onClick={() => quickFill(set.answers(play))}>
+            <button key={set.id} type="button" onClick={() => quickFill(set.answers(play), set.id)}>
               {set.label}
             </button>
           ))}
@@ -259,15 +309,14 @@ export function MakeRep({ play, motionPlayId, onClose }: { play: Play; motionPla
           </button>
         )}
       </div>
-      <label className="make-q-field">
-        <span>Concept - what you&rsquo;ll see missed</span>
-        <input value={concept} onChange={(e) => setConcept(e.target.value)} placeholder="Motion adjustment" list="make-rep-concepts" maxLength={80} />
-        <datalist id="make-rep-concepts">
-          {concepts.map((c) => (
-            <option key={c.id} value={c.name} />
-          ))}
-        </datalist>
-      </label>
+      <ConceptPicker
+        label="Concept - what you'll see missed"
+        value={concept}
+        onChange={setConcept}
+        concepts={concepts}
+        recent={memory?.recentConcepts ?? []}
+        classes={{ field: 'make-q-field make-rep-concept', chips: 'make-rep-sets', chip: '', strong: 'make-rep-mean', note: 'make-q-note' }}
+      />
       <label className="make-q-field">
         <span>Why (optional) - he sees it after he answers</span>
         <textarea value={why} rows={2} onChange={(e) => setWhy(e.target.value)} placeholder="He's the new #3 - you rotate down to him." />

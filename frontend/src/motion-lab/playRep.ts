@@ -7,6 +7,7 @@
 // It is stored as an ordinary multiple-choice question (see api/reps.ts), so
 // everything here only saves the coach typing.
 
+import { ballTargetOf } from './engine/ball'
 import type { Player } from './engine/formation'
 import type { Play } from './engine/play'
 
@@ -92,6 +93,63 @@ export function tapTargets(play: Play, answers: string[], at: (p: Player) => { x
     out.push(at(men[0]))
   }
   return out
+}
+
+/**
+ * THE QUESTIONS COACHES ASK, one tap each. A prompt that implies its answers
+ * fills them too ("Identify the coverage." -> Cover 1 / 2 / 3 / Quarters).
+ */
+export const SITUATION_PROMPTS: { label: string; text: string; answers?: AnswerSet['id'] }[] = [
+  { label: 'Your check?', text: 'What is your check?' },
+  { label: 'Who do you have?', text: 'Who do you have?' },
+  { label: 'Your leverage?', text: 'What is your leverage?', answers: 'leverage' },
+  { label: 'The coverage?', text: 'Identify the coverage.', answers: 'coverage' },
+  { label: 'Who gets the ball?', text: 'Who gets the ball?', answers: 'players' },
+  { label: 'Your gap?', text: 'What is your gap?', answers: 'gap' },
+]
+
+/** "#3 motions across." + "What is your check?" -> one situation; never the same question twice. */
+export function addPrompt(current: string, text: string): string {
+  const now = current.trim()
+  if (!now) return text
+  if (now.toLowerCase().endsWith(text.toLowerCase())) return now
+  return `${now} ${text}`
+}
+
+/** The man the play gives the ball to, by label - the right answer to "Who gets the ball?" when PEIRA knows it. */
+export function ballTargetLabel(play: Play): string | null {
+  const id = ballTargetOf(play.ball) ?? (play.ball?.kind === 'handoff' ? play.ball.carrierId : null)
+  return play.players.find((p) => p.id === id)?.label ?? null
+}
+
+/** WHAT THE COACH SAID LAST TIME, so the next decision does not start from nothing. */
+export interface RepMemory {
+  playId: string
+  who: string | null
+  role: string
+  concept: string
+  repId: number | null
+  /** Concepts this coach used most recently, newest first. */
+  recentConcepts: string[]
+}
+
+const MEMORY_KEY = 'peira.makeRep.v1'
+
+export function readRepMemory(): RepMemory | null {
+  try {
+    const raw = window.localStorage.getItem(MEMORY_KEY)
+    return raw ? (JSON.parse(raw) as RepMemory) : null
+  } catch {
+    return null
+  }
+}
+
+export function writeRepMemory(memory: RepMemory): void {
+  try {
+    window.localStorage.setItem(MEMORY_KEY, JSON.stringify(memory))
+  } catch {
+    // A private window: the next decision simply starts blank.
+  }
 }
 
 /** Whether anyone in the play moves before the snap (so the picture should show it). */
