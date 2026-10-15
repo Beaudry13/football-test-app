@@ -226,7 +226,8 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
         <div className={styles.liveRow}>
           <span className={styles.livePip} aria-hidden="true" />
           <span className={styles.liveText}>
-            Out with {results.audience.label ?? 'players'} · {done} of {results.audience.invited} ran it
+            Out with {results.audience.label ?? pluralFor(results.audience.positions ?? []) ?? 'players'} · {done} of{' '}
+            {results.audience.invited} ran it
           </span>
         </div>
         <div className={styles.linkRow}>
