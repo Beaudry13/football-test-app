@@ -408,3 +408,30 @@ class TestMakeRepFromAQuiz:
         )
         assert response.status_code == 422
         assert response.get_json()["reason"] == "question_not_tappable"
+
+
+class TestHomeSummary:
+    def test_the_latest_reps_each_with_its_worst_football_problem(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        client.post("/api/quizzes", json={"title": "Install"}, headers=headers)  # a quiz is not a rep
+
+        summary = client.get("/api/quizzes/reps-summary", headers=headers).get_json()
+        assert [s["id"] for s in summary] == [rep["id"]]
+        top = summary[0]
+        assert (top["decisions"], top["ran"], top["invited"], top["live"]) == (2, 1, 4, True)
+        assert top["worst"] == {"name": "Motion adjustment", "missed": 1, "responded": 1, "most_common_wrong": "Stay boundary"}
+
+    def test_another_organizations_reps_are_not_shown(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        _built(client, headers, app, coach)
+        _, _, other = register_coach(username="coach2", email="coach2@example.com", organization="Rivals")
+        assert client.get("/api/quizzes/reps-summary", headers=other).get_json() == []
+
+    def test_the_live_board_says_rep(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, *_ = _built(client, headers, app, coach)
+        live = client.get("/api/quizzes/active-status", headers=headers).get_json()
+        assert [(e["quiz_id"], e["quiz_kind"]) for e in live] == [(rep["id"], "REP")]

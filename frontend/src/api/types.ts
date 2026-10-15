@@ -810,6 +810,8 @@ export interface ActiveAttemptSummary {
 export interface ActiveQuizStatus {
   quiz_id: number;
   quiz_title: string;
+  /** REP for a Situational Rep. Absent from older payloads (all quizzes). */
+  quiz_kind?: QuizKind;
   access_code_id: number;
   code: string;
   expires_at: string;

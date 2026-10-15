@@ -100,7 +100,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
   // meaningful completion state - a player who has practised three times and
   // one who never will both sit outside "submitted". The counts are relabelled
   // rather than removed: a coach still wants to see who is getting reps.
-  const submittedLabel = entry.is_practice ? 'practised' : 'submitted';
+  const submittedLabel = entry.quiz_kind === 'REP' ? 'ran it' : entry.is_practice ? 'practised' : 'submitted';
   const [isOpen, setIsOpen] = useState(false);
   const [breakdown, setBreakdown] = useState<QuestionBreakdown[] | null>(null);
 
@@ -144,7 +144,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
       >
         <div>
           <Link
-            to={`/quizzes/${entry.quiz_id}?tab=results`}
+            to={entry.quiz_kind === 'REP' ? `/reps/${entry.quiz_id}` : `/quizzes/${entry.quiz_id}?tab=results`}
             className={styles.title}
             onClick={(e) => e.stopPropagation()}
           >
@@ -158,7 +158,7 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
           {/* First, and unconditionally: a card reading "12 submitted" that
               silently meant practice reps would be read as twelve results. */}
           {entry.is_practice && (
-            <span className={`${nb.badge} ${nb.badgeWarning}`}>Practice</span>
+            <span className={`${nb.badge} ${nb.badgeWarning}`}>{entry.quiz_kind === 'REP' ? 'Rep' : 'Practice'}</span>
           )}
           <span className={`${nb.badge} ${nb.badgeSuccess}`}>
             {entry.submitted.length} {submittedLabel}

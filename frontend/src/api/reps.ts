@@ -104,6 +104,23 @@ export function getRepResults(quizId: number): Promise<RepResults> {
   return api.get<RepResults>(`/quizzes/${quizId}/rep-results`);
 }
 
+/** One recent Rep for Home: who has run it and its worst football problem. */
+export interface RepSummary {
+  id: number;
+  title: string;
+  decisions: number;
+  ran: number;
+  invited: number;
+  live: boolean;
+  audience_label: string | null;
+  is_retest: boolean;
+  worst: { name: string; missed: number; responded: number; most_common_wrong: string | null } | null;
+}
+
+export function getRepsSummary(): Promise<RepSummary[]> {
+  return api.get<RepSummary[]>('/quizzes/reps-summary');
+}
+
 export interface RepRetest extends Quiz {
   player_count: number;
 }

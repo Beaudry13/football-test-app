@@ -10,6 +10,8 @@ the two things a Rep adds live here:
                                        same decisions, ready to send
   POST /api/quizzes/<id>/make-rep      an existing quiz's tap-an-answer questions
                                        as a new REP (existing content -> Rep)
+  GET  /api/quizzes/reps-summary       the latest Reps, each with its worst
+                                       football problem - what Home shows
 
 RETEST REUSES THE QUIZ RETEST'S PARTS, not its rules. The copy (every field a
 decision carries, its picture included) and the targeted roster are the very
@@ -224,3 +226,49 @@ def make_rep(quiz_id: int):
     body = rep.to_dict()
     body["left_behind"] = len([q for q in original.questions if not q.is_retired]) - len(chosen)
     return jsonify(body), 201
+
+
+#: How many Reps Home summarises. The Reps page has the rest.
+HOME_REPS = 4
+
+
+@reps_bp.get("/reps-summary")
+@jwt_required()
+def reps_summary():
+    """THE NEXT USEFUL ACTION, FOR HOME: the organization's latest Reps, each
+    with how many have run it and its worst football problem (if anyone
+    missed anything). Computed by the same first-try rules as a Rep's page."""
+    coach = current_coach()
+    reps = (
+        Quiz.query.filter(Quiz.organization_id == coach.organization_id, Quiz.kind == REP_KIND)
+        .order_by(Quiz.updated_at.desc(), Quiz.id.desc())
+        .limit(HOME_REPS)
+        .all()
+    )
+    out = []
+    for rep in reps:
+        results = rep_results(rep)
+        worst = next((c for c in results["concepts"] if c["missed"] > 0), None)
+        out.append(
+            {
+                "id": rep.id,
+                "title": rep.title,
+                "decisions": len(results["decisions"]),
+                "ran": len(results["players"]),
+                "invited": results["audience"]["invited"],
+                "live": results["audience"]["code"] is not None,
+                "audience_label": results["audience"]["label"],
+                "is_retest": results["retest_of"] is not None,
+                "worst": (
+                    {
+                        "name": worst["name"],
+                        "missed": worst["missed"],
+                        "responded": worst["responded"],
+                        "most_common_wrong": (worst["most_common_wrong"] or {}).get("text"),
+                    }
+                    if worst
+                    else None
+                ),
+            }
+        )
+    return jsonify(out)

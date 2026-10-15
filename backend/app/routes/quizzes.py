@@ -317,6 +317,9 @@ def active_status():
             {
                 "quiz_id": code.quiz_id,
                 "quiz_title": code.quiz.title,
+                # QUIZ or REP: a live Situational Rep reads as a Rep and opens
+                # its own page, not as an anonymous practice quiz.
+                "quiz_kind": code.quiz.kind,
                 "access_code_id": code.id,
                 "code": code.code,
                 "expires_at": code.expires_at.isoformat(),
