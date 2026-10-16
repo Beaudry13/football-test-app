@@ -22,28 +22,32 @@ export function usableTargets(
 /** How far upfield (a fraction of the picture) a row of close places sits above them. */
 export const ROW_LIFT = 0.2
 
+/** How close two targets may be before their buttons would overlap: places
+ *  on one line within a few yards; men within a ring's width on a phone. */
+const reach = (t: TapTarget) => (t.zone ? { x: 0.12, y: 0.03 } : { x: 0.12, y: 0.08 })
+
 /**
- * Targets grouped for drawing. A man, or a place standing alone, is a row of
- * one; places on one line within a short reach of each other (a line's gaps,
- * a yard or two apart - a few pixels on a phone) share a row, ordered across
- * the field, so every label stays readable.
+ * Targets grouped for drawing. A man standing clear gets a ring on him; a
+ * place standing clear, a labelled spot. Targets too close to tell apart (a
+ * line's gaps a yard or two apart; a slot and a tight end side by side - a
+ * few pixels on a phone) share one row of labelled buttons in field order,
+ * with a dot on each true spot, so every answer stays readable and tappable.
  */
 export function placeRows(targets: TapTarget[]): number[][] {
   const rows: number[][] = []
-  const places = targets
-    .map((t, i) => ({ ...t, i }))
-    .filter((t) => t.zone)
-    .sort((a, b) => a.y - b.y || a.x - b.x)
-  for (const p of places) {
-    const row = rows.find((r) => {
-      const last = targets[r[r.length - 1]]
-      return Math.abs(last.y - p.y) < 0.03 && Math.abs(p.x - last.x) < 0.12
-    })
+  const order = targets.map((t, i) => ({ ...t, i })).sort((a, b) => a.y - b.y || a.x - b.x)
+  for (const p of order) {
+    const r = reach(p)
+    const row = rows.find((members) =>
+      members.some((m) => {
+        const q = targets[m]
+        return !!q.zone === !!p.zone && Math.abs(q.x - p.x) < r.x && Math.abs(q.y - p.y) < r.y
+      }),
+    )
     if (row) row.push(p.i)
     else rows.push([p.i])
   }
-  targets.forEach((t, i) => !t.zone && rows.push([i]))
-  return rows
+  return rows.map((row) => [...row].sort((a, b) => targets[a].x - targets[b].x))
 }
 
 /** Whether every target is a man (rings) - the words a hint uses. */

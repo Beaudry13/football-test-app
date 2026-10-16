@@ -61,7 +61,8 @@ export function TapOverlay({
   const button = (i: number, style?: CSSProperties) => {
     const option = options[i];
     const on = chosen?.includes(option.id);
-    const zone = !!targets[i].zone;
+    // In a shared row everything is a labelled button (the dot marks the man or the spot).
+    const zone = !!targets[i].zone || !style;
     // A man's ring stays on the man; only a place moves - by its own pill when
     // it stands alone, by its dot when it shares a row.
     const movable = !!onMove && zone && !!style;
@@ -96,17 +97,21 @@ export function TapOverlay({
           button(row[0], { left: `${targets[row[0]].x * 100}%`, top: `${targets[row[0]].y * 100}%` })
         ) : (
           <Fragment key={row.join('-')}>
-            {row.map((i) => (
-              <span
-                key={`dot-${i}`}
-                className={onMove ? `${styles.dot} ${styles.dotMovable}` : styles.dot}
-                style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
-                aria-hidden={onMove ? undefined : true}
-                role={onMove ? 'button' : undefined}
-                aria-label={onMove ? `Move ${options[i].option_text}` : undefined}
-                {...grab(i)}
-              />
-            ))}
+            {row.map((i) => {
+              // A place's dot can be dragged; a man's dot stays on the man.
+              const movable = !!onMove && !!targets[i].zone;
+              return (
+                <span
+                  key={`dot-${i}`}
+                  className={movable ? `${styles.dot} ${styles.dotMovable}` : styles.dot}
+                  style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
+                  aria-hidden={movable ? undefined : true}
+                  role={movable ? 'button' : undefined}
+                  aria-label={movable ? `Move ${options[i].option_text}` : undefined}
+                  {...(movable ? grab(i) : {})}
+                />
+              );
+            })}
             <div
               className={styles.row}
               style={{
