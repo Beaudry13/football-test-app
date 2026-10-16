@@ -48,3 +48,15 @@ export function placeRows(targets: TapTarget[]): number[][] {
 
 /** Whether every target is a man (rings) - the words a hint uses. */
 export const tapsMen = (targets: TapTarget[]) => !targets.some((t) => t.zone)
+
+/** Spots for answers that name no man or place: an even row across the
+ *  field (picture fractions) for the coach to drag where he means each. */
+export function spreadTargets(count: number): TapTarget[] {
+  const left = 0.244
+  const right = 0.756
+  return Array.from({ length: count }, (_, i) => ({
+    x: count === 1 ? 0.5 : left + ((right - left) * i) / (count - 1),
+    y: 0.3,
+    zone: true,
+  }))
+}

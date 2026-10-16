@@ -903,3 +903,88 @@ class TestConceptHistory:
         _, _, teammate = invite_teammate(headers)
         theirs = client.get(f"/api/quizzes/concept-history/{concept_id}", headers=teammate).get_json()
         assert (theirs["points"], theirs["still_missing"], theirs["latest"]) == ([], [], None)
+
+
+class TestTheTestedMan:
+    """Which man a decision tests is recorded, so the words, the ring and the
+    picture stay about the same man - and once players have it, it stays."""
+
+    CLIP = TestThePresnapMoment.CLIP
+
+    def _decision(self, client, headers, quiz_id, **extra):
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            json={
+                "question_text": "#3 motions across. Your check?",
+                "question_type": "multiple_choice",
+                "options": [{"option_text": "Rotate down", "is_correct_answer": True}, {"option_text": "Stay"}],
+                "subject_role": "Free safety",
+                **extra,
+            },
+            headers=headers,
+        )
+
+    def test_recorded_named_and_carried_into_copies(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._decision(client, coach_headers, rep["id"], subject_man="D9", presnap=self.CLIP)
+        assert made.status_code == 201, made.get_json()
+        assert made.get_json()["subject_man"] == "D9"
+        results = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=coach_headers).get_json()
+        assert results["decisions"][0]["subject_man"] == {"id": "D9", "label": "FS"}
+        copy = client.post(f"/api/quizzes/{rep['id']}/duplicate", headers=coach_headers).get_json()
+        assert copy["questions"][0]["subject_man"] == "D9"
+
+    def test_a_motion_decision_made_before_it_was_recorded_names_its_ringed_man(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        self._decision(client, coach_headers, rep["id"], presnap=self.CLIP)
+        results = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=coach_headers).get_json()
+        assert results["decisions"][0]["subject_man"] == {"id": "D9", "label": "FS"}
+
+    def test_a_still_decision_names_its_man_from_the_play(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep = _rep(client, headers)
+        with app.app_context():
+            play = MotionPlay(
+                organization_id=coach["organization_id"], name="Base", schema_version=3,
+                document={"players": [{"id": "D6", "label": "NB"}]},
+            )
+            db.session.add(play)
+            db.session.commit()
+            play_id = play.id
+        self._decision(client, headers, rep["id"], subject_man="D6", motion_play_id=play_id)
+        results = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=headers).get_json()
+        assert results["decisions"][0]["subject_man"] == {"id": "D6", "label": "NB"}
+
+    def test_before_players_have_it_the_man_moment_and_spots_can_change(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._decision(client, coach_headers, rep["id"], subject_man="D9", presnap=self.CLIP).get_json()
+        url = f"/api/quizzes/{rep['id']}/questions/{made['id']}"
+        moved = client.patch(
+            url, json={"subject_man": "O8", "subject_role": "H", "presnap": {**self.CLIP, "highlight": "O8", "freeze": "mid"}},
+            headers=coach_headers,
+        )
+        assert moved.status_code == 200, moved.get_json()
+        assert (moved.get_json()["subject_man"], moved.get_json()["presnap"]["freeze"]) == ("O8", "mid")
+
+    def test_once_players_have_it_the_man_moment_and_spots_are_locked_but_words_are_not(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        targets = [{"x": 0.1, "y": 0.5}, {"x": 0.9, "y": 0.5}]
+        made = self._decision(
+            client, coach_headers, rep["id"], subject_man="D9", presnap=self.CLIP, tap_targets=targets
+        ).get_json()
+        ids = _players(client, coach_headers, rep["id"])
+        code = _send(client, coach_headers, rep["id"])
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {made["id"]: made["options"][0]["id"]})
+        url = f"/api/quizzes/{rep['id']}/questions/{made['id']}"
+        for change in (
+            {"subject_man": "O8"},
+            {"presnap": {**self.CLIP, "freeze": "mid"}},
+            {"tap_targets": [{"x": 0.2, "y": 0.5}, {"x": 0.8, "y": 0.5}]},
+        ):
+            refused = client.patch(url, json=change, headers=coach_headers)
+            assert refused.status_code == 422, change
+            assert refused.get_json()["reason"] == "delivered_locked"
+        # Same man, new words - and sending what is already there - are fine.
+        reworded = client.patch(url, json={"subject_role": "Boundary safety", "subject_man": "D9"}, headers=coach_headers)
+        assert reworded.status_code == 200, reworded.get_json()
+        assert reworded.get_json()["subject_role"] == "Boundary safety"

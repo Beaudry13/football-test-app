@@ -40,6 +40,23 @@
 .sendLead {
   font-weight: 700;
 }
+/* The words and the ring: which man is ringed, and a warning when the words name another job. */
+.ringNote {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+  white-space: nowrap;
+}
+.ringWarn {
+  flex-basis: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-danger, #b42318);
+}
+.editLocked {
+  margin: 0;
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}
 /* A VARIATION: copy the Rep, change what is different, send it. */
 .variationOpen {
   align-self: flex-start;
@@ -247,6 +264,7 @@
 
 .roleField {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   font-size: 13px;

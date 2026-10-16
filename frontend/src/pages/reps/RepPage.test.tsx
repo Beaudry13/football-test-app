@@ -5,7 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.fn(), markRepTaught: vi.fn() }));
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
-vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn(), reorderQuestions: vi.fn(), deleteQuestion: vi.fn() }));
+vi.mock('../../api/questions', () => ({
+  updateQuestion: vi.fn(),
+  reorderQuestions: vi.fn(),
+  deleteQuestion: vi.fn(),
+  uploadQuestionImage: vi.fn(),
+}));
+// jsdom cannot draw; the picture itself is playImage's business.
+vi.mock('../../motion-lab/playImage', () => ({
+  IMAGE_WIDTH: 1376,
+  IMAGE_HEIGHT: 720,
+  drawPlay: vi.fn(),
+  playImage: vi.fn(async () => new Blob(['png'], { type: 'image/png' })),
+}));
 vi.mock('../../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }));
 vi.mock('../../api/players', () => ({ listPlayers: vi.fn() }));
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
@@ -453,5 +465,110 @@ describe('a variation of a Rep', () => {
     await user.click(screen.getByRole('button', { name: 'Remove decision 2' }));
     await acceptConfirm(user, 'Remove');
     await waitFor(() => expect(questionsApi.deleteQuestion).toHaveBeenCalledWith(5, 12));
+  });
+});
+
+describe('the tested man, his moment and his spots', () => {
+  const CLIP = {
+    v: 1,
+    situation: { losYard: 35, hash: 'middle', down: 1, distance: 10, show: true },
+    highlight: 'D9',
+    players: [
+      { id: 'O8', side: 'offense', label: 'H', x: 38, y: -1.6, speed: 'fast', timing: 'on-snap', motion: [{ x: 38, y: -1.6 }, { x: 20, y: -1.6 }] },
+      { id: 'D9', side: 'defense', label: 'FS', x: 26, y: 12, speed: 'fast', timing: 'on-snap' },
+      { id: 'D6', side: 'defense', label: 'NB', x: 38.5, y: 4.5, speed: 'fast', timing: 'on-snap' },
+    ],
+  };
+  const moving = (extra: object = {}) => ({
+    ...RESULTS,
+    decisions: [
+      {
+        ...RESULTS.decisions[0],
+        subject_role: 'Free safety',
+        subject_man: { id: 'D9', label: 'FS' },
+        presnap: CLIP,
+        delivered: false,
+        ...extra,
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);
+    vi.mocked(questionsApi.uploadQuestionImage).mockResolvedValue({} as never);
+    vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 3, name: 'Motion adjustment', is_archived: false }]);
+  });
+
+  it('says which man is ringed, and warns when the words name another job', async () => {
+    open(moving() as RepResults);
+    const words = await screen.findByRole('textbox', { name: 'Who the player is in decision 1' });
+    expect(screen.getByText('ring on FS')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.change(words, { target: { value: 'Nickel' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('The ring is on the FS');
+  });
+
+  it('Change man: tap the nickel - the ring, his name and the picture all follow', async () => {
+    open(moving() as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    expect(await screen.findByText(/Testing the/)).toHaveTextContent('Testing the FS - "Free safety"');
+    fireEvent.click(screen.getByRole('button', { name: 'Change man' }));
+    const pick = screen.getByLabelText('Tap the man to test');
+    pick.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1376, height: 720, right: 1376, bottom: 720, x: 0, y: 0, toJSON: () => ({}) });
+    // The nickel, where he stands in the picture.
+    fireEvent.click(pick, { clientX: (38.5 + 2) * 24, clientY: (17 - 4.5) * 24 });
+    expect(screen.getByText(/Testing the/)).toHaveTextContent('Testing the NB - "Nickel"');
+    await waitFor(() => expect(vi.mocked(questionsApi.uploadQuestionImage)).not.toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect(body).toMatchObject({ subject_man: 'D6', subject_role: 'Nickel' });
+    expect((body.presnap as { highlight: string }).highlight).toBe('D6');
+    // The still is redrawn with his ring.
+    await waitFor(() => expect(questionsApi.uploadQuestionImage).toHaveBeenCalledWith(5, 11, expect.any(File)));
+  });
+
+  it('the moment can change before players have it - with the same Decide at', async () => {
+    open(moving() as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    const moments = within(await screen.findByRole('radiogroup', { name: 'Decide at' }));
+    expect(moments.getByRole('radio', { name: 'Snap' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(moments.getByRole('radio', { name: 'Mid-motion' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect((body.presnap as { freeze: string }).freeze).toBe('mid');
+    expect(body).not.toHaveProperty('subject_man');
+  });
+
+  it('once players have it, the man, the moment and the spots are locked - and it says why', async () => {
+    open(moving({ delivered: true }) as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    expect(screen.getByText(/who it tests, when they decide and where they tap are locked/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Change man' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Decide at' })).toBeNull();
+  });
+
+  it('the coach checks and moves the spots right in the editor', async () => {
+    const targets = [
+      { x: 0.3, y: 0.5, zone: true },
+      { x: 0.5, y: 0.2, zone: true },
+      { x: 0.7, y: 0.6, zone: true },
+    ];
+    open(moving({ tap_targets: targets }) as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'See what they tap' }));
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }));
+    const spot = await check.findByRole('button', { name: 'Move Stay boundary' });
+    const surface = document.querySelector('[data-tap-surface]') as HTMLElement;
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(spot, { pointerId: 1, clientX: 500, clientY: 100 });
+    fireEvent.pointerMove(spot, { pointerId: 1, clientX: 600, clientY: 150 });
+    fireEvent.pointerUp(spot, { pointerId: 1 });
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect(body.tap_targets![1]).toEqual({ x: 0.6, y: 0.3, zone: true });
   });
 });

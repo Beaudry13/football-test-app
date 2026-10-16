@@ -182,6 +182,25 @@ def _player(attempt) -> dict:
     }
 
 
+def _subject_man(question) -> dict | None:
+    """{id, label} of the man the decision tests: the recorded one, else the
+    man its pre-snap moment rings. His label from that moment, else from the
+    Motion Lab play it came from (read here, not opened to the browser)."""
+    presnap = question.presnap if isinstance(question.presnap, dict) else {}
+    man_id = question.subject_man or presnap.get("highlight")
+    if not man_id:
+        return None
+    men = presnap.get("players") or []
+    if not men and question.motion_play_id is not None:
+        from app.extensions import db
+        from app.models import MotionPlay
+
+        play = db.session.get(MotionPlay, question.motion_play_id)
+        men = ((play.document or {}).get("players") or []) if play is not None else []
+    label = next((m.get("label") for m in men if isinstance(m, dict) and m.get("id") == man_id), None)
+    return {"id": man_id, "label": label}
+
+
 def _concept_ref(question) -> dict | None:
     if question.concept is None:
         return None
@@ -318,6 +337,9 @@ def _first_try_results(quiz) -> dict:
                 "question_text": question.question_text,
                 "question_type": question.question_type.value,
                 "subject_role": question.subject_role,
+                # Which man is ringed, by his label, so the coach sees the
+                # words and the ring are about the same man.
+                "subject_man": _subject_man(question),
                 "concept": _concept_ref(question),
                 "motion_play_id": question.motion_play_id,
                 "answer_explanation": question.answer_explanation,

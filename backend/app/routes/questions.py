@@ -538,6 +538,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         allows_multiple_answers=allows_multiple,
         concept_id=_validated_concept_id(quiz, data.get("concept_id")),
         subject_role=_clean_role(data.get("subject_role")),
+        subject_man=data.get("subject_man"),
         motion_play_id=motion_play_id,
         tap_targets=tap_targets,
         presnap=presnap,
@@ -828,8 +829,27 @@ def update_question(quiz_id: int, question_id: int):
         # deliberately has no load_default, so an edit that never mentions the
         # concept leaves the key absent and the existing tag alone.
         question.concept_id = _validated_concept_id(question.quiz, data.get("concept_id"))
+    # WHAT A PLAYER WAS TESTED ON stays what it was once he has it: which man
+    # the decision is about, when he decides, and where he taps. The same rule
+    # as the right answer - a change would quietly rewrite results players
+    # already have. (Rewording "You're the..." stays open: same man, new words.)
+    if delivered:
+        for key, current in (
+            ("subject_man", question.subject_man),
+            ("presnap", question.presnap),
+            ("tap_targets", question.tap_targets),
+        ):
+            if key in data and data.get(key) != current:
+                raise ApiError(
+                    "Players have this one, so who it is about, when they decide and "
+                    "where they tap are locked. Make a variation to test something different.",
+                    status_code=422,
+                    reason="delivered_locked",
+                )
     if "subject_role" in data:
         question.subject_role = _clean_role(data.get("subject_role"))
+    if "subject_man" in data:
+        question.subject_man = data.get("subject_man")
     if "motion_play_id" in data:
         question.motion_play_id = _validated_motion_play_id(question.quiz, data.get("motion_play_id"))
     if "presnap" in data:

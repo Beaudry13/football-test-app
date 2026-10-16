@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
-import { deleteQuestion, reorderQuestions, updateQuestion } from '../../api/questions';
+import { deleteQuestion, reorderQuestions, updateQuestion, uploadQuestionImage } from '../../api/questions';
 import { duplicateQuiz, updateQuiz } from '../../api/quizzes';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { AddDecisions } from './AddDecisions';
@@ -12,7 +12,7 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { listGroups } from '../../api/groups';
 import { listPlayers } from '../../api/players';
 import { addRosterMembers } from '../../api/roster';
-import { audiencesFrom, chosenPlayerIds, groupPlayerIds, pluralFor, suggestedFamily } from './audiences';
+import { audiencesFrom, chosenPlayerIds, familyOf, groupPlayerIds, pluralFor, suggestedFamily } from './audiences';
 import { PositionChips } from './PositionChips';
 import { taughtLine } from './taught';
 import {
@@ -31,7 +31,13 @@ import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { PlayPicture } from '../../components/football/PlayPicture';
-import { usableTargets } from '../../components/football/tapTargets';
+import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
+import { TapCheck } from '../../components/football/TapCheck';
+import type { PresnapClip } from '../../motion-lab/presnap';
+import type { PlayDraft } from '../../motion-lab/DecisionPlay';
+
+/* Who it tests and when he decides - Motion Lab's code, loaded only to edit one. */
+const DecisionPlay = lazy(() => import('../../motion-lab/DecisionPlay'));
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
@@ -694,6 +700,12 @@ function DidItStick({ results }: { results: RepResults }) {
 /** "You're the ___" on a decision, fixable right here - a Rep made from a quiz starts without one. */
 function RoleField({ quizId, decision, onChanged }: { quizId: number; decision: RepDecision; onChanged: () => void }) {
   const [value, setValue] = useState(decision.subject_role ?? '');
+  /* THE WORDS AND THE RING: rewording is fine (same man), but words that name
+     another job than the ringed man's would test one man and show another. */
+  const ring = decision.subject_man?.label ?? null;
+  const wordsJob = suggestedFamily([value]);
+  const ringJob = familyOf(ring);
+  const mismatch = !!(ring && wordsJob && ringJob && wordsJob !== ringJob);
   const [saving, setSaving] = useState(false);
   const save = async () => {
     if (value.trim() === (decision.subject_role ?? '')) return;
@@ -718,6 +730,12 @@ function RoleField({ quizId, decision, onChanged }: { quizId: number; decision: 
         onBlur={() => void save()}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       />
+      {ring && <span className={styles.ringNote}>ring on {ring}</span>}
+      {mismatch && (
+        <span className={styles.ringWarn} role="alert">
+          The ring is on the {ring}. To test another man, use Edit → Change man.
+        </span>
+      )}
     </label>
   );
 }
@@ -734,14 +752,28 @@ function DecisionEditor({
   concepts,
   onSaved,
   onCancel,
+  canOpenPlay = false,
 }: {
   quizId: number;
   decision: RepDecision;
   concepts: Concept[];
   onSaved: () => void;
   onCancel: () => void;
+  /** Motion Lab is open to this coach (the play itself can be read). */
+  canOpenPlay?: boolean;
 }) {
   const locked = !!decision.delivered;
+  /* WHO IT TESTS, WHEN HE DECIDES, WHERE HE TAPS - one draft, saved with the
+     rest. Once players have it, all three are locked (the server agrees). */
+  const fromPlay = !!(decision.presnap || decision.motion_play_id);
+  const [draft, setDraft] = useState<PlayDraft>(() => ({
+    clip: (decision.presnap as unknown as PresnapClip | null) ?? null,
+    man: decision.subject_man ? { id: decision.subject_man.id, label: decision.subject_man.label } : null,
+    role: decision.subject_role,
+    targets: decision.tap_targets ?? null,
+    image: null,
+  }));
+  const [checking, setChecking] = useState(false);
   const [prompt, setPrompt] = useState(decision.question_text);
   const [answers, setAnswers] = useState(decision.choices.map((c) => ({ text: c.text, correct: c.is_correct })));
   const [concept, setConcept] = useState(decision.concept?.name ?? '');
@@ -751,6 +783,14 @@ function DecisionEditor({
   const kept = decision.choices.length;
   const filled = answers.filter((a) => a.text.trim());
   const ready = !!prompt.trim() && filled.length >= 2 && filled.some((a) => a.correct);
+  const sentCount = (locked ? answers : filled).length;
+  const hasPicture = !!(decision.image || draft.clip);
+  const targets = draft.targets && draft.targets.length === sentCount && hasPicture ? draft.targets : null;
+  const spotIndex = (k: number) => answers.indexOf(filled[k]);
+  const moveSpot = (k: number, at: { x: number; y: number }) =>
+    setDraft((d) => ({ ...d, targets: (d.targets ?? []).map((t, j) => (j === k ? { ...t, ...at } : t)) as TapTarget[] }));
+  const renameSpot = (k: number, text: string) =>
+    setAnswers((list) => list.map((a, j) => (j === spotIndex(k) ? { ...a, text } : a)));
 
   const save = async () => {
     setBusy(true);
@@ -758,12 +798,30 @@ function DecisionEditor({
     try {
       const name = concept.trim();
       const conceptId = name ? (resolveConcept(name, concepts) ?? (await createConcept(name))).id : null;
+      const play: Record<string, unknown> = {};
+      if (!locked) {
+        const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+        if (!same(draft.clip, decision.presnap)) play.presnap = draft.clip;
+        if ((draft.man?.id ?? null) !== (decision.subject_man?.id ?? null)) {
+          play.subject_man = draft.man?.id ?? null;
+          play.subject_role = draft.role;
+        }
+        // Spots go with exactly one per answer; otherwise the buttons answer.
+        if (!same(draft.targets, decision.tap_targets) && (!draft.targets || draft.targets.length === sentCount)) {
+          play.tap_targets = draft.targets;
+        }
+      }
       await updateQuestion(quizId, decision.question_id, {
         question_text: prompt.trim(),
         options: (locked ? answers : filled).map((a) => ({ option_text: a.text.trim(), is_correct_answer: a.correct })),
         concept_id: conceptId,
         answer_explanation: why.trim(),
+        ...play,
       });
+      // The still follows the ring.
+      if (!locked && draft.image && play.subject_man !== undefined) {
+        await uploadQuestionImage(quizId, decision.question_id, draft.image);
+      }
       onSaved();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -773,6 +831,24 @@ function DecisionEditor({
 
   return (
     <div className={styles.editor} role="group" aria-label={`Edit decision ${decision.number}`}>
+      {locked
+        ? (fromPlay || decision.tap_targets) && (
+            <p className={styles.editLocked}>
+              Players have this one, so who it tests, when they decide and where they tap are locked. Make a variation
+              to test something different.
+            </p>
+          )
+        : fromPlay && (
+            <Suspense fallback={null}>
+              <DecisionPlay
+                draft={draft}
+                onChange={setDraft}
+                playId={decision.motion_play_id}
+                canOpenPlay={canOpenPlay}
+                answers={filled.map((a) => a.text)}
+              />
+            </Suspense>
+          )}
       <label className={styles.editField}>
         <span>The situation</span>
         <textarea value={prompt} rows={2} onChange={(e) => setPrompt(e.target.value)} aria-label="The situation" />
@@ -820,7 +896,42 @@ function DecisionEditor({
             + Answer
           </button>
         )}
+        {/* WHAT THEY TAP - checked on the very picture the player gets. */}
+        {targets ? (
+          <button type="button" className={styles.editAdd} onClick={() => setChecking(true)}>
+            See what they tap
+          </button>
+        ) : (
+          !locked &&
+          hasPicture &&
+          filled.length >= 2 && (
+            <button
+              type="button"
+              className={styles.editAdd}
+              onClick={() => {
+                setDraft((d) => ({ ...d, targets: spreadTargets(filled.length) }));
+                setChecking(true);
+              }}
+            >
+              Put them on the field - players tap the spot
+            </button>
+          )
+        )}
       </div>
+      {checking && targets && (
+        <TapCheck
+          image={decision.image}
+          presnap={draft.clip}
+          targets={targets}
+          answers={(locked ? answers : filled).map((a) => a.text)}
+          rightIndex={(locked ? answers : filled).findIndex((a) => a.correct)}
+          onMove={locked ? undefined : moveSpot}
+          onRename={locked ? undefined : renameSpot}
+          locked={locked ? 'Players have this one, so its spots are locked.' : undefined}
+          onClose={() => setChecking(false)}
+          onConfirm={() => setChecking(false)}
+        />
+      )}
       <ConceptPicker
         label="Concept"
         value={concept}
@@ -975,7 +1086,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
               {d.image && <img className={styles.thumb} src={resolveMediaUrl(d.image.image_url)} alt="" />}
               <div className={styles.decisionBody}>
                 <div className={styles.decisionTop}>
-                  <RoleField quizId={quizId} decision={d} onChanged={onChanged} />
+                  <RoleField key={`${d.question_id}-${d.subject_role}`} quizId={quizId} decision={d} onChanged={onChanged} />
                   {editing !== d.question_id && (
                     <button type="button" className={styles.editOpen} onClick={() => edit(d.question_id)} aria-label={`Edit decision ${d.number}`}>
                       Edit
@@ -996,6 +1107,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                   <DecisionEditor
                     quizId={quizId}
                     decision={d}
+                    canOpenPlay={motionLab}
                     concepts={concepts}
                     onCancel={() => setEditing(null)}
                     onSaved={() => {

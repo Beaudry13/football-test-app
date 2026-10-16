@@ -49,6 +49,8 @@ export interface RepDecision {
   presnap?: Record<string, unknown> | null;
   /** What the player taps, one per choice (components/football/tapTargets). */
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
+  /** Which man in the play it tests - the one ringed - and his label ("FS"). */
+  subject_man?: { id: string; label: string | null } | null;
   /** A player has received it: answers can be reworded or added, the right one is locked. */
   delivered?: boolean;
   is_retired: boolean;

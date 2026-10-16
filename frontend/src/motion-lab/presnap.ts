@@ -100,7 +100,7 @@ export function presnapOf(play: Play, highlight: string | null, freeze: Decision
 }
 
 /** The beat after the snap, sampled from the FULL play's own schedule - and cut there. */
-function afterBeat(play: Play): NonNullable<PresnapClip['after']> {
+export function afterBeat(play: Play): NonNullable<PresnapClip['after']> {
   const { schedule, snapAt } = buildSchedule(play.players)
   const samples: { id: string; pts: Pt[] }[] = []
   for (const p of play.players) {
@@ -211,6 +211,28 @@ export function freezePicture(clip: PresnapClip): { play: Play; options: PlayIma
 export function freezeSpots(clip: PresnapClip): Map<string, Pt> {
   const line = presnapTimeline(clip)
   return new Map(line.players.map((p) => [p.id, spotAt(clip, line, p, line.freezeAt)]))
+}
+
+/** The same clip decided at another moment. "After the snap" needs the beat
+ *  itself - the clip's own, or the play's (when the play is at hand). */
+export function withMoment(clip: PresnapClip, moment: DecisionMoment, play: Play | null = null): PresnapClip | null {
+  const next: PresnapClip = { ...clip }
+  delete next.freeze
+  delete next.after
+  if (moment === 'snap') return next
+  next.freeze = moment
+  if (moment === 'after') {
+    const beat = clip.after ?? (play && hasPostSnapMovement(play) ? afterBeat(play) : null)
+    if (!beat) return null
+    next.after = beat
+  }
+  return next
+}
+
+/** The moments a stored clip can be decided at (after the snap only with its beat at hand). */
+export function clipMoments(clip: PresnapClip, play: Play | null = null): DecisionMoment[] {
+  const after = !!clip.after || (!!play && hasPostSnapMovement(play))
+  return after ? ['before', 'mid', 'snap', 'after'] : ['before', 'mid', 'snap']
 }
 
 /** Where every man stands at the snap. */

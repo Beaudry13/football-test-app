@@ -46,6 +46,11 @@ class QuestionCreateSchema(Schema):
         required=False, load_default=None, allow_none=True, validate=validate.Length(max=60)
     )
     motion_play_id = fields.Int(required=False, load_default=None, allow_none=True)
+    #: Which man in the play the decision tests (a Motion Lab player id).
+    subject_man = fields.Str(
+        required=False, load_default=None, allow_none=True,
+        validate=validate.Regexp(r"^[A-Za-z0-9_-]{1,32}$"),
+    )
     tap_targets = fields.List(
         fields.Nested(lambda: TapTargetSchema()), required=False, load_default=None, allow_none=True
     )
@@ -79,6 +84,7 @@ class QuestionUpdateSchema(Schema):
     # them must not clear them.
     subject_role = fields.Str(required=False, allow_none=True, validate=validate.Length(max=60))
     motion_play_id = fields.Int(required=False, allow_none=True)
+    subject_man = fields.Str(required=False, allow_none=True, validate=validate.Regexp(r"^[A-Za-z0-9_-]{1,32}$"))
     tap_targets = fields.List(fields.Nested(lambda: TapTargetSchema()), required=False, allow_none=True)
     presnap = fields.Dict(required=False, allow_none=True)
 

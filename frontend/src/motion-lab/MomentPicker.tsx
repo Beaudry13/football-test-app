@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react'
 import { MOMENT_LABEL, type DecisionMoment, type PresnapClip } from './presnap'
+import styles from './MomentPicker.module.css'
 
 const PresnapPicture = lazy(() => import('./PresnapPicture'))
 
@@ -30,16 +31,16 @@ export function MomentPicker({
   const [previewing, setPreviewing] = useState(false)
   if (moments.length === 0 || !clip) return null
   return (
-    <div className="moment-picker">
-      <div className="moment-row" role="radiogroup" aria-label="Decide at">
-        <span className="moment-lead">Decide at</span>
+    <div className={styles.picker}>
+      <div className={styles.row} role="radiogroup" aria-label="Decide at">
+        <span className={styles.lead}>Decide at</span>
         {moments.map((m) => (
           <button
             key={m}
             type="button"
             role="radio"
             aria-checked={value === m}
-            className={value === m ? 'moment on' : 'moment'}
+            className={value === m ? `${styles.moment} ${styles.on}` : styles.moment}
             onClick={() => {
               onChange(m)
               setPreviewing(false)
@@ -48,11 +49,11 @@ export function MomentPicker({
             {MOMENT_LABEL[m]}
           </button>
         ))}
-        <button type="button" className="moment-preview" aria-pressed={previewing} onClick={() => setPreviewing((p) => !p)}>
+        <button type="button" className={styles.preview} aria-pressed={previewing} onClick={() => setPreviewing((p) => !p)}>
           {previewing ? 'Hide preview' : '▶ Preview'}
         </button>
       </div>
-      <div className="make-q-note">{MOMENT_NOTE[value]}</div>
+      <div className={styles.note}>{MOMENT_NOTE[value]}</div>
       {previewing && (
         <Suspense fallback={null}>
           <PresnapPicture key={`${value}`} clip={clip} />

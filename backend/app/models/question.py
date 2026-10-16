@@ -150,6 +150,10 @@ class Question(db.Model):
     #: situation) so the player's screen runs the motion and freezes at the
     #: snap. Never routes, ball or blocks - they would answer the question.
     presnap = db.Column(JSONB, nullable=True)
+    #: WHICH MAN the decision tests: the Motion Lab player id ("D4") ringed in
+    #: its picture and pre-snap moment. `subject_role` is the coach's words for
+    #: him; this keeps words, ring and picture about the same man.
+    subject_man = db.Column(db.String(32), nullable=True)
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -284,6 +288,9 @@ class Question(db.Model):
             # The pre-snap motion to play before the question - alignment and
             # motion only, nothing that answers it.
             "presnap": self.presnap,
+            # Which man in the play the decision is about - not a secret, he
+            # is ringed in the picture.
+            "subject_man": self.subject_man,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must
             # not receive it. The play routes decide when to include it - in

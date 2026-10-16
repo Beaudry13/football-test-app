@@ -244,6 +244,7 @@ export function MakeRep({
           options: filled.map((a) => ({ option_text: a.text.trim(), is_correct_answer: a.correct })),
           concept_id: conceptId,
           subject_role: role.trim() || null,
+          ...(who ? { subject_man: who } : {}),
           motion_play_id: motionPlayId,
           answer_explanation: why.trim() || null,
           ...(targets ? { tap_targets: targets } : {}),

@@ -27,6 +27,8 @@ export interface QuestionInput {
   subject_role?: string | null;
   motion_play_id?: number | null;
   /** One {x, y} (fractions of the picture) per option, so a player taps the man. */
+  /** Which man in the play the decision tests (a Motion Lab player id). */
+  subject_man?: string | null;
   /** `zone`: a place on the field (a gap, a drop), shown labelled - not a man. */
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** The pre-snap moment to play before the question (motion-lab/presnap.ts). */
