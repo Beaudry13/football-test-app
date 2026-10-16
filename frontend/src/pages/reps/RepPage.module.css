@@ -103,6 +103,14 @@
   font-size: 14px;
   color: var(--nb-text-muted);
 }
+/* A problem's name opens its history - quietly, still a heading. */
+.problemLink {
+  color: inherit;
+  text-decoration: none;
+}
+.problemLink:hover {
+  text-decoration: underline;
+}
 .groups {
   display: flex;
   flex-wrap: wrap;

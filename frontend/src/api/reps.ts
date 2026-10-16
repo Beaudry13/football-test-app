@@ -190,6 +190,41 @@ export interface ConceptTrend {
   last_rep_id: number;
 }
 
+/** One Rep that tested a concept, on its history page (first tries). */
+export interface ConceptPoint {
+  rep_id: number;
+  title: string;
+  at: string | null;
+  pct: number;
+  responded: number;
+  missed: number;
+  is_retest: boolean;
+}
+
+/** ONE FOOTBALL PROBLEM OVER TIME (routes/reps.get_concept_history). */
+export interface ConceptHistory {
+  concept: { id: number; name: string; is_archived: boolean };
+  /** Oldest first. */
+  points: ConceptPoint[];
+  /** Newest first, up to five. */
+  recent: ConceptPoint[];
+  /** Each player whose latest first try on it was a miss. */
+  still_missing: (RepPlayer & { rep_id: number })[];
+  /** The next step, from the latest Rep that tested it. */
+  latest: {
+    rep_id: number;
+    title: string;
+    missed: number;
+    responded: number;
+    taught: RepTaught | null;
+    retest: RepConcept['retest'];
+  } | null;
+}
+
+export function getConceptHistory(conceptId: number): Promise<ConceptHistory> {
+  return api.get<ConceptHistory>(`/quizzes/concept-history/${conceptId}`);
+}
+
 export function getConceptTrends(): Promise<ConceptTrend[]> {
   return api.get<ConceptTrend[]>('/quizzes/concept-trends');
 }

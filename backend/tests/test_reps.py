@@ -852,3 +852,45 @@ class TestRepListsAreYourOwn:
         assert client.get("/api/quizzes/concept-trends", headers=teammate).get_json() == []
         assert client.get(f"/api/quizzes/reps-for-play/{play_id}", headers=teammate).get_json() == []
         assert client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=teammate).status_code == 404
+
+
+class TestConceptHistory:
+    """One football problem over time: the trend, the recent Reps, who still
+    misses it, and the next step - by the same first-try rules."""
+
+    def test_the_trend_and_who_is_still_missing_it(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        concept_id = first["concept"]["id"]
+        stay, rotate, inside = _option(first, "Stay boundary"), _option(first, "Rotate down"), _option(second, "Inside")
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {first["id"]: rotate, second["id"]: inside})
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        _play(client, code, "Cam Cole", ids["Cam Cole"], {first["id"]: stay, second["id"]: inside})
+        # Retest the two who missed it; Bo gets it now, Cam still does not.
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": concept_id}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        again = {o["option_text"]: o["id"] for o in copied["options"]}
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: again["Rotate down"]})
+        _play(client, sent, "Cam Cole", ids["Cam Cole"], {copied["id"]: again["Stay boundary"]})
+
+        history = client.get(f"/api/quizzes/concept-history/{concept_id}", headers=headers).get_json()
+        assert history["concept"]["name"] == "Motion adjustment"
+        assert [p["pct"] for p in history["points"]] == [33, 50]
+        assert [p["rep_id"] for p in history["recent"]] == [retest["id"], rep["id"]]
+        assert history["points"][1]["is_retest"] is True
+        assert [p["display_name"] for p in history["still_missing"]] == ["Cam Cole"]
+        assert history["latest"]["rep_id"] == retest["id"]
+        assert (history["latest"]["missed"], history["latest"]["taught"]) == (1, None)
+
+    def test_never_across_organizations_and_only_your_own_reps(self, client, register_coach, invite_teammate, app):
+        coach, _, headers = register_coach()
+        _rep_, first, *_ = _built(client, headers, app, coach)
+        concept_id = first["concept"]["id"]
+        _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
+        assert client.get(f"/api/quizzes/concept-history/{concept_id}", headers=stranger).status_code == 404
+        _, _, teammate = invite_teammate(headers)
+        theirs = client.get(f"/api/quizzes/concept-history/{concept_id}", headers=teammate).get_json()
+        assert (theirs["points"], theirs["still_missing"], theirs["latest"]) == ([], [], None)

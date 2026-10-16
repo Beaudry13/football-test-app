@@ -14,6 +14,7 @@ import { listPlayers } from '../../api/players';
 import { addRosterMembers } from '../../api/roster';
 import { audiencesFrom, chosenPlayerIds, groupPlayerIds, pluralFor, suggestedFamily } from './audiences';
 import { PositionChips } from './PositionChips';
+import { taughtLine } from './taught';
 import {
   createRepRetest,
   getRepResults,
@@ -40,11 +41,6 @@ const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
 /** The key a problem is grouped (and marked taught) by: its concept id, or "general". */
 const conceptKey = (c: RepConcept) => String(c.concept?.id ?? 'general');
 
-/** "Taught Oct 16 by coach1" - when, and who, so a second coach knows it happened. */
-function taughtLine(taught: RepTaught): string {
-  const when = new Date(taught.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  return `Taught ${when}${taught.by ? ` by ${taught.by}` : ''}.`;
-}
 
 /**
  * A SITUATIONAL REP, FOR THE COACH: send it, then see the FOOTBALL PROBLEM.
@@ -372,7 +368,16 @@ function ProblemCard({
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
   return (
     <article className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem} aria-label={problem.name}>
-      <h2 className={styles.problemName}>{problem.name}</h2>
+      <h2 className={styles.problemName}>
+        {/* The problem's history: is it getting better, who still misses it. */}
+        {problem.concept ? (
+          <Link to={`/reps/concepts/${problem.concept.id}`} className={styles.problemLink}>
+            {problem.name}
+          </Link>
+        ) : (
+          problem.name
+        )}
+      </h2>
       <p className={styles.problemLine}>
         <strong>
           {problem.missed} of {problem.responded}

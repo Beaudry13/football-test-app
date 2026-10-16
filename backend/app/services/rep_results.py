@@ -117,6 +117,52 @@ def player_progress(quiz, attempt) -> dict:
     }
 
 
+def concept_history(reps, concept_id: int) -> dict:
+    """ONE FOOTBALL PROBLEM OVER TIME, for its history page. `reps` oldest
+    first. By the same first-try rule as everywhere here:
+
+      points         one per Rep that tested it (someone answered it there):
+                     first-try percent, how many answered, how many missed
+      still_missing  each player whose LATEST first try on it was a miss -
+                     getting it right on a later Rep takes him off the list
+    """
+    points = []
+    latest: dict = {}
+    for rep in reps:
+        responded = missed = 0
+        for key, (attempt, _made) in first_tries(rep_attempts(rep)).items():
+            verdicts = [
+                a.is_correct
+                for a in _checked(attempt)
+                if a.is_correct is not None and a.question is not None and a.question.concept_id == concept_id
+            ]
+            if not verdicts:
+                continue
+            got = all(verdicts)
+            responded += 1
+            missed += 0 if got else 1
+            latest[key] = (got, attempt, rep)
+        if responded:
+            points.append(
+                {
+                    "rep_id": rep.id,
+                    "title": rep.title,
+                    "at": rep.created_at.isoformat() if rep.created_at else None,
+                    "pct": round(100 * (responded - missed) / responded),
+                    "responded": responded,
+                    "missed": missed,
+                    "is_retest": rep.retest_of_quiz_id is not None,
+                }
+            )
+    still = [
+        {**_player(attempt), "rep_id": rep.id}
+        for got, attempt, rep in latest.values()
+        if not got
+    ]
+    still.sort(key=lambda p: (p["display_name"] or "").lower())
+    return {"points": points, "still_missing": still}
+
+
 def _chosen_ids(answer) -> list[int]:
     """The options the player picked - the selection set first, which survives a
     deleted option; the single column as the fallback."""

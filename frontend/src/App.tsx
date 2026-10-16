@@ -22,6 +22,7 @@ import { RequestAccessPage } from './pages/RequestAccessPage';
 import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { RepPage } from './pages/reps/RepPage';
 import { RepsPage } from './pages/reps/RepsPage';
+import { ConceptHistoryPage } from './pages/reps/ConceptHistoryPage';
 import { GradeResponsesPage } from './pages/quiz-editor/GradeResponsesPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
@@ -163,6 +164,7 @@ function App() {
               {/* SITUATIONAL REP (experimental): a Rep is a quiz with kind REP.
                   Its own page shows the football problems, not the grades. */}
               <Route path="/reps" element={<RepsPage />} />
+              <Route path="/reps/concepts/:conceptId" element={<ConceptHistoryPage />} />
               <Route path="/reps/:quizId" element={<RepPage />} />
               {/* Inside NotebookLayout, unlike annotation: grading is a
                   destination a coach navigates to and back from, not a mode

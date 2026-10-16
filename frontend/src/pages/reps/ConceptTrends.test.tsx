@@ -23,7 +23,7 @@ describe('Concept trends', () => {
     );
     const list = within(await screen.findByRole('list'));
     const motion = list.getByRole('link', { name: /Motion adjustment/ });
-    expect(motion).toHaveAttribute('href', '/reps/9');
+    expect(motion).toHaveAttribute('href', '/reps/concepts/3');
     expect(motion.textContent).toMatch(/64% → 82%3 repsstill missed by 2/);
     expect(list.getByRole('link', { name: /Leverage/ }).textContent).toMatch(/100%1 rep$/);
   });

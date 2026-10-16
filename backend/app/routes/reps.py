@@ -16,6 +16,8 @@ the two things a Rep adds live here:
                                        that already exists
   POST /api/quizzes/<rep>/rep-teach    a problem marked taught, so its next
                                        step is Retest for every coach
+  GET  /api/quizzes/concept-history/<concept>  one problem over time: the
+                                       trend, recent Reps, who still misses it
 
 RETEST REUSES THE QUIZ RETEST'S PARTS, not its rules. The copy (every field a
 decision carries, its picture included) and the targeted roster are the very
@@ -40,7 +42,7 @@ from app.models.question import QuestionType
 from app.models.quiz import REP_KIND
 from app.routes.quizzes import _copy_questions_into, _retest_title, _seed_retest_roster
 from app.services.file_storage import StorageError, get_file_storage
-from app.services.rep_results import first_tries, player_progress, rep_attempts, rep_results
+from app.services.rep_results import concept_history, first_tries, player_progress, rep_attempts, rep_results
 from app.utils.auth import current_coach, get_visible_quiz
 from app.utils.validation import load_json_body
 
@@ -548,6 +550,55 @@ def reps_for_play(play_id: int):
 #: How many recent Reps a concept trend reads. Enough for a season's arc,
 #: small enough to stay a glance.
 TREND_REPS = 20
+
+
+@reps_bp.get("/concept-history/<int:concept_id>")
+@jwt_required()
+def get_concept_history(concept_id: int):
+    """ONE FOOTBALL PROBLEM, OVER TIME - not a dashboard: its first-try trend
+    across this coach's Reps that tested it (64% -> 67% -> 82%), the recent
+    Reps, who is still missing it, and the next step from the latest Rep that
+    tested it (taught? retested?)."""
+    from app.models import Question
+
+    coach = current_coach()
+    concept = db.session.get(Concept, concept_id)
+    if concept is None or concept.organization_id != coach.organization_id:
+        raise ApiError("That concept does not exist", status_code=404)
+    reps = (
+        _my_reps(coach)
+        .join(Question, Question.quiz_id == Quiz.id)
+        .filter(Question.concept_id == concept_id)
+        .distinct()
+        .order_by(Quiz.created_at.desc(), Quiz.id.desc())
+        .limit(TREND_REPS)
+        .all()
+    )
+    history = concept_history(list(reversed(reps)), concept_id)
+    latest = None
+    if history["points"]:
+        rep = db.session.get(Quiz, history["points"][-1]["rep_id"])
+        here = next(
+            (c for c in rep_results(rep)["concepts"] if (c["concept"] or {}).get("id") == concept_id), None
+        )
+        if here is not None:
+            latest = {
+                "rep_id": rep.id,
+                "title": rep.title,
+                "missed": here["missed"],
+                "responded": here["responded"],
+                "taught": here.get("taught"),
+                "retest": here.get("retest"),
+            }
+    return jsonify(
+        {
+            "concept": {"id": concept.id, "name": concept.name, "is_archived": concept.is_archived},
+            "points": history["points"],
+            "recent": list(reversed(history["points"]))[:5],
+            "still_missing": history["still_missing"],
+            "latest": latest,
+        }
+    )
 
 
 @reps_bp.get("/concept-trends")

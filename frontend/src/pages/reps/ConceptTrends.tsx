@@ -6,8 +6,8 @@ import styles from './ConceptTrends.module.css';
 /**
  * IS IT GETTING BETTER? One line per football problem, across the Reps that
  * tested it: "Motion adjustment 64% -> 82% - 3 reps", or "still missed by 2".
- * First tries only, as everywhere in Reps. A glance - each line opens the
- * latest Rep that tested it.
+ * First tries only, as everywhere in Reps. A glance - each line opens that
+ * problem's history: the trend, who still misses it, Teach / Retest.
  */
 export function ConceptTrends({ limit = 5 }: { limit?: number }) {
   const [trends, setTrends] = useState<ConceptTrend[] | null>(null);
@@ -33,7 +33,7 @@ export function ConceptTrends({ limit = 5 }: { limit?: number }) {
           const down = t.reps > 1 && t.last_pct !== null && t.first_pct !== null && t.last_pct < t.first_pct;
           return (
             <li key={t.concept_id}>
-              <Link to={`/reps/${t.last_rep_id}`} className={styles.row}>
+              <Link to={`/reps/concepts/${t.concept_id}`} className={styles.row}>
                 <span className={styles.name}>{t.name}</span>
                 <span className={up ? styles.up : down ? styles.down : styles.flat}>
                   {t.reps > 1 ? `${t.first_pct}% → ${t.last_pct}%` : `${t.last_pct}%`}
