@@ -53,6 +53,17 @@
   font-weight: 400;
 }
 
+.positionChips {
+  margin-top: 0.5em;
+}
+
+/* Exactly who a position send reaches - the roster it joins, counted. */
+.reach {
+  margin: 0.5em 0 0;
+  font-size: 0.9em;
+  color: var(--nb-text-muted);
+}
+
 .activateHint {
   font-size: 0.85em;
   color: var(--nb-text-muted);

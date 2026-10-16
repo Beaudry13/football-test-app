@@ -1,0 +1,35 @@
+/* WHO, FROM THE ROSTER: position chips - a Rep's send panel and a quiz's Activate tab. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  white-space: nowrap;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.on {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  font-weight: 700;
+}
+.count {
+  color: var(--nb-text-muted);
+  font-weight: 400;
+}
+.suggested {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--nb-accent);
+  color: var(--color-accent-contrast);
+}

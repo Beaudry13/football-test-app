@@ -6,7 +6,7 @@
 // chip always shows exactly which positions and how many players, so nothing
 // is hidden behind the name. Positions nobody maps stay their own chip.
 
-import type { Player } from '../../api/types';
+import type { Group, Player } from '../../api/types';
 
 export interface Family {
   name: string;
@@ -97,4 +97,16 @@ export function pluralFor(positions: string[]): string | null {
   const families = new Set(positions.map((p) => familyOf(p)?.name ?? `?${p}`));
   if (families.size !== 1) return null;
   return familyOf(positions[0])?.plural ?? null;
+}
+
+/** The players behind the chosen chips. */
+export function chosenPlayerIds(audiences: Audience[], chosen: string[]): number[] {
+  return [...new Set(audiences.filter((a) => chosen.includes(a.key)).flatMap((a) => a.playerIds))];
+}
+
+/** The canonical players in the picked groups (name-only slots have no player to add). */
+export function groupPlayerIds(groups: Group[], picked: number[]): number[] {
+  return groups
+    .filter((g) => picked.includes(g.id))
+    .flatMap((g) => g.players.map((p) => p.player?.id).filter((id): id is number => id != null));
 }

@@ -10,7 +10,8 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import { listGroups } from '../../api/groups';
 import { listPlayers } from '../../api/players';
 import { addRosterMembers } from '../../api/roster';
-import { audiencesFrom, pluralFor, suggestedFamily, type Audience } from './audiences';
+import { audiencesFrom, chosenPlayerIds, groupPlayerIds, pluralFor, suggestedFamily } from './audiences';
+import { PositionChips } from './PositionChips';
 import { createRepRetest, getRepResults, type RepConcept, type RepDecision, type RepResults } from '../../api/reps';
 import type { Group, Player } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -250,27 +251,7 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
   return (
     <section className={styles.send} aria-label="Send it">
       <span className={styles.sendLead}>Send it to</span>
-      {audiences.length > 0 && (
-        <div className={styles.groups} role="group" aria-label="Positions">
-          {audiences.map((a: Audience) => {
-            const on = chosen.includes(a.key);
-            return (
-              <button
-                key={a.key}
-                type="button"
-                aria-pressed={on}
-                className={on ? `${styles.group} ${styles.groupOn}` : styles.group}
-                onClick={() => setPositions(on ? chosen.filter((k) => k !== a.key) : [...chosen, a.key])}
-              >
-                {a.name}
-                {a.family && <span className={styles.groupCount}> {a.positions.join(', ')}</span>}
-                <span className={styles.groupCount}> · {a.playerIds.length}</span>
-                {a.family && a.family === likely && <span className={styles.suggested}>suggested</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <PositionChips audiences={audiences} chosen={chosen} onChange={setPositions} likely={likely} className={styles.groups} />
       <div className={styles.groups} role="group" aria-label="Groups">
         {(groups ?? []).map((g) => {
           const on = picked.includes(g.id);
@@ -297,13 +278,11 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
           setBusy(true);
           setError(null);
           try {
-            const fromPositions = audiences.filter((a) => chosen.includes(a.key)).flatMap((a) => a.playerIds);
+            const fromPositions = chosenPlayerIds(audiences, chosen);
             if (fromPositions.length > 0) {
               // Positions go on the Rep's own roster (as Retest does - no
               // throwaway Group); any picked groups' players join them there.
-              const fromGroups = (groups ?? [])
-                .filter((g) => picked.includes(g.id))
-                .flatMap((g) => g.players.map((p) => p.player?.id).filter((id): id is number => id != null));
+              const fromGroups = groupPlayerIds(groups ?? [], picked);
               await addRosterMembers(results.quiz_id, [...new Set([...fromPositions, ...fromGroups])]);
               await activateQuiz(results.quiz_id, [], 'PRACTICE');
             } else {
