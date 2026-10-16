@@ -404,6 +404,14 @@ describe('QuestionInput - answers in the picture, as in a Rep', () => {
     expect(screen.queryByText('Tap the man in the picture')).not.toBeInTheDocument();
   });
 
+  it('practice: a checked tap lights the man - right or wrong - as a Rep does', () => {
+    render(
+      <QuestionInput question={tappable} index={0} answer={{ selected_option_id: 2 }} onChange={vi.fn()} locked verdict={false} />,
+    );
+    expect(screen.getByRole('button', { name: 'Tap Z' }).className).toMatch(/wrong/);
+    expect(screen.getByRole('button', { name: 'Tap X' }).className).not.toMatch(/wrong|right/);
+  });
+
   it('select-all-that-apply questions keep their checkboxes only', () => {
     render(
       <QuestionInput question={{ ...tappable, allows_multiple_answers: true }} index={0} answer={undefined} onChange={vi.fn()} />,

@@ -47,6 +47,7 @@ export function QuestionInput({
   locked = false,
   canRevealClip = false,
   autostartClip = true,
+  verdict = null,
 }: {
   question: Question;
   index: number;
@@ -65,6 +66,9 @@ export function QuestionInput({
   /** False on the all-questions-on-one-page layout, so a screen of clips
    * does not all start playing at once. */
   autostartClip?: boolean;
+  /** Practice: how the checked answer went - lights the tapped man or spot
+   * in the picture, as a Rep does. Never given for a graded question. */
+  verdict?: boolean | null;
   /** Practice only: this question has been checked, so the answer is fixed
    * for this attempt. Shown read-only rather than hidden - a player should
    * still be able to re-read what they put and what their coach said.
@@ -225,6 +229,7 @@ export function QuestionInput({
           options={question.options}
           onTap={locked || watching ? undefined : (optionId) => onChange({ selected_option_id: optionId })}
           chosen={answer?.selected_option_id != null ? [answer.selected_option_id] : []}
+          tone={verdict === true ? 'right' : verdict === false ? 'wrong' : null}
           disabled={locked || watching}
           still={locked}
           autoplay={autostartClip}

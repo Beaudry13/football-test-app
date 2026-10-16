@@ -686,6 +686,7 @@ export function QuizStep({
           isUnanswered={unansweredIds.has(question.id)}
           drawingScope={drawingScope}
           locked={Boolean(checked)}
+          verdict={checked ? checked.is_correct : null}
           /* THE SAME RULE THAT GOVERNS SUBMITTING decides whether the rest of
              the play may be shown. Reusing `isAnswered` rather than writing a
              second rule is the point: a blank box or an untouched choice must
@@ -752,6 +753,7 @@ export function QuizStep({
               isUnanswered={unansweredIds.has(question.id)}
               drawingScope={drawingScope}
               locked={Boolean(checked)}
+              verdict={checked ? checked.is_correct : null}
               canRevealClip={isAnswered(question, answers[question.id])}
               /* EVERY QUESTION IS ON SCREEN AT ONCE HERE, so nothing may start
                  on its own - twenty clips playing together is a wall of film
