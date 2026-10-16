@@ -666,6 +666,18 @@ class TestThePresnapMoment:
         copy = client.post(f"/api/quizzes/{rep['id']}/duplicate", headers=coach_headers).get_json()
         assert copy["questions"][0]["presnap"] == self.CLIP
 
+    def test_a_decision_moment_and_only_a_short_beat_after_the_snap(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        mid = {**self.CLIP, "freeze": "mid"}
+        assert self._make(client, coach_headers, rep["id"], mid).status_code == 201
+        beat = {**self.CLIP, "freeze": "after", "after": {"step": 0.1, "duration": 0.8, "samples": [
+            {"id": "O8", "pts": [{"x": 20, "y": -1.6}, {"x": 20, "y": -0.6}]}]}}
+        assert self._make(client, coach_headers, rep["id"], beat).status_code == 201
+        a_whole_route = {**beat, "after": {"step": 0.1, "duration": 6, "samples": beat["after"]["samples"]}}
+        assert self._make(client, coach_headers, rep["id"], a_whole_route).status_code == 422
+        nonsense = {**self.CLIP, "freeze": "halftime"}
+        assert self._make(client, coach_headers, rep["id"], nonsense).status_code == 422
+
     def test_nothing_that_would_answer_the_question_is_accepted(self, client, coach_headers):
         rep = _rep(client, coach_headers)
         with_route = {**self.CLIP, "players": [{**self.CLIP["players"][0], "path": [{"x": 20, "y": -1.6}, {"x": 20, "y": 10}]}]}

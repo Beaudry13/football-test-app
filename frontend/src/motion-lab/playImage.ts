@@ -26,6 +26,8 @@ export interface PlayImageOptions {
   motion?: boolean
   /** The man the question is about ("You're the X"): ringed in gold. */
   highlight?: string | null
+  /** Draw the football at the snapper's feet (false once it has been snapped). */
+  ball?: boolean
 }
 
 const COLORS = {
@@ -165,7 +167,7 @@ export function drawPlay(ctx: CanvasRenderingContext2D, play: Play, options: Pla
 
   // The football, at the snapper's feet.
   const snapper = play.players.find((p) => p.side === 'offense' && p.role === 'snapper') ?? play.players.find((p) => p.side === 'offense' && p.label === 'C')
-  if (snapper) {
+  if (snapper && options.ball !== false) {
     const b = px({ x: snapper.x, y: 0 })
     ctx.fillStyle = COLORS.ball
     ctx.beginPath()

@@ -141,8 +141,22 @@ def _validated_presnap(presnap):
         # A path is stored only when it IS pre-snap motion (legacy timing).
         if man.get("path") and man.get("timing") != "pre-snap":
             raise ApiError("Routes after the snap do not belong in the pre-snap moment", status_code=422, reason="presnap_invalid")
-    if set(presnap) - {"v", "situation", "players", "highlight"}:
+    if set(presnap) - {"v", "situation", "players", "highlight", "freeze", "after"}:
         raise ApiError("The pre-snap moment holds alignment and motion only", status_code=422, reason="presnap_invalid")
+    if presnap.get("freeze") not in (None, "before", "mid", "snap", "after"):
+        raise ApiError("Unknown decision moment", status_code=422, reason="presnap_invalid")
+    after = presnap.get("after")
+    if after is not None:
+        # Only the beat after the snap - a second or two at most, never a route.
+        samples = after.get("samples") if isinstance(after, dict) else None
+        if (
+            not isinstance(samples, list)
+            or len(samples) > 30
+            or not isinstance(after.get("duration"), (int, float))
+            or not 0 < after["duration"] <= 2
+            or any(not isinstance(s, dict) or not isinstance(s.get("pts"), list) or len(s["pts"]) > 25 for s in samples)
+        ):
+            raise ApiError("The beat after the snap is a short one", status_code=422, reason="presnap_invalid")
     if len(json.dumps(presnap)) > 64_000:
         raise ApiError("The pre-snap moment is too large", status_code=422, reason="presnap_invalid")
     return presnap

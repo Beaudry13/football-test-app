@@ -248,6 +248,26 @@ describe('Make a rep from a play', () => {
     expect(input.tap_targets![at].x).toBeCloseTo(px({ x: h.x - 14, y: h.y }).x / 1376)
   })
 
+  it('the coach picks the decision moment - mid-motion - and the tap spots move with it', async () => {
+    const play = newPlay('Jet')
+    const h = play.players.find((p) => p.label === 'H')!
+    h.motion = [{ x: h.x, y: h.y }, { x: h.x - 14, y: h.y }]
+    open(play)
+    const moments = within(screen.getByRole('radiogroup', { name: 'Decide at' }))
+    expect(moments.getByRole('radio', { name: 'Snap' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(moments.getByRole('radio', { name: 'Mid-motion' }))
+    expect(screen.getByText('Players watch the motion and decide halfway through it.')).toBeInTheDocument()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Who gets the ball?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect((input.presnap as { freeze?: string }).freeze).toBe('mid')
+    const at = input.options.findIndex((o) => o.option_text === 'H')
+    const x = input.tap_targets![at].x * 1376
+    expect(x).toBeLessThan(px(h).x)
+    expect(x).toBeGreaterThan(px({ x: h.x - 14, y: h.y }).x)
+  })
+
   it('without motion shown, there is no pre-snap moment', async () => {
     const play = newPlay('Jet')
     const h = play.players.find((p) => p.label === 'H')!

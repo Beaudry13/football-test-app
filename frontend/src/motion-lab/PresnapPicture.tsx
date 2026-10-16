@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
-import { presnapFrame, presnapTimeline, type PresnapClip } from './presnap'
+import { MOMENT_LABEL, presnapFrame, presnapTimeline, type PresnapClip } from './presnap'
 import styles from './PresnapPicture.module.css'
 
 /**
  * THE PLAY, MOVING: the decision's pre-snap moment run on Motion Lab's own
  * timeline - the motion man goes, the ring goes with the man it marks - and
- * frozen at the snap, which is when the player decides. `onDone` fires once,
- * at the freeze; the question waits for it.
+ * frozen at the decision moment the coach chose (the snap by default).
+ * `onDone` fires once, at the freeze; the question waits for it.
  *
- * `still` (a review) and reduced motion skip straight to the frozen snap.
+ * `still` (a review) and reduced motion skip straight to the frozen moment.
  */
 export default function PresnapPicture({
   clip,
@@ -38,10 +38,15 @@ export default function PresnapPicture({
     const draw = (t: number) => {
       if (!ctx) return
       ctx.setTransform(1, 0, 0, 1, 0, 0)
-      drawPlay(ctx, presnapFrame(clip, line, t), { routes: false, motion: true, highlight: clip.highlight })
+      drawPlay(ctx, presnapFrame(clip, line, t), {
+        routes: false,
+        motion: line.moment !== 'before',
+        highlight: clip.highlight,
+        ball: t <= line.snapAt,
+      })
     }
     const freeze = () => {
-      draw(line.snapAt)
+      draw(line.freezeAt)
       setFrozen(true)
       if (!told.current) {
         told.current = true
@@ -49,7 +54,8 @@ export default function PresnapPicture({
       }
     }
     const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (still || reduced || !ctx || typeof requestAnimationFrame === 'undefined') {
+    // Before motion there is nothing to watch: the alignment is the moment.
+    if (still || reduced || line.moment === 'before' || !ctx || typeof requestAnimationFrame === 'undefined') {
       freeze()
       return
     }
@@ -62,7 +68,7 @@ export default function PresnapPicture({
       if (began === null) began = now
       const elapsed = (now - began) / 1000 - HOLD
       const t = line.from + Math.max(0, elapsed)
-      if (t >= line.snapAt) {
+      if (t >= line.freezeAt) {
         freeze()
         return
       }
@@ -82,11 +88,11 @@ export default function PresnapPicture({
         width={IMAGE_WIDTH}
         height={IMAGE_HEIGHT}
         role="img"
-        aria-label={frozen ? 'The play, at the snap' : 'The play, before the snap'}
+        aria-label={frozen ? `The play, ${MOMENT_LABEL[line.moment].toLowerCase()}` : 'The play, moving'}
       />
       {children}
-      {frozen && <span className={styles.snap}>Snap</span>}
-      {frozen && !still && (
+      {frozen && <span className={styles.snap}>{MOMENT_LABEL[line.moment]}</span>}
+      {frozen && !still && line.moment !== 'before' && (
         <button type="button" className={styles.again} onClick={() => setRun((n) => n + 1)}>
           ↻ Watch again
         </button>

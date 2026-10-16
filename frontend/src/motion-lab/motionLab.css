@@ -1630,6 +1630,38 @@
   max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
+/* WHEN THE PLAYER DECIDES: before motion / mid-motion / snap / after the snap. */
+.motion-lab-root .moment-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.motion-lab-root .moment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.motion-lab-root .moment-lead {
+  font-size: 12px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.motion-lab-root .moment,
+.motion-lab-root .moment-preview {
+  font-size: 12px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.motion-lab-root .moment.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.motion-lab-root .moment-preview {
+  margin-left: auto;
+}
 /* Make rep stays in reach however tall the panel gets. */
 .motion-lab-root .make-rep-pop .make-q-actions {
   position: sticky;
