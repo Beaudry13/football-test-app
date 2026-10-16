@@ -8,6 +8,7 @@ import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
 import { playerAt, px } from './playImageLayout'
 import { tapTargets } from './playRep'
+import { TapCheck } from '../components/football/TapCheck'
 import { MomentPicker } from './MomentPicker'
 import { freezePicture, freezeSpots, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
 import { ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
@@ -53,6 +54,7 @@ export function MakeQuestion({
   const [quizId, setQuizId] = useState<number | 'new'>('new')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
   const preview = useRef<HTMLCanvasElement>(null)
   const hasMotion = useMemo(() => hasPresnapMotion(play), [play])
   const [motion, setMotion] = useState(hasMotion)
@@ -204,8 +206,24 @@ export function MakeQuestion({
       {kind === 'ball' && ball && (
         <div className="make-q-note">
           Choices: {ball.choices.join(', ')} · answer {ball.target}
-          {targets ? ' · players tap the man in the picture' : ''}
+          {targets ? ' · players tap the man in the picture ' : ''}
+          {targets && (
+            <button type="button" className="make-q-link" onClick={() => setChecking(true)}>
+              See what they tap
+            </button>
+          )}
         </div>
+      )}
+      {checking && targets && ball && (
+        <TapCheck
+          presnap={presnap}
+          drawn={presnap ? undefined : { width: IMAGE_WIDTH, height: IMAGE_HEIGHT, draw: (ctx) => drawPlay(ctx, play, { routes }) }}
+          targets={targets}
+          answers={ball.choices}
+          rightIndex={ball.choices.indexOf(ball.target)}
+          onClose={() => setChecking(false)}
+          onConfirm={() => setChecking(false)}
+        />
       )}
       <label className="make-q-field">
         <span>Question</span>

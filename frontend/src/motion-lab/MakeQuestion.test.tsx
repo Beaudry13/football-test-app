@@ -171,6 +171,15 @@ describe('Make a quiz question from a play', () => {
     expect(input.tap_targets![at].x).toBeCloseTo(px(x).x / 1376)
   })
 
+  it('the coach can try what a player taps before making it', async () => {
+    open(passTo('O8'))
+    fireEvent.click(screen.getByRole('radio', { name: 'Who gets the ball?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'See what they tap' }))
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
+    fireEvent.click(check.getByRole('button', { name: 'Tap X' }))
+    expect(check.getByRole('status')).toHaveTextContent('That answers “X” - the right one.')
+  })
+
   it('says what went wrong and stays open', async () => {
     vi.mocked(questionsApi.createQuestion).mockRejectedValue(new Error('The picture is too large.'))
     open(newPlay('Jet Dig'))
