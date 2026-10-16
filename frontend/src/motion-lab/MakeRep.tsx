@@ -13,6 +13,8 @@ import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
 import { playerAt, px } from './playImageLayout'
 import { freezeSpots, momentsFor, presnapOf, type DecisionMoment } from './presnap'
 import { MomentPicker } from './MomentPicker'
+import { TapCheck } from '../components/football/TapCheck'
+import type { DrawnStill } from '../components/football/PlayPicture'
 import {
   addPrompt,
   ANSWER_SETS,
@@ -23,6 +25,7 @@ import {
   roleName,
   SITUATION_PROMPTS,
   fieldSpots,
+  spreadSpots,
   tapTargets,
   writeRepMemory,
 } from './playRep'
@@ -45,6 +48,8 @@ import {
 interface Answer {
   text: string
   correct: boolean
+  /** Where the coach put this answer's spot on the field (picture fractions). */
+  spot?: { x: number; y: number }
 }
 
 const blankAnswers = (): Answer[] => [
@@ -129,23 +134,50 @@ export function MakeRep({
   const [moment, setMoment] = useState<DecisionMoment>('snap')
   const moments = useMemo(() => momentsFor(play), [play])
   const presnap = useMemo(() => (motion ? presnapOf(play, who, moment) : null), [play, who, motion, moment])
+  /** Answers with words, in order - the options the decision will have. */
+  const filledIdx = useMemo(() => answers.map((a, i) => (a.text.trim() ? i : -1)).filter((i) => i >= 0), [answers])
+  const filled = filledIdx.map((i) => answers[i].text)
+  /** "Put them on the field": spots for answers that name no man or known place. */
+  const [onField, setOnField] = useState(false)
   /* Answers that are men in the play ("Players", or typed labels) become
      spots in the picture the player taps - where they stand AT THE DECISION
      MOMENT when the motion plays, since that is the picture he taps on. */
   const targets = useMemo(() => {
     const spots = presnap ? freezeSpots(presnap) : null
-    const filled = answers.filter((a) => a.text.trim()).map((a) => a.text)
-    const men = tapTargets(play, filled, (p) => {
+    const texts = filledIdx.map((i) => answers[i].text)
+    const men = tapTargets(play, texts, (p) => {
       const at = spots?.get(p.id) ?? p
       return { x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT }
     })
     if (men) return men
-    /* Answers that are PLACES - gaps, zones - become labelled spots on his
-       side of the field, the player taps the spot. */
-    const places = fieldSpots(play, filled, who)
-    return places ? places.map((at) => ({ x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT, zone: true })) : null
-  }, [play, answers, presnap, who])
+    /* PLACES - gaps, drops, any spot: PEIRA SUGGESTS where (his side of the
+       field, from the formation), the coach moves them and confirms. A spot
+       he has placed is his, never re-suggested. */
+    const suggested = fieldSpots(play, texts, who) ?? (onField && texts.length >= 2 ? spreadSpots(texts.length) : null)
+    if (!suggested) return null
+    return filledIdx.map((ai, k) => {
+      const placed = answers[ai].spot
+      return placed
+        ? { ...placed, zone: true }
+        : { x: px(suggested[k]).x / IMAGE_WIDTH, y: px(suggested[k]).y / IMAGE_HEIGHT, zone: true }
+    })
+  }, [play, answers, filledIdx, presnap, who, onField])
   const tapsSpots = !!targets?.some((t) => 'zone' in t && t.zone)
+  /* The coach's "Looks right" holds for the spots he saw: the man, the
+     answers and the field toggle they were suggested from. */
+  const spotsSeen = `${who}|${onField}|${filled.join('|')}`
+  const [confirmed, setConfirmed] = useState<string | null>(null)
+  const spotsOk = !tapsSpots || confirmed === spotsSeen
+  const [checking, setChecking] = useState<null | 'look' | 'before-make'>(null)
+  /** The still the player sees when there is no motion - the uploaded picture, drawn here. */
+  const drawn = useMemo<DrawnStill>(
+    () => ({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT, draw: (ctx) => drawPlay(ctx, play, { routes, motion, highlight: who }) }),
+    [play, routes, motion, who],
+  )
+  const moveSpot = (k: number, at: { x: number; y: number }) =>
+    setAnswers((list) => list.map((a, j) => (j === filledIdx[k] ? { ...a, spot: at } : a)))
+  const renameSpot = (k: number, text: string) =>
+    setAnswers((list) => list.map((a, j) => (j === filledIdx[k] ? { ...a, text } : a)))
 
   const ready = useMemo(() => {
     const filled = answers.filter((a) => a.text.trim())
@@ -187,7 +219,12 @@ export function MakeRep({
     if (set && answers.every((a) => !a.text.trim())) quickFill(set.answers(play), set.id)
   }
 
-  async function make() {
+  async function make(spotsChecked = spotsOk) {
+    // Suggested spots go out only once the coach has seen and confirmed them.
+    if (!spotsChecked) {
+      setChecking('before-make')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -344,8 +381,45 @@ export function MakeRep({
             )}
           </div>
         ))}
-        {targets && (
-          <div className="make-q-note">{tapsSpots ? 'Players tap the spot on the field.' : 'Players tap the man in the picture.'}</div>
+        {targets ? (
+          <div className="make-q-note">
+            {!tapsSpots
+              ? 'Players tap the man in the picture.'
+              : spotsOk
+                ? 'Players tap the spot on the field.'
+                : 'PEIRA suggested where these spots are - check them.'}{' '}
+            <button type="button" className="make-q-link" onClick={() => setChecking('look')}>
+              See what they tap
+            </button>
+            {onField && (
+              <>
+                {' · '}
+                <button
+                  type="button"
+                  className="make-q-link"
+                  onClick={() => {
+                    setOnField(false)
+                    setAnswers((list) => list.map((a) => ({ text: a.text, correct: a.correct })))
+                  }}
+                >
+                  Buttons only
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          filled.length >= 2 && (
+            <button
+              type="button"
+              className="make-q-link"
+              onClick={() => {
+                setOnField(true)
+                setChecking('look')
+              }}
+            >
+              Put them on the field - players tap the spot
+            </button>
+          )
         )}
 
         {answers.length < 5 && (
@@ -388,6 +462,25 @@ export function MakeRep({
           Cancel
         </button>
       </div>
+      {checking && targets && (
+        <TapCheck
+          presnap={presnap}
+          drawn={presnap ? undefined : drawn}
+          targets={targets}
+          answers={filled}
+          rightIndex={filledIdx.findIndex((i) => answers[i].correct)}
+          onMove={tapsSpots ? moveSpot : undefined}
+          onRename={tapsSpots ? renameSpot : undefined}
+          lead={checking === 'before-make' ? 'Check the spots before you make it.' : undefined}
+          onClose={() => setChecking(null)}
+          onConfirm={() => {
+            const goOn = checking === 'before-make'
+            setConfirmed(spotsSeen)
+            setChecking(null)
+            if (goOn) void make(true)
+          }}
+        />
+      )}
     </div>
   )
 }

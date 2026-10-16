@@ -154,23 +154,65 @@ describe('Make a rep from a play', () => {
     expect(input.tap_targets![at].y).toBeCloseTo(px(x).y / 720)
   })
 
-  it('a gap is a spot on HIS side of the field: tap the backer, ask his gap', async () => {
+  it('a gap is a SUGGESTED spot on his side: the coach checks it, moves it, and only then is it made', async () => {
     const play = open()
     const picture = screen.getByLabelText('The picture the player will see')
     picture.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1376, height: 720, right: 1376, bottom: 720, x: 0, y: 0, toJSON: () => ({}) })
     const backer = play.players.find((p) => p.label === 'LB' && p.x < 53.33 / 2)!
     fireEvent.click(picture, { clientX: px(backer).x, clientY: px(backer).y })
     fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Your gap?' }))
-    expect(screen.getByText('Players tap the spot on the field.')).toBeInTheDocument()
+    expect(screen.getByText(/PEIRA suggested where these spots are - check them/)).toBeInTheDocument()
+    // Make rep does not send suggested spots: it opens the check first.
     fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
+    expect(check.getByText('Check the spots before you make it.')).toBeInTheDocument()
+    expect(questionsApi.createQuestion).not.toHaveBeenCalled()
+    // His side - left of the ball - A to D outward, labelled in one row.
+    expect(check.getByRole('button', { name: 'Tap A gap' })).toHaveTextContent('A gap')
+    // The coach drags the B gap where he means it.
+    const surface = document.querySelector('[data-tap-surface]') as HTMLElement
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) })
+    const b = check.getByRole('button', { name: 'Move B gap' })
+    fireEvent.pointerDown(b, { pointerId: 1, clientX: 450, clientY: 300 })
+    fireEvent.pointerMove(b, { pointerId: 1, clientX: 430, clientY: 290 })
+    fireEvent.pointerUp(b, { pointerId: 1 })
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(input.options.map((o) => o.option_text)).toEqual(['A gap', 'B gap', 'C gap', 'D gap'])
     expect(input.tap_targets!.every((t) => t.zone)).toBe(true)
-    // His side - left of the ball - and outward from A to D.
-    const xs = input.tap_targets!.map((t) => t.x)
-    expect(xs[0]).toBeLessThan(px({ x: 53.33 / 2, y: 0 }).x / 1376)
-    expect([...xs].sort((a, b) => b - a)).toEqual(xs)
+    expect(input.tap_targets![1]).toEqual({ x: 0.43, y: 0.58, zone: true })
+    // The others stayed where PEIRA suggested: left of the ball.
+    expect(input.tap_targets![0].x).toBeLessThan(px({ x: 53.33 / 2, y: 0 }).x / 1376)
+  })
+
+  it('answers that name no man or place can still be put on the field - the coach places every spot', async () => {
+    open()
+    type('The situation', 'Where do you fit?')
+    type('Answer 1', 'Alley')
+    type('Answer 2', 'Cutback')
+    fireEvent.click(screen.getByRole('button', { name: /Put them on the field/ }))
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
+    // He can rename a spot right where he places it.
+    fireEvent.change(check.getByRole('textbox', { name: 'Name of spot 2' }), { target: { value: 'Cutback lane' } })
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }))
+    expect(screen.getByText(/Players tap the spot on the field/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.options.map((o) => o.option_text)).toEqual(['Alley', 'Cutback lane'])
+    expect(input.tap_targets).toHaveLength(2)
+  })
+
+  it('the coach can try exactly what a player taps - and sees what it answers', async () => {
+    open()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick answers' })).getByRole('button', { name: 'Players' }))
+    fireEvent.click(screen.getByRole('button', { name: 'See what they tap' }))
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
+    // Men only: nothing to move, a ring on each man to try.
+    expect(check.queryByRole('radio', { name: 'Move spots' })).toBeNull()
+    fireEvent.click(check.getByRole('button', { name: 'Tap Z' }))
+    expect(check.getByRole('status')).toHaveTextContent(/That answers “Z” - (the right one|not the right one)\./)
   })
 
   it('typed answers that are not men have no spots', async () => {

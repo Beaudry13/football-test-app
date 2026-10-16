@@ -62,8 +62,9 @@ export function TapOverlay({
     const option = options[i];
     const on = chosen?.includes(option.id);
     const zone = !!targets[i].zone;
-    // A man's ring stays on the man; only a place moves.
-    const movable = !!onMove && zone;
+    // A man's ring stays on the man; only a place moves - by its own pill when
+    // it stands alone, by its dot when it shares a row.
+    const movable = !!onMove && zone && !!style;
     return (
       <button
         key={option.id}
@@ -81,7 +82,7 @@ export function TapOverlay({
         aria-label={movable ? `Move ${option.option_text}` : `Tap ${option.option_text}`}
         disabled={disabled && !movable}
         onClick={onTap && !movable ? () => onTap(option.id) : undefined}
-        {...(movable && style ? grab(i) : {})}
+        {...(movable ? grab(i) : {})}
       >
         {zone ? option.option_text : null}
       </button>

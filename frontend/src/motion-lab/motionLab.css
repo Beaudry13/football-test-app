@@ -1630,6 +1630,18 @@
   max-height: calc(100vh - 120px);
   overflow-y: auto;
 }
+/* A quiet in-line action ("See what they tap"). */
+.motion-lab-root .make-q-link {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
 /* WHEN THE PLAYER DECIDES: before motion / mid-motion / snap / after the snap. */
 .motion-lab-root .moment-picker {
   display: flex;

@@ -127,6 +127,17 @@ export function fieldSpots(play: Play, answers: string[], whoId: string | null):
   return out
 }
 
+/** Spots for answers that name no man and no known place - an even row
+ *  across the field for the coach to drag where he means each one. */
+export function spreadSpots(count: number): Pt[] {
+  const left = 12
+  const right = FIELD_WIDTH - 12
+  return Array.from({ length: count }, (_, i) => ({
+    x: count === 1 ? FIELD_WIDTH / 2 : left + ((right - left) * i) / (count - 1),
+    y: 8,
+  }))
+}
+
 /** Where the football is: over the center, else the hash it is spotted on. */
 function ballX(play: Play): number {
   const center = play.players.find((p) => p.side === 'offense' && p.label.toUpperCase() === 'C')
