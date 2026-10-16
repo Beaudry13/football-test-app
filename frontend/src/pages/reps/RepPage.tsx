@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { deleteQuestion, reorderQuestions, updateQuestion, uploadQuestionImage } from '../../api/questions';
@@ -1062,16 +1062,48 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   };
   /** ▲ / ▼ - one step, by keyboard or tap (and the way on a phone). */
   const move = (index: number, by: -1 | 1) => place(index, index + by);
-  /* DRAG A DECISION BY ITS GRIP to where it goes. Only the grip arms the row,
-     so typing in a decision's fields never starts a drag. */
-  const [armed, setArmed] = useState<number | null>(null);
+  /* DRAG A DECISION BY ITS GRIP to where it goes - a finger, a mouse or a pen
+     alike (pointer events, not the mouse-only drag-and-drop). Only the grip
+     starts it, so typing in a decision's fields never does. */
   const [dragging, setDragging] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
   const endDrag = () => {
-    setArmed(null);
     setDragging(null);
     setOver(null);
   };
+  const grip = (i: number) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (moving) return;
+      e.preventDefault();
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+      setDragging(i);
+      setOver(i);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      if (dragging === null) return;
+      // The row under the finger - or the nearest one, past either end.
+      let best = over ?? dragging;
+      let bestD = Infinity;
+      rowRefs.current.forEach((row, j) => {
+        const box = row?.getBoundingClientRect();
+        if (!box) return;
+        const d = e.clientY < box.top ? box.top - e.clientY : e.clientY > box.bottom ? e.clientY - box.bottom : 0;
+        if (d < bestD) {
+          bestD = d;
+          best = j;
+        }
+      });
+      if (best !== over) setOver(best);
+    },
+    onPointerUp: () => {
+      const from = dragging;
+      const to = over;
+      endDrag();
+      if (from !== null && to !== null && from !== to) void place(from, to);
+    },
+    onPointerCancel: endDrag,
+  });
   const edit = (id: number) => {
     setEditing(id);
     listConcepts()
@@ -1109,27 +1141,10 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
           return (
             <li
               key={d.question_id}
+              ref={(el) => {
+                rowRefs.current[i] = el;
+              }}
               className={rowClass}
-              draggable={armed === i && !moving}
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = 'move';
-                // Firefox starts a drag only with something in the transfer.
-                e.dataTransfer.setData('text/plain', String(d.question_id));
-                setDragging(i);
-              }}
-              onDragOver={(e) => {
-                if (dragging === null) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                if (over !== i) setOver(i);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                const from = dragging;
-                endDrag();
-                if (from !== null) void place(from, i);
-              }}
-              onDragEnd={endDrag}
             >
               <div className={styles.order}>
                 <span
@@ -1137,8 +1152,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                   title="Drag to move it - or use the arrows"
                   aria-hidden="true"
                   data-testid={`grip-${d.number}`}
-                  onPointerDown={() => setArmed(i)}
-                  onPointerUp={() => dragging === null && setArmed(null)}
+                  {...grip(i)}
                 >
                   ⠿
                 </span>
