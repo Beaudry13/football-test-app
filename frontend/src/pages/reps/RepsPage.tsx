@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { listQuizzes } from '../../api/quizzes';
+import { listOrganizationQuizzes, type OrganizationQuiz } from '../../api/organizations';
+import { useAuth } from '../../auth/AuthContext';
 import { makeRepFromQuiz } from '../../api/reps';
 import type { Quiz } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -27,6 +29,11 @@ export function RepsPage() {
   const [picking, setPicking] = useState(false);
   const [making, setMaking] = useState<number | null>(null);
   const [rowError, setRowError] = useState<{ id: number; message: string } | null>(null);
+  /* MY REPS | ALL REPS - an admin may open any Rep in the organization, so he
+     may list them too; everyone else sees his own. Home stays his own. */
+  const isAdmin = useAuth().coach?.role === 'admin';
+  const [scope, setScope] = useState<'mine' | 'all'>('mine');
+  const [everyone, setEveryone] = useState<OrganizationQuiz[] | null>(null);
 
   useEffect(() => {
     listQuizzes()
@@ -34,7 +41,15 @@ export function RepsPage() {
       .catch((err) => setError(getErrorMessage(err)));
   }, []);
 
-  const reps = all?.filter((q) => q.kind === 'REP') ?? null;
+  useEffect(() => {
+    if (scope !== 'all' || everyone !== null) return;
+    listOrganizationQuizzes()
+      .then((tree) => setEveryone(tree.quizzes.filter((q) => q.kind === 'REP')))
+      .catch((err) => setError(getErrorMessage(err)));
+  }, [scope, everyone]);
+
+  const mine = all?.filter((q) => q.kind === 'REP') ?? null;
+  const reps: (Quiz & { owner?: OrganizationQuiz['owner'] })[] | null = scope === 'all' ? everyone : mine;
   const quizzes = all?.filter((q) => q.kind !== 'REP' && q.question_count > 0) ?? [];
 
   const make = async (quiz: Quiz) => {
@@ -103,8 +118,25 @@ export function RepsPage() {
       <ConceptTrends />
       {/* One "Motion adjustment", not five: offered when concepts look alike. */}
       <TidyConcepts />
+      {isAdmin && (
+        <div className={styles.scope} role="radiogroup" aria-label="Whose reps">
+          {(['mine', 'all'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              role="radio"
+              aria-checked={scope === s}
+              className={scope === s ? `${styles.scopeButton} ${styles.scopeOn}` : styles.scopeButton}
+              onClick={() => setScope(s)}
+            >
+              {s === 'mine' ? 'My reps' : 'All reps'}
+            </button>
+          ))}
+        </div>
+      )}
       {reps === null && !error && <LoadingState />}
-      {reps?.length === 0 && !picking && (
+      {scope === 'all' && reps?.length === 0 && <p className={styles.empty}>Nobody in your program has made a rep yet.</p>}
+      {scope === 'mine' && reps?.length === 0 && !picking && (
         <p className={styles.empty}>
           No reps yet. Tap <strong>Make a rep from a quiz</strong> - its tap-an-answer questions become decisions your
           players run one at a time{motionLab ? ', or put a player in a Motion Lab play' : ''}.
@@ -119,6 +151,7 @@ export function RepsPage() {
                 {rep.question_count} {rep.question_count === 1 ? 'decision' : 'decisions'}
                 {rep.is_active ? ' · out now' : ''}
                 {rep.retest_of ? ' · retest' : ''}
+                {scope === 'all' && rep.owner ? ` · ${rep.owner.username}` : ''}
               </span>
             </Link>
           </li>

@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/quizzes', () => ({ listQuizzes: vi.fn() }));
 vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn(), getConceptTrends: vi.fn().mockResolvedValue([]) }));
+vi.mock('../../api/organizations', () => ({ listOrganizationQuizzes: vi.fn() }));
+import * as orgApi from '../../api/organizations';
 import * as quizzesApi from '../../api/quizzes';
 import * as repsApi from '../../api/reps';
 import * as authModule from '../../auth/AuthContext';
@@ -14,8 +16,8 @@ import { RepsPage } from './RepsPage';
 const quiz = (id: number, title: string, kind: 'QUIZ' | 'REP', question_count = 3) =>
   ({ id, title, kind, question_count, updated_at: `2026-10-0${id}`, is_active: false }) as never;
 
-function open(owner: boolean) {
-  vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: owner } } as never);
+function open(owner: boolean, role = 'member') {
+  vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: owner, role } } as never);
   render(
     <MemoryRouter initialEntries={['/reps']}>
       <Routes>
@@ -62,5 +64,34 @@ describe('Reps, for every coach', () => {
   it('a coach with Motion Lab can also start from a play', async () => {
     open(true);
     expect(await screen.findByRole('link', { name: 'From a Motion Lab play' })).toHaveAttribute('href', '/motion-lab');
+  });
+});
+
+describe('My reps | All reps', () => {
+  it('a coach sees his own reps, and no switch', async () => {
+    open(false);
+    await screen.findByRole('link', { name: /Trips Jet/ });
+    expect(screen.queryByRole('radiogroup', { name: 'Whose reps' })).toBeNull();
+    expect(orgApi.listOrganizationQuizzes).not.toHaveBeenCalled();
+  });
+
+  it('an admin starts on his own, and All reps lists every rep in the program with its coach', async () => {
+    vi.mocked(orgApi.listOrganizationQuizzes).mockResolvedValue({
+      folders: [],
+      quizzes: [
+        { ...(quiz(3, 'Trips Jet - Boundary safety', 'REP') as object), owner: { id: 1, username: 'me' } },
+        { ...(quiz(7, 'Red zone - Nickel', 'REP') as object), owner: { id: 2, username: 'dcoach' } },
+        { ...(quiz(8, 'Install', 'QUIZ') as object), owner: { id: 2, username: 'dcoach' } },
+      ],
+    } as never);
+    open(false, 'admin');
+    const scope = within(await screen.findByRole('radiogroup', { name: 'Whose reps' }));
+    expect(scope.getByRole('radio', { name: 'My reps' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('link', { name: /Red zone/ })).toBeNull();
+    fireEvent.click(scope.getByRole('radio', { name: 'All reps' }));
+    const theirs = await screen.findByRole('link', { name: /Red zone - Nickel/ });
+    expect(theirs).toHaveAttribute('href', '/reps/7');
+    expect(theirs).toHaveTextContent('dcoach');
+    expect(screen.queryByRole('link', { name: /Install/ })).toBeNull();
   });
 });
