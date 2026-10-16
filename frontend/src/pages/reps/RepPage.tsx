@@ -107,6 +107,7 @@ export function RepPage() {
      different. A copy carries no code and no roster: nothing is sent until the
      coach sends it. ?variation=<original> keeps the banner up until Done. */
   const variationOf = Number(params.get('variation')) || null;
+  const motionLab = useMayUseMotionLab();
   const [varying, setVarying] = useState(false);
   const makeVariation = async () => {
     if (!results) return;
@@ -184,6 +185,7 @@ export function RepPage() {
                 fromId={variationOf}
                 onRenamed={load}
                 onDone={() => setParams({}, { replace: true })}
+                canOpenPlay={motionLab}
               />
             )}
 
@@ -597,15 +599,62 @@ function VariationBanner({
   fromId,
   onRenamed,
   onDone,
+  canOpenPlay = false,
 }: {
   results: RepResults;
   quizId: number;
   fromId: number;
   onRenamed: () => void;
   onDone: () => void;
+  canOpenPlay?: boolean;
 }) {
   const [title, setTitle] = useState(results.title);
   const [error, setError] = useState<string | null>(null);
+  /* SAME SITUATION, ANOTHER MAN: every decision re-pointed at him - the ring,
+     the words and the picture follow (motion-lab/retargetRep). */
+  const [labels, setLabels] = useState<string[]>([]);
+  const [label, setLabel] = useState('');
+  const [moving, setMoving] = useState(false);
+  const [said, setSaid] = useState<string | null>(null);
+  const fromPlays = results.decisions.some((d) => d.presnap || d.motion_play_id !== null);
+  useEffect(() => {
+    if (!fromPlays) return;
+    let gone = false;
+    import('../../motion-lab/retargetRep')
+      .then((m) => m.testableLabels(results.decisions, canOpenPlay))
+      .then((found) => !gone && setLabels(found))
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, [fromPlays, results.decisions, canOpenPlay]);
+  const testHim = async () => {
+    if (!label) return;
+    setMoving(true);
+    setError(null);
+    setSaid(null);
+    try {
+      const { retargetRep } = await import('../../motion-lab/retargetRep');
+      const { changes, skipped } = await retargetRep(results.decisions, label, canOpenPlay);
+      for (const c of changes) {
+        await updateQuestion(quizId, c.questionId, c.body);
+        if (c.image) await uploadQuestionImage(quizId, c.questionId, c.image);
+      }
+      const check = changes.filter((c) => c.checkSpots).map((c) => c.number);
+      setSaid(
+        [
+          `Now testing the ${label} in ${changes.length} of ${results.decisions.length} ${results.decisions.length === 1 ? 'decision' : 'decisions'}.`,
+          ...skipped.map((k) => `Decision ${k.number}: ${k.why}.`),
+          ...(check.length ? [`Check the spots on ${check.map((n) => `decision ${n}`).join(', ')} - they stay where you put them.`] : []),
+        ].join(' '),
+      );
+      onRenamed();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setMoving(false);
+    }
+  };
   const rename = async () => {
     const next = title.trim();
     if (!next || next === results.title) return;
@@ -639,9 +688,32 @@ function VariationBanner({
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         />
       </label>
+      {labels.length > 0 && (
+        <div className={styles.variationMan}>
+          <label>
+            <span>Same situation, test the </span>
+            <select value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Test another man">
+              <option value="">pick a man</option>
+              {labels.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className={nb.btnSm} disabled={!label || moving} onClick={() => void testHim()}>
+            {moving ? 'Changing…' : 'Test him in every decision'}
+          </button>
+        </div>
+      )}
+      {said && (
+        <p className={styles.variationSaid} role="status">
+          {said}
+        </p>
+      )}
       <p className={styles.variationHint}>
-        Change what&rsquo;s different below: the man (&ldquo;You&rsquo;re the&rdquo;), the question or its answers
-        (Edit), or a new play or formation (+ Add decisions, then Remove the old one). Then pick who it goes to and send it.
+        Change what&rsquo;s different below: the man (Edit → Change man), the question or its answers (Edit), or a new
+        play or formation (+ Add decisions, then Remove the old one). Then pick who it goes to and send it.
       </p>
       <ErrorBanner message={error} />
     </section>

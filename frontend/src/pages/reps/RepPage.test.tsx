@@ -549,6 +549,36 @@ describe('the tested man, his moment and his spots', () => {
     expect(screen.queryByRole('radiogroup', { name: 'Decide at' })).toBeNull();
   });
 
+  it('a variation: same situation, now test the nickel - every decision that can, and says the rest', async () => {
+    const noNickel = { ...CLIP, players: CLIP.players.filter((p) => p.label !== 'NB') };
+    const variation = {
+      ...RESULTS,
+      quiz_id: 31,
+      players: [],
+      audience: { label: null, invited: 0, code: null, people: [] },
+      decisions: [
+        { ...RESULTS.decisions[0], question_id: 11, number: 1, subject_man: { id: 'D9', label: 'FS' }, presnap: CLIP, delivered: false },
+        { ...RESULTS.decisions[0], question_id: 12, number: 2, subject_man: { id: 'D9', label: 'FS' }, presnap: noNickel, delivered: false },
+      ],
+    };
+    open(variation as unknown as RepResults, '/reps/31?variation=5');
+    const banner = within(await screen.findByRole('region', { name: 'Variation' }));
+    const pick = await banner.findByRole('combobox', { name: 'Test another man' });
+    // Defense first: the men a coach tests most.
+    expect(within(pick).getAllByRole('option').map((o) => o.textContent)).toEqual(['pick a man', 'FS', 'NB', 'H']);
+    fireEvent.change(pick, { target: { value: 'NB' } });
+    fireEvent.click(banner.getByRole('button', { name: 'Test him in every decision' }));
+    expect(await banner.findByRole('status')).toHaveTextContent(
+      'Now testing the NB in 1 of 2 decisions. Decision 2: its play has no NB.',
+    );
+    expect(questionsApi.updateQuestion).toHaveBeenCalledTimes(1);
+    const [quiz, question, body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect([quiz, question]).toEqual([31, 11]);
+    expect(body).toMatchObject({ subject_man: 'D6', subject_role: 'Nickel', presnap: { highlight: 'D6' } });
+    expect(questionsApi.uploadQuestionImage).toHaveBeenCalledWith(31, 11, expect.any(File));
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
+  });
+
   it('the coach checks and moves the spots right in the editor', async () => {
     const targets = [
       { x: 0.3, y: 0.5, zone: true },

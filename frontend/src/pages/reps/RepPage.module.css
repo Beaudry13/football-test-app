@@ -115,6 +115,24 @@
   border: 1px solid var(--color-border-strong);
   border-radius: 6px;
 }
+.variationMan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.variationMan select {
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-strong);
+}
+.variationSaid {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
 .variationHint {
   margin: 0;
   font-size: 14px;
