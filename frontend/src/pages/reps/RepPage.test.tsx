@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.fn() }));
+vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.fn(), markRepTaught: vi.fn() }));
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
 vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn(), reorderQuestions: vi.fn(), deleteQuestion: vi.fn() }));
@@ -114,6 +114,7 @@ beforeEach(() => {
   vi.mocked(groupsApi.listGroups).mockResolvedValue([{ id: 9, name: 'Safeties', players: new Array(11).fill({}) }] as never);
   vi.mocked(codesApi.activateQuiz).mockResolvedValue({ code: 'NEW123' } as never);
   vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 6, player_count: 2 } as never);
+  vi.mocked(repsApi.markRepTaught).mockResolvedValue({ concept_key: '3', taught: { at: '2026-10-16T15:00:00Z', by: 'coach1' } });
 });
 
 describe('A Rep, for the coach', () => {
@@ -212,6 +213,7 @@ describe('A Rep, for the coach', () => {
   });
 
   it('the next step is said: Teach first, then Retest - and Retest is right there in Teach', async () => {
+    vi.mocked(repsApi.markRepTaught).mockResolvedValue({ concept_key: '3', taught: { at: '2026-10-16T15:00:00Z', by: 'coach1' } });
     open();
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
     // Before teaching, Teach leads.
@@ -219,8 +221,9 @@ describe('A Rep, for the coach', () => {
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
     const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
     fireEvent.click(teach.getByRole('button', { name: 'Close' }));
-    // Taught: Retest leads, and the card says so.
-    expect(card.getByText('Taught it. Now see if it stuck.')).toBeInTheDocument();
+    // Marked taught on the server - for every coach, everywhere - so Retest leads, and the card says so.
+    expect(repsApi.markRepTaught).toHaveBeenCalledWith(5, 3);
+    expect(await card.findByText(/Taught Oct 16 by coach1\. Now see if it stuck\./)).toBeInTheDocument();
     expect(card.getByRole('button', { name: 'Retest' }).className).toMatch(/btnPrimary/);
     // And from the teaching screen, one tap sends it.
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
@@ -228,6 +231,16 @@ describe('A Rep, for the coach', () => {
     await waitFor(() => expect(screen.getByText("the retest's page")).toBeInTheDocument());
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
     expect(codesApi.activateQuiz).toHaveBeenCalledWith(6, [], 'PRACTICE');
+  });
+
+  it('taught on another device, by another coach: Retest already leads, and Teach does not mark it again', async () => {
+    const taught = { at: '2026-10-15T15:00:00Z', by: 'headcoach' };
+    open({ ...RESULTS, concepts: [{ ...RESULTS.concepts[0], taught }, RESULTS.concepts[1]] });
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    expect(card.getByText(/Taught Oct 15 by headcoach/)).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Retest' }).className).toMatch(/btnPrimary/);
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    expect(repsApi.markRepTaught).not.toHaveBeenCalled();
   });
 
   it('once retested, the card says how it went and opens the retest', async () => {
@@ -387,7 +400,7 @@ describe('a variation of a Rep', () => {
     expect(banner).toHaveTextContent('nothing sent yet');
     expect(within(banner).getByRole('link', { name: 'the original rep' })).toHaveAttribute('href', '/reps/5');
     // Ready to send, never sent.
-    expect(screen.getByRole('button', { name: 'Send rep' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Send rep' })).toBeInTheDocument();
     expect(codesApi.activateQuiz).not.toHaveBeenCalled();
     // A variation does not offer to vary itself while its banner is up.
     expect(screen.queryByRole('button', { name: 'Make a variation' })).toBeNull();

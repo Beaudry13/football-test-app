@@ -87,6 +87,20 @@ describe('Reps on Home', () => {
     expect(next.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/reps/7?teach=5');
   });
 
+  it('once it has been taught (by any coach), Next up says Retest', async () => {
+    vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
+      rep({
+        id: 7,
+        open_problem: { name: 'Coverage ID', concept_id: 5, missed: 3, responded: 11, taught: { at: '2026-10-16T15:00:00Z', by: 'coach1' } },
+      }),
+    ]);
+    open();
+    const next = within(await screen.findByLabelText('Next up'));
+    expect(next.getByText(/missed · taught/)).toBeInTheDocument();
+    expect(next.getByRole('link', { name: 'Retest it' })).toHaveAttribute('href', '/reps/7');
+    expect(next.queryByRole('link', { name: 'Teach it' })).toBeNull();
+  });
+
   it('with no reps yet, offers the one thing to do', async () => {
     vi.mocked(repsApi.getRepsSummary).mockResolvedValue([]);
     open();

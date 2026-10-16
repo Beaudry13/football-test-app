@@ -85,12 +85,19 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
             {fresh.audience_label
               ? fresh.audience_label.toLowerCase()
               : (pluralFor(fresh.audience_positions ?? []) ?? 'players')}{' '}
-            missed
+            missed{fresh.open_problem.taught ? ' · taught' : ''}
           </span>
           <span className={styles.nextActions}>
-            <Link to={`/reps/${fresh.id}?teach=${fresh.open_problem.concept_id ?? 'general'}`} className={nb.btnPrimary}>
-              Teach it
-            </Link>
+            {/* Taught already (by anyone): the next step is Retest, on the Rep page. */}
+            {fresh.open_problem.taught ? (
+              <Link to={`/reps/${fresh.id}`} className={nb.btnPrimary}>
+                Retest it
+              </Link>
+            ) : (
+              <Link to={`/reps/${fresh.id}?teach=${fresh.open_problem.concept_id ?? 'general'}`} className={nb.btnPrimary}>
+                Teach it
+              </Link>
+            )}
           </span>
         </div>
       )}

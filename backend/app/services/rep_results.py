@@ -148,7 +148,20 @@ def rep_results(quiz) -> dict:
     result["audience"] = _audience(quiz)
     result["retest_of"] = _retest_of(quiz, result["concepts"])
     _attach_retests(quiz, result["concepts"])
+    _attach_taught(quiz, result["concepts"])
     return result
+
+
+def _attach_taught(quiz, concepts: list[dict]) -> None:
+    """WHETHER EACH PROBLEM HAS BEEN TAUGHT (models/rep_teach_mark): `taught`
+    is {at, by} or None. Taught means the next step is Retest - the same answer
+    for every coach, on every device."""
+    from app.models.rep_teach_mark import RepTeachMark, concept_key
+
+    marks = {m.concept_key: m for m in RepTeachMark.query.filter_by(quiz_id=quiz.id).all()}
+    for c in concepts:
+        mark = marks.get(concept_key((c["concept"] or {}).get("id")))
+        c["taught"] = mark.to_dict() if mark is not None else None
 
 
 def _attach_retests(quiz, concepts: list[dict]) -> None:

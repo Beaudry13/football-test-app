@@ -14,7 +14,15 @@ import { listPlayers } from '../../api/players';
 import { addRosterMembers } from '../../api/roster';
 import { audiencesFrom, chosenPlayerIds, groupPlayerIds, pluralFor, suggestedFamily } from './audiences';
 import { PositionChips } from './PositionChips';
-import { createRepRetest, getRepResults, type RepConcept, type RepDecision, type RepResults } from '../../api/reps';
+import {
+  createRepRetest,
+  getRepResults,
+  markRepTaught,
+  type RepConcept,
+  type RepDecision,
+  type RepResults,
+  type RepTaught,
+} from '../../api/reps';
 import type { Group, Player } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
@@ -29,24 +37,13 @@ import styles from './RepPage.module.css';
 /* Teach runs the motion for the room when a decision has some. */
 const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
 
-/** Which problems this coach has opened Teach on, per Rep - so Retest becomes the next step. */
-const TAUGHT_KEY = 'peira.repTaught.v1';
+/** The key a problem is grouped (and marked taught) by: its concept id, or "general". */
 const conceptKey = (c: RepConcept) => String(c.concept?.id ?? 'general');
-function readTaught(repId: number): string[] {
-  try {
-    const all = JSON.parse(window.localStorage.getItem(TAUGHT_KEY) ?? '{}') as Record<string, string[]>;
-    return all[repId] ?? [];
-  } catch {
-    return [];
-  }
-}
-function writeTaught(repId: number, keys: string[]): void {
-  try {
-    const all = JSON.parse(window.localStorage.getItem(TAUGHT_KEY) ?? '{}') as Record<string, string[]>;
-    window.localStorage.setItem(TAUGHT_KEY, JSON.stringify({ ...all, [repId]: keys }));
-  } catch {
-    // Private window: Teach still works, Retest is just not pushed forward.
-  }
+
+/** "Taught Oct 16 by coach1" - when, and who, so a second coach knows it happened. */
+function taughtLine(taught: RepTaught): string {
+  const when = new Date(taught.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return `Taught ${when}${taught.by ? ` by ${taught.by}` : ''}.`;
 }
 
 /**
@@ -75,15 +72,21 @@ export function RepPage() {
   const [teaching, setTeaching] = useState<RepConcept | null>(null);
   /** ?teach=<concept id | general>: arrive straight in Teach (Home's "Teach it"). */
   const [params, setParams] = useSearchParams();
-  /** Problems already taught here: their next step is Retest. */
-  const [taught, setTaught] = useState<string[]>(() => readTaught(id));
+  /* TEACH, REMEMBERED ON THE SERVER: opening Teach marks the problem taught on
+     this Rep, so its next step is Retest - on every device, for every coach
+     who opens the Rep. A failed mark never stops the teaching. */
   const teach = (problem: RepConcept) => {
     setTeaching(problem);
-    if (!taught.includes(conceptKey(problem))) {
-      const next = [...taught, conceptKey(problem)];
-      setTaught(next);
-      writeTaught(id, next);
-    }
+    if (problem.taught) return;
+    markRepTaught(id, problem.concept?.id ?? null)
+      .then(({ concept_key, taught }) =>
+        setResults((r) =>
+          r && r.quiz_id === id
+            ? { ...r, concepts: r.concepts.map((c) => (conceptKey(c) === concept_key ? { ...c, taught } : c)) }
+            : r,
+        ),
+      )
+      .catch(() => undefined);
   };
   /** Retest = a new Rep of this concept for exactly the players who missed it, sent, opened. */
   const retest = async (problem: RepConcept) => {
@@ -196,7 +199,7 @@ export function RepPage() {
                     problem={problem}
                     who={who}
                     decisions={results.decisions}
-                    taught={taught.includes(conceptKey(problem))}
+                    taught={problem.taught ?? null}
                     onTeach={() => teach(problem)}
                     onRetest={() => retest(problem)}
                   />
@@ -352,8 +355,8 @@ function ProblemCard({
   problem: RepConcept;
   who: string;
   decisions: RepDecision[];
-  /** Teach has been opened on it here: Retest is the next step. */
-  taught: boolean;
+  /** Taught on this Rep (any coach, any device): Retest is the next step. */
+  taught: RepTaught | null;
   onTeach: () => void;
   onRetest: () => Promise<void>;
 }) {
@@ -406,7 +409,7 @@ function ProblemCard({
           {again.ran > 0 && toGo > 0 && <span className={styles.toGo}> {toGo} to go</span>}
         </p>
       ) : (
-        taught && <p className={styles.nextLine}>Taught it. Now see if it stuck.</p>
+        taught && <p className={styles.nextLine}>{taughtLine(taught)} Now see if it stuck.</p>
       )}
       <div className={styles.actions}>
         <button type="button" className={nb.btnSecondary} aria-expanded={viewing} onClick={() => setViewing((v) => !v)}>

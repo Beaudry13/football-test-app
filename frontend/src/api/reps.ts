@@ -76,6 +76,14 @@ export interface RepConcept {
   motion_play_id: number | null;
   /** THE NEXT STEP: the latest Retest of this concept and how it went (first tries). */
   retest?: { id: number; title: string; invited: number; ran: number; responded: number; missed: number } | null;
+  /** Taught on this Rep (by any coach, on any device): Retest is the next step. */
+  taught?: RepTaught | null;
+}
+
+/** When a problem was last taught, and by whom (the coach's username). */
+export interface RepTaught {
+  at: string;
+  by: string | null;
 }
 
 export interface RepResults {
@@ -126,7 +134,13 @@ export interface RepSummary {
   is_retest: boolean;
   worst: { name: string; concept_id: number | null; missed: number; responded: number; most_common_wrong: string | null } | null;
   /** The worst problem nobody has retested yet (originals only) - what Next up offers. */
-  open_problem?: { name: string; concept_id: number | null; missed: number; responded: number } | null;
+  open_problem?: {
+    name: string;
+    concept_id: number | null;
+    missed: number;
+    responded: number;
+    taught?: RepTaught | null;
+  } | null;
   /** How a retest went, when that is the thing to say (see routes/reps._signal). */
   signal: {
     kind: 'retest_fixed' | 'retest_missing' | 'retested';
@@ -207,6 +221,11 @@ export function addDecisions(repId: number, fromQuizId: number, questionIds: num
 }
 
 /** A new Rep: this concept's decisions, for exactly the players who missed it. Built, not sent. */
+/** TEACH, REMEMBERED: mark this problem taught on this Rep (null = the untagged decisions). */
+export function markRepTaught(quizId: number, conceptId: number | null): Promise<{ concept_key: string; taught: RepTaught }> {
+  return api.post(`/quizzes/${quizId}/rep-teach`, { concept_id: conceptId });
+}
+
 export function createRepRetest(quizId: number, conceptId: number | null): Promise<RepRetest> {
   return api.post<RepRetest>(`/quizzes/${quizId}/rep-retest`, { concept_id: conceptId });
 }

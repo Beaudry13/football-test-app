@@ -17,6 +17,25 @@ from app.errors import ApiError
 from app.utils.auth import current_coach, require_admin
 from app.utils.validation import load_json_body
 
+
+def _carry_teach_marks(merge_ids: set[int], keep_id: int) -> None:
+    """A Rep problem taught under a merged concept stays taught under the one
+    it merged into. Where that Rep already has a mark there, the later
+    teaching wins and the other row goes - one mark per Rep and problem."""
+    from app.models.rep_teach_mark import RepTeachMark, concept_key
+
+    for mark in RepTeachMark.query.filter(RepTeachMark.concept_id.in_(merge_ids)).all():
+        there = RepTeachMark.query.filter_by(quiz_id=mark.quiz_id, concept_key=concept_key(keep_id)).one_or_none()
+        if there is None:
+            mark.concept_id = keep_id
+            mark.concept_key = concept_key(keep_id)
+        else:
+            if mark.taught_at > there.taught_at:
+                there.taught_at = mark.taught_at
+                there.taught_by_coach_id = mark.taught_by_coach_id
+            db.session.delete(mark)
+        db.session.flush()
+
 concepts_bp = Blueprint("concepts", __name__)
 
 
@@ -184,6 +203,7 @@ def merge_concepts():
         Question.query.filter(Question.concept_id.in_(merge_ids))
         .update({Question.concept_id: keep.id}, synchronize_session=False)
     )
+    _carry_teach_marks(merge_ids, keep.id)
     for c in found:
         if c.id in merge_ids:
             c.is_archived = True

@@ -14,6 +14,8 @@ the two things a Rep adds live here:
                                        football problem - what Home shows
   POST /api/quizzes/<rep>/add-decisions  questions from a quiz added to a Rep
                                        that already exists
+  POST /api/quizzes/<rep>/rep-teach    a problem marked taught, so its next
+                                       step is Retest for every coach
 
 RETEST REUSES THE QUIZ RETEST'S PARTS, not its rules. The copy (every field a
 decision carries, its picture included) and the targeted roster are the very
@@ -23,14 +25,17 @@ graded retest rightly never reads.
 """
 
 import re
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from marshmallow import Schema, fields, validate
+from sqlalchemy.exc import IntegrityError
 
 from app.errors import ApiError
 from app.extensions import db
-from app.models import Concept, Quiz
+from app.models import Concept, Quiz, RepTeachMark
+from app.models.rep_teach_mark import concept_key
 from app.models.question import QuestionType
 from app.models.quiz import REP_KIND
 from app.routes.quizzes import _copy_questions_into, _retest_title, _seed_retest_roster
@@ -45,6 +50,17 @@ reps_bp = Blueprint("reps", __name__)
 rep_play_bp = Blueprint("rep_play", __name__)
 
 
+def _my_reps(coach):
+    """The Reps a LIST shows this coach: his own. The same rule every quiz list
+    follows (utils/auth.get_visible_quiz - lists are own-only for everyone), so
+    Home never offers a Rep that would then refuse to open."""
+    return Quiz.query.filter(
+        Quiz.organization_id == coach.organization_id,
+        Quiz.coach_id == coach.id,
+        Quiz.kind == REP_KIND,
+    )
+
+
 def _visible_rep(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
     if quiz.kind != REP_KIND:
@@ -56,6 +72,45 @@ def _visible_rep(quiz_id: int):
 @jwt_required()
 def get_rep_results(quiz_id: int):
     return jsonify(rep_results(_visible_rep(quiz_id)))
+
+
+class RepTeachSchema(Schema):
+    #: The problem taught. None means the untagged ("General") decisions.
+    concept_id = fields.Int(required=False, load_default=None, allow_none=True)
+
+
+@reps_bp.post("/<int:quiz_id>/rep-teach")
+@jwt_required()
+def mark_rep_taught(quiz_id: int):
+    """TEACH, REMEMBERED: this problem has been taught on this Rep, so its
+    next step is Retest - on every device, for every coach who opens it.
+    Teaching it again moves the time and the coach forward."""
+    quiz = _visible_rep(quiz_id)
+    coach = current_coach()
+    concept_id = load_json_body(RepTeachSchema())["concept_id"]
+    if concept_id is not None:
+        concept = db.session.get(Concept, concept_id)
+        # Never trusted across a tenant boundary.
+        if concept is None or concept.organization_id != quiz.organization_id:
+            raise ApiError("That concept does not exist", status_code=422)
+    key = concept_key(concept_id)
+    for _ in range(2):
+        mark = RepTeachMark.query.filter_by(quiz_id=quiz.id, concept_key=key).one_or_none()
+        if mark is None:
+            mark = RepTeachMark(quiz_id=quiz.id, concept_key=key, concept_id=concept_id)
+            db.session.add(mark)
+        mark.taught_by_coach_id = coach.id
+        mark.taught_at = datetime.now(timezone.utc)
+        try:
+            db.session.commit()
+            break
+        except IntegrityError:
+            # Two coaches taught it at the same moment: the other row won the
+            # insert, so update that one instead.
+            db.session.rollback()
+    else:
+        raise ApiError("Could not mark it taught. Try again.", status_code=409)
+    return jsonify({"concept_key": key, "taught": mark.to_dict()})
 
 
 class RepRetestSchema(Schema):
@@ -244,12 +299,12 @@ HOME_REPS = 4
 @reps_bp.get("/reps-summary")
 @jwt_required()
 def reps_summary():
-    """THE NEXT USEFUL ACTION, FOR HOME: the organization's latest Reps, each
+    """THE NEXT USEFUL ACTION, FOR HOME: this coach's latest Reps, each
     with how many have run it and its worst football problem (if anyone
     missed anything). Computed by the same first-try rules as a Rep's page."""
     coach = current_coach()
     reps = (
-        Quiz.query.filter(Quiz.organization_id == coach.organization_id, Quiz.kind == REP_KIND)
+        _my_reps(coach)
         .order_by(Quiz.updated_at.desc(), Quiz.id.desc())
         .limit(HOME_REPS)
         .all()
@@ -290,6 +345,8 @@ def reps_summary():
                         "concept_id": (open_problem["concept"] or {}).get("id"),
                         "missed": open_problem["missed"],
                         "responded": open_problem["responded"],
+                        # Taught already: Next up says Retest, the same as the Rep page.
+                        "taught": open_problem.get("taught"),
                     }
                     if open_problem and results["retest_of"] is None
                     else None
@@ -478,12 +535,9 @@ def reps_for_play(play_id: int):
 
     coach = current_coach()
     reps = (
-        Quiz.query.join(Question, Question.quiz_id == Quiz.id)
-        .filter(
-            Quiz.organization_id == coach.organization_id,
-            Quiz.kind == REP_KIND,
-            Question.motion_play_id == play_id,
-        )
+        _my_reps(coach)
+        .join(Question, Question.quiz_id == Quiz.id)
+        .filter(Question.motion_play_id == play_id)
         .distinct()
         .order_by(Quiz.updated_at.desc(), Quiz.id.desc())
         .all()
@@ -499,7 +553,7 @@ TREND_REPS = 20
 @reps_bp.get("/concept-trends")
 @jwt_required()
 def concept_trends():
-    """IS IT GETTING BETTER? Per concept, across the organization's recent
+    """IS IT GETTING BETTER? Per concept, across this coach's recent
     Reps (oldest first): first-try percent on the first Rep that tested it and
     on the latest, how many Reps tested it, and how many still missed it on the
     latest. Five, most recently tested first. A glance, not a dashboard."""
@@ -507,7 +561,7 @@ def concept_trends():
 
     coach = current_coach()
     reps = (
-        Quiz.query.filter(Quiz.organization_id == coach.organization_id, Quiz.kind == REP_KIND)
+        _my_reps(coach)
         .order_by(Quiz.created_at.desc(), Quiz.id.desc())
         .limit(TREND_REPS)
         .all()

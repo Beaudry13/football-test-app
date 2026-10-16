@@ -15,7 +15,7 @@ A Rep is a quiz with kind REP. What this file protects:
 """
 
 from app.extensions import db
-from app.models import MotionPlay, Organization, Quiz
+from app.models import MotionPlay, Organization, Quiz, RepTeachMark
 from app.models.assessment_mode import PRACTICE
 
 PLAYERS = ["Ty Adams", "Bo Brown", "Cam Cole", "Dee Diaz"]
@@ -466,7 +466,9 @@ class TestHomeSummary:
         assert [s["id"] for s in summary] == [rep["id"]]
         top = summary[0]
         assert (top["decisions"], top["ran"], top["invited"], top["live"]) == (2, 1, 4, True)
-        assert top["open_problem"] == {"name": "Motion adjustment", "concept_id": first["concept"]["id"], "missed": 1, "responded": 1}
+        assert top["open_problem"] == {
+            "name": "Motion adjustment", "concept_id": first["concept"]["id"], "missed": 1, "responded": 1, "taught": None,
+        }
         assert top["worst"] == {
             "name": "Motion adjustment", "concept_id": first["concept"]["id"], "missed": 1, "responded": 1,
             "most_common_wrong": "Stay boundary",
@@ -754,3 +756,99 @@ class TestTapTheMan:
             headers=coach_headers,
         ).get_json()
         assert edited["tap_targets"] is None
+
+
+class TestTeachIsRemembered:
+    """Taught on one device, by one coach: the next step is Retest for every
+    coach, everywhere (models/rep_teach_mark)."""
+
+    def _missed(self, client, headers, app, coach):
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        return rep, first
+
+    def _motion(self, results, concept_id):
+        return next(c for c in results["concepts"] if (c["concept"] or {}).get("id") == concept_id)
+
+    def test_every_coach_sees_it_taught_and_teaching_again_moves_it_forward(
+        self, client, register_coach, invite_teammate, app
+    ):
+        coach, _, headers = register_coach()
+        rep, first = self._missed(client, headers, app, coach)
+        concept_id = first["concept"]["id"]
+        url = f"/api/quizzes/{rep['id']}/rep-results"
+        assert self._motion(client.get(url, headers=headers).get_json(), concept_id)["taught"] is None
+
+        marked = client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": concept_id}, headers=headers)
+        assert marked.status_code == 200, marked.get_json()
+        assert marked.get_json()["concept_key"] == str(concept_id)
+
+        # Another coach who may open this Rep - an admin - on his own device.
+        mate, _, teammate = invite_teammate(headers)
+        with app.app_context():
+            from app.models import Coach, CoachRole
+
+            db.session.get(Coach, mate["id"]).role = CoachRole.ADMIN
+            db.session.commit()
+        seen = self._motion(client.get(url, headers=teammate).get_json(), concept_id)
+        assert seen["taught"]["by"] == coach["username"]
+        assert seen["taught"]["at"]
+
+        again = client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": concept_id}, headers=teammate)
+        assert again.get_json()["taught"]["by"] == "teammate"
+        with app.app_context():
+            assert RepTeachMark.query.filter_by(quiz_id=rep["id"]).count() == 1
+
+    def test_home_next_up_knows_it_was_taught(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first = self._missed(client, headers, app, coach)
+        client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": first["concept"]["id"]}, headers=headers)
+        top = client.get("/api/quizzes/reps-summary", headers=headers).get_json()[0]
+        assert top["open_problem"]["taught"]["by"] == coach["username"]
+
+    def test_the_untagged_problem_and_nothing_across_organizations(self, client, register_coach):
+        _, _, headers = register_coach()
+        rep = _rep(client, headers)
+        _decision(client, headers, rep["id"], "Your check?", ["A", "B"])
+        general = client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": None}, headers=headers)
+        assert general.get_json()["concept_key"] == "general"
+
+        _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
+        refused = client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": None}, headers=stranger)
+        assert refused.status_code in (403, 404)
+        theirs = _concept(client, stranger, "Their concept")
+        foreign = client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": theirs["id"]}, headers=headers)
+        assert foreign.status_code == 422
+
+        plain = client.post("/api/quizzes", json={"title": "Install"}, headers=headers).get_json()
+        assert client.post(f"/api/quizzes/{plain['id']}/rep-teach", json={}, headers=headers).status_code == 422
+
+    def test_merging_the_concept_keeps_it_taught(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first = self._missed(client, headers, app, coach)
+        old = first["concept"]["id"]
+        client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": old}, headers=headers)
+        keep = _concept(client, headers, "Motion check")
+        merged = client.post("/api/concepts/merge", json={"keep_id": keep["id"], "merge_ids": [old]}, headers=headers)
+        assert merged.status_code == 200, merged.get_json()
+        results = client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=headers).get_json()
+        assert self._motion(results, keep["id"])["taught"]["by"] == coach["username"]
+
+
+class TestRepListsAreYourOwn:
+    """Lists show a coach his own Reps - the rule every quiz list follows - so
+    nothing is offered that would then refuse to open (utils/auth)."""
+
+    def test_a_teammates_rep_is_not_on_your_home_trends_or_play(self, client, register_coach, invite_teammate, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, play_id = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        assert [s["id"] for s in client.get("/api/quizzes/reps-summary", headers=headers).get_json()] == [rep["id"]]
+
+        _, _, teammate = invite_teammate(headers)
+        assert client.get("/api/quizzes/reps-summary", headers=teammate).get_json() == []
+        assert client.get("/api/quizzes/concept-trends", headers=teammate).get_json() == []
+        assert client.get(f"/api/quizzes/reps-for-play/{play_id}", headers=teammate).get_json() == []
+        assert client.get(f"/api/quizzes/{rep['id']}/rep-results", headers=teammate).status_code == 404
