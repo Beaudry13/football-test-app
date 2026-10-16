@@ -157,11 +157,13 @@ function zoneSpots(ball: number, side: 1 | -1): Pt[] {
   const fromSideline = (yards: number) => sideline - side * yards
   const flat = fromSideline(6)
   const hook = ball + side * 5
+  // Shallow and deep enough to stay clear of the men aligned there (a corner
+  // at 6-7 yards, the picture's corner tag at its top edge).
   return [
-    { x: flat, y: 4 },
+    { x: flat, y: 2.5 },
     { x: (flat + hook) / 2, y: 10 },
     { x: hook, y: 7 },
-    { x: fromSideline(FIELD_WIDTH / 6), y: 15 },
+    { x: fromSideline(FIELD_WIDTH / 6), y: 13 },
   ]
 }
 

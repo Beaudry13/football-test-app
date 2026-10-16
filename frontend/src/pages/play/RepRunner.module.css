@@ -89,6 +89,28 @@
   white-space: nowrap;
   cursor: pointer;
 }
+/* Close places in one row: the buttons upfield, a dot on each true spot. */
+.zoneRow {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+}
+.zoneRow .zone {
+  position: static;
+  transform: none;
+}
+.zoneDot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: rgba(247, 201, 72, 0.95);
+  box-shadow: 0 0 0 2px rgba(15, 16, 18, 0.6);
+  pointer-events: none;
+}
 .zone:disabled {
   cursor: default;
   opacity: 0.45;

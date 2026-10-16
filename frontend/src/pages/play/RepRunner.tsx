@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, submitQuiz } from '../../api/play';
 import { getRepProgress, type RepProgress } from '../../api/reps';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
@@ -361,27 +361,56 @@ function Decision({
 }) {
   const role = roleOf(question);
   const targets = tapTargetsOf(question);
+  const tapButton = (i: number, style?: React.CSSProperties) => {
+    const option = question.options[i];
+    const on = chosen?.includes(option.id);
+    // A place on the field (a gap, a drop) is labelled; a man is just ringed.
+    const zone = !!targets![i].zone;
+    return (
+      <button
+        key={option.id}
+        type="button"
+        className={`${zone ? styles.zone : styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
+        style={style}
+        aria-label={`Tap ${option.option_text}`}
+        disabled={disabled}
+        onClick={() => onTap!(option.id)}
+      >
+        {zone ? option.option_text : null}
+      </button>
+    );
+  };
+  /* Places too close to label where they are (a line's gaps are a yard or two
+     apart - a few pixels on a phone) become ONE ROW of buttons in field order,
+     just upfield, with a dot on each true spot. Places far apart stay put. */
   const overlay =
     onTap &&
     targets &&
-    question.options.map((option, i) => {
-      const on = chosen?.includes(option.id);
-      // A place on the field (a gap, a drop) is labelled; a man is just ringed.
-      const zone = !!targets[i].zone;
-      return (
-        <button
-          key={option.id}
-          type="button"
-          className={`${zone ? styles.zone : styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
-          style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
-          aria-label={`Tap ${option.option_text}`}
-          disabled={disabled}
-          onClick={() => onTap(option.id)}
-        >
-          {zone ? option.option_text : null}
-        </button>
-      );
-    });
+    placeRows(targets).map((row) =>
+      row.length === 1 ? (
+        tapButton(row[0], { left: `${targets[row[0]].x * 100}%`, top: `${targets[row[0]].y * 100}%` })
+      ) : (
+        <Fragment key={row.join('-')}>
+          {row.map((i) => (
+            <span
+              key={`dot-${i}`}
+              className={styles.zoneDot}
+              style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
+              aria-hidden="true"
+            />
+          ))}
+          <div
+            className={styles.zoneRow}
+            style={{
+              left: `${(row.reduce((n, i) => n + targets[i].x, 0) / row.length) * 100}%`,
+              top: `${(targets[row[0]].y - ROW_LIFT) * 100}%`,
+            }}
+          >
+            {row.map((i) => tapButton(i))}
+          </div>
+        </Fragment>
+      ),
+    );
   return (
     <>
       {role && (
@@ -424,6 +453,30 @@ function Decision({
       )}
     </>
   );
+}
+
+/** How far upfield (a fraction of the picture) a row of close places sits above them. */
+const ROW_LIFT = 0.2;
+
+/** Tap targets grouped for drawing: a man, or a place standing alone, is a row
+ *  of one; places on one line within a short reach of each other share a row,
+ *  ordered across the field. */
+function placeRows(targets: { x: number; y: number; zone?: boolean }[]): number[][] {
+  const rows: number[][] = [];
+  const places = targets
+    .map((t, i) => ({ ...t, i }))
+    .filter((t) => t.zone)
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+  for (const p of places) {
+    const row = rows.find((r) => {
+      const last = targets[r[r.length - 1]];
+      return Math.abs(last.y - p.y) < 0.03 && Math.abs(p.x - last.x) < 0.12;
+    });
+    if (row) row.push(p.i);
+    else rows.push([p.i]);
+  }
+  targets.forEach((t, i) => !t.zone && rows.push([i]));
+  return rows;
 }
 
 /** The decision's tap spots, when there is one per answer. */

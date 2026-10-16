@@ -32,7 +32,7 @@ describe('tap the spot', () => {
     const play = newPlay('Base')
     const corner = play.players.find((p) => p.label === 'CB' && p.x < MID)!
     const [flat, curl, hook, deep] = fieldSpots(play, answers('zone'), corner.id)!
-    expect(flat).toEqual({ x: 6, y: 4 })
+    expect(flat).toEqual({ x: 6, y: 2.5 })
     expect(hook.x).toBeCloseTo(MID - 5)
     expect(curl.x).toBeGreaterThan(flat.x)
     expect(curl.x).toBeLessThan(hook.x)
