@@ -31,6 +31,7 @@ import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
+import { MOMENT_LABEL, momentOf } from '../../motion-lab/moments';
 import { addDecisions, makeRepFromQuiz } from '../../api/reps';
 import { listQuizzes } from '../../api/quizzes';
 
@@ -769,6 +770,13 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     pattern is learned once. */}
                 <div className={styles.questionMeta}>
                   <span className={`${nb.badge} ${nb.badgeNeutral}`}>{TYPE_LABELS[question.question_type]}</span>
+                  {/* A Motion Lab play that moves before the player answers -
+                      and when it stops - so it does not look like a still. */}
+                  {question.presnap && (
+                    <span className={`${nb.badge} ${nb.badgeNeutral}`}>
+                      &#9654; Motion · {MOMENT_LABEL[momentOf(question.presnap)]}
+                    </span>
+                  )}
                   {/* State, not a warning. Stopping a question is a normal
                       authoring decision, so this reads as a label rather than
                       an error - and it is always visible, because a stopped

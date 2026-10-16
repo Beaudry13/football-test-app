@@ -22,6 +22,18 @@ vi.mock('../../components/annotation/AnnotationViewer', () => ({
   ),
 }));
 
+// The moving picture's own business is tested in motion-lab; here it is a
+// stand-in that reports how it was asked to play and can be brought to the freeze.
+vi.mock('../../motion-lab/PresnapPicture', () => ({
+  default: ({ onDone, still, autoplay }: { onDone?: () => void; still?: boolean; autoplay?: boolean }) => (
+    <div data-testid="moving-play" data-still={String(!!still)} data-autoplay={String(autoplay)}>
+      <button type="button" onClick={onDone}>
+        bring it to the freeze
+      </button>
+    </div>
+  ),
+}));
+
 const baseQuestion: Question = {
   id: 1,
   quiz_id: 1,
@@ -248,5 +260,63 @@ describe('QuestionInput fill-in-the-blank', () => {
     // the component does not render them even if one ever leaked through.
     render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={vi.fn()} />);
     expect(screen.queryByText(/Cover 3/)).not.toBeInTheDocument();
+  });
+});
+
+describe('QuestionInput - a Motion Lab play, moving', () => {
+  const CLIP = { v: 1, situation: {}, highlight: null, players: [], freeze: 'mid' };
+  const moving: Question = {
+    ...baseQuestion,
+    presnap: CLIP,
+    image: {
+      id: 9,
+      question_id: 1,
+      image_url: '/uploads/freeze.png',
+      annotations: [],
+      canvas_width: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  };
+
+  it('plays the motion in place of the still, and the answers wait for the freeze', async () => {
+    render(<QuestionInput question={moving} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(await screen.findByTestId('moving-play')).toHaveAttribute('data-autoplay', 'true');
+    expect(screen.queryByAltText('Film still')).not.toBeInTheDocument();
+    expect(screen.getByText('Watch the motion…')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'bring it to the freeze' }));
+    expect(screen.queryByText('Watch the motion…')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('does not make a player re-watch to change an answer already given', async () => {
+    render(<QuestionInput question={moving} index={0} answer={{ selected_option_id: 2 }} onChange={vi.fn()} />);
+    await screen.findByTestId('moving-play');
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('a checked question shows the frozen moment, not the motion again', async () => {
+    render(<QuestionInput question={moving} index={0} answer={{ selected_option_id: 1 }} onChange={vi.fn()} locked />);
+    expect(await screen.findByTestId('moving-play')).toHaveAttribute('data-still', 'true');
+  });
+
+  it('on the all-on-one-page layout a play waits for a tap rather than starting on its own', async () => {
+    render(<QuestionInput question={moving} index={0} answer={undefined} onChange={vi.fn()} autostartClip={false} />);
+    expect(await screen.findByTestId('moving-play')).toHaveAttribute('data-autoplay', 'false');
+  });
+
+  it('a Draw question offers the board only once the play has frozen', async () => {
+    const draw: Question = { ...moving, question_type: 'draw_response', options: [] };
+    render(<QuestionInput question={draw} index={0} answer={undefined} onChange={vi.fn()} />);
+    await screen.findByTestId('moving-play');
+    expect(screen.queryByRole('button', { name: /Draw your answer/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'bring it to the freeze' }));
+    expect(screen.getByRole('button', { name: /Draw your answer/ })).toBeInTheDocument();
+  });
+
+  it('a question without motion is untouched', () => {
+    render(<QuestionInput question={{ ...moving, presnap: null }} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.getByAltText('Film still')).toBeInTheDocument();
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
   });
 });

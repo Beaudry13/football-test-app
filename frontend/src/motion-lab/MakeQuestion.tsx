@@ -7,6 +7,8 @@ import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
 import { playerAt } from './playImageLayout'
+import { MomentPicker } from './MomentPicker'
+import { freezePicture, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
 import { ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
 
 /**
@@ -22,9 +24,23 @@ import { ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInpu
  *                           choices and the play's own target is the answer.
  * The question lands in a quiz the coach picks (or a new one named after the
  * play) and opens in the quiz editor, where everything about it can be changed.
+ *
+ * A play with pre-snap motion PLAYS IT for the player - the same moving
+ * picture a Rep uses - and freezes at the decision moment the coach picks;
+ * the answers wait for the freeze. Routes never play, so the picture is the
+ * play moving or a still with its routes: one or the other.
  */
 
-export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => void }) {
+export function MakeQuestion({
+  play,
+  motionPlayId = null,
+  onClose,
+}: {
+  play: Play
+  /** The saved Motion Lab play, so the question keeps its source. */
+  motionPlayId?: number | null
+  onClose: () => void
+}) {
   const navigate = useNavigate()
   const ball = useMemo(() => ballChoices(play), [play])
   const [kind, setKind] = useState<Kind>('draw')
@@ -37,6 +53,16 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const preview = useRef<HTMLCanvasElement>(null)
+  const hasMotion = useMemo(() => hasPresnapMotion(play), [play])
+  const [motion, setMotion] = useState(hasMotion)
+  const [moment, setMoment] = useState<DecisionMoment>('snap')
+  const moments = useMemo(() => momentsFor(play), [play])
+  const presnap = useMemo(
+    () => (motion ? presnapOf(play, kind === 'draw' ? who : null, moment) : null),
+    [play, kind, who, motion, moment],
+  )
+  /** With the motion playing, the small picture is the decision moment. */
+  const frozen = useMemo(() => (presnap ? freezePicture(presnap) : null), [presnap])
 
   useEffect(() => {
     listQuizzes()
@@ -49,8 +75,9 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
     const ctx = preview.current?.getContext('2d')
     if (!ctx) return
     ctx.setTransform(preview.current!.width / IMAGE_WIDTH, 0, 0, preview.current!.height / IMAGE_HEIGHT, 0, 0)
-    drawPlay(ctx, play, { routes, highlight: kind === 'draw' ? who : null })
-  }, [play, routes, kind, who])
+    if (frozen) drawPlay(ctx, frozen.play, frozen.options)
+    else drawPlay(ctx, play, { routes, highlight: kind === 'draw' ? who : null })
+  }, [play, routes, kind, who, frozen])
 
   const offense = play.players.filter((p) => p.side === 'offense')
   const defense = play.players.filter((p) => p.side === 'defense')
@@ -66,24 +93,43 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
     if (kind !== 'draw') return
     const box = e.currentTarget.getBoundingClientRect()
     if (!box.width || !box.height) return
-    const id = playerAt(play, { x: ((e.clientX - box.left) / box.width) * IMAGE_WIDTH, y: ((e.clientY - box.top) / box.height) * IMAGE_HEIGHT })
+    const id = playerAt(frozen?.play ?? play, { x: ((e.clientX - box.left) / box.width) * IMAGE_WIDTH, y: ((e.clientY - box.top) / box.height) * IMAGE_HEIGHT })
     if (id) mark(id === who ? null : id)
   }
 
   const choose = (next: Kind) => {
     setKind(next)
     setText(next === 'draw' ? drawText(play.players.find((p) => p.id === who)?.label) : QUESTION_TEXT[next])
-    // To answer "who gets it" a player reads the concept, so the routes show.
+    // To answer "who gets it" a player reads the concept, so the routes show
+    // (and a still with routes is not the play moving).
     setRoutes(SHOWS_ROUTES[next])
+    setMotion(hasMotion && !SHOWS_ROUTES[next])
+  }
+
+  const showMotion = (on: boolean) => {
+    setMotion(on)
+    if (on) setRoutes(false)
+  }
+  const showRoutes = (on: boolean) => {
+    setRoutes(on)
+    if (on) setMotion(false)
   }
 
   const create = async () => {
     setBusy(true)
     setError(null)
     try {
-      const image = await playImageFile(play, routes, kind === 'draw' ? who : null)
+      const image = await playImageFile(play, routes, kind === 'draw' ? who : null, presnap)
       const target = quizId === 'new' ? (await createQuiz({ title: play.name })).id : quizId
-      await createQuestion(target, playQuestionInput(play, kind, text), image)
+      await createQuestion(
+        target,
+        {
+          ...playQuestionInput(play, kind, text),
+          ...(presnap ? { presnap } : {}),
+          ...(motionPlayId !== null ? { motion_play_id: motionPlayId } : {}),
+        },
+        image,
+      )
       navigate(`/quizzes/${target}`)
     } catch (err) {
       setError(getErrorMessage(err))
@@ -134,9 +180,15 @@ export function MakeQuestion({ play, onClose }: { play: Play; onClose: () => voi
           </select>
         </label>
       )}
+      {hasMotion && (
+        <label className="make-q-check">
+          <input type="checkbox" checked={motion} onChange={(e) => showMotion(e.target.checked)} /> Play the motion
+        </label>
+      )}
       <label className="make-q-check">
-        <input type="checkbox" checked={routes} onChange={(e) => setRoutes(e.target.checked)} /> Show the routes
+        <input type="checkbox" checked={routes} onChange={(e) => showRoutes(e.target.checked)} /> Show the routes
       </label>
+      <MomentPicker moments={motion ? moments : []} value={moment} onChange={setMoment} clip={presnap} />
       {kind === 'ball' && ball && <div className="make-q-note">Choices: {ball.choices.join(', ')} · answer {ball.target}</div>}
       <label className="make-q-field">
         <span>Question</span>

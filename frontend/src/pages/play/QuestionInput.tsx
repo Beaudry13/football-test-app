@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
 import { AnnotationViewer } from '../../components/annotation/AnnotationViewer';
@@ -10,7 +10,11 @@ import { Icon } from '../../components/ui/Icon';
 import { renderArrows } from '../../utils/typography';
 import { clearDraft, createDrawingFor, draftKey, saveDraft } from './drawingDraft';
 import { ClipPlayer } from '../../components/clip/ClipPlayer';
+import type { PresnapClip } from '../../motion-lab/presnap';
 import styles from './PlayPage.module.css';
+
+// The moving play is Motion Lab's renderer - loaded only for a question that has one.
+const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
 
 export interface PlayerAnswer {
   selected_option_id?: number;
@@ -73,6 +77,8 @@ export function QuestionInput({
   const [isZoomed, setIsZoomed] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingError, setDrawingError] = useState<string | null>(null);
+  /** Which question's motion has reached its freeze (the input outlives a question). */
+  const [motionDoneFor, setMotionDoneFor] = useState<number | null>(null);
   const image = question.image;
   const hasAnnotations = (image?.annotations.length ?? 0) > 0;
 
@@ -94,6 +100,20 @@ export function QuestionInput({
   // metadata-only shape has none, and there is nothing to play without it.
   const clip = question.clip?.url ? question.clip : null;
   const canDraw = isDrawResponse && image !== null;
+  /** THE PLAY, MOVING: a question made from a Motion Lab play with its
+   *  pre-snap motion plays it - the same picture a Rep uses - and freezes at
+   *  the coach's decision moment. Never alongside a clip or a playbook page.
+   *  The answers wait for the freeze, unless one is already given (a resume,
+   *  or a step back) or the question is locked for review. */
+  const presnap =
+    !clip && !maskedImageUrl && question.presnap ? (question.presnap as unknown as PresnapClip) : null;
+  const answered =
+    !!answer &&
+    (answer.selected_option_id != null ||
+      (answer.selected_option_ids?.length ?? 0) > 0 ||
+      !!answer.answer_text ||
+      !!answer.drawing);
+  const watching = !!presnap && !locked && !answered && motionDoneFor !== question.id;
   /** "Select all that apply" - read from the DELIVERED question, so a coach
    *  flipping the setting cannot change how an attempt already underway
    *  behaves. */
@@ -191,7 +211,22 @@ export function QuestionInput({
           )}
         </>
       )}
-      {image && (
+      {presnap ? (
+        <Suspense
+          fallback={
+            image ? <img src={resolveMediaUrl(image.image_url)} alt="The play" className={styles.questionImage} /> : null
+          }
+        >
+          <PresnapPicture
+            key={question.id}
+            clip={presnap}
+            still={locked}
+            autoplay={autostartClip}
+            onDone={() => setMotionDoneFor(question.id)}
+            className={styles.presnapPicture}
+          />
+        </Suspense>
+      ) : image && (
         <>
           {hasAnnotations ? (
             <AnnotationViewer
@@ -234,6 +269,7 @@ export function QuestionInput({
         <strong className={styles.questionText}>{renderArrows(question.question_text)}</strong>
       </div>
       {isUnanswered && <div className={styles.questionRequiredNote}>Please answer this question.</div>}
+      {watching && <p className={styles.watchingNote}>Watch the motion…</p>}
 
       {/* Rendered only for questions the coach opted in. Everything below is
           untouched for every other question, including image questions. */}
@@ -243,7 +279,7 @@ export function QuestionInput({
         </div>
       )}
 
-      {canDraw && (
+      {canDraw && !watching && (
         <div className={styles.drawingRow}>
           <button
             type="button"
@@ -284,7 +320,7 @@ export function QuestionInput({
           future combined-response work will add an explanation box or choices
           here behind their own per-question requirements; until then the
           absence is deliberate, not an oversight. */}
-      {isDrawResponse ? null : isFillBlank ? (
+      {isDrawResponse || watching ? null : isFillBlank ? (
         /* A single line, not a textarea: a fill-in-the-blank answer is a play
            name or a call, and a multi-line box invites an essay the matcher
            would then mark wrong. */

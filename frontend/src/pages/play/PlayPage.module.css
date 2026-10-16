@@ -314,6 +314,18 @@
   }
 }
 
+/* A Motion Lab play, moving (QuestionInput): sits where a still would. */
+.presnapPicture {
+  margin-bottom: 0.75em;
+}
+
+/* While the play's motion runs, the answers wait. */
+.watchingNote {
+  margin: 0.75em 0 0;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
 .writtenAnswer {
   width: 100%;
   min-height: 7em;

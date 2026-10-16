@@ -20,15 +20,10 @@ import { SPEED_YPS, type Player, type SpeedTier, type Timing } from './engine/fo
 import type { Pt } from './engine/geometry'
 import { newPlay, type Play, type Situation } from './engine/play'
 import { buildSchedule, posAt, type ScheduleMap } from './engine/timeline'
+import type { PlayImageOptions } from './playImage'
+import type { DecisionMoment } from './moments'
 
-export type DecisionMoment = 'before' | 'mid' | 'snap' | 'after'
-
-export const MOMENT_LABEL: Record<DecisionMoment, string> = {
-  before: 'Before motion',
-  mid: 'Mid-motion',
-  snap: 'Snap',
-  after: 'After the snap',
-}
+export { MOMENT_LABEL, type DecisionMoment } from './moments'
 
 /** How long "a beat after the snap" is, in playback seconds. */
 export const AFTER_SNAP_BEAT = 0.8
@@ -197,6 +192,19 @@ export function presnapFrame(clip: PresnapClip, line: PresnapTimeline, t: number
       return { ...p, x: at.x, y: at.y, path: [], ...(line.moment === 'before' ? { motion: undefined } : {}) }
     }),
   }
+}
+
+/** How a frame is drawn: never a route; the motion trail unless the moment is
+ *  the bare alignment; the football until it has been snapped. */
+export function frameOptions(clip: PresnapClip, line: PresnapTimeline, t: number): PlayImageOptions {
+  return { routes: false, motion: line.moment !== 'before', highlight: clip.highlight, ball: t <= line.snapAt }
+}
+
+/** The picture AT the decision moment - what the player is left looking at,
+ *  and what a drawing answer goes on. */
+export function freezePicture(clip: PresnapClip): { play: Play; options: PlayImageOptions } {
+  const line = presnapTimeline(clip)
+  return { play: presnapFrame(clip, line, line.freezeAt), options: frameOptions(clip, line, line.freezeAt) }
 }
 
 /** Where every man stands at the decision moment. */

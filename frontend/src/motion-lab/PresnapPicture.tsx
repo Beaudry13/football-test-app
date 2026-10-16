@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
-import { MOMENT_LABEL, presnapFrame, presnapTimeline, type PresnapClip } from './presnap'
+import { frameOptions, MOMENT_LABEL, presnapFrame, presnapTimeline, type PresnapClip } from './presnap'
 import styles from './PresnapPicture.module.css'
 
 /**
@@ -10,16 +10,20 @@ import styles from './PresnapPicture.module.css'
  * `onDone` fires once, at the freeze; the question waits for it.
  *
  * `still` (a review) and reduced motion skip straight to the frozen moment.
+ * `autoplay={false}` (a screen of several questions) waits on the alignment
+ * for a tap, so a page of plays does not all start moving at once.
  */
 export default function PresnapPicture({
   clip,
   still = false,
+  autoplay = true,
   onDone,
   className,
   children,
 }: {
   clip: PresnapClip
   still?: boolean
+  autoplay?: boolean
   onDone?: () => void
   className?: string
   /** Laid over the picture (the tap targets). */
@@ -29,6 +33,7 @@ export default function PresnapPicture({
   const line = useMemo(() => presnapTimeline(clip), [clip])
   const [run, setRun] = useState(0)
   const [frozen, setFrozen] = useState(false)
+  const [started, setStarted] = useState(autoplay)
   const done = useRef(onDone)
   done.current = onDone
   const told = useRef(false)
@@ -38,12 +43,7 @@ export default function PresnapPicture({
     const draw = (t: number) => {
       if (!ctx) return
       ctx.setTransform(1, 0, 0, 1, 0, 0)
-      drawPlay(ctx, presnapFrame(clip, line, t), {
-        routes: false,
-        motion: line.moment !== 'before',
-        highlight: clip.highlight,
-        ball: t <= line.snapAt,
-      })
+      drawPlay(ctx, presnapFrame(clip, line, t), frameOptions(clip, line, t))
     }
     const freeze = () => {
       draw(line.freezeAt)
@@ -60,6 +60,10 @@ export default function PresnapPicture({
       return
     }
     setFrozen(false)
+    if (!started) {
+      draw(line.from)
+      return
+    }
     let raf = 0
     let began: number | null = null
     // A beat on the alignment first, so the eye is set before anything moves.
@@ -78,7 +82,7 @@ export default function PresnapPicture({
     draw(line.from)
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [clip, line, still, run])
+  }, [clip, line, still, run, started])
 
   return (
     <div className={`${styles.wrap} ${className ?? ''}`}>
@@ -91,6 +95,11 @@ export default function PresnapPicture({
         aria-label={frozen ? `The play, ${MOMENT_LABEL[line.moment].toLowerCase()}` : 'The play, moving'}
       />
       {children}
+      {!started && !frozen && (
+        <button type="button" className={styles.play} onClick={() => setStarted(true)}>
+          ▶ Watch the play
+        </button>
+      )}
       {frozen && <span className={styles.snap}>{MOMENT_LABEL[line.moment]}</span>}
       {frozen && !still && line.moment !== 'before' && (
         <button type="button" className={styles.again} onClick={() => setRun((n) => n + 1)}>

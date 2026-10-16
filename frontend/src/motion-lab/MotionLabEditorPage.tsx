@@ -367,7 +367,13 @@ export default function MotionLabEditorPage() {
                 intoRep={intoRep}
               />
             )}
-            {asking && currentPlay && <MakeQuestion play={currentPlay} onClose={() => setAsking(false)} />}
+            {asking && currentPlay && (
+              <MakeQuestion
+                play={currentPlay}
+                motionPlayId={current ? session.serverIdOf(current) : null}
+                onClose={() => setAsking(false)}
+              />
+            )}
           </div>
         }
         isUnsaved={(id) => session.isScratch(id)}

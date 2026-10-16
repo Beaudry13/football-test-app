@@ -14,6 +14,7 @@ import type { QuestionInput } from '../api/questions'
 import { ballTargetOf } from './engine/ball'
 import type { Play } from './engine/play'
 import { playImage } from './playImage'
+import { freezePicture, type PresnapClip } from './presnap'
 
 export type PlayQuestionKind = 'draw' | 'ball'
 
@@ -62,8 +63,16 @@ export function playQuestionInput(play: Play, kind: PlayQuestionKind, text = QUE
   return { question_text: text.trim(), question_type: 'draw_response', options: [] }
 }
 
-/** The play's picture, as the PNG file the question is created with. */
-export async function playImageFile(play: Play, routes: boolean, highlight: string | null = null): Promise<File> {
-  const blob = await playImage(play, highlight ? { routes, highlight } : { routes })
+/** The play's picture, as the PNG file the question is created with. With
+ *  the motion playing it is the play AT THE DECISION MOMENT - the frame the
+ *  player is left looking at, so a drawing goes on exactly what he saw. */
+export async function playImageFile(
+  play: Play,
+  routes: boolean,
+  highlight: string | null = null,
+  presnap: PresnapClip | null = null,
+): Promise<File> {
+  const frozen = presnap ? freezePicture(presnap) : null
+  const blob = await (frozen ? playImage(frozen.play, frozen.options) : playImage(play, highlight ? { routes, highlight } : { routes }))
   return new File([blob], `${play.name.replace(/[^\w-]+/g, '-').slice(0, 40) || 'play'}.png`, { type: 'image/png' })
 }
