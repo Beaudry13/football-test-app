@@ -1,7 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
-import { reorderQuestions, updateQuestion } from '../../api/questions';
+import { deleteQuestion, reorderQuestions, updateQuestion } from '../../api/questions';
+import { duplicateQuiz, updateQuiz } from '../../api/quizzes';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { AddDecisions } from './AddDecisions';
 import { createConcept, listConcepts, type Concept } from '../../api/concepts';
 import { ConceptPicker } from '../../components/concepts/ConceptPicker';
@@ -91,6 +93,27 @@ export function RepPage() {
   };
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
 
+  /* A VARIATION: the same Rep copied - every decision with its man, play,
+     motion, concept and reason - and opened as a new Rep to change what is
+     different. A copy carries no code and no roster: nothing is sent until the
+     coach sends it. ?variation=<original> keeps the banner up until Done. */
+  const variationOf = Number(params.get('variation')) || null;
+  const [varying, setVarying] = useState(false);
+  const makeVariation = async () => {
+    if (!results) return;
+    setVarying(true);
+    setError(null);
+    try {
+      const copy = await duplicateQuiz(id);
+      await updateQuiz(copy.id, { title: `${results.title} - variation` });
+      navigate(`/reps/${copy.id}?variation=${id}`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setVarying(false);
+    }
+  };
+
   const load = useCallback(() => {
     getRepResults(id)
       .then(setResults)
@@ -137,7 +160,23 @@ export function RepPage() {
                 {roles.length === 1 ? `You’re the ${roles[0]} · ` : ''}
                 {results.decisions.length} {results.decisions.length === 1 ? 'decision' : 'decisions'}
               </span>
+              {!variationOf && (
+                <button type="button" className={styles.variationOpen} disabled={varying} onClick={() => void makeVariation()}>
+                  {varying ? 'Copying…' : 'Make a variation'}
+                </button>
+              )}
             </header>
+
+            {variationOf && (
+              <VariationBanner
+                key={id}
+                results={results}
+                quizId={id}
+                fromId={variationOf}
+                onRenamed={load}
+                onDone={() => setParams({}, { replace: true })}
+              />
+            )}
 
             <SendPanel results={results} onSent={load} />
             <Waiting results={results} />
@@ -521,6 +560,68 @@ function Teach({
 }
 
 /** WHO HASN'T RUN IT - while the Rep is out, the names to nudge. */
+/**
+ * A VARIATION, JUST MADE: say what it is and that nothing has gone out, let
+ * the coach name it, and point at the few things a variation changes - all
+ * of them right below, on the same page.
+ */
+function VariationBanner({
+  results,
+  quizId,
+  fromId,
+  onRenamed,
+  onDone,
+}: {
+  results: RepResults;
+  quizId: number;
+  fromId: number;
+  onRenamed: () => void;
+  onDone: () => void;
+}) {
+  const [title, setTitle] = useState(results.title);
+  const [error, setError] = useState<string | null>(null);
+  const rename = async () => {
+    const next = title.trim();
+    if (!next || next === results.title) return;
+    setError(null);
+    try {
+      await updateQuiz(quizId, { title: next });
+      onRenamed();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
+  return (
+    <section className={styles.variation} aria-label="Variation">
+      <div className={styles.variationTop}>
+        <span className={styles.variationKicker}>Variation</span>
+        <span className={styles.variationOf}>
+          of <Link to={`/reps/${fromId}`}>the original rep</Link> · nothing sent yet
+        </span>
+        <button type="button" className={nb.btnSm} onClick={onDone}>
+          Done
+        </button>
+      </div>
+      <label className={styles.variationName}>
+        <span>Name</span>
+        <input
+          value={title}
+          maxLength={200}
+          aria-label="Variation name"
+          onChange={(e) => setTitle(e.target.value)}
+          onBlur={() => void rename()}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+        />
+      </label>
+      <p className={styles.variationHint}>
+        Change what&rsquo;s different below: the man (&ldquo;You&rsquo;re the&rdquo;), the question or its answers
+        (Edit), or a new play or formation (+ Add decisions, then Remove the old one). Then pick who it goes to and send it.
+      </p>
+      <ErrorBanner message={error} />
+    </section>
+  );
+}
+
 function Waiting({ results }: { results: RepResults }) {
   if (!results.audience.code) return null;
   const ran = new Set(results.players.map((p) => (p.player_id !== null ? `p${p.player_id}` : p.display_name.toLowerCase())));
@@ -730,6 +831,18 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(false);
+  const { confirm, dialog } = useConfirmDialog();
+  /** Only a decision nobody has received can go - nothing a player has is lost. */
+  const remove = (d: RepDecision) =>
+    confirm({
+      title: 'Remove this decision?',
+      body: 'No player has received it, so nothing is lost but the decision itself.',
+      confirmLabel: 'Remove',
+      action: async () => {
+        await deleteQuestion(quizId, d.question_id);
+        onChanged();
+      },
+    }).catch(() => undefined);
   /** Move a decision up or down: the order players meet them in. */
   const move = async (index: number, by: -1 | 1) => {
     const ids = results.decisions.map((d) => d.question_id);
@@ -752,6 +865,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   };
   return (
     <section className={styles.section} aria-label="Decisions">
+      {dialog}
       <div className={styles.sectionHead}>
         <h2 className={styles.sectionTitle}>Decisions</h2>
         <button type="button" className={styles.addOpen} aria-expanded={adding} onClick={() => setAdding((open) => !open)}>
@@ -793,6 +907,16 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                   {editing !== d.question_id && (
                     <button type="button" className={styles.editOpen} onClick={() => edit(d.question_id)} aria-label={`Edit decision ${d.number}`}>
                       Edit
+                    </button>
+                  )}
+                  {editing !== d.question_id && !d.delivered && results.decisions.length > 1 && (
+                    <button
+                      type="button"
+                      className={styles.editOpen}
+                      onClick={() => void remove(d)}
+                      aria-label={`Remove decision ${d.number}`}
+                    >
+                      Remove
                     </button>
                   )}
                 </div>

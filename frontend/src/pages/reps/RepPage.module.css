@@ -40,6 +40,69 @@
 .sendLead {
   font-weight: 700;
 }
+/* A VARIATION: copy the Rep, change what is different, send it. */
+.variationOpen {
+  align-self: flex-start;
+  margin-top: 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.variation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--nb-accent);
+  border-radius: 10px;
+  background: var(--color-accent-bg);
+}
+.variationTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.variationTop > button {
+  margin-left: auto;
+}
+.variationKicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nb-accent);
+}
+.variationOf {
+  color: var(--nb-text-muted);
+  font-size: 14px;
+}
+.variationName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.variationName input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+}
+.variationHint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nb-text-muted);
+}
 .groups {
   display: flex;
   flex-wrap: wrap;

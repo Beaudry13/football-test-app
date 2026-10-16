@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../api/reps', () => ({ getRepResults: vi.fn(), createRepRetest: vi.fn() }));
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 vi.mock('../../api/groups', () => ({ listGroups: vi.fn() }));
-vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn(), reorderQuestions: vi.fn() }));
+vi.mock('../../api/questions', () => ({ updateQuestion: vi.fn(), reorderQuestions: vi.fn(), deleteQuestion: vi.fn() }));
 vi.mock('../../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }));
 vi.mock('../../api/players', () => ({ listPlayers: vi.fn() }));
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
@@ -16,6 +16,9 @@ import * as questionsApi from '../../api/questions';
 import * as conceptsApi from '../../api/concepts';
 import * as playersApi from '../../api/players';
 import * as rosterApi from '../../api/roster';
+import * as quizzesApi from '../../api/quizzes';
+import userEvent from '@testing-library/user-event';
+import { acceptConfirm } from '../../test/confirmDialog';
 import * as authModule from '../../auth/AuthContext';
 import type { RepResults } from '../../api/reps';
 import { RepPage } from './RepPage';
@@ -338,5 +341,66 @@ describe('A Rep, for the coach', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send rep' }));
     await waitFor(() => expect(codesApi.activateQuiz).toHaveBeenCalledWith(5, [9], 'PRACTICE'));
     expect(repsApi.getRepResults).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a variation of a Rep', () => {
+  it('copies the rep, names it a variation and opens it - with nothing sent', async () => {
+    const copy: RepResults = {
+      ...RESULTS,
+      quiz_id: 31,
+      title: 'Trips Jet - Boundary safety - variation',
+      players: [],
+      audience: { label: null, invited: 0, code: null, people: [] },
+    };
+    vi.mocked(repsApi.getRepResults).mockImplementation(async (id: number) => (id === 31 ? copy : RESULTS));
+    const duplicate = vi.spyOn(quizzesApi, 'duplicateQuiz').mockResolvedValue({ id: 31 } as never);
+    const rename = vi.spyOn(quizzesApi, 'updateQuiz').mockResolvedValue({} as never);
+    render(
+      <MemoryRouter initialEntries={['/reps/5']}>
+        <Routes>
+          <Route path="/reps/:quizId" element={<RepPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Make a variation' }));
+    await waitFor(() => expect(duplicate).toHaveBeenCalledWith(5));
+    expect(rename).toHaveBeenCalledWith(31, { title: 'Trips Jet - Boundary safety - variation' });
+    const banner = await screen.findByRole('region', { name: 'Variation' });
+    expect(banner).toHaveTextContent('nothing sent yet');
+    expect(within(banner).getByRole('link', { name: 'the original rep' })).toHaveAttribute('href', '/reps/5');
+    // Ready to send, never sent.
+    expect(screen.getByRole('button', { name: 'Send rep' })).toBeInTheDocument();
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
+    // A variation does not offer to vary itself while its banner is up.
+    expect(screen.queryByRole('button', { name: 'Make a variation' })).toBeNull();
+  });
+
+  it('names it right there', async () => {
+    const copy: RepResults = { ...RESULTS, quiz_id: 31, title: 'Copy', audience: { label: null, invited: 0, code: null, people: [] } };
+    const rename = vi.spyOn(quizzesApi, 'updateQuiz').mockResolvedValue({} as never);
+    open(copy, '/reps/31?variation=5');
+    const name = await screen.findByRole('textbox', { name: 'Variation name' });
+    fireEvent.change(name, { target: { value: 'Trips Jet - Corner' } });
+    fireEvent.blur(name);
+    await waitFor(() => expect(rename).toHaveBeenCalledWith(31, { title: 'Trips Jet - Corner' }));
+  });
+
+  it('a decision nobody has received can be removed; one a player has cannot', async () => {
+    const user = userEvent.setup();
+    const two: RepResults = {
+      ...RESULTS,
+      decisions: [
+        { ...RESULTS.decisions[0], delivered: true },
+        { ...RESULTS.decisions[0], question_id: 12, number: 2, delivered: false },
+      ],
+    };
+    vi.mocked(questionsApi.deleteQuestion).mockResolvedValue(undefined);
+    open(two);
+    await screen.findByRole('button', { name: 'Remove decision 2' });
+    expect(screen.queryByRole('button', { name: 'Remove decision 1' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Remove decision 2' }));
+    await acceptConfirm(user, 'Remove');
+    await waitFor(() => expect(questionsApi.deleteQuestion).toHaveBeenCalledWith(5, 12));
   });
 });

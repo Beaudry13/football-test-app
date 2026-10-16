@@ -217,6 +217,24 @@ class TestADecisionKnowsWhoAndWhere:
         assert copy["questions"][0]["subject_role"] == "Boundary safety"
         assert copy["questions"][0]["motion_play_id"] == play_id
 
+    def test_a_variation_starts_unsent_with_every_decision_intact(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        concept = _concept(client, coach_headers, "Motion adjustment")
+        _decision(
+            client, coach_headers, rep["id"], "Your check?", ["Rotate", "Stay"],
+            concept=concept, role="Boundary safety", why="He is the new #3.",
+        )
+        _players(client, coach_headers, rep["id"])
+        _send(client, coach_headers, rep["id"])
+        copy = client.post(f"/api/quizzes/{rep['id']}/duplicate", headers=coach_headers).get_json()
+        decision = copy["questions"][0]
+        assert decision["concept"]["id"] == concept["id"]
+        assert decision["answer_explanation"] == "He is the new #3."
+        assert [o["is_correct_answer"] for o in decision["options"]] == [True, False]
+        # Never sent: no code, and nobody on its roster until the coach picks them.
+        assert client.get(f"/api/quizzes/{copy['id']}/access-codes", headers=coach_headers).get_json() == []
+        assert client.get(f"/api/quizzes/{copy['id']}/roster", headers=coach_headers).get_json()["players"] == []
+
     def test_deleting_the_play_keeps_the_decision(self, client, register_coach, app):
         coach, _, headers = register_coach()
         rep = _rep(client, headers)
