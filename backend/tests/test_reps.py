@@ -736,6 +736,15 @@ class TestTapTheMan:
         copy = client.post(f"/api/quizzes/{rep['id']}/duplicate", headers=coach_headers).get_json()
         assert copy["questions"][0]["tap_targets"] == self.TARGETS
 
+    def test_a_place_on_the_field_is_marked_as_one(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        targets = [{"x": 0.48, "y": 0.5, "zone": True}, {"x": 0.44, "y": 0.5, "zone": True}]
+        made = self._tap_decision(client, coach_headers, rep["id"], targets=targets)
+        assert made.status_code == 201, made.get_json()
+        assert made.get_json()["tap_targets"] == targets
+        men = self._tap_decision(client, coach_headers, rep["id"], targets=[{"x": 0.1, "y": 0.5}, {"x": 0.9, "y": 0.5}])
+        assert men.get_json()["tap_targets"] == [{"x": 0.1, "y": 0.5}, {"x": 0.9, "y": 0.5}]
+
     def test_one_target_per_answer_or_none(self, client, coach_headers):
         rep = _rep(client, coach_headers)
         response = self._tap_decision(client, coach_headers, rep["id"], targets=[{"x": 0.5, "y": 0.5}])

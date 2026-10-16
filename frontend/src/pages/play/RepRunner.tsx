@@ -366,16 +366,20 @@ function Decision({
     targets &&
     question.options.map((option, i) => {
       const on = chosen?.includes(option.id);
+      // A place on the field (a gap, a drop) is labelled; a man is just ringed.
+      const zone = !!targets[i].zone;
       return (
         <button
           key={option.id}
           type="button"
-          className={`${styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
+          className={`${zone ? styles.zone : styles.target} ${on ? styles.targetOn : ''} ${on && tone === 'right' ? styles.targetRight : ''} ${on && tone === 'wrong' ? styles.targetWrong : ''}`}
           style={{ left: `${targets[i].x * 100}%`, top: `${targets[i].y * 100}%` }}
           aria-label={`Tap ${option.option_text}`}
           disabled={disabled}
           onClick={() => onTap(option.id)}
-        />
+        >
+          {zone ? option.option_text : null}
+        </button>
       );
     });
   return (
@@ -413,13 +417,17 @@ function Decision({
         )
       )}
       <h1 className={styles.prompt}>{question.question_text}</h1>
-      {onTap && targets && <span className={styles.tapHint}>Tap the man in the picture</span>}
+      {onTap && targets && (
+        <span className={styles.tapHint}>
+          {targets.some((t) => t.zone) ? 'Tap the spot on the field' : 'Tap the man in the picture'}
+        </span>
+      )}
     </>
   );
 }
 
 /** The decision's tap spots, when there is one per answer. */
-function tapTargetsOf(question: Question): { x: number; y: number }[] | null {
+function tapTargetsOf(question: Question): { x: number; y: number; zone?: boolean }[] | null {
   const t = question.tap_targets;
   return t && t.length === question.options.length && (question.image || question.presnap) ? t : null;
 }

@@ -22,6 +22,7 @@ import {
   repTitle,
   roleName,
   SITUATION_PROMPTS,
+  fieldSpots,
   tapTargets,
   writeRepMemory,
 } from './playRep'
@@ -133,15 +134,18 @@ export function MakeRep({
      MOMENT when the motion plays, since that is the picture he taps on. */
   const targets = useMemo(() => {
     const spots = presnap ? freezeSpots(presnap) : null
-    return tapTargets(
-      play,
-      answers.filter((a) => a.text.trim()).map((a) => a.text),
-      (p) => {
-        const at = spots?.get(p.id) ?? p
-        return { x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT }
-      },
-    )
-  }, [play, answers, presnap])
+    const filled = answers.filter((a) => a.text.trim()).map((a) => a.text)
+    const men = tapTargets(play, filled, (p) => {
+      const at = spots?.get(p.id) ?? p
+      return { x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT }
+    })
+    if (men) return men
+    /* Answers that are PLACES - gaps, zones - become labelled spots on his
+       side of the field, the player taps the spot. */
+    const places = fieldSpots(play, filled, who)
+    return places ? places.map((at) => ({ x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT, zone: true })) : null
+  }, [play, answers, presnap, who])
+  const tapsSpots = !!targets?.some((t) => 'zone' in t && t.zone)
 
   const ready = useMemo(() => {
     const filled = answers.filter((a) => a.text.trim())
@@ -340,7 +344,9 @@ export function MakeRep({
             )}
           </div>
         ))}
-        {targets && <div className="make-q-note">Players tap the man in the picture.</div>}
+        {targets && (
+          <div className="make-q-note">{tapsSpots ? 'Players tap the spot on the field.' : 'Players tap the man in the picture.'}</div>
+        )}
 
         {answers.length < 5 && (
           <button type="button" className="make-rep-add" onClick={() => setAnswers((list) => [...list, { text: '', correct: false }])}>

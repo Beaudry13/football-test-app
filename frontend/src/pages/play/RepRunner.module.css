@@ -72,19 +72,43 @@
   animation: none;
   opacity: 0.35;
 }
+/* A PLACE ON THE FIELD to tap - a gap, a drop - labelled, since no man is there. */
+.zone {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2px solid rgba(217, 164, 65, 0.9);
+  background: rgba(15, 16, 18, 0.72);
+  color: #f7e7c0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.zone:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
 .targetOn,
-.target:disabled.targetOn {
+.target:disabled.targetOn,
+.zone:disabled.targetOn {
   opacity: 1;
   border-color: var(--peira-accent-text);
   background: rgba(217, 164, 65, 0.3);
 }
 .targetRight,
-.target:disabled.targetRight {
+.target:disabled.targetRight,
+.zone:disabled.targetRight {
   border-color: var(--peira-success);
   background: rgba(111, 207, 138, 0.3);
 }
 .targetWrong,
-.target:disabled.targetWrong {
+.target:disabled.targetWrong,
+.zone:disabled.targetWrong {
   border-color: var(--peira-danger);
   background: rgba(226, 87, 58, 0.3);
 }

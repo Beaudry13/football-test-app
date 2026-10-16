@@ -147,6 +147,20 @@ describe('A Situational Rep, for the player', () => {
     expect(screen.getByRole('button', { name: 'Tap X' })).toBeDisabled();
   });
 
+  it('a decision about a place is answered by tapping the labelled spot on the field', async () => {
+    const tap = {
+      ...decision(3, 'What is your gap?', ['A gap', 'B gap'], 'Run fits'),
+      tap_targets: [{ x: 0.48, y: 0.5, zone: true }, { x: 0.44, y: 0.5, zone: true }],
+    } as unknown as Question;
+    run({ quiz: { ...QUIZ, questions: [tap] } as unknown as Quiz });
+    expect(screen.getByText('Tap the spot on the field')).toBeInTheDocument();
+    const b = screen.getByRole('button', { name: 'Tap B gap' });
+    expect(b).toHaveTextContent('B gap');
+    fireEvent.click(b);
+    await waitFor(() => expect(playApi.checkAnswer).toHaveBeenCalled());
+    expect(vi.mocked(playApi.saveAnswer).mock.calls[0][0]).toMatchObject({ question_id: 3, selected_option_id: 301 });
+  });
+
   it('the finish says what he has and what to work on, and how he did against last time', async () => {
     vi.mocked(repsApi.getRepProgress).mockResolvedValue({
       previous: { correct: 0, answered: 2, missed_concepts: ['Motion adjustment', 'Seam'], mastered_concepts: [] },

@@ -88,6 +88,8 @@ class TapTargetSchema(Schema):
 
     x = fields.Float(required=True, validate=validate.Range(min=0, max=1))
     y = fields.Float(required=True, validate=validate.Range(min=0, max=1))
+    #: A place on the field (a gap, a drop) rather than a man - shown labelled.
+    zone = fields.Bool(required=False)
 
 
 class RegionSchema(Schema):

@@ -112,7 +112,10 @@ def _validated_tap_targets(targets, option_count: int):
         raise ApiError(
             "Give one tap target per answer, or none", status_code=422, reason="tap_targets_mismatch"
         )
-    return [{"x": float(t["x"]), "y": float(t["y"])} for t in targets]
+    return [
+        {"x": float(t["x"]), "y": float(t["y"]), **({"zone": True} if t.get("zone") else {})}
+        for t in targets
+    ]
 
 
 #: Keys a pre-snap man may carry - the pre-snap part of a Motion Lab player.

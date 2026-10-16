@@ -154,6 +154,25 @@ describe('Make a rep from a play', () => {
     expect(input.tap_targets![at].y).toBeCloseTo(px(x).y / 720)
   })
 
+  it('a gap is a spot on HIS side of the field: tap the backer, ask his gap', async () => {
+    const play = open()
+    const picture = screen.getByLabelText('The picture the player will see')
+    picture.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1376, height: 720, right: 1376, bottom: 720, x: 0, y: 0, toJSON: () => ({}) })
+    const backer = play.players.find((p) => p.label === 'LB' && p.x < 53.33 / 2)!
+    fireEvent.click(picture, { clientX: px(backer).x, clientY: px(backer).y })
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Your gap?' }))
+    expect(screen.getByText('Players tap the spot on the field.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.options.map((o) => o.option_text)).toEqual(['A gap', 'B gap', 'C gap', 'D gap'])
+    expect(input.tap_targets!.every((t) => t.zone)).toBe(true)
+    // His side - left of the ball - and outward from A to D.
+    const xs = input.tap_targets!.map((t) => t.x)
+    expect(xs[0]).toBeLessThan(px({ x: 53.33 / 2, y: 0 }).x / 1376)
+    expect([...xs].sort((a, b) => b - a)).toEqual(xs)
+  })
+
   it('typed answers that are not men have no spots', async () => {
     open()
     type('The situation', 'Your check?')

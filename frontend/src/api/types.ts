@@ -303,7 +303,7 @@ export interface Question {
   /** The Motion Lab play the decision was made from. Coach payload only. */
   motion_play_id?: number | null;
   /** TAP THE MAN: one spot per option (option order), as fractions of the picture. */
-  tap_targets?: { x: number; y: number }[] | null;
+  tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** THE PRE-SNAP MOMENT (motion-lab/presnap.ts PresnapClip): played, then frozen at the snap. */
   presnap?: Record<string, unknown> | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the

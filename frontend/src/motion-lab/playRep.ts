@@ -8,8 +8,10 @@
 // everything here only saves the coach typing.
 
 import { ballTargetOf } from './engine/ball'
+import { FIELD_WIDTH } from './engine/field'
 import type { Player } from './engine/formation'
-import type { Play } from './engine/play'
+import type { Pt } from './engine/geometry'
+import { hashX, type Play } from './engine/play'
 
 /** "FS" -> "Free safety": what a coach would call the man he tapped. Editable. */
 const ROLE_NAMES: Record<string, string> = {
@@ -58,10 +60,16 @@ export interface AnswerSet {
 
 const OFFENSE_NOT_A_TARGET = new Set(['QB', 'C', 'LT', 'LG', 'RG', 'RT', 'OL', 'G', 'T'])
 
+/** Places on the field an answer can name - and the player can tap. */
+const GAP_SPOTS = ['A gap', 'B gap', 'C gap', 'D gap']
+const ZONE_SPOTS = ['Flat', 'Curl', 'Hook', 'Deep third']
+
 export const ANSWER_SETS: AnswerSet[] = [
   { id: 'coverage', label: 'Coverage', answers: () => ['Cover 1', 'Cover 2', 'Cover 3', 'Quarters'] },
   { id: 'leverage', label: 'Leverage', answers: () => ['Inside', 'Outside', 'Head up'] },
-  { id: 'gap', label: 'Gap', answers: () => ['A gap', 'B gap', 'C gap', 'D gap'] },
+  { id: 'gap', label: 'Gap', answers: () => [...GAP_SPOTS] },
+  { id: 'zone', label: 'Zone drop', answers: () => [...ZONE_SPOTS] },
+  { id: 'run-fit', label: 'Run fit', answers: () => ['Force', 'Spill', 'Alley', 'Cutback'] },
   { id: 'run-pass', label: 'Run / pass', answers: () => ['Run', 'Pass'] },
   {
     id: 'players',
@@ -96,6 +104,68 @@ export function tapTargets(play: Play, answers: string[], at: (p: Player) => { x
 }
 
 /**
+ * TAP THE SPOT: when every answer names a place on the field - a gap ("A gap"
+ * ... "D gap") or a zone ("Flat", "Curl", "Hook", "Deep third") - where each
+ * is, in field yards, ON THE SIDE OF THE MAN the decision is about (his gaps,
+ * his drops). Gaps sit between that side's linemen as the coach aligned them;
+ * zones by the ball and the sideline. Null when any answer is not a place.
+ */
+export function fieldSpots(play: Play, answers: string[], whoId: string | null): Pt[] | null {
+  if (answers.length < 2) return null
+  const ball = ballX(play)
+  const man = play.players.find((p) => p.id === whoId)
+  const side = man && man.x < ball ? -1 : 1
+  const out: Pt[] = []
+  for (const text of answers) {
+    const key = text.trim().toLowerCase()
+    const gap = GAP_SPOTS.findIndex((g) => g.toLowerCase() === key)
+    const zone = ZONE_SPOTS.findIndex((z) => z.toLowerCase() === key)
+    if (gap >= 0) out.push(gapSpots(play, ball, side)[gap])
+    else if (zone >= 0) out.push(zoneSpots(ball, side)[zone])
+    else return null
+  }
+  return out
+}
+
+/** Where the football is: over the center, else the hash it is spotted on. */
+function ballX(play: Play): number {
+  const center = play.players.find((p) => p.side === 'offense' && p.label.toUpperCase() === 'C')
+  return center ? center.x : hashX(play.situation.hash)
+}
+
+/** A, B, C, D on one side: between the center, guard, tackle and tight end as
+ *  aligned - an ordinary split (1.5 yd) standing in for a man the play lacks. */
+function gapSpots(play: Play, ball: number, side: 1 | -1): Pt[] {
+  const out = play.players
+    .filter((p) => p.side === 'offense' && p.y >= -1.6 && p.y <= 0.5)
+    .map((p) => (p.x - ball) * side)
+    .filter((d) => d >= -0.3 && d <= 6)
+    .sort((a, b) => a - b)
+  const edges: number[] = []
+  for (const d of out) {
+    // The line is contiguous; a man well apart from it is not on it.
+    if (edges.length === 0 ? d <= 0.6 : d - edges[edges.length - 1] <= 2.5) edges.push(d)
+  }
+  const at = (k: number) => edges[k] ?? (edges.length ? edges[edges.length - 1] + 1.5 * (k - edges.length + 1) : 1.5 * k)
+  const yards = [(at(0) + at(1)) / 2, (at(1) + at(2)) / 2, (at(2) + at(3)) / 2, at(3) + 1.6]
+  return yards.map((d) => ({ x: ball + side * d, y: 1 }))
+}
+
+/** Flat, curl, hook and deep third on one side - by the ball and the sideline. */
+function zoneSpots(ball: number, side: 1 | -1): Pt[] {
+  const sideline = side < 0 ? 0 : FIELD_WIDTH
+  const fromSideline = (yards: number) => sideline - side * yards
+  const flat = fromSideline(6)
+  const hook = ball + side * 5
+  return [
+    { x: flat, y: 4 },
+    { x: (flat + hook) / 2, y: 10 },
+    { x: hook, y: 7 },
+    { x: fromSideline(FIELD_WIDTH / 6), y: 15 },
+  ]
+}
+
+/**
  * THE QUESTIONS COACHES ASK, one tap each. A prompt that implies its answers
  * fills them too ("Identify the coverage." -> Cover 1 / 2 / 3 / Quarters).
  */
@@ -106,6 +176,8 @@ export const SITUATION_PROMPTS: { label: string; text: string; answers?: AnswerS
   { label: 'The coverage?', text: 'Identify the coverage.', answers: 'coverage' },
   { label: 'Who gets the ball?', text: 'Who gets the ball?', answers: 'players' },
   { label: 'Your gap?', text: 'What is your gap?', answers: 'gap' },
+  { label: 'Your drop?', text: 'Where is your drop?', answers: 'zone' },
+  { label: 'Your run fit?', text: 'What is your run fit?', answers: 'run-fit' },
 ]
 
 /** "#3 motions across." + "What is your check?" -> one situation; never the same question twice. */
