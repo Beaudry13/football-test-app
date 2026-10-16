@@ -243,6 +243,27 @@ describe('A Rep, for the coach', () => {
     expect(repsApi.markRepTaught).not.toHaveBeenCalled();
   });
 
+  it('Teach shows the same picture the players tapped, with the right spot lit', async () => {
+    const image = { id: 1, question_id: 11, image_url: '/uploads/p.png', annotations: [], canvas_width: null, updated_at: '' };
+    const tapped = {
+      ...RESULTS.decisions[0],
+      image,
+      tap_targets: [
+        { x: 0.3, y: 0.5, zone: true },
+        { x: 0.5, y: 0.2, zone: true },
+        { x: 0.7, y: 0.6, zone: true },
+      ],
+    };
+    open({ ...RESULTS, decisions: [tapped] });
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
+    const right = teach.getByRole('button', { name: 'Tap Rotate down' });
+    expect(right).toBeDisabled();
+    expect(right.className).toMatch(/right/);
+    expect(teach.getByRole('button', { name: 'Tap Stay boundary' }).className).not.toMatch(/right/);
+  });
+
   it('once retested, the card says how it went and opens the retest', async () => {
     const retest = { id: 6, title: 'Motion adjustment - Retest', invited: 4, ran: 3, responded: 3, missed: 1 };
     open({ ...RESULTS, concepts: [{ ...RESULTS.concepts[0], retest }, RESULTS.concepts[1]] });

@@ -324,6 +324,9 @@ def _first_try_results(quiz) -> dict:
                 "image": question.image.to_dict() if question.image else None,
                 # The pre-snap moment, so Teach can run the motion for the room.
                 "presnap": question.presnap,
+                # What the player taps - so Teach shows the right spot and the
+                # coach can check (and, before delivery, move) the spots.
+                "tap_targets": question.tap_targets,
                 # Received by a player already: its answers can be reworded or
                 # added to, but which one is right is locked (routes/questions).
                 "delivered": has_history(question),

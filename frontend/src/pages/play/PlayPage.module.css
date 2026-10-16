@@ -319,6 +319,16 @@
   margin-bottom: 0.75em;
 }
 
+/* Answers in the picture: say how to answer, once. */
+.tapHint {
+  margin: 0.5em 0 0;
+  font-size: 0.8em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
 /* While the play's motion runs, the answers wait. */
 .watchingNote {
   margin: 0.75em 0 0;

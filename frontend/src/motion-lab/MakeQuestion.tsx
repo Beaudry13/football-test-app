@@ -6,9 +6,10 @@ import { createQuiz, listQuizzes } from '../api/quizzes'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
-import { playerAt } from './playImageLayout'
+import { playerAt, px } from './playImageLayout'
+import { tapTargets } from './playRep'
 import { MomentPicker } from './MomentPicker'
-import { freezePicture, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
+import { freezePicture, freezeSpots, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
 import { ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
 
 /**
@@ -63,6 +64,16 @@ export function MakeQuestion({
   )
   /** With the motion playing, the small picture is the decision moment. */
   const frozen = useMemo(() => (presnap ? freezePicture(presnap) : null), [presnap])
+  /* "Who gets the ball?" is answered by tapping the man, as in a Rep - where
+     he stands in the picture the player answers on (the frozen moment). */
+  const targets = useMemo(() => {
+    if (kind !== 'ball' || !ball) return null
+    const spots = presnap ? freezeSpots(presnap) : null
+    return tapTargets(play, ball.choices, (p) => {
+      const at = spots?.get(p.id) ?? p
+      return { x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT }
+    })
+  }, [kind, ball, play, presnap])
 
   useEffect(() => {
     listQuizzes()
@@ -126,6 +137,7 @@ export function MakeQuestion({
         {
           ...playQuestionInput(play, kind, text),
           ...(presnap ? { presnap } : {}),
+          ...(targets ? { tap_targets: targets } : {}),
           ...(motionPlayId !== null ? { motion_play_id: motionPlayId } : {}),
         },
         image,
@@ -189,7 +201,12 @@ export function MakeQuestion({
         <input type="checkbox" checked={routes} onChange={(e) => showRoutes(e.target.checked)} /> Show the routes
       </label>
       <MomentPicker moments={motion ? moments : []} value={moment} onChange={setMoment} clip={presnap} />
-      {kind === 'ball' && ball && <div className="make-q-note">Choices: {ball.choices.join(', ')} · answer {ball.target}</div>}
+      {kind === 'ball' && ball && (
+        <div className="make-q-note">
+          Choices: {ball.choices.join(', ')} · answer {ball.target}
+          {targets ? ' · players tap the man in the picture' : ''}
+        </div>
+      )}
       <label className="make-q-field">
         <span>Question</span>
         <textarea value={text} rows={2} onChange={(e) => setText(e.target.value)} />

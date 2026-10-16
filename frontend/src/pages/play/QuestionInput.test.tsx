@@ -25,11 +25,22 @@ vi.mock('../../components/annotation/AnnotationViewer', () => ({
 // The moving picture's own business is tested in motion-lab; here it is a
 // stand-in that reports how it was asked to play and can be brought to the freeze.
 vi.mock('../../motion-lab/PresnapPicture', () => ({
-  default: ({ onDone, still, autoplay }: { onDone?: () => void; still?: boolean; autoplay?: boolean }) => (
+  default: ({
+    onDone,
+    still,
+    autoplay,
+    children,
+  }: {
+    onDone?: () => void;
+    still?: boolean;
+    autoplay?: boolean;
+    children?: unknown;
+  }) => (
     <div data-testid="moving-play" data-still={String(!!still)} data-autoplay={String(autoplay)}>
       <button type="button" onClick={onDone}>
         bring it to the freeze
       </button>
+      {children as never}
     </div>
   ),
 }));
@@ -318,5 +329,86 @@ describe('QuestionInput - a Motion Lab play, moving', () => {
     render(<QuestionInput question={{ ...moving, presnap: null }} index={0} answer={undefined} onChange={vi.fn()} />);
     expect(screen.getByAltText('Film still')).toBeInTheDocument();
     expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+});
+
+describe('QuestionInput - answers in the picture, as in a Rep', () => {
+  const still = {
+    id: 9,
+    question_id: 1,
+    image_url: '/uploads/play.png',
+    annotations: [],
+    canvas_width: null,
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+  const tappable: Question = {
+    ...baseQuestion,
+    question_text: 'Who gets the ball?',
+    image: still,
+    options: [
+      { id: 1, question_id: 1, option_text: 'X', position: 0, is_correct_answer: true },
+      { id: 2, question_id: 1, option_text: 'Z', position: 1, is_correct_answer: false },
+    ],
+    tap_targets: [
+      { x: 0.1, y: 0.5 },
+      { x: 0.9, y: 0.5 },
+    ],
+  };
+
+  it('a man is tapped in the picture to answer - the buttons still work too', async () => {
+    const onChange = vi.fn();
+    render(<QuestionInput question={tappable} index={0} answer={undefined} onChange={onChange} />);
+    expect(screen.getByText('Tap the man in the picture')).toBeInTheDocument();
+    const z = screen.getByRole('button', { name: 'Tap Z' });
+    expect(z).toHaveStyle({ left: '90%', top: '50%' });
+    await userEvent.click(z);
+    expect(onChange).toHaveBeenCalledWith({ selected_option_id: 2 });
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('a place is a labelled spot on the field', async () => {
+    const gaps: Question = {
+      ...tappable,
+      question_text: 'What is your gap?',
+      options: [
+        { id: 1, question_id: 1, option_text: 'A gap', position: 0, is_correct_answer: true },
+        { id: 2, question_id: 1, option_text: 'B gap', position: 1, is_correct_answer: false },
+      ],
+      tap_targets: [
+        { x: 0.48, y: 0.5, zone: true },
+        { x: 0.6, y: 0.3, zone: true },
+      ],
+    };
+    const onChange = vi.fn();
+    render(<QuestionInput question={gaps} index={0} answer={{ selected_option_id: 1 }} onChange={onChange} />);
+    expect(screen.getByText('Tap the spot on the field')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tap A gap' })).toHaveTextContent('A gap');
+    await userEvent.click(screen.getByRole('button', { name: 'Tap B gap' }));
+    expect(onChange).toHaveBeenCalledWith({ selected_option_id: 2 });
+  });
+
+  it('the spots wait for the motion to freeze, like the buttons', async () => {
+    const moving: Question = { ...tappable, presnap: { v: 1, situation: {}, highlight: null, players: [] } };
+    const onChange = vi.fn();
+    render(<QuestionInput question={moving} index={0} answer={undefined} onChange={onChange} />);
+    expect(await screen.findByRole('button', { name: 'Tap Z' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'bring it to the freeze' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Tap Z' }));
+    expect(onChange).toHaveBeenCalledWith({ selected_option_id: 2 });
+  });
+
+  it('a checked question cannot be re-answered from the picture', () => {
+    const onChange = vi.fn();
+    render(<QuestionInput question={tappable} index={0} answer={{ selected_option_id: 1 }} onChange={onChange} locked />);
+    expect(screen.getByRole('button', { name: 'Tap Z' })).toBeDisabled();
+    expect(screen.queryByText('Tap the man in the picture')).not.toBeInTheDocument();
+  });
+
+  it('select-all-that-apply questions keep their checkboxes only', () => {
+    render(
+      <QuestionInput question={{ ...tappable, allows_multiple_answers: true }} index={0} answer={undefined} onChange={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Tap Z' })).not.toBeInTheDocument();
+    expect(screen.getByAltText('Film still')).toBeInTheDocument();
   });
 });

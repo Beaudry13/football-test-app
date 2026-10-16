@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { deleteQuestion, reorderQuestions, updateQuestion } from '../../api/questions';
@@ -30,13 +30,17 @@ import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
-import type { PresnapClip } from '../../motion-lab/presnap';
+import { PlayPicture } from '../../components/football/PlayPicture';
+import { usableTargets } from '../../components/football/tapTargets';
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
 
-/* Teach runs the motion for the room when a decision has some. */
-const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
+
+/** A decision's tap targets when usable (one per choice, a picture to tap). */
+const targetsOf = (d: RepDecision) => usableTargets(d.tap_targets, d.choices.length, !!(d.image || d.presnap));
+/** A decision's choices as the picture's answers. */
+const choicesOf = (d: RepDecision) => d.choices.map((c) => ({ id: c.option_id, option_text: c.text }));
 
 /** The key a problem is grouped (and marked taught) by: its concept id, or "general". */
 const conceptKey = (c: RepConcept) => String(c.concept?.id ?? 'general');
@@ -531,11 +535,19 @@ function Teach({
       why: d.answer_explanation,
       wrong: wrong ? { text: wrong.text, count: wrong.count } : null,
       motionPlayId: d.motion_play_id ?? problem.motion_play_id,
-      // The play moving to the snap, exactly as the players saw it.
-      picture: d.presnap ? (
-        <Suspense fallback={null}>
-          <PresnapPicture clip={d.presnap as unknown as PresnapClip} />
-        </Suspense>
+      // The play moving to the decision moment, exactly as the players saw
+      // it - and, when they tapped, the right spot lit.
+      picture: d.presnap || targetsOf(d) ? (
+        <PlayPicture
+          image={d.image}
+          presnap={d.presnap}
+          targets={targetsOf(d)}
+          options={choicesOf(d)}
+          chosen={d.choices.filter((c) => c.is_correct).map((c) => c.option_id)}
+          tone="right"
+          disabled
+          motionKey={d.question_id}
+        />
       ) : undefined,
     };
   });

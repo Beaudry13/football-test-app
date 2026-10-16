@@ -6,6 +6,9 @@ import type { Play } from './engine/play'
 import { PlayThumb } from './PlayThumb'
 import { ballChoices, playImageFile, playQuestionInput, SHOWS_ROUTES, type PlayQuestionKind } from './playQuestion'
 import { hasPresnapMotion, presnapOf } from './presnap'
+import { IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
+import { px } from './playImageLayout'
+import { tapTargets } from './playRep'
 import { playFromRow } from './storage/apiPlayRepository'
 import styles from './MotionLabPlayPicker.module.css'
 
@@ -42,8 +45,23 @@ export default function MotionLabPlayPicker({ onPick, onClose }: { onPick: (inpu
     setError(null)
     try {
       const presnap = SHOWS_ROUTES[kind] ? null : presnapOf(play, null)
+      const input = playQuestionInput(play, kind)
+      // "Who gets the ball?": tap the man, where he stands in the still.
+      const targets =
+        kind === 'ball'
+          ? tapTargets(
+              play,
+              input.options.map((o) => o.option_text),
+              (p) => ({ x: px(p).x / IMAGE_WIDTH, y: px(p).y / IMAGE_HEIGHT }),
+            )
+          : null
       await onPick(
-        { ...playQuestionInput(play, kind), motion_play_id: serverId, ...(presnap ? { presnap } : {}) },
+        {
+          ...input,
+          motion_play_id: serverId,
+          ...(presnap ? { presnap } : {}),
+          ...(targets ? { tap_targets: targets } : {}),
+        },
         await playImageFile(play, SHOWS_ROUTES[kind], null, presnap),
       )
     } catch (err) {

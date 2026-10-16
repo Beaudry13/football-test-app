@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { Question } from '../../api/types';
 import { AnnotationViewer } from '../../components/annotation/AnnotationViewer';
@@ -10,11 +10,10 @@ import { Icon } from '../../components/ui/Icon';
 import { renderArrows } from '../../utils/typography';
 import { clearDraft, createDrawingFor, draftKey, saveDraft } from './drawingDraft';
 import { ClipPlayer } from '../../components/clip/ClipPlayer';
-import type { PresnapClip } from '../../motion-lab/presnap';
+import { PlayPicture } from '../../components/football/PlayPicture';
+import { tapsMen, usableTargets } from '../../components/football/tapTargets';
 import styles from './PlayPage.module.css';
 
-// The moving play is Motion Lab's renderer - loaded only for a question that has one.
-const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
 
 export interface PlayerAnswer {
   selected_option_id?: number;
@@ -105,8 +104,7 @@ export function QuestionInput({
    *  the coach's decision moment. Never alongside a clip or a playbook page.
    *  The answers wait for the freeze, unless one is already given (a resume,
    *  or a step back) or the question is locked for review. */
-  const presnap =
-    !clip && !maskedImageUrl && question.presnap ? (question.presnap as unknown as PresnapClip) : null;
+  const presnap = !clip && !maskedImageUrl && question.presnap ? question.presnap : null;
   const answered =
     !!answer &&
     (answer.selected_option_id != null ||
@@ -118,6 +116,14 @@ export function QuestionInput({
    *  flipping the setting cannot change how an attempt already underway
    *  behaves. */
   const isMultiSelect = Boolean(question.allows_multiple_answers);
+  /* TAP THE MAN / THE SPOT - the same answers-in-the-picture a Rep uses, on a
+     one-answer multiple choice question that carries them (a picture without
+     a coach's markings). The buttons below stay: either way answers it. */
+  const tapTargets =
+    question.question_type === 'multiple_choice' && !isMultiSelect && !clip && !maskedImageUrl && !hasAnnotations
+      ? usableTargets(question.tap_targets, question.options.length, !!(presnap || image))
+      : null;
+  const usePlayPicture = !!presnap || !!tapTargets;
   const selectedIds = answer?.selected_option_ids ?? [];
   const drawing = answer?.drawing;
   const storageKey = drawingScope ? draftKey(drawingScope, question.id) : null;
@@ -211,21 +217,21 @@ export function QuestionInput({
           )}
         </>
       )}
-      {presnap ? (
-        <Suspense
-          fallback={
-            image ? <img src={resolveMediaUrl(image.image_url)} alt="The play" className={styles.questionImage} /> : null
-          }
-        >
-          <PresnapPicture
-            key={question.id}
-            clip={presnap}
-            still={locked}
-            autoplay={autostartClip}
-            onDone={() => setMotionDoneFor(question.id)}
-            className={styles.presnapPicture}
-          />
-        </Suspense>
+      {usePlayPicture ? (
+        <PlayPicture
+          image={image}
+          presnap={presnap}
+          targets={tapTargets}
+          options={question.options}
+          onTap={locked || watching ? undefined : (optionId) => onChange({ selected_option_id: optionId })}
+          chosen={answer?.selected_option_id != null ? [answer.selected_option_id] : []}
+          disabled={locked || watching}
+          still={locked}
+          autoplay={autostartClip}
+          onMotionDone={() => setMotionDoneFor(question.id)}
+          className={styles.presnapPicture}
+          motionKey={question.id}
+        />
       ) : image && (
         <>
           {hasAnnotations ? (
@@ -270,6 +276,9 @@ export function QuestionInput({
       </div>
       {isUnanswered && <div className={styles.questionRequiredNote}>Please answer this question.</div>}
       {watching && <p className={styles.watchingNote}>Watch the motion…</p>}
+      {tapTargets && !watching && !locked && (
+        <p className={styles.tapHint}>{tapsMen(tapTargets) ? 'Tap the man in the picture' : 'Tap the spot on the field'}</p>
+      )}
 
       {/* Rendered only for questions the coach opted in. Everything below is
           untouched for every other question, including image questions. */}

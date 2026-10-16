@@ -81,6 +81,8 @@ describe('From Motion Lab, in the quiz editor', () => {
     expect(quizId).toBe(500);
     expect(input).toMatchObject({ question_type: 'multiple_choice', question_text: 'Who gets the ball on this play?' });
     expect(input.options.filter((o) => o.is_correct_answer).map((o) => o.option_text)).toEqual(['X']);
+    // Tapped like a Rep: one spot per choice, on the man.
+    expect(input.tap_targets).toHaveLength(input.options.length);
     expect((image as File).type).toBe('image/png');
     await waitFor(() => expect(reload).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Motion Lab plays' })).toBeNull());

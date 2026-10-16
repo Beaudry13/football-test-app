@@ -157,6 +157,20 @@ describe('Make a quiz question from a play', () => {
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: true })
   })
 
+  it('"Who gets the ball?" is answered by tapping the man, as in a Rep', async () => {
+    const play = passTo('O8')
+    open(play)
+    fireEvent.click(screen.getByRole('radio', { name: 'Who gets the ball?' }))
+    expect(screen.getByText(/players tap the man in the picture/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.tap_targets).toHaveLength(input.options.length)
+    const x = play.players.find((p) => p.label === 'X')!
+    const at = input.options.findIndex((o) => o.option_text === 'X')
+    expect(input.tap_targets![at].x).toBeCloseTo(px(x).x / 1376)
+  })
+
   it('says what went wrong and stays open', async () => {
     vi.mocked(questionsApi.createQuestion).mockRejectedValue(new Error('The picture is too large.'))
     open(newPlay('Jet Dig'))

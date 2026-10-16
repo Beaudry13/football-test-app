@@ -47,6 +47,8 @@ export interface RepDecision {
   image: QuestionImage | null;
   /** The pre-snap moment (motion-lab/presnap.ts), when the decision has motion. */
   presnap?: Record<string, unknown> | null;
+  /** What the player taps, one per choice (components/football/tapTargets). */
+  tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** A player has received it: answers can be reworded or added, the right one is locked. */
   delivered?: boolean;
   is_retired: boolean;
