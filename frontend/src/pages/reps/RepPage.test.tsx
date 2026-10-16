@@ -303,6 +303,23 @@ describe('A Rep, for the coach', () => {
     await waitFor(() => expect(repsApi.getRepResults).toHaveBeenCalledTimes(2));
   });
 
+  it('drags a decision by its grip to where it goes', async () => {
+    vi.mocked(questionsApi.reorderQuestions).mockResolvedValue([] as never);
+    const d = (id: number, number: number) => ({ ...RESULTS.decisions[0], question_id: id, number });
+    open({ ...RESULTS, decisions: [d(11, 1), d(12, 2), d(13, 3)] });
+    const decisions = within(await screen.findByRole('region', { name: 'Decisions' }));
+    const rows = decisions.getAllByRole('listitem').filter((li) => li.getAttribute('draggable') !== null);
+    // Rows are not draggable until the grip is taken, so typing never drags.
+    expect(rows[2]).toHaveAttribute('draggable', 'false');
+    fireEvent.pointerDown(screen.getByTestId('grip-3'));
+    expect(rows[2]).toHaveAttribute('draggable', 'true');
+    const dataTransfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+    fireEvent.dragStart(rows[2], { dataTransfer });
+    fireEvent.dragOver(rows[0], { dataTransfer });
+    fireEvent.drop(rows[0], { dataTransfer });
+    await waitFor(() => expect(questionsApi.reorderQuestions).toHaveBeenCalledWith(5, [13, 11, 12]));
+  });
+
   it('a decision made from Motion Lab opens its play, for a coach who has Motion Lab', async () => {
     vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
     open();

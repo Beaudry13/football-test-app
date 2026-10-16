@@ -843,12 +843,12 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
         onChanged();
       },
     }).catch(() => undefined);
-  /** Move a decision up or down: the order players meet them in. */
-  const move = async (index: number, by: -1 | 1) => {
+  /** Put decision `from` at `to`: the order players meet them in. */
+  const place = async (from: number, to: number) => {
     const ids = results.decisions.map((d) => d.question_id);
-    const to = index + by;
-    if (to < 0 || to >= ids.length) return;
-    [ids[index], ids[to]] = [ids[to], ids[index]];
+    if (from === to || to < 0 || to >= ids.length) return;
+    const [picked] = ids.splice(from, 1);
+    ids.splice(to, 0, picked);
     setMoving(true);
     try {
       await reorderQuestions(quizId, ids);
@@ -856,6 +856,18 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
     } finally {
       setMoving(false);
     }
+  };
+  /** ▲ / ▼ - one step, by keyboard or tap (and the way on a phone). */
+  const move = (index: number, by: -1 | 1) => place(index, index + by);
+  /* DRAG A DECISION BY ITS GRIP to where it goes. Only the grip arms the row,
+     so typing in a decision's fields never starts a drag. */
+  const [armed, setArmed] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const endDrag = () => {
+    setArmed(null);
+    setDragging(null);
+    setOver(null);
   };
   const edit = (id: number) => {
     setEditing(id);
@@ -884,9 +896,49 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
       <ol className={styles.decisions}>
         {results.decisions.map((d, i) => {
           const total = d.choices.reduce((n, c) => n + c.count, 0);
+          const rowClass = [
+            styles.decision,
+            dragging === i ? styles.dragging : '',
+            over === i && dragging !== null && dragging !== i ? (dragging < i ? styles.dropAfter : styles.dropBefore) : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
           return (
-            <li key={d.question_id} className={styles.decision}>
+            <li
+              key={d.question_id}
+              className={rowClass}
+              draggable={armed === i && !moving}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = 'move';
+                // Firefox starts a drag only with something in the transfer.
+                e.dataTransfer.setData('text/plain', String(d.question_id));
+                setDragging(i);
+              }}
+              onDragOver={(e) => {
+                if (dragging === null) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (over !== i) setOver(i);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const from = dragging;
+                endDrag();
+                if (from !== null) void place(from, i);
+              }}
+              onDragEnd={endDrag}
+            >
               <div className={styles.order}>
+                <span
+                  className={styles.grip}
+                  title="Drag to move it - or use the arrows"
+                  aria-hidden="true"
+                  data-testid={`grip-${d.number}`}
+                  onPointerDown={() => setArmed(i)}
+                  onPointerUp={() => dragging === null && setArmed(null)}
+                >
+                  ⠿
+                </span>
                 <button type="button" aria-label={`Move decision ${d.number} up`} disabled={moving || i === 0} onClick={() => void move(i, -1)}>
                   ▲
                 </button>

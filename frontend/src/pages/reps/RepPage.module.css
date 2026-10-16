@@ -509,6 +509,24 @@
   opacity: 0.35;
   cursor: default;
 }
+/* The drag grip, and where a dragged decision will land. */
+.grip {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--nb-text-muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.dragging {
+  opacity: 0.45;
+}
+.dropBefore {
+  box-shadow: 0 -3px 0 var(--nb-accent);
+}
+.dropAfter {
+  box-shadow: 0 3px 0 var(--nb-accent);
+}
 .orderNum {
   font-weight: 800;
   font-size: 14px;
