@@ -126,8 +126,18 @@ def verification_for(retest) -> dict | None:
     parent_attempts = _official_attempts(parent)
 
     concept_ids, concept_source = _rounds_concept_ids(retest, retest_attempts)
+    parent_ids = {q.id for q in parent.questions}
+    # AN UNTAGGED RETEST compares question by question: each copy against the
+    # question it was copied from (questions.copied_from_question_id).
+    copies = {
+        q.id: q.copied_from_question_id
+        for q in retest.questions
+        if q.copied_from_question_id in parent_ids
+    }
     if not concept_ids:
-        return None
+        if not copies:
+            return None
+        concept_source = "question"
 
     # NAMES ALONGSIDE THE IDS, because the card offers another round and the
     # confirmation has to say what that round is ABOUT. Resolved from the live
@@ -140,12 +150,16 @@ def verification_for(retest) -> dict | None:
         if q.concept_id in concept_ids and q.concept is not None
     }
 
-    retest_qs = {q.id for q in retest.questions if q.concept_id in concept_ids}
-    # The parent is matched on the SAME concept, not on question identity. A
-    # copied question may have been reworded before sending, and v1 measures
-    # another observation on the same idea rather than a controlled re-run of
-    # an identical item - see the module docstring in retests.py.
-    parent_qs = {q.id for q in parent.questions if q.concept_id in concept_ids}
+    if concept_ids:
+        retest_qs = {q.id for q in retest.questions if q.concept_id in concept_ids}
+        # The parent is matched on the SAME concept, not on question identity. A
+        # copied question may have been reworded before sending, and v1 measures
+        # another observation on the same idea rather than a controlled re-run of
+        # an identical item - see the module docstring in retests.py.
+        parent_qs = {q.id for q in parent.questions if q.concept_id in concept_ids}
+    else:
+        retest_qs = set(copies)
+        parent_qs = set(copies.values())
 
     # DETERMINISTIC, and that is a correctness requirement rather than tidiness.
     # These used to be built with setdefault over an unordered query, so when a
@@ -205,6 +219,11 @@ def verification_for(retest) -> dict | None:
         #: question's current tag stood in. Never presented as history.
         "concept_source": concept_source,
         "concept_ids": sorted(concept_ids),
+        #: The original's questions this round re-asked (by concept, or - for
+        #: an untagged retest - the very questions it copied), and this round's
+        #: own copies, for "retest again" without a concept.
+        "source_question_ids": sorted(parent_qs),
+        "retest_question_ids": sorted(retest_qs),
         #: Parallel to concept_ids, for the "retest again" confirmation.
         "concept_names": [names_by_id[cid] for cid in sorted(concept_ids) if cid in names_by_id],
         "parent_missed_total": parent_missed_total,
@@ -234,3 +253,32 @@ def verification_for(retest) -> dict | None:
             if r["outcome"] == INCORRECT
         ],
     }
+
+
+def retests_of(quiz) -> list[dict]:
+    """How each retest built FROM this quiz went, newest first - what lets the
+    original's Results answer "did the reteaching work?". The same verification
+    the retest's own Results show, without the player list."""
+    from app.models import Quiz
+
+    children = (
+        Quiz.query.filter(Quiz.retest_of_quiz_id == quiz.id, Quiz.kind == quiz.kind)
+        .order_by(Quiz.created_at.desc(), Quiz.id.desc())
+        .all()
+    )
+    out = []
+    for child in children:
+        v = verification_for(child)
+        if v is None:
+            continue
+        out.append(
+            {
+                "quiz_id": child.id,
+                "title": child.title,
+                **{k: v[k] for k in (
+                    "concept_ids", "source_question_ids", "targeted_total", "correct_count",
+                    "incorrect_count", "ungraded_count", "not_submitted_count", "is_complete",
+                )},
+            }
+        )
+    return out

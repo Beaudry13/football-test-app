@@ -11,9 +11,12 @@ class RetestCreateSchema(Schema):
     arbitrary question or target a player who did not miss anything.
     """
 
-    concept_id = fields.Int(required=True)
+    #: The concept retested. Null/absent for an untagged miss, which is then
+    #: retested by `question_ids` alone.
+    concept_id = fields.Int(required=False, load_default=None, allow_none=True)
     #: Omitted means "every question the rule found". Present means "these,
-    #: from that set" - the coach unticked one on the confirmation.
+    #: from that set" - the coach unticked one on the confirmation. Without a
+    #: concept, these ARE the scope: the exact questions to send back.
     question_ids = fields.List(fields.Int(), required=False, load_default=None, allow_none=True)
     #: Canonical players. The normal case.
     player_ids = fields.List(fields.Int(), required=False, load_default=list)

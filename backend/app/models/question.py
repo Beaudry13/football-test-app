@@ -158,6 +158,11 @@ class Question(db.Model):
     #: ring: {x, y, r} as picture fractions. Placed by the coach, never read
     #: from the photo; his words stay in subject_role.
     subject_marker = db.Column(JSONB, nullable=True)
+    #: The question this one was copied from (a duplicate, a retest, a Rep made
+    #: from a quiz) - what lets an untagged question's retest say if it stuck.
+    copied_from_question_id = db.Column(
+        db.Integer, db.ForeignKey("questions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",

@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { makeRepFromQuiz } from '../../api/reps';
+import { createRetest } from '../../api/retests';
 import { addRosterMembers } from '../../api/roster';
 import type { Question, QuestionBreakdown } from '../../api/types';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
@@ -29,6 +30,7 @@ export function MissActions({
   extraAction,
   slides,
   teachLabel = 'Teach',
+  retestTargets,
 }: {
   quizId: number;
   /** The questions this miss is about, in quiz order. */
@@ -45,12 +47,33 @@ export function MissActions({
   /** Slides made by the caller (a concept's own wording); else built from `questions`. */
   slides?: TeachSlide[];
   teachLabel?: string;
+  /** Who missed THESE questions: offers 'Retest' - the exact football problem
+   *  back to them, no concept needed. The server re-checks who missed it. */
+  retestTargets?: { player_id: number | null; player_name: string }[];
 }) {
   const navigate = useNavigate();
   const [teaching, setTeaching] = useState(false);
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tappable = questions.filter((q) => q.question_type === 'multiple_choice' || q.question_type === 'true_false');
+
+  const [retesting, setRetesting] = useState(false);
+  const retest = async () => {
+    if (!retestTargets?.length) return;
+    setRetesting(true);
+    setError(null);
+    try {
+      const draft = await createRetest(quizId, {
+        question_ids: questions.map((q) => q.id),
+        player_ids: retestTargets.map((p) => p.player_id).filter((id): id is number => id !== null),
+        player_names: retestTargets.filter((p) => p.player_id === null).map((p) => p.player_name),
+      });
+      navigate(`/quizzes/${draft.id}?tab=questions`);
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setRetesting(false);
+    }
+  };
 
   const makeRep = async () => {
     setMaking(true);
@@ -71,11 +94,17 @@ export function MissActions({
       {making ? 'Making…' : playerIds.length > 0 ? `Make a rep for the ${playerIds.length}` : 'Make rep'}
     </button>
   );
+  const retestButton = !!retestTargets?.length && (
+    <button type="button" className={styles.action} disabled={retesting} onClick={() => void retest()}>
+      {retesting ? 'Building…' : retestTargets.length === 1 ? 'Retest the 1' : `Retest the ${retestTargets.length}`}
+    </button>
+  );
   return (
     <span className={styles.actions}>
       <button type="button" className={styles.action} onClick={() => setTeaching(true)}>
         {teachLabel}
       </button>
+      {retestButton}
       {repButton}
       {error && (
         <span className={styles.error} role="alert">
@@ -90,6 +119,7 @@ export function MissActions({
           action={
             <>
               {extraAction}
+              {retestButton}
               {repButton}
             </>
           }

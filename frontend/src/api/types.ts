@@ -679,8 +679,13 @@ export interface RetestVerification {
   /** "snapshot" = what these players were actually delivered. "live_fallback"
    *  = the delivery predates concept tagging, so the question's current tag
    *  stood in. Never presented to a coach as recorded history. */
-  concept_source: 'snapshot' | 'live_fallback';
+  concept_source: 'snapshot' | 'live_fallback' | 'question';
   concept_ids: number[];
+  /** The original's questions this round re-asked; for an untagged retest,
+   *  the very questions it copied ("question" source). */
+  source_question_ids?: number[];
+  /** This round's own copies - what "retest again" re-asks without a concept. */
+  retest_question_ids?: number[];
   /** Parallel to concept_ids. What another round would be ABOUT - the card
    *  offers one, and its confirmation has to name the concept rather than the
    *  quiz it came from. */
@@ -735,6 +740,22 @@ export interface QuizDashboard {
   /** Present only on a quiz built as a retest; null everywhere else, which is
    *  the signal to render no verification card at all. */
   verification: RetestVerification | null;
+  /** DID IT STICK? How each retest built FROM this quiz went, newest first. */
+  retests?: RetestSummary[];
+}
+
+/** One retest of this quiz, as its own Results would summarise it. */
+export interface RetestSummary {
+  quiz_id: number;
+  title: string;
+  concept_ids: number[];
+  source_question_ids: number[];
+  targeted_total: number;
+  correct_count: number;
+  incorrect_count: number;
+  ungraded_count: number;
+  not_submitted_count: number;
+  is_complete: boolean;
 }
 
 export interface ConceptMissingPlayer {

@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn() }));
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
+vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
+import * as retestsApi from '../../api/retests';
+import { RetestVerification } from './RetestVerification';
+import type { RetestVerification as Verification } from '../../api/types';
 import * as repsApi from '../../api/reps';
 import * as rosterApi from '../../api/roster';
 import * as authModule from '../../auth/AuthContext';
@@ -80,6 +84,7 @@ function at(ui: React.ReactNode) {
       <Routes>
         <Route path="/quizzes/9" element={ui} />
         <Route path="/reps/:id" element={<p>the new rep</p>} />
+        <Route path="/quizzes/:id" element={<p>the retest draft</p>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -90,6 +95,7 @@ beforeEach(() => {
   vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1 } } as never);
   vi.mocked(repsApi.makeRepFromQuiz).mockResolvedValue({ id: 55 } as never);
   vi.mocked(rosterApi.addRosterMembers).mockResolvedValue({} as never);
+  vi.mocked(retestsApi.createRetest).mockResolvedValue({ id: 77 } as never);
 });
 
 describe('from a quiz miss', () => {
@@ -143,5 +149,85 @@ describe('concept rows say the problem, or that it is fine', () => {
     const leverage = screen.getByText('Leverage').closest('li')!;
     expect(within(leverage).getByText('✓ Looks good')).toBeInTheDocument();
     expect(within(leverage).queryByRole('button', { name: 'Teach' })).toBeNull();
+  });
+});
+
+describe('retest one question - no concept needed - and did it stick?', () => {
+  it('sends this exact football problem back to exactly the players who missed it', async () => {
+    const untagged = { ...question, concept: null } as Question;
+    at(
+      <MissActions
+        quizId={9}
+        questions={[untagged]}
+        title="Q3"
+        repTitle="Week 3 - Q3"
+        retestTargets={[
+          { player_id: 41, player_name: 'Ty Adams' },
+          { player_id: null, player_name: 'Walk On' },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Retest the 2' }));
+    expect(await screen.findByText('the retest draft')).toBeInTheDocument();
+    expect(retestsApi.createRetest).toHaveBeenCalledWith(9, {
+      question_ids: [7],
+      player_ids: [41],
+      player_names: ['Walk On'],
+    });
+  });
+
+  it("the original's concept row says how its retest went - careful words, the retest a tap away", () => {
+    at(
+      <WeakestConcepts
+        concepts={[concept]}
+        quizId={9}
+        questions={[question]}
+        retests={[
+          {
+            quiz_id: 31,
+            title: 'Force / Contain - Retest',
+            concept_ids: [1],
+            source_question_ids: [7],
+            targeted_total: 4,
+            correct_count: 3,
+            incorrect_count: 1,
+            ungraded_count: 0,
+            not_submitted_count: 0,
+            is_complete: true,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/answered correctly this time/)).toHaveTextContent('3 of 4 answered correctly this time');
+    expect(screen.getByText('1 still missed')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/quizzes/31?tab=results');
+  });
+
+  it('an untagged retest card offers Teach and Retest again for whoever still misses it', async () => {
+    const v = {
+      parent_quiz_id: 9,
+      parent_quiz_title: 'Week 3',
+      concept_source: 'question',
+      concept_ids: [],
+      concept_names: [],
+      source_question_ids: [7],
+      retest_question_ids: [70],
+      parent_missed_total: 2,
+      parent_response_total: 10,
+      targeted_total: 2,
+      correct_count: 1,
+      incorrect_count: 1,
+      ungraded_count: 0,
+      not_submitted_count: 0,
+      is_complete: true,
+      players: [],
+      still_missing: [{ player_id: 42, player_name: 'Bo Brown', display_name: 'Bo Brown' }],
+    } as unknown as Verification;
+    at(<RetestVerification verification={v} quizId={31} questions={[{ ...question, id: 70, concept: null } as Question]} />);
+    expect(screen.getByRole('button', { name: 'Teach' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retest the 1' }));
+    await waitFor(() =>
+      expect(retestsApi.createRetest).toHaveBeenCalledWith(31, { question_ids: [70], player_ids: [42], player_names: [] }),
+    );
   });
 });

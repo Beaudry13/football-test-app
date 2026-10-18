@@ -29,7 +29,7 @@ from app.services.question_exclusions import (
     load_for_quizzes,
 )
 from app.services.concept_results import concept_breakdown
-from app.services.retest_verification import verification_for
+from app.services.retest_verification import retests_of, verification_for
 from app.services.scoring import count_answers, pending_grading_count
 from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, QuestionType, Quiz
 from app.schemas.grading import GradeAnswerSchema
@@ -377,6 +377,9 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         #: retest; None everywhere else, which is the client's signal to render
         #: nothing rather than an empty verification card.
         "verification": verification_for(quiz),
+        #: How each retest built from THIS quiz went - "did it stick?" on the
+        #: original, beside the concept or question it re-asked.
+        "retests": retests_of(quiz),
     }
 
 

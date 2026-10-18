@@ -141,3 +141,8 @@
 .contextDetail {
   display: block;
 }
+
+/* Teach / Retest again / Make rep, for the players still missing. */
+.teach {
+  margin: var(--space-2, 8px) 0;
+}

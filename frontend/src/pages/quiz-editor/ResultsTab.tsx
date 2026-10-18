@@ -33,6 +33,7 @@ import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { TapResult } from '../../components/football/TapResult';
 import { MissActions } from './MissActions';
+import { RetestStatus } from './RetestStatus';
 import { teachable } from './quizTeach';
 import { usableTargets } from '../../components/football/tapTargets';
 
@@ -198,6 +199,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
      Still the server's own per-question counts, merely filtered: the number
      stays something Peira computed rather than something this screen derived,
      and the filter is the same rule the grading queue applies. */
+  /** Who missed a question, from the responses on this page - the server
+   *  re-checks it before a retest is built. */
+  const missedBy = (questionId: number) =>
+    (responses ?? [])
+      .filter((r) => (r.answers ?? []).some((a) => a.question_id === questionId && a.is_correct === false))
+      .map((r) => ({ player_id: r.player_id ?? null, player_name: r.player_name }));
+  /** The latest retest that re-asked exactly this question (untagged retests). */
+  const questionRetest = (questionId: number) =>
+    (dashboard?.retests ?? []).find((t) => t.concept_ids.length === 0 && t.source_question_ids.includes(questionId));
   /** The live question behind a breakdown row, when it has football to teach from. */
   const liveTeachable = (questionId: number) => {
     const question = (quiz.questions ?? []).find((q) => q.id === questionId);
@@ -227,7 +237,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               not how the team scored - it is whether the players they sent it
               to are any different. Renders nothing on an ordinary quiz, so
               every other Results page is untouched. */}
-          <RetestVerification verification={dashboard.verification} quizId={quiz.id} />
+          <RetestVerification verification={dashboard.verification} quizId={quiz.id} questions={quiz.questions ?? []} />
 
           {/* WHAT SHOULD I TEACH NEXT, FIRST.
               Results used to open with a team average - which answers "how did
@@ -253,6 +263,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             quizId={quiz.id}
             questions={quiz.questions ?? []}
             breakdown={dashboard?.question_breakdown ?? []}
+            retests={dashboard?.retests ?? []}
           />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than
@@ -354,8 +365,10 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                         breakdown={dashboard.question_breakdown}
                         title={`Q${row.question_number}`}
                         repTitle={`${quiz.title} - Q${row.question_number}`}
+                        retestTargets={missedBy(row.question_id)}
                       />
                     )}
+                    {questionRetest(row.question_id) && <RetestStatus retest={questionRetest(row.question_id)!} />}
                     <TapResult
                       image={question.image}
                       presnap={question.presnap}
@@ -405,9 +418,11 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                               breakdown={dashboard.question_breakdown}
                               title={`Q${q.question_number}`}
                               repTitle={`${quiz.title} - Q${q.question_number}`}
+                              retestTargets={missedBy(q.question_id)}
                             />
                           </div>
                         )}
+                        {questionRetest(q.question_id) && <RetestStatus retest={questionRetest(q.question_id)!} />}
                         {/* Every active exclusion, not a single boolean: a
                             quiz-wide and an assignment-scoped one can overlap,
                             and restoring one leaves the other in force. */}

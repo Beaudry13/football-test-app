@@ -17,7 +17,8 @@ export interface RetestDraft extends Quiz {
 export function createRetest(
   quizId: number,
   input: {
-    concept_id: number;
+    /** Absent for an untagged miss, retested by its exact `question_ids`. */
+    concept_id?: number | null;
     player_ids?: number[];
     player_names?: string[];
     question_ids?: number[] | null;

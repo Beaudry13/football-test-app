@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { createRetest } from '../../api/retests';
-import type { ConceptBreakdown, Question, QuestionBreakdown } from '../../api/types';
+import type { ConceptBreakdown, Question, QuestionBreakdown, RetestSummary } from '../../api/types';
 import type { TeachSlide } from '../../components/teach/TeachView';
 import { MissActions } from './MissActions';
+import { RetestStatus } from './RetestStatus';
 import { quizTeachSlides } from './quizTeach';
 import { RetestAction } from './RetestAction';
 import { playerLabels } from '../../utils/playerDisplayLabel';
@@ -83,6 +84,7 @@ export function WeakestConcepts({
   quizId,
   questions = [],
   breakdown = [],
+  retests = [],
 }: {
   concepts: ConceptBreakdown[];
   quizId: number;
@@ -90,7 +92,10 @@ export function WeakestConcepts({
   questions?: Question[];
   /** Results' per-question breakdown: what the room chose on each question. */
   breakdown?: QuestionBreakdown[];
+  /** How retests built from this quiz went - did it stick, per concept. */
+  retests?: RetestSummary[];
 }) {
+  const retestOf = (concept: ConceptBreakdown) => retests.find((t) => t.concept_ids.includes(concept.concept_id));
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   /** Teach it / Make a rep for the ones who missed it - the loop a Rep has. */
   const missActions = (concept: ConceptBreakdown, label: string) => {
@@ -268,6 +273,7 @@ export function WeakestConcepts({
         {teachSlides(weakest, questions, breakdown).length > 0 && (
           <div className={styles.teachRow}>{missActions(weakest, 'Teach it')}</div>
         )}
+        {retestOf(weakest) && <RetestStatus retest={retestOf(weakest)!} />}
         {weakest.retestable_question_count > 0 ? (
           <RetestAction
             quizId={quizId}
@@ -297,6 +303,7 @@ export function WeakestConcepts({
               </span>
               {/* THE PROBLEM IN ONE LINE, as a Rep says it: what they chose
                   instead and the next step - or that nobody needs it. */}
+              {retestOf(concept) && <RetestStatus retest={retestOf(concept)!} />}
               {concept.players_missed_count === 0 ? (
                 <span className={styles.looksGood}>✓ Looks good</span>
               ) : (

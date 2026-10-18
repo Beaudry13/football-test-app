@@ -470,14 +470,29 @@ def create_retest(quiz_id: int):
     coach = current_coach()
     data = load_json_body(RetestCreateSchema())
 
-    concept = db.session.get(Concept, data["concept_id"])
-    if concept is None or concept.organization_id != coach.organization_id:
-        raise ApiError("That concept does not exist", status_code=422)
+    # A CONCEPT, OR THE EXACT QUESTIONS. A retest is normally about a concept;
+    # an untagged miss is retested by its questions ("send this exact football
+    # problem back to the players who missed it") - the coach is never made to
+    # invent a concept to do it.
+    concept = None
+    question_scope: set[int] | None = None
+    if data["concept_id"] is not None:
+        concept = db.session.get(Concept, data["concept_id"])
+        if concept is None or concept.organization_id != coach.organization_id:
+            raise ApiError("That concept does not exist", status_code=422)
+    else:
+        question_scope = set(data["question_ids"] or [])
+        if not question_scope or question_scope - {q.id for q in original.questions}:
+            raise ApiError(
+                "Choose the questions to retest from this quiz",
+                status_code=422,
+                reason="question_not_eligible",
+            )
 
     # WHO ACTUALLY MISSED SOMETHING, recomputed here rather than believed.
     # Keyed by player identity, so a player who took the original through two
     # access codes is one target rather than two.
-    eligible = eligible_players(original, concept.id)
+    eligible = eligible_players(original, concept.id if concept else None, question_ids=question_scope)
 
     chosen: dict[PlayerKey, object] = {}
     for player_id in data["player_ids"]:
@@ -514,7 +529,9 @@ def create_retest(quiz_id: int):
         # than the coach asked for. Refuse rather than guess.
         raise ApiError("Choose at least one player to retest", status_code=422)
 
-    copyable, skipped_retired = questions_to_copy(original, concept.id, set(chosen))
+    copyable, skipped_retired = questions_to_copy(
+        original, concept.id if concept else None, set(chosen), question_ids=question_scope
+    )
     if data["question_ids"] is not None:
         requested = set(data["question_ids"])
         outside = requested - copyable
@@ -527,7 +544,7 @@ def create_retest(quiz_id: int):
         copyable = requested
     if not copyable:
         raise ApiError(
-            "There are no questions to retest for this concept",
+            "There are no questions to retest for this concept" if concept else "There are no questions to retest",
             status_code=422,
             reason="no_questions_to_retest",
         )
@@ -609,7 +626,8 @@ def _retest_title(concept, original) -> str:
         round_number += 1
         ancestor = ancestor.retest_of
     suffix = "" if round_number == 1 else f" {round_number}"
-    return f"{concept.name} - Retest{suffix}"
+    # An untagged retest is named for the quiz it came from.
+    return f"{concept.name if concept is not None else original.title} - Retest{suffix}"
 
 
 def _seed_retest_roster(retest, attempts, coach) -> None:
@@ -812,6 +830,8 @@ def _copy_questions_into(
             subject_role=question.subject_role,
             subject_man=question.subject_man,
             subject_marker=question.subject_marker,
+            # Provenance: where this copy came from (did a retest stick?).
+            copied_from_question_id=question.id,
             motion_play_id=question.motion_play_id,
             tap_targets=question.tap_targets,
             presnap=question.presnap,

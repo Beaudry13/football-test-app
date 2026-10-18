@@ -20,6 +20,23 @@
   opacity: 0.6;
   cursor: default;
 }
+/* Did it stick? - one line beside the concept or question a retest re-asked. */
+.retest {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--nb-text-muted, #6b7280);
+}
+.retestLead {
+  font-weight: 700;
+}
+.retestStill {
+  color: var(--color-danger, #b42318);
+  font-weight: 700;
+}
+.retestLink {
+  font-weight: 700;
+}
 .error {
   font-size: 13px;
   color: var(--color-danger, #b42318);

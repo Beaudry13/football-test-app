@@ -426,3 +426,91 @@ class TestConceptNamesTravelWithTheIds:
         verification = _verified_round(client, coach_headers)
 
         assert verification["parent_quiz_title"] not in verification["concept_names"]
+
+
+def _untagged_parent(client, headers, missed=("A", "B"), passed=("C",)):
+    """A quiz whose question carries NO concept, missed by `missed`."""
+    quiz, tf, _written, code = build_ready_quiz(client, headers)
+    _widen(client, headers, quiz["id"], list(missed) + list(passed))
+    wrong = next(o for o in tf["options"] if o["is_correct_answer"] is False)
+    right = next(o for o in tf["options"] if o["is_correct_answer"] is not False)
+    for name in missed:
+        _answer_round(client, code["id"], name, tf["id"], wrong["id"])
+    for name in passed:
+        _answer_round(client, code["id"], name, tf["id"], right["id"])
+    return quiz, tf
+
+
+class TestRetestingOneQuestionWithoutAConcept:
+    """'Send this exact football problem back to the players who missed it' -
+    no concept invented. The server still decides who missed it and what may
+    be copied; the request only narrows."""
+
+    def test_the_exact_question_goes_back_to_exactly_who_missed_it(self, client, coach_headers):
+        quiz, tf = _untagged_parent(client, coach_headers)
+        made = client.post(
+            f"/api/quizzes/{quiz['id']}/retests",
+            json={"question_ids": [tf["id"]], "player_names": ["A", "B"]},
+            headers=coach_headers,
+        )
+        assert made.status_code == 201, made.get_json()
+        retest = made.get_json()
+        assert retest["title"] == f"{quiz['title']} - Retest"
+        assert [q["question_text"] for q in retest["questions"]] == [tf["question_text"]]
+        with client.application.app_context():
+            copy = db.session.get(Quiz, retest["id"]).questions[0]
+            assert copy.copied_from_question_id == tf["id"]
+        roster = client.get(f"/api/quizzes/{retest['id']}/roster", headers=coach_headers).get_json()
+        assert sorted(p["player_name"] for p in roster["players"]) == ["A", "B"]
+
+    def test_a_player_who_got_it_right_cannot_be_targeted(self, client, coach_headers):
+        quiz, tf = _untagged_parent(client, coach_headers)
+        refused = client.post(
+            f"/api/quizzes/{quiz['id']}/retests",
+            json={"question_ids": [tf["id"]], "player_names": ["C"]},
+            headers=coach_headers,
+        )
+        assert refused.status_code == 422
+        assert refused.get_json()["reason"] == "player_not_eligible"
+
+    def test_no_concept_and_no_questions_is_refused(self, client, coach_headers):
+        quiz, _tf = _untagged_parent(client, coach_headers)
+        refused = client.post(f"/api/quizzes/{quiz['id']}/retests", json={"player_names": ["A"]}, headers=coach_headers)
+        assert refused.status_code == 422
+
+    def test_did_it_stick_compares_each_copy_with_its_original(self, client, coach_headers):
+        quiz, tf = _untagged_parent(client, coach_headers)
+        retest = client.post(
+            f"/api/quizzes/{quiz['id']}/retests",
+            json={"question_ids": [tf["id"]], "player_names": ["A", "B"]},
+            headers=coach_headers,
+        ).get_json()
+        code = _activate(client, coach_headers, retest["id"])
+        copy = retest["questions"][0]
+        right = next(o for o in copy["options"] if o["is_correct_answer"] is not False)
+        wrong = next(o for o in copy["options"] if o["is_correct_answer"] is False)
+        _answer_round(client, code["id"], "A", copy["id"], right["id"])
+        _answer_round(client, code["id"], "B", copy["id"], wrong["id"])
+        v = _verify(retest["id"])
+        assert v["concept_source"] == "question"
+        assert v["concept_ids"] == []
+        assert v["source_question_ids"] == [tf["id"]]
+        assert v["retest_question_ids"] == [copy["id"]]
+        assert (v["targeted_total"], v["correct_count"], v["incorrect_count"]) == (2, 1, 1)
+        assert [p["display_name"] for p in v["still_missing"]] == ["B"]
+
+        # And the ORIGINAL's Results know how its retest went.
+        original = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
+        assert original["retests"][0]["quiz_id"] == retest["id"]
+        assert original["retests"][0]["source_question_ids"] == [tf["id"]]
+        assert (original["retests"][0]["correct_count"], original["retests"][0]["incorrect_count"]) == (1, 1)
+
+
+class TestTheOriginalKnowsHowItsConceptRetestWent:
+    def test_the_concept_retest_is_listed_on_the_original(self, client, coach_headers):
+        quiz, tf, concept, _code = _parent_with_misses(client, coach_headers)
+        retest = _make_retest(client, coach_headers, quiz["id"], concept["id"], ["A", "B"])
+        dashboard = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
+        assert dashboard["retests"][0]["quiz_id"] == retest["id"]
+        assert dashboard["retests"][0]["concept_ids"] == [concept["id"]]
+        assert dashboard["retests"][0]["not_submitted_count"] == 2

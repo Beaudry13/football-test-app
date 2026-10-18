@@ -1,4 +1,5 @@
-import type { RetestVerification as Verification } from '../../api/types';
+import type { Question, RetestVerification as Verification } from '../../api/types';
+import { MissActions } from './MissActions';
 import nb from '../../styles/notebook.module.css';
 import { RetestAction } from './RetestAction';
 import styles from './RetestVerification.module.css';
@@ -21,8 +22,11 @@ import styles from './RetestVerification.module.css';
 export function RetestVerification({
   verification,
   quizId,
+  questions = [],
 }: {
   verification: Verification | null;
+  /** This retest's own questions, for Teach (and, untagged, Retest again). */
+  questions?: Question[];
   /** THIS retest's id. Another round is built FROM the round that exposed the
    *  players still missing, so the lineage keeps describing what was actually
    *  compared: round 3 against round 2, never against the original. */
@@ -30,6 +34,12 @@ export function RetestVerification({
 }) {
   if (!verification) return null;
   const v = verification;
+  /* TEACH what is still missing - this round's questions, in the meeting-room
+     view; an untagged round retests its own copies again, no concept needed. */
+  const asked = questions.filter((q) =>
+    v.concept_ids.length > 0 ? q.concept && v.concept_ids.includes(q.concept.id) : (v.retest_question_ids ?? []).includes(q.id),
+  );
+  const untagged = v.concept_ids.length === 0;
 
   return (
     <section className={styles.wrap} aria-labelledby="verification">
@@ -165,6 +175,18 @@ export function RetestVerification({
                 below it. Offered only when the round tested exactly one
                 concept - "retest this concept" has no single answer otherwise,
                 and guessing one would build the wrong quiz. */}
+            {quizId !== undefined && asked.length > 0 && (
+              <div className={styles.teach}>
+                <MissActions
+                  quizId={quizId}
+                  questions={asked}
+                  title={v.concept_names[0] ?? 'Still missing'}
+                  repTitle={`${v.concept_names[0] ?? v.parent_quiz_title} - Rep`}
+                  playerIds={v.still_missing.map((p) => p.player_id).filter((id): id is number => id !== null)}
+                  retestTargets={untagged ? v.still_missing : undefined}
+                />
+              </div>
+            )}
             {quizId !== undefined &&
               v.concept_ids.length === 1 &&
               v.concept_names.length === 1 && (
