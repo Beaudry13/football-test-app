@@ -7,9 +7,9 @@
 
 import { getMotionPlay } from '../api/motionLab'
 import type { RepDecision } from '../api/reps'
-import { manLabelled, menOf, redrawStill, ringOn, wordsFor, type Man } from './decisionMan'
+import { manLabelled, menOf, menSpotsAt, redrawStill, ringOn, wordsFor, type Man } from './decisionMan'
 import type { Play } from './engine/play'
-import type { PresnapClip } from './presnap'
+import { MOMENT_LABEL, withMoment, type DecisionMoment, type PresnapClip } from './presnap'
 import { playFromRow } from './storage/apiPlayRepository'
 
 /** A decision whose play has more than one man with the label: the coach picks. */
@@ -97,4 +97,48 @@ export async function retargetOne(d: RepDecision, man: Man, clip: PresnapClip | 
     image: await redrawStill(clip, play, man.id).catch(() => null),
     checkSpots: !!d.tap_targets?.some((t) => t.zone),
   }
+}
+
+/** Every motion decision decided at one moment - "tap the man" spots moving
+ *  with the men. A decision with no motion, one players have, or (for after
+ *  the snap) one whose beat is not at hand, is said, never forced. */
+export async function remomentRep(
+  decisions: RepDecision[],
+  moment: DecisionMoment,
+  canOpenPlay: boolean,
+): Promise<{
+  changes: { questionId: number; number: number; body: { presnap: PresnapClip; tap_targets?: RepDecision['tap_targets'] } }[]
+  skipped: { number: number; why: string }[]
+}> {
+  const plays = new Map<number, Play | null>()
+  const changes: { questionId: number; number: number; body: { presnap: PresnapClip; tap_targets?: RepDecision['tap_targets'] } }[] = []
+  const skipped: { number: number; why: string }[] = []
+  for (const d of decisions) {
+    const clip = (d.presnap as unknown as PresnapClip | null) ?? null
+    if (!clip) {
+      skipped.push({ number: d.number, why: 'it has no motion' })
+      continue
+    }
+    if (d.delivered) {
+      skipped.push({ number: d.number, why: 'players have it' })
+      continue
+    }
+    if ((clip.freeze ?? 'snap') === moment) continue
+    let play: Play | null = null
+    if (moment === 'after' && !clip.after && canOpenPlay && d.motion_play_id !== null) {
+      if (!plays.has(d.motion_play_id)) {
+        plays.set(d.motion_play_id, await getMotionPlay(d.motion_play_id).then(playFromRow).catch(() => null))
+      }
+      play = plays.get(d.motion_play_id) ?? null
+    }
+    const next = withMoment(clip, moment, play)
+    if (!next) {
+      skipped.push({ number: d.number, why: `${MOMENT_LABEL[moment].toLowerCase()} needs the play's routes` })
+      continue
+    }
+    const answers = d.choices.map((c) => c.text)
+    const men = d.tap_targets && !d.tap_targets.some((t) => t.zone) ? menSpotsAt(next, answers) : null
+    changes.push({ questionId: d.question_id, number: d.number, body: { presnap: next, ...(men ? { tap_targets: men } : {}) } })
+  }
+  return { changes, skipped }
 }

@@ -37,6 +37,7 @@ import { TapResult } from '../../components/football/TapResult';
 import type { PresnapClip } from '../../motion-lab/presnap';
 import type { PlayDraft } from '../../motion-lab/DecisionPlay';
 import type { Choice, Retarget } from '../../motion-lab/retargetRep';
+import { MOMENT_LABEL, momentOf, type DecisionMoment } from '../../motion-lab/moments';
 
 /* Who it tests and when he decides - Motion Lab's code, loaded only to edit one. */
 const DecisionPlay = lazy(() => import('../../motion-lab/DecisionPlay'));
@@ -640,6 +641,56 @@ function VariationBanner({
   const [said, setSaid] = useState<string | null>(null);
   const [choices, setChoices] = useState<Choice[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
+  /* EVERY DECISION AT ONCE: when they decide, and what they are about. */
+  const motionDecisions = results.decisions.filter((d) => d.presnap);
+  const moments = new Set(motionDecisions.map((d) => momentOf(d.presnap)));
+  const sharedMoment = moments.size === 1 ? [...moments][0] : null;
+  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [concept, setConcept] = useState('');
+  useEffect(() => {
+    listConcepts()
+      .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
+      .catch(() => setConcepts([]));
+  }, []);
+  const everyMoment = async (m: DecisionMoment) => {
+    setMoving(true);
+    setError(null);
+    setSaid(null);
+    try {
+      const { remomentRep } = await import('../../motion-lab/retargetRep');
+      const { changes, skipped } = await remomentRep(results.decisions, m, canOpenPlay);
+      for (const c of changes) await updateQuestion(quizId, c.questionId, c.body);
+      setSaid(
+        [
+          `Decide at ${MOMENT_LABEL[m].toLowerCase()}: ${changes.length} ${changes.length === 1 ? 'decision' : 'decisions'} changed.`,
+          ...skipped.map((k) => `Decision ${k.number}: ${k.why}.`),
+        ].join(' '),
+      );
+      onRenamed();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setMoving(false);
+    }
+  };
+  const everyConcept = async () => {
+    const name = concept.trim();
+    if (!name) return;
+    setMoving(true);
+    setError(null);
+    setSaid(null);
+    try {
+      const picked = resolveConcept(name, concepts) ?? (await createConcept(name));
+      for (const d of results.decisions) await updateQuestion(quizId, d.question_id, { concept_id: picked.id });
+      setSaid(`Every decision is now about ${picked.name}.`);
+      setConcept('');
+      onRenamed();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setMoving(false);
+    }
+  };
   const apply = async (c: Retarget) => {
     await updateQuestion(quizId, c.questionId, c.body);
     if (c.image) await uploadQuestionImage(quizId, c.questionId, c.image);
@@ -733,6 +784,36 @@ function VariationBanner({
           </button>
         </div>
       )}
+      {motionDecisions.length > 0 && (
+        <div className={styles.variationMan} role="radiogroup" aria-label="Decide at, every decision">
+          <span>Decide at</span>
+          {(['before', 'mid', 'snap', 'after'] as DecisionMoment[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={sharedMoment === m}
+              className={sharedMoment === m ? `${styles.group} ${styles.groupOn}` : styles.group}
+              disabled={moving}
+              onClick={() => void everyMoment(m)}
+            >
+              {MOMENT_LABEL[m]}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className={styles.variationMan}>
+        <ConceptPicker
+          label="Concept for every decision"
+          value={concept}
+          onChange={setConcept}
+          concepts={concepts}
+          classes={{ field: styles.editField, chips: styles.editChips, chip: styles.editChip, strong: styles.editMean, note: styles.editNote }}
+        />
+        <button type="button" className={nb.btnSm} disabled={!concept.trim() || moving} onClick={() => void everyConcept()}>
+          Use it for every decision
+        </button>
+      </div>
       {said && (
         <p className={styles.variationSaid} role="status">
           {said}

@@ -652,6 +652,37 @@ describe('the tested man, his moment and his spots', () => {
     expect(await screen.findByText(/Decision 1: the CB you picked\./)).toBeInTheDocument();
   });
 
+  it('a variation changes when they decide, and what it is about, for every decision at once', async () => {
+    const variation = {
+      ...RESULTS,
+      quiz_id: 31,
+      players: [],
+      audience: { label: null, invited: 0, code: null, people: [] },
+      decisions: [
+        { ...RESULTS.decisions[0], question_id: 11, number: 1, presnap: CLIP, delivered: false },
+        { ...RESULTS.decisions[0], question_id: 12, number: 2, presnap: null, delivered: false },
+      ],
+    };
+    open(variation as unknown as RepResults, '/reps/31?variation=5');
+    const banner = within(await screen.findByRole('region', { name: 'Variation' }));
+    const moments = within(banner.getByRole('radiogroup', { name: 'Decide at, every decision' }));
+    expect(moments.getByRole('radio', { name: 'Snap' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(moments.getByRole('radio', { name: 'Mid-motion' }));
+    expect(await banner.findByRole('status')).toHaveTextContent(
+      'Decide at mid-motion: 1 decision changed. Decision 2: it has no motion.',
+    );
+    const [, question, body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect(question).toBe(11);
+    expect((body.presnap as { freeze: string }).freeze).toBe('mid');
+
+    vi.mocked(questionsApi.updateQuestion).mockClear();
+    fireEvent.change(banner.getByRole('textbox', { name: 'Concept for every decision' }), { target: { value: 'motion adjustment' } });
+    fireEvent.click(banner.getByRole('button', { name: 'Use it for every decision' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(questionsApi.updateQuestion).mock.calls.map((c) => c[2])).toEqual([{ concept_id: 3 }, { concept_id: 3 }]);
+    expect(await banner.findByText('Every decision is now about Motion adjustment.')).toBeInTheDocument();
+  });
+
   it('the coach checks and moves the spots right in the editor', async () => {
     const targets = [
       { x: 0.3, y: 0.5, zone: true },
