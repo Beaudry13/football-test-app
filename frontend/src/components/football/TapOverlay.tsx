@@ -7,6 +7,9 @@ export interface TapOption {
   option_text: string;
 }
 
+/** How one answer is marked when the picture is a RESULT, not a question. */
+export type TapMark = 'right' | 'wrong' | 'on';
+
 /**
  * THE ANSWERS, IN THE PICTURE: a ring on each man, a labelled spot on each
  * place - laid over a play picture. The same layer for the player (tap to
@@ -22,6 +25,8 @@ export function TapOverlay({
   tone,
   disabled,
   onMove,
+  marks,
+  badges,
 }: {
   targets: TapTarget[];
   options: TapOption[];
@@ -29,6 +34,10 @@ export function TapOverlay({
   chosen?: number[];
   tone?: 'right' | 'wrong' | null;
   disabled?: boolean;
+  /** A result: each answer marked on its own (the right spot, his tap). Wins over chosen/tone. */
+  marks?: Partial<Record<number, TapMark>>;
+  /** A small tag on an answer: how many tapped it, or whose tap it was. */
+  badges?: Partial<Record<number, string>>;
   /** The coach's check: places can be dragged; `at` is in picture fractions. */
   onMove?: (index: number, at: { x: number; y: number }) => void;
 }) {
@@ -60,7 +69,9 @@ export function TapOverlay({
 
   const button = (i: number, style?: CSSProperties) => {
     const option = options[i];
-    const on = chosen?.includes(option.id);
+    const mark = marks ? marks[option.id] : chosen?.includes(option.id) ? (tone ?? 'on') : undefined;
+    const on = !!mark;
+    const badge = badges?.[option.id];
     // In a shared row everything is a labelled button (the dot marks the man or the spot).
     const zone = !!targets[i].zone || !style;
     // A man's ring stays on the man; only a place moves - by its own pill when
@@ -73,8 +84,8 @@ export function TapOverlay({
         className={[
           zone ? styles.zone : styles.target,
           on ? styles.on : '',
-          on && tone === 'right' ? styles.right : '',
-          on && tone === 'wrong' ? styles.wrong : '',
+          mark === 'right' ? styles.right : '',
+          mark === 'wrong' ? styles.wrong : '',
           movable ? styles.movable : '',
         ]
           .filter(Boolean)
@@ -86,6 +97,7 @@ export function TapOverlay({
         {...(movable ? grab(i) : {})}
       >
         {zone ? option.option_text : null}
+        {badge && <span className={styles.badge}>{badge}</span>}
       </button>
     );
   };

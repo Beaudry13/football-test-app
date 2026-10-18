@@ -1,0 +1,22 @@
+/* A TAP ANSWER, READ BACK: the picture, and one line saying what it shows. */
+.result {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 640px;
+}
+.key {
+  font-size: 14px;
+  font-weight: 700;
+}
+.right {
+  color: var(--peira-success, #2f9e57);
+}
+.wrong {
+  color: var(--peira-danger, #c43d20);
+}
+.note {
+  font-weight: 400;
+  color: var(--nb-text-muted, #6b7280);
+}

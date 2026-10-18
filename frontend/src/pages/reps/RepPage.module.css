@@ -57,6 +57,36 @@
   font-size: 13px;
   color: var(--nb-text-muted);
 }
+/* One player, every decision: open his row. */
+.playerOpen {
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.playerDetail td {
+  background: var(--peira-surface);
+}
+.playerDecisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.playerDecision {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.playerDecisionText {
+  font-size: 14px;
+}
 /* A VARIATION: copy the Rep, change what is different, send it. */
 .variationOpen {
   align-self: flex-start;

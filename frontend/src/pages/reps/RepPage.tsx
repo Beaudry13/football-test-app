@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { deleteQuestion, reorderQuestions, updateQuestion, uploadQuestionImage } from '../../api/questions';
@@ -33,6 +33,7 @@ import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import { TapCheck } from '../../components/football/TapCheck';
+import { TapResult } from '../../components/football/TapResult';
 import type { PresnapClip } from '../../motion-lab/presnap';
 import type { PlayDraft } from '../../motion-lab/DecisionPlay';
 
@@ -378,6 +379,11 @@ function ProblemCard({
   const shown = problem.players_missed.slice(0, 8);
   const more = problem.players_missed.length - shown.length;
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
+  /** The problem's most-missed decision answered by tapping - its picture tells the miss. */
+  const tapped =
+    decisions
+      .filter((d) => problem.question_ids.includes(d.question_id) && targetsOf(d))
+      .sort((a, b) => b.missed - a.missed)[0] ?? null;
   return (
     <article className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem} aria-label={problem.name}>
       <h2 className={styles.problemName}>
@@ -486,6 +492,19 @@ function ProblemCard({
         </div>
       )}
       <ErrorBanner message={error} />
+      {viewing && tapped && (
+        /* WHERE THEY TAPPED, in one glance: the right spot green, every spot
+           someone missed to in red, how many on each. */
+        <TapResult
+          image={tapped.image}
+          presnap={tapped.presnap}
+          targets={tapped.tap_targets}
+          options={choicesOf(tapped)}
+          correctIds={tapped.choices.filter((c) => c.is_correct).map((c) => c.option_id)}
+          counts={Object.fromEntries(tapped.choices.map((c) => [c.option_id, c.count]))}
+          motionKey={`team-${tapped.question_id}`}
+        />
+      )}
       {viewing && (
         <table className={styles.table}>
           <thead>
@@ -1240,7 +1259,44 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   );
 }
 
+/** One player's first try, decision by decision. */
+function PlayerDecisions({ results, playerKey, name }: { results: RepResults; playerKey: string; name: string }) {
+  const first = name.split(' ')[0];
+  return (
+    <ol className={styles.playerDecisions} aria-label={`${name}'s decisions`}>
+      {results.decisions.map((d) => {
+        const his = d.answers.find((a) => a.player.key === playerKey);
+        if (!his) return null;
+        const chosenIds = d.choices.filter((c) => his.chose.includes(c.text)).map((c) => c.option_id);
+        return (
+          <li key={d.question_id} className={styles.playerDecision}>
+            <span className={styles.playerDecisionText}>
+              <span className={styles.qNum}>#{d.number}</span> {d.question_text}{' '}
+              <strong className={his.is_correct ? styles.tick : styles.missedCell}>
+                {his.is_correct ? '✓' : '✕'} {his.chose.join(', ') || '-'}
+              </strong>
+            </span>
+            <TapResult
+              image={d.image}
+              presnap={d.presnap}
+              targets={d.tap_targets}
+              options={choicesOf(d)}
+              correctIds={d.choices.filter((c) => c.is_correct).map((c) => c.option_id)}
+              chosenIds={chosenIds}
+              who={`${first} tapped`}
+              motionKey={`${playerKey}-${d.question_id}`}
+            />
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function Players({ results }: { results: RepResults }) {
+  /* ONE PLAYER, EVERY DECISION: what he answered - and for a tap decision,
+     where he tapped against the right spot, on the picture he tapped. */
+  const [open, setOpen] = useState<string | null>(null);
   return (
     <section className={styles.section} aria-label="Players">
       <h2 className={styles.sectionTitle}>Players</h2>
@@ -1255,17 +1311,33 @@ function Players({ results }: { results: RepResults }) {
         </thead>
         <tbody>
           {results.players.map((p) => (
-            <tr key={p.key}>
-              <td>
-                {p.display_name}
-                {p.position ? <span className={styles.pos}> {p.position}</span> : null}
-              </td>
-              <td className={p.correct < p.answered ? styles.missedCell : ''}>
-                {p.correct} of {p.answered}
-              </td>
-              <td>{p.total_ms ? `${(p.total_ms / 1000).toFixed(1)} s` : '-'}</td>
-              <td>{p.attempts}</td>
-            </tr>
+            <Fragment key={p.key}>
+              <tr>
+                <td>
+                  <button
+                    type="button"
+                    className={styles.playerOpen}
+                    aria-expanded={open === p.key}
+                    onClick={() => setOpen((k) => (k === p.key ? null : p.key))}
+                  >
+                    {open === p.key ? '▾' : '▸'} {p.display_name}
+                  </button>
+                  {p.position ? <span className={styles.pos}> {p.position}</span> : null}
+                </td>
+                <td className={p.correct < p.answered ? styles.missedCell : ''}>
+                  {p.correct} of {p.answered}
+                </td>
+                <td>{p.total_ms ? `${(p.total_ms / 1000).toFixed(1)} s` : '-'}</td>
+                <td>{p.attempts}</td>
+              </tr>
+              {open === p.key && (
+                <tr className={styles.playerDetail}>
+                  <td colSpan={4}>
+                    <PlayerDecisions results={results} playerKey={p.key} name={p.display_name} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
           ))}
         </tbody>
       </table>

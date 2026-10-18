@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { PresnapClip } from '../../motion-lab/presnap';
-import { TapOverlay, type TapOption } from './TapOverlay';
+import { TapOverlay, type TapMark, type TapOption } from './TapOverlay';
 import type { TapTarget } from './tapTargets';
 import styles from './PlayPicture.module.css';
 
@@ -43,6 +43,8 @@ export function PlayPicture({
   tone,
   disabled,
   onMove,
+  marks,
+  badges,
   still = false,
   autoplay = true,
   onMotionDone,
@@ -64,6 +66,9 @@ export function PlayPicture({
   tone?: 'right' | 'wrong' | null;
   disabled?: boolean;
   onMove?: (index: number, at: { x: number; y: number }) => void;
+  /** A result: each answer marked on its own (TapOverlay). */
+  marks?: Partial<Record<number, TapMark>>;
+  badges?: Partial<Record<number, string>>;
   /** A review or a checked question: the frozen moment, no motion. */
   still?: boolean;
   /** False on a screen of several questions: tap to play. */
@@ -79,7 +84,17 @@ export function PlayPicture({
 }) {
   const overlay =
     targets && options && (onTap || onMove || disabled) ? (
-      <TapOverlay targets={targets} options={options} onTap={onTap} chosen={chosen} tone={tone} disabled={disabled} onMove={onMove} />
+      <TapOverlay
+        targets={targets}
+        options={options}
+        onTap={onTap}
+        chosen={chosen}
+        tone={tone}
+        disabled={disabled}
+        onMove={onMove}
+        marks={marks}
+        badges={badges}
+      />
     ) : null;
   const stillImage = drawn ? (
     <Drawn still={drawn} className={pictureClassName ?? styles.picture} />

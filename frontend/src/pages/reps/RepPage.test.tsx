@@ -611,3 +611,41 @@ describe('the tested man, his moment and his spots', () => {
     expect(body.tap_targets![1]).toEqual({ x: 0.6, y: 0.3, zone: true });
   });
 });
+
+describe('the right spot, in the results', () => {
+  const image = { id: 1, question_id: 11, image_url: '/uploads/p.png', annotations: [], canvas_width: null, updated_at: '' };
+  const tapped = {
+    ...RESULTS.decisions[0],
+    image,
+    tap_targets: [
+      { x: 0.3, y: 0.5, zone: true },
+      { x: 0.5, y: 0.2, zone: true },
+      { x: 0.7, y: 0.6, zone: true },
+    ],
+    answers: [
+      { player: person('p1', 'Marcus Hill'), is_correct: false, chose: ['Stay boundary'], time_ms: 6100 },
+      { player: person('p2', 'Devin Price'), is_correct: true, chose: ['Rotate down'], time_ms: 3000 },
+    ],
+  };
+
+  it("a player's row opens to each decision - where he tapped against the right spot", async () => {
+    open({ ...RESULTS, decisions: [tapped] } as RepResults);
+    const players = within(await screen.findByRole('region', { name: 'Players' }));
+    fireEvent.click(players.getByRole('button', { name: /Marcus Hill/ }));
+    const his = within(players.getByRole('list', { name: "Marcus Hill's decisions" }));
+    expect(his.getByRole('button', { name: 'Tap Stay boundary' }).className).toMatch(/wrong/);
+    expect(his.getByRole('button', { name: 'Tap Rotate down' }).className).toMatch(/right/);
+    expect(his.getByText(/✕ Marcus tapped Stay boundary/)).toBeInTheDocument();
+  });
+
+  it("a problem's View players shows where the team tapped - how many on each spot", async () => {
+    open({ ...RESULTS, decisions: [tapped] } as RepResults);
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    fireEvent.click(card.getByRole('button', { name: 'View players' }));
+    const stay = card.getByRole('button', { name: 'Tap Stay boundary' });
+    expect(stay.className).toMatch(/wrong/);
+    expect(stay).toHaveTextContent('3');
+    expect(card.getByRole('button', { name: 'Tap Rotate down' })).toHaveTextContent('7');
+    expect(card.getByText(/how many tapped it/)).toBeInTheDocument();
+  });
+});

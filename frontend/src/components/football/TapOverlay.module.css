@@ -86,6 +86,30 @@
   border-style: dashed;
 }
 
+/* A result's tag on an answer: "3", "Ty". */
+.badge {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #0f1012;
+  color: #f7e7c0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.row .zone,
+.zone {
+  overflow: visible;
+}
+.row .zone {
+  position: relative;
+}
+
 .on,
 .target:disabled.on,
 .zone:disabled.on {
