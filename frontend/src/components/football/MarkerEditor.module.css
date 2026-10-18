@@ -1,0 +1,16 @@
+/* The coach's ring, placed on his own photo. */
+.frame {
+  position: relative;
+}
+.surface {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

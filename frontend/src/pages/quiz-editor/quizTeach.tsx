@@ -33,10 +33,11 @@ export function quizTeachSlides(questions: Question[], breakdown: QuestionBreakd
       wrong: mostChosenWrong(row),
       motionPlayId: q.motion_play_id ?? null,
       picture:
-        q.presnap || targets ? (
+        q.presnap || targets || q.subject_marker ? (
           <PlayPicture
             image={q.image}
             presnap={q.presnap}
+            marker={q.subject_marker}
             targets={targets}
             options={q.options.map((o) => ({ id: o.id, option_text: o.option_text }))}
             chosen={right.map((o) => o.id)}

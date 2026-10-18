@@ -340,6 +340,7 @@ def _first_try_results(quiz) -> dict:
                 # Which man is ringed, by his label, so the coach sees the
                 # words and the ring are about the same man.
                 "subject_man": _subject_man(question),
+                "subject_marker": question.subject_marker,
                 "concept": _concept_ref(question),
                 "motion_play_id": question.motion_play_id,
                 "answer_explanation": question.answer_explanation,

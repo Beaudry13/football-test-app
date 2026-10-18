@@ -51,6 +51,8 @@ export interface RepDecision {
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** Which man in the play it tests - the one ringed - and his label ("FS"). */
   subject_man?: { id: string; label: string | null } | null;
+  /** The coach's ring on a photo. */
+  subject_marker?: { x: number; y: number; r: number } | null;
   /** A player has received it: answers can be reworded or added, the right one is locked. */
   delivered?: boolean;
   is_retired: boolean;

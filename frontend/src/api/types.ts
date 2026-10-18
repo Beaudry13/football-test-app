@@ -306,6 +306,8 @@ export interface Question {
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** THE PRE-SNAP MOMENT (motion-lab/presnap.ts PresnapClip): played, then frozen at the snap. */
   presnap?: Record<string, unknown> | null;
+  /** The coach's "you are this player" ring on a photo (picture fractions). */
+  subject_marker?: { x: number; y: number; r: number } | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {

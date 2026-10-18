@@ -319,6 +319,19 @@
   margin-bottom: 0.75em;
 }
 
+/* "You're the Mike" above the picture - who the player is, as in a Rep. */
+.roleLine {
+  margin: 0 0 0.4em;
+  font-size: 1.05em;
+}
+.roleLead {
+  font-size: 0.75em;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
 /* Answers in the picture: say how to answer, once. */
 .tapHint {
   margin: 0.5em 0 0;

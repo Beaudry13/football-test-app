@@ -154,6 +154,10 @@ class Question(db.Model):
     #: its picture and pre-snap moment. `subject_role` is the coach's words for
     #: him; this keeps words, ring and picture about the same man.
     subject_man = db.Column(db.String(32), nullable=True)
+    #: On an uploaded photo, where the coach put the gold "you are this player"
+    #: ring: {x, y, r} as picture fractions. Placed by the coach, never read
+    #: from the photo; his words stay in subject_role.
+    subject_marker = db.Column(JSONB, nullable=True)
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -291,6 +295,9 @@ class Question(db.Model):
             # Which man in the play the decision is about - not a secret, he
             # is ringed in the picture.
             "subject_man": self.subject_man,
+            # The ring the coach put on the photo - not a secret, the player
+            # sees it.
+            "subject_marker": self.subject_marker,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must
             # not receive it. The play routes decide when to include it - in

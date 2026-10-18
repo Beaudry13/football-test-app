@@ -988,3 +988,49 @@ class TestTheTestedMan:
         reworded = client.patch(url, json={"subject_role": "Boundary safety", "subject_man": "D9"}, headers=coach_headers)
         assert reworded.status_code == 200, reworded.get_json()
         assert reworded.get_json()["subject_role"] == "Boundary safety"
+
+
+class TestTheRingOnAPhoto:
+    """A coach-placed 'you are this player' ring on an uploaded photo: placed,
+    kept in copies, sane in size - and, once players have it, locked."""
+
+    def _q(self, client, headers, quiz_id, **extra):
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            json={
+                "question_text": "Your read?",
+                "question_type": "multiple_choice",
+                "options": [{"option_text": "Fit A", "is_correct_answer": True}, {"option_text": "Fit B"}],
+                "subject_role": "Mike",
+                **extra,
+            },
+            headers=headers,
+        )
+
+    def test_placed_returned_and_copied(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "Fits"}, headers=coach_headers).get_json()
+        ring = {"x": 0.4, "y": 0.55, "r": 0.05}
+        made = self._q(client, coach_headers, quiz["id"], subject_marker=ring)
+        assert made.status_code == 201, made.get_json()
+        assert made.get_json()["subject_marker"] == ring
+        copy = client.post(f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers).get_json()
+        assert copy["questions"][0]["subject_marker"] == ring
+
+    def test_a_ring_off_the_picture_or_the_size_of_it_is_refused(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "Fits"}, headers=coach_headers).get_json()
+        assert self._q(client, coach_headers, quiz["id"], subject_marker={"x": 1.4, "y": 0.5, "r": 0.05}).status_code == 422
+        assert self._q(client, coach_headers, quiz["id"], subject_marker={"x": 0.4, "y": 0.5, "r": 0.9}).status_code == 422
+
+    def test_once_players_have_it_the_ring_stays(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._q(client, coach_headers, rep["id"], subject_marker={"x": 0.4, "y": 0.55, "r": 0.05}).get_json()
+        ids = _players(client, coach_headers, rep["id"])
+        code = _send(client, coach_headers, rep["id"])
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {made["id"]: made["options"][0]["id"]})
+        moved = client.patch(
+            f"/api/quizzes/{rep['id']}/questions/{made['id']}",
+            json={"subject_marker": {"x": 0.7, "y": 0.55, "r": 0.05}},
+            headers=coach_headers,
+        )
+        assert moved.status_code == 422
+        assert moved.get_json()["reason"] == "delivered_locked"

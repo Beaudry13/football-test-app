@@ -420,3 +420,20 @@ describe('QuestionInput - answers in the picture, as in a Rep', () => {
     expect(screen.getByAltText('Film still')).toBeInTheDocument();
   });
 });
+
+describe("QuestionInput - you're the player, ringed on the photo", () => {
+  it("shows who he is and the coach's gold ring on him, as a Rep does", () => {
+    const ringed = {
+      ...baseQuestion,
+      subject_role: 'Mike',
+      subject_marker: { x: 0.4, y: 0.55, r: 0.05 },
+      image: { id: 2, question_id: 1, image_url: '/uploads/photo.png', annotations: [], canvas_width: null, updated_at: '' },
+    } as Question;
+    render(<QuestionInput question={ringed} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.getByText('Mike')).toBeInTheDocument();
+    expect(screen.getByText(/You.re the/)).toBeInTheDocument();
+    expect(screen.getByTestId('player-ring')).toHaveStyle({ left: '40%', top: '55%', width: '10%' });
+    // Still answered the ordinary way.
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+});

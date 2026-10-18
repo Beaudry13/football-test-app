@@ -161,3 +161,31 @@ describe('tap spots while creating the question - no save-and-come-back', () => 
     expect(onSave.mock.calls[0][0]).not.toHaveProperty('tap_targets');
   });
 });
+
+describe('you are this player - the coach rings the man on his photo', () => {
+  it('tap him, adjust the ring, say who he is - saved with the question', async () => {
+    const onSave = edit();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark the player' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Mark the player' }));
+    const surface = document.querySelector('[data-marker-surface]') as HTMLElement;
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 400, clientY: 250 });
+    fireEvent.pointerUp(surface, { pointerId: 1 });
+    expect(screen.getByTestId('player-ring')).toHaveStyle({ left: '40%', top: '50%' });
+    fireEvent.click(dialog.getByRole('button', { name: 'Bigger' }));
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Who he is' }), { target: { value: 'Mike' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
+    expect(screen.getByText("Ringed: you're the Mike.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    const [input] = onSave.mock.calls[0];
+    expect(input.subject_marker).toEqual({ x: 0.4, y: 0.5, r: 0.06 });
+    expect(input.subject_role).toBe('Mike');
+  });
+
+  it('once players have the question, the ring stays put', () => {
+    edit({ hasBeenDelivered: true, existingMarker: { x: 0.4, y: 0.5, r: 0.05 }, initialRole: 'Mike' });
+    expect(screen.queryByRole('button', { name: 'Move the ring' })).toBeNull();
+    expect(screen.getByText('Players have this question, so the ring stays.')).toBeInTheDocument();
+  });
+});

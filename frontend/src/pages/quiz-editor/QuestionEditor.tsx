@@ -15,7 +15,8 @@ import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecor
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionEditor.module.css';
 import { TapCheck } from '../../components/football/TapCheck';
-import { spreadTargets, type TapTarget } from '../../components/football/tapTargets';
+import { spreadTargets, type Marker, type TapTarget } from '../../components/football/tapTargets';
+import { MarkerEditor } from '../../components/football/MarkerEditor';
 
 const TRUE_FALSE_OPTIONS: QuestionOptionInput[] = [
   { option_text: 'True', is_correct_answer: true },
@@ -87,6 +88,9 @@ interface QuestionEditorProps {
   existingPresnap?: Record<string, unknown> | null;
   /** The coach drew on the picture: spots cannot sit over a marked-up picture. */
   existingImageHasMarks?: boolean;
+  /** The coach's "you are this player" ring on the photo, and his words for him. */
+  existingMarker?: Marker | null;
+  initialRole?: string | null;
 }
 
 /** The image types Peira accepts, in ONE place.
@@ -148,7 +152,14 @@ export function QuestionEditor({
   existingTapTargets = null,
   existingPresnap = null,
   existingImageHasMarks = false,
+  existingMarker = null,
+  initialRole = null,
 }: QuestionEditorProps) {
+  /* YOU ARE THIS PLAYER: the coach rings the man on his photo himself
+     (MarkerEditor) and says who he is. Locked once players have it. */
+  const [marker, setMarker] = useState<Marker | null>(existingMarker);
+  const [role, setRole] = useState(initialRole ?? '');
+  const [marking, setMarking] = useState(false);
   /* TAP ANSWERS ON THE PICTURE - the coach's own spots, one per answer, on a
      photo or a play picture. Nothing is read from the photo: spots start in a
      plain row and he drags, names, tries and confirms them (TapCheck). Once
@@ -460,6 +471,22 @@ export function QuestionEditor({
     setOptions((prev) => prev.filter((_, i) => i !== index));
   }
 
+  /* "You are this player" - under the picture beside the spots. */
+  const markControls = pictureUrl && !existingImageHasMarks && (
+    <div className={styles.imageActions}>
+      <span className={styles.imageHint}>
+        {marker ? `Ringed: ${role.trim() ? `you're the ${role.trim()}` : 'the player they are'}.` : 'Who are they in this picture?'}
+      </span>
+      {!hasBeenDelivered ? (
+        <button type="button" className={nb.btnSm} onClick={() => setMarking(true)}>
+          {marker ? 'Move the ring' : 'Mark the player'}
+        </button>
+      ) : (
+        marker && <span className={styles.imageHint}>Players have this question, so the ring stays.</span>
+      )}
+    </div>
+  );
+
   /* The spot controls, under whichever picture this question has - saved, or
      just chosen while creating it (no save-and-come-back). */
   const tapControls = tapsAllowed && (
@@ -539,6 +566,11 @@ export function QuestionEditor({
           // The page the coach chose, and the one thing they hid on it. Both
           // omitted entirely when no playbook was used, so an ordinary
           // question's payload is byte-for-byte what it was before.
+          // The ring and the words for him, when they changed (and only with a picture).
+          ...(pictureUrl && !existingImageHasMarks && JSON.stringify(marker) !== JSON.stringify(existingMarker ?? null)
+            ? { subject_marker: marker }
+            : {}),
+          ...(role.trim() !== (initialRole ?? '').trim() ? { subject_role: role.trim() || null } : {}),
           // Spots go only with exactly one per answer, and only when they changed.
           ...(tapsAllowed && JSON.stringify(tapTargets) !== JSON.stringify(existingTapTargets ?? null)
             ? { tap_targets: tapTargets && tapTargets.length === options.length ? tapTargets : null }
@@ -905,12 +937,26 @@ export function QuestionEditor({
               Opens the drawing canvas for this question, with everything you have already
               drawn on it.
             </p>
+            {markControls}
             {tapControls}
             {existingImageHasMarks && questionType === 'multiple_choice' && (
               <p className={styles.imageHint}>Tap answers need a picture without your markings.</p>
             )}
           </div>
         </div>
+      )}
+      {marking && pictureUrl && (
+        <MarkerEditor
+          imageUrl={pictureUrl}
+          marker={marker}
+          role={role}
+          onClose={() => setMarking(false)}
+          onDone={(next, words) => {
+            setMarker(next);
+            setRole(words);
+            setMarking(false);
+          }}
+        />
       )}
       {checkingSpots && tapTargets && pictureUrl && (
         <TapCheck
@@ -1084,6 +1130,7 @@ export function QuestionEditor({
                   Remove
                 </button>
               </div>
+              {markControls}
               {tapControls}
             </div>
           ) : (

@@ -127,7 +127,11 @@ export function QuestionInput({
     question.question_type === 'multiple_choice' && !isMultiSelect && !clip && !maskedImageUrl && !hasAnnotations
       ? usableTargets(question.tap_targets, question.options.length, !!(presnap || image))
       : null;
-  const usePlayPicture = !!presnap || !!tapTargets;
+  /** The coach's ring on a photo, on a picture without his other markings. */
+  const marker = !presnap && image && !hasAnnotations && !clip && !maskedImageUrl ? question.subject_marker ?? null : null;
+  const usePlayPicture = !!presnap || !!tapTargets || !!marker;
+  /** "You're the Mike" - who the player is, when the coach said (as a Rep says it). */
+  const role = (question as Question & { subject_role?: string | null }).subject_role?.trim() || null;
   const selectedIds = answer?.selected_option_ids ?? [];
   const drawing = answer?.drawing;
   const storageKey = drawingScope ? draftKey(drawingScope, question.id) : null;
@@ -221,8 +225,14 @@ export function QuestionInput({
           )}
         </>
       )}
+      {role && (
+        <div className={styles.roleLine}>
+          <span className={styles.roleLead}>You&rsquo;re the</span> <strong>{role}</strong>
+        </div>
+      )}
       {usePlayPicture ? (
         <PlayPicture
+          marker={marker}
           image={image}
           presnap={presnap}
           targets={tapTargets}

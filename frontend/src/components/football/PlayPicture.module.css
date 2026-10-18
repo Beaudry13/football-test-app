@@ -2,6 +2,16 @@
 .wrap {
   position: relative;
 }
+/* The coach's ring on a photo: the same gold as the tested man's ring. */
+.marker {
+  position: absolute;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 3px solid #f7c948;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(15, 16, 18, 0.55);
+  pointer-events: none;
+}
 .picture {
   display: block;
   width: 100%;

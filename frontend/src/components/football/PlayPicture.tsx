@@ -2,8 +2,11 @@ import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { resolveMediaUrl } from '../../api/client';
 import type { PresnapClip } from '../../motion-lab/presnap';
 import { TapOverlay, type TapMark, type TapOption } from './TapOverlay';
-import type { TapTarget } from './tapTargets';
+import type { Marker, TapTarget } from './tapTargets';
 import styles from './PlayPicture.module.css';
+
+/** A fraction as a CSS percentage, without float noise (0.55 -> "55%"). */
+const pct = (f: number) => `${+(f * 100).toFixed(3)}%`;
 
 // The moving play is Motion Lab's renderer - loaded only for a question that has one.
 const PresnapPicture = lazy(() => import('../../motion-lab/PresnapPicture'));
@@ -45,6 +48,7 @@ export function PlayPicture({
   onMove,
   marks,
   badges,
+  marker,
   still = false,
   autoplay = true,
   onMotionDone,
@@ -69,6 +73,9 @@ export function PlayPicture({
   /** A result: each answer marked on its own (TapOverlay). */
   marks?: Partial<Record<number, TapMark>>;
   badges?: Partial<Record<number, string>>;
+  /** The coach's gold ring on a photo - "you are this player". A moving
+   *  picture rings its man itself, so this is for stills. */
+  marker?: Marker | null;
   /** A review or a checked question: the frozen moment, no motion. */
   still?: boolean;
   /** False on a screen of several questions: tap to play. */
@@ -123,6 +130,14 @@ export function PlayPicture({
   return (
     <div className={className ? `${styles.wrap} ${className}` : styles.wrap}>
       {stillImage}
+      {marker && (
+        <span
+          className={styles.marker}
+          style={{ left: pct(marker.x), top: pct(marker.y), width: pct(marker.r * 2) }}
+          data-testid="player-ring"
+          aria-hidden="true"
+        />
+      )}
       {overlay}
       {children}
     </div>

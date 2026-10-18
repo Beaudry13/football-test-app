@@ -539,6 +539,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         concept_id=_validated_concept_id(quiz, data.get("concept_id")),
         subject_role=_clean_role(data.get("subject_role")),
         subject_man=data.get("subject_man"),
+        subject_marker=data.get("subject_marker"),
         motion_play_id=motion_play_id,
         tap_targets=tap_targets,
         presnap=presnap,
@@ -836,6 +837,7 @@ def update_question(quiz_id: int, question_id: int):
     if delivered:
         for key, current in (
             ("subject_man", question.subject_man),
+            ("subject_marker", question.subject_marker),
             ("presnap", question.presnap),
             ("tap_targets", question.tap_targets),
         ):
@@ -850,6 +852,8 @@ def update_question(quiz_id: int, question_id: int):
         question.subject_role = _clean_role(data.get("subject_role"))
     if "subject_man" in data:
         question.subject_man = data.get("subject_man")
+    if "subject_marker" in data:
+        question.subject_marker = data.get("subject_marker")
     if "motion_play_id" in data:
         question.motion_play_id = _validated_motion_play_id(question.quiz, data.get("motion_play_id"))
     if "presnap" in data:

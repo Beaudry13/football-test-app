@@ -811,6 +811,7 @@ def _copy_questions_into(
             # from travel with it, or a copied Rep forgets both.
             subject_role=question.subject_role,
             subject_man=question.subject_man,
+            subject_marker=question.subject_marker,
             motion_play_id=question.motion_play_id,
             tap_targets=question.tap_targets,
             presnap=question.presnap,
