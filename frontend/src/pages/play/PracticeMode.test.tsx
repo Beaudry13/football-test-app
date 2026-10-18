@@ -175,7 +175,13 @@ describe('Practice Mode player flow', () => {
     await screen.findByText('Correct');
     await user.click(screen.getByRole('button', { name: 'Finish practice' }));
 
-    await waitFor(() => expect(onPracticeComplete).toHaveBeenCalledWith([CORRECT]));
+    // The feedback, and what Review missed needs: the questions and his picks.
+    await waitFor(() =>
+      expect(onPracticeComplete).toHaveBeenCalledWith(
+        [CORRECT],
+        expect.objectContaining({ questions: expect.any(Array), chosen: expect.any(Object) }),
+      ),
+    );
     // A practice attempt never becomes a result a coach reviews, so the
     // results screen must not be reached.
     expect(onSubmitted).not.toHaveBeenCalled();

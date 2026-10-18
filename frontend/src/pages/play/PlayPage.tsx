@@ -25,7 +25,7 @@ import {
 } from './playerSession';
 import { PracticeCompleteStep } from './PracticeCompleteStep';
 import type { PlayerAnswer } from './QuestionInput';
-import { QuizStep } from './QuizStep';
+import { QuizStep, type PracticeReview } from './QuizStep';
 import { RepIntro } from './RepIntro';
 import { RepRunner } from './RepRunner';
 import { SubmittedStep } from './SubmittedStep';
@@ -84,6 +84,7 @@ type Step =
       joined: ValidateCodeResponse;
       player: RememberedPlayer;
       feedback: PracticeFeedback[];
+      review?: PracticeReview;
       run: number;
     };
 
@@ -389,20 +390,21 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onSubmitted={() => setStep({ name: 'submitted', code: step.code, player: step.player })}
-          onPracticeComplete={(feedback) =>
+          onPracticeComplete={(feedback, review) =>
             setStep({
               name: 'practice-complete',
               code: step.code,
               joined: step.joined,
               player: step.player,
               feedback,
+              review,
               run: step.run,
             })
           }
         />
       )}
       {step.name === 'practice-complete' && (
-        <PracticeCompleteStep feedback={step.feedback} onTryAgain={() => void handleTryAgain()} />
+        <PracticeCompleteStep feedback={step.feedback} review={step.review} onTryAgain={() => void handleTryAgain()} />
       )}
       {step.name === 'submitted' && (
         <SubmittedStep

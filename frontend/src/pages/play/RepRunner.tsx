@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, submitQuiz } from '../../api/play';
 import { getRepProgress, type RepProgress } from '../../api/reps';
 import { getErrorMessage } from '../../api/client';
-import { PlayPicture } from '../../components/football/PlayPicture';
-import { tapsMen, usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import type {
   DeliveredPlayerQuestion,
   PracticeFeedback,
@@ -16,9 +14,9 @@ import { applyDeliveredContent } from './deliveredQuestions';
 import { orderQuestions } from './questionOrder';
 import { isAuthRefusal } from './playerEntry';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
+import { Decision, ReviewMissed, Verdict } from './FootballDecision';
+import { missedOf, TAPPABLE } from './decisionRules';
 import styles from './RepRunner.module.css';
-
-/* The moving picture loads only for a decision that has motion to play. */
 
 /**
  * SITUATIONAL REP, AS THE PLAYER LIVES IT: "put me in the play".
@@ -40,12 +38,6 @@ import styles from './RepRunner.module.css';
  */
 
 /** Shown above the picture: "YOU'RE THE" / "Boundary safety". */
-function roleOf(question: Question): string | null {
-  return question.subject_role?.trim() || null;
-}
-
-const TAPPABLE = new Set(['multiple_choice', 'true_false']);
-
 interface Taken {
   optionIds: number[];
   ms: number | null;
@@ -212,10 +204,10 @@ export function RepRunner({
   if (finished || !decision) {
     if (reviewing !== null) {
       return (
-        <Review
+        <ReviewMissed
           decisions={decisions}
           feedback={feedback}
-          taken={taken}
+          chosen={Object.fromEntries(Object.entries(taken).map(([id, t]) => [id, t.optionIds]))}
           at={reviewing}
           onAt={setReviewing}
           onDone={() => setReviewing(null)}
@@ -339,88 +331,6 @@ function Progress({
   );
 }
 
-/** Who you are, the picture, the question - the whole situation. With
- *  `onTap`, each answer is a man in the picture to tap. */
-function Decision({
-  question,
-  onTap,
-  chosen,
-  tone,
-  disabled,
-  still = false,
-  onMotionDone,
-}: {
-  question: Question;
-  onTap?: (optionId: number) => void;
-  chosen?: number[];
-  tone?: 'right' | 'wrong' | null;
-  disabled?: boolean;
-  /** Show the frozen snap without playing the motion (a review, an answered decision). */
-  still?: boolean;
-  onMotionDone?: () => void;
-}) {
-  const role = roleOf(question);
-  const targets = tapTargetsOf(question);
-  return (
-    <>
-      {role && (
-        <div className={styles.role}>
-          <span className={styles.roleLead}>You&rsquo;re the</span>
-          <span className={styles.roleName}>{role}</span>
-        </div>
-      )}
-      {/* THE PLAY, MOVING to the decision moment (or the still), with the
-          answers in it - the one picture every football question uses. */}
-      <PlayPicture
-        image={question.image}
-        presnap={question.presnap}
-        targets={onTap ? targets : null}
-        options={question.options}
-        onTap={onTap}
-        chosen={chosen}
-        tone={tone}
-        disabled={disabled}
-        still={still}
-        onMotionDone={onMotionDone}
-        pictureClassName={styles.picture}
-        motionKey={question.id}
-      />
-      <h1 className={styles.prompt}>{question.question_text}</h1>
-      {onTap && targets && (
-        <span className={styles.tapHint}>{tapsMen(targets) ? 'Tap the man in the picture' : 'Tap the spot on the field'}</span>
-      )}
-    </>
-  );
-}
-
-/** The decision's tap spots, when there is one per answer and a picture to tap. */
-function tapTargetsOf(question: Question): TapTarget[] | null {
-  return usableTargets(question.tap_targets, question.options.length, !!(question.image || question.presnap));
-}
-
-function Verdict({ feedback }: { feedback: PracticeFeedback }) {
-  const word = feedback.is_correct === true ? 'Correct' : feedback.is_correct === false ? 'Not quite' : 'Locked in';
-  const tone =
-    feedback.is_correct === true ? styles.verdictRight : feedback.is_correct === false ? styles.verdictWrong : '';
-  return (
-    <div className={`${styles.verdict} ${tone}`}>
-      <span className={styles.verdictWord}>
-        {feedback.is_correct === true ? '✓ ' : feedback.is_correct === false ? '✕ ' : ''}
-        {word}
-      </span>
-      {feedback.answer_explanation && (
-        <p className={styles.why}>
-          <span className={styles.whyLead}>Coach:</span> {feedback.answer_explanation}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function missedOf(decisions: Question[], feedback: Record<number, PracticeFeedback>) {
-  return decisions.filter((q) => feedback[q.id]?.is_correct === false);
-}
-
 function Summary({
   decisions,
   feedback,
@@ -513,65 +423,6 @@ function Summary({
         <button type="button" className={missed.length > 0 ? 'btn' : 'btn btn-primary'} onClick={onRunAgain}>
           Run it again
         </button>
-      </div>
-    </div>
-  );
-}
-
-/** Each missed decision again: the situation, what he chose, why the coach says otherwise. */
-function Review({
-  decisions,
-  feedback,
-  taken,
-  at,
-  onAt,
-  onDone,
-}: {
-  decisions: Question[];
-  feedback: Record<number, PracticeFeedback>;
-  taken: Record<number, Taken>;
-  at: number;
-  onAt: (index: number) => void;
-  onDone: () => void;
-}) {
-  const missed = missedOf(decisions, feedback);
-  const position = Math.max(0, missed.indexOf(decisions[at]));
-  const question = missed[position];
-  if (!question) {
-    return (
-      <div className={styles.summaryActions}>
-        <button type="button" className="btn btn-primary" onClick={onDone}>
-          Done
-        </button>
-      </div>
-    );
-  }
-  const chose = question.options
-    .filter((o) => taken[question.id]?.optionIds.includes(o.id))
-    .map((o) => o.option_text);
-  const next = missed[position + 1];
-  return (
-    <div className={styles.rep}>
-      <div className={styles.reviewHead}>
-        Missed {position + 1} of {missed.length}
-      </div>
-      <Decision question={question} still />
-      {chose.length > 0 && (
-        <div className={`${styles.choice} ${styles.chosen} ${styles.wrong} ${styles.static}`}>
-          You chose: {chose.join(', ')}
-        </div>
-      )}
-      <Verdict feedback={feedback[question.id]} />
-      <div className={styles.summaryActions}>
-        {next ? (
-          <button type="button" className="btn btn-primary" onClick={() => onAt(decisions.indexOf(next))}>
-            Next missed
-          </button>
-        ) : (
-          <button type="button" className="btn btn-primary" onClick={onDone}>
-            Done
-          </button>
-        )}
       </div>
     </div>
   );

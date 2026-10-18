@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import type { PracticeFeedback } from '../../api/types';
 import { Icon } from '../../components/ui/Icon';
+import { missedOf } from './decisionRules';
+import { ReviewMissed } from './FootballDecision';
+import type { PracticeReview } from './QuizStep';
 import { summarisePractice } from './practiceSummary';
 import styles from './PlayPage.module.css';
 
@@ -13,12 +17,31 @@ import styles from './PlayPage.module.css';
  */
 export function PracticeCompleteStep({
   feedback,
+  review,
   onTryAgain,
 }: {
   feedback: PracticeFeedback[];
+  /** The questions and his picks, for Review Missed - the same review a Rep ends with. */
+  review?: PracticeReview;
   onTryAgain: () => void;
 }) {
   const summary = summarisePractice(feedback);
+  const byQuestion = Object.fromEntries(feedback.map((f) => [f.question_id, f]));
+  const missed = review ? missedOf(review.questions, byQuestion) : [];
+  const [reviewing, setReviewing] = useState<number | null>(null);
+
+  if (review && reviewing !== null) {
+    return (
+      <ReviewMissed
+        decisions={review.questions}
+        feedback={byQuestion}
+        chosen={review.chosen}
+        at={reviewing}
+        onAt={setReviewing}
+        onDone={() => setReviewing(null)}
+      />
+    );
+  }
 
   return (
     <div className={styles.practiceComplete}>
@@ -52,6 +75,15 @@ export function PracticeCompleteStep({
         This was practice &mdash; none of it counts toward your grades.
       </p>
 
+      {missed.length > 0 && (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setReviewing(review!.questions.indexOf(missed[0]))}
+        >
+          Review missed
+        </button>
+      )}
       <button type="button" className="btn btn-primary" onClick={onTryAgain}>
         Try again
       </button>

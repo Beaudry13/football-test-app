@@ -147,6 +147,23 @@ describe('A Situational Rep, for the player', () => {
     expect(screen.getByRole('button', { name: 'Tap X' })).toBeDisabled();
   });
 
+  it('Review missed shows his tap on the picture he tapped - and not the right one (the coach says why)', async () => {
+    const tap = {
+      ...decision(1, 'Who gets the ball?', ['X', 'Z'], 'Ball'),
+      tap_targets: [{ x: 0.1, y: 0.5 }, { x: 0.9, y: 0.5 }],
+    } as unknown as Question;
+    run({ quiz: { ...QUIZ, questions: [tap] } as unknown as Quiz });
+    fireEvent.click(screen.getByRole('button', { name: 'Tap Z' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Finish' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review missed' }));
+    const his = screen.getByRole('button', { name: 'Tap Z' });
+    expect(his).toBeDisabled();
+    expect(his.className).toMatch(/wrong/);
+    expect(screen.getByRole('button', { name: 'Tap X' }).className).not.toMatch(/right/);
+    expect(screen.queryByText('Tap the man in the picture')).toBeNull();
+    expect(screen.getByText(/He is the new #3/)).toBeInTheDocument();
+  });
+
   it('a decision about a place is answered by tapping the labelled spot on the field', async () => {
     const tap = {
       ...decision(3, 'What is your gap?', ['A gap', 'B gap'], 'Run fits'),
