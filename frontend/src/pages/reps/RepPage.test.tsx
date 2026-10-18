@@ -623,6 +623,35 @@ describe('the tested man, his moment and his spots', () => {
     expect(body.subject_man).toBe('D6');
   });
 
+  it('two CBs in the play: the coach taps the one he means - never a guess', async () => {
+    const twoCorners = {
+      ...CLIP,
+      players: [
+        ...CLIP.players,
+        { id: 'D7', side: 'defense', label: 'CB', x: 8, y: 6.5, speed: 'fast', timing: 'on-snap' },
+        { id: 'D8', side: 'defense', label: 'CB', x: 46, y: 6.5, speed: 'fast', timing: 'on-snap' },
+      ],
+    };
+    const variation = {
+      ...RESULTS,
+      quiz_id: 31,
+      players: [],
+      audience: { label: null, invited: 0, code: null, people: [] },
+      decisions: [{ ...RESULTS.decisions[0], subject_man: { id: 'D9', label: 'FS' }, presnap: twoCorners, delivered: false }],
+    };
+    open(variation as unknown as RepResults, '/reps/31?variation=5');
+    const banner = within(await screen.findByRole('region', { name: 'Variation' }));
+    fireEvent.change(await banner.findByRole('combobox', { name: 'Test another man' }), { target: { value: 'CB' } });
+    fireEvent.click(banner.getByRole('button', { name: 'Test him in every decision' }));
+    const choose = within(await screen.findByRole('group', { name: 'Decision 1: which CB?' }));
+    expect(questionsApi.updateQuestion).not.toHaveBeenCalled();
+    fireEvent.click(await choose.findByRole('button', { name: 'Tap CB, right' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect(body).toMatchObject({ subject_man: 'D8', subject_role: 'Corner', presnap: { highlight: 'D8' } });
+    expect(await screen.findByText(/Decision 1: the CB you picked\./)).toBeInTheDocument();
+  });
+
   it('the coach checks and moves the spots right in the editor', async () => {
     const targets = [
       { x: 0.3, y: 0.5, zone: true },

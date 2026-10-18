@@ -1,16 +1,24 @@
 // SAME SITUATION, NOW TEST THE NICKEL - a variation's whole Rep re-pointed at
-// another man by his label. Each decision that can be (not yet received, and
-// its play has exactly one man with that label) gets the new man, the words
-// for him, the ring in its moment and a redrawn still - the same
-// keep-them-together rules as Change man (decisionMan). The rest are said,
-// never guessed. Nothing is sent.
+// another man by his label. Each decision that can be (not yet received)
+// gets the new man, the words for him, the ring in its moment and a redrawn
+// still - the same keep-them-together rules as Change man (decisionMan). A
+// play with TWO such men (two CBs) goes to the coach to choose on the field;
+// a play with none is said. Never guessed. Nothing is sent.
 
 import { getMotionPlay } from '../api/motionLab'
 import type { RepDecision } from '../api/reps'
-import { manLabelled, menOf, redrawStill, ringOn, wordsFor } from './decisionMan'
+import { manLabelled, menOf, redrawStill, ringOn, wordsFor, type Man } from './decisionMan'
 import type { Play } from './engine/play'
 import type { PresnapClip } from './presnap'
 import { playFromRow } from './storage/apiPlayRepository'
+
+/** A decision whose play has more than one man with the label: the coach picks. */
+export interface Choice {
+  decision: RepDecision
+  clip: PresnapClip | null
+  play: Play | null
+  candidates: Man[]
+}
 
 export interface Retarget {
   questionId: number
@@ -48,10 +56,11 @@ export async function retargetRep(
   decisions: RepDecision[],
   label: string,
   canOpenPlay: boolean,
-): Promise<{ changes: Retarget[]; skipped: { number: number; why: string }[] }> {
+): Promise<{ changes: Retarget[]; skipped: { number: number; why: string }[]; choose: Choice[] }> {
   const plays = new Map<number, Play | null>()
   const changes: Retarget[] = []
   const skipped: { number: number; why: string }[] = []
+  const choose: Choice[] = []
   for (const d of decisions) {
     if (d.delivered) {
       skipped.push({ number: d.number, why: 'players have it' })
@@ -65,21 +74,27 @@ export async function retargetRep(
     }
     const man = manLabelled(men, label)
     if (!man) {
-      const count = men.filter((m) => m.label.toUpperCase() === label.toUpperCase()).length
-      skipped.push({ number: d.number, why: count === 0 ? `its play has no ${label}` : `its play has ${count} - pick him in Edit` })
+      const same = men.filter((m) => m.label.toUpperCase() === label.trim().toUpperCase())
+      if (same.length === 0) skipped.push({ number: d.number, why: `its play has no ${label}` })
+      else choose.push({ decision: d, clip, play, candidates: same })
       continue
     }
     if (d.subject_man?.id === man.id) {
       skipped.push({ number: d.number, why: `it already tests the ${label}` })
       continue
     }
-    changes.push({
-      questionId: d.question_id,
-      number: d.number,
-      body: { subject_man: man.id, subject_role: wordsFor(man), ...(clip ? { presnap: ringOn(clip, man.id) } : {}) },
-      image: await redrawStill(clip, play, man.id).catch(() => null),
-      checkSpots: !!d.tap_targets?.some((t) => t.zone),
-    })
+    changes.push(await retargetOne(d, man, clip, play))
   }
-  return { changes, skipped }
+  return { changes, skipped, choose }
+}
+
+/** One decision re-pointed at one man - the man the coach chose, or the only one. */
+export async function retargetOne(d: RepDecision, man: Man, clip: PresnapClip | null, play: Play | null): Promise<Retarget> {
+  return {
+    questionId: d.question_id,
+    number: d.number,
+    body: { subject_man: man.id, subject_role: wordsFor(man), ...(clip ? { presnap: ringOn(clip, man.id) } : {}) },
+    image: await redrawStill(clip, play, man.id).catch(() => null),
+    checkSpots: !!d.tap_targets?.some((t) => t.zone),
+  }
 }

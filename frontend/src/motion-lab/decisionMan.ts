@@ -82,6 +82,15 @@ export function suggestPlaces(clip: PresnapClip | null, play: Play | null, answe
   return spots ? spots.map((at) => ({ x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT, zone: true })) : null
 }
 
+/** Where these men stand in the still (picture fractions), in the order given. */
+export function menAt(clip: PresnapClip | null, play: Play | null, ids: string[]): TapTarget[] {
+  const still = stillOf(clip, play)
+  return ids.map((id) => {
+    const p = still?.players.find((m) => m.id === id)
+    return p ? { x: px(p).x / IMAGE_WIDTH, y: px(p).y / IMAGE_HEIGHT } : { x: 0.5, y: 0.5 }
+  })
+}
+
 /** The man drawn nearest a point in the still (picture fractions), or null. */
 export function manAt(clip: PresnapClip | null, play: Play | null, at: { x: number; y: number }): Man | null {
   const still = stillOf(clip, play)

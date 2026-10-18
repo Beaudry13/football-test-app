@@ -36,9 +36,12 @@ import { TapCheck } from '../../components/football/TapCheck';
 import { TapResult } from '../../components/football/TapResult';
 import type { PresnapClip } from '../../motion-lab/presnap';
 import type { PlayDraft } from '../../motion-lab/DecisionPlay';
+import type { Choice, Retarget } from '../../motion-lab/retargetRep';
 
 /* Who it tests and when he decides - Motion Lab's code, loaded only to edit one. */
 const DecisionPlay = lazy(() => import('../../motion-lab/DecisionPlay'));
+/* Two men with one label: the coach taps the one he means. */
+const ChooseMan = lazy(() => import('../../motion-lab/ChooseMan'));
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
@@ -635,6 +638,12 @@ function VariationBanner({
   const [label, setLabel] = useState('');
   const [moving, setMoving] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
+  const [choices, setChoices] = useState<Choice[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
+  const apply = async (c: Retarget) => {
+    await updateQuestion(quizId, c.questionId, c.body);
+    if (c.image) await uploadQuestionImage(quizId, c.questionId, c.image);
+  };
   const fromPlays = results.decisions.some((d) => d.presnap || d.motion_play_id !== null);
   useEffect(() => {
     if (!fromPlays) return;
@@ -652,13 +661,12 @@ function VariationBanner({
     setMoving(true);
     setError(null);
     setSaid(null);
+    setPicked([]);
     try {
       const { retargetRep } = await import('../../motion-lab/retargetRep');
-      const { changes, skipped } = await retargetRep(results.decisions, label, canOpenPlay);
-      for (const c of changes) {
-        await updateQuestion(quizId, c.questionId, c.body);
-        if (c.image) await uploadQuestionImage(quizId, c.questionId, c.image);
-      }
+      const { changes, skipped, choose } = await retargetRep(results.decisions, label, canOpenPlay);
+      for (const c of changes) await apply(c);
+      setChoices(choose);
       const check = changes.filter((c) => c.checkSpots).map((c) => c.number);
       setSaid(
         [
@@ -728,8 +736,27 @@ function VariationBanner({
       {said && (
         <p className={styles.variationSaid} role="status">
           {said}
+          {picked.length > 0 && ` ${picked.join(' ')}`}
         </p>
       )}
+      {choices.map((choice) => (
+        <Suspense key={choice.decision.question_id} fallback={null}>
+          <ChooseMan
+            choice={choice}
+            label={label}
+            onChosen={async (r) => {
+              try {
+                await apply(r);
+                setChoices((list) => list.filter((c) => c.decision.question_id !== r.questionId));
+                setPicked((list) => [...list, `Decision ${r.number}: the ${label} you picked.`]);
+                onRenamed();
+              } catch (err) {
+                setError(getErrorMessage(err));
+              }
+            }}
+          />
+        </Suspense>
+      ))}
       <p className={styles.variationHint}>
         Change what&rsquo;s different below: the man (Edit → Change man), the question or its answers (Edit), or a new
         play or formation (+ Add decisions, then Remove the old one). Then pick who it goes to and send it.
