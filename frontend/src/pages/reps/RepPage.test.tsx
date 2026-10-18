@@ -741,6 +741,8 @@ describe('the right spot, in the results', () => {
     expect(stay.className).toMatch(/wrong/);
     expect(stay).toHaveTextContent('3');
     expect(card.getByRole('button', { name: 'Tap Rotate down' })).toHaveTextContent('7');
-    expect(card.getByText(/how many tapped it/)).toBeInTheDocument();
+    // Every answer, most tapped first, with how many and what share.
+    expect(card.getByText(/✓ Rotate down 7 \(64%\)/)).toBeInTheDocument();
+    expect(card.getByText(/Stay boundary 3 \(27%\)/)).toBeInTheDocument();
   });
 });

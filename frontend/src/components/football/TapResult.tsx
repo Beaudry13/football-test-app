@@ -51,6 +51,7 @@ export function TapResult({
   const text = (id: number) => options.find((o) => o.id === id)?.option_text ?? '';
   const right = correctIds.map(text).join(', ');
   const missed = chosenIds.filter((id) => !correctIds.includes(id));
+  const total = counts ? options.reduce((n, o) => n + (counts[o.id] ?? 0), 0) : 0;
   return (
     <figure className={styles.result}>
       <PlayPicture
@@ -66,10 +67,23 @@ export function TapResult({
       />
       <figcaption className={styles.key}>
         {counts ? (
-          <>
-            <span className={styles.right}>✓ {right}</span>
-            <span className={styles.note}> - the number on a spot is how many tapped it</span>
-          </>
+          /* EVERY ANSWER, MOST TAPPED FIRST - "✓ X 8 (67%) · Z 3 (25%) · H 1". */
+          <span className={styles.tally}>
+            {options
+              .map((o) => ({ o, n: counts[o.id] ?? 0 }))
+              .sort((a, b) => b.n - a.n)
+              .map(({ o, n }, i) => {
+                const isRight = correctIds.includes(o.id);
+                return (
+                  <span key={o.id} className={isRight ? styles.right : n > 0 ? styles.wrong : styles.note}>
+                    {i > 0 && <span className={styles.note}> · </span>}
+                    {isRight ? '✓ ' : ''}
+                    {o.option_text} {n}
+                    {total > 0 && n > 0 ? ` (${Math.round((100 * n) / total)}%)` : ''}
+                  </span>
+                );
+              })}
+          </span>
         ) : missed.length > 0 ? (
           <>
             <span className={styles.wrong}>

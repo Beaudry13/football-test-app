@@ -660,6 +660,10 @@ export interface QuestionBreakdown {
   correct_count: number;
   incorrect_count: number;
   ungraded_count: number;
+  /** WHERE THE TEAM WENT, for a one-answer question: how many of these same
+   *  answers chose each option (option order). A diagnostic - it changes no
+   *  score. Null for a select-all set or a question without options. */
+  option_counts?: { option_id: number; option_text: string; is_correct: boolean; count: number }[] | null;
   is_excluded: boolean;
   /** Every ACTIVE exclusion covering this question. More than one when a
    *  quiz-wide and an assignment-scoped exclusion overlap - restoring one

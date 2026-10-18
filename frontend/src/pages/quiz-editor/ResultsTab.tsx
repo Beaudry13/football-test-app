@@ -31,6 +31,8 @@ import { hasResponseDenominator } from '../../utils/responseSummary';
 import styles from './ResultsTab.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { TapResult } from '../../components/football/TapResult';
+import { usableTargets } from '../../components/football/tapTargets';
 
 function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'quiz';
@@ -194,6 +196,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
      Still the server's own per-question counts, merely filtered: the number
      stays something Peira computed rather than something this screen derived,
      and the filter is the same rule the grading queue applies. */
+  /** One-answer questions players answered by tapping, with where they went. */
+  const teamTaps = (dashboard?.question_breakdown ?? [])
+    .filter((row) => row.answered_count > 0 && row.option_counts)
+    .map((row) => ({ row, question: (quiz.questions ?? []).find((q) => q.id === row.question_id) }))
+    .filter(
+      (t): t is { row: (typeof t)['row']; question: NonNullable<(typeof t)['question']> } =>
+        !!t.question &&
+        !!usableTargets(t.question.tap_targets, t.question.options.length, !!(t.question.image || t.question.presnap)),
+    );
   const ungradedTotal = (dashboard?.question_breakdown ?? [])
     .filter((q) => needsManualGrading(q.question_type) && !q.is_excluded)
     .reduce((total, q) => total + q.ungraded_count, 0);
@@ -305,6 +316,35 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                   <span key={name} className={`${nb.badge} ${nb.badgeWarning}`}>
                     {name}
                   </span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* WHERE DID EVERYBODY TAP? The team's choices on the football
+              picture itself - the coach's right spot green, every spot someone
+              chose with how many chose it. The same picture a Rep reads back
+              (TapResult); a view over the counts below, never a score. */}
+          {teamTaps.length > 0 && (
+            <section className={styles.evidence} aria-label="Where they tapped">
+              <h2 className={styles.evidenceHeading}>Where they tapped</h2>
+              <div className={styles.teamTaps}>
+                {teamTaps.map(({ row, question }) => (
+                  <div key={row.question_id} className={styles.teamTap}>
+                    <div className={styles.teamTapQuestion}>
+                      <span className={styles.questionNumber}>Q{row.question_number}</span>
+                      {row.question_text}
+                    </div>
+                    <TapResult
+                      image={question.image}
+                      presnap={question.presnap}
+                      targets={question.tap_targets}
+                      options={question.options.map((o) => ({ id: o.id, option_text: o.option_text }))}
+                      correctIds={(row.option_counts ?? []).filter((c) => c.is_correct).map((c) => c.option_id)}
+                      counts={Object.fromEntries((row.option_counts ?? []).map((c) => [c.option_id, c.count]))}
+                      motionKey={`team-${row.question_id}`}
+                    />
+                  </div>
                 ))}
               </div>
             </section>

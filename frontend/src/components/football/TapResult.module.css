@@ -16,6 +16,9 @@
 .wrong {
   color: var(--peira-danger, #c43d20);
 }
+.tally {
+  display: inline;
+}
 .note {
   font-weight: 400;
   color: var(--nb-text-muted, #6b7280);
