@@ -295,7 +295,20 @@ export function WeakestConcepts({
                 {concept.players_missed_count} of {concept.players_responded_count} players
                 {!concept.has_enough_responses && <span className={styles.thin}> (thin)</span>}
               </span>
-              {missActions(concept, 'Teach')}
+              {/* THE PROBLEM IN ONE LINE, as a Rep says it: what they chose
+                  instead and the next step - or that nobody needs it. */}
+              {concept.players_missed_count === 0 ? (
+                <span className={styles.looksGood}>✓ Looks good</span>
+              ) : (
+                <>
+                  {concept.top_distractor && (
+                    <span className={styles.otherChose}>
+                      most chose <strong>{concept.top_distractor.option_text}</strong>
+                    </span>
+                  )}
+                  {missActions(concept, 'Teach')}
+                </>
+              )}
             </li>
           ))}
         </ul>

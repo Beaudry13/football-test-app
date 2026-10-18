@@ -114,3 +114,34 @@ describe('from a quiz miss', () => {
     expect(rosterApi.addRosterMembers).not.toHaveBeenCalled();
   });
 });
+
+describe('concept rows say the problem, or that it is fine', () => {
+  it('a missed concept: what they chose instead and the next step; a clean one: Looks good', () => {
+    const weakest = { ...concept, concept_id: 9, concept_name: 'Run fits', players_missed_count: 5, player_miss_rate: 50 };
+    const missed = {
+      ...concept,
+      top_distractor: { option_text: 'Spill', count: 2, of_misses: 2 },
+    };
+    const clean = {
+      ...concept,
+      concept_id: 2,
+      concept_name: 'Leverage',
+      players_missed_count: 0,
+      players_missed: [],
+      player_miss_rate: 0,
+    };
+    at(
+      <WeakestConcepts
+        concepts={[weakest, missed, clean] as ConceptBreakdown[]}
+        quizId={9}
+        questions={[question, { ...question, id: 8, concept: { id: 2, name: 'Leverage', is_archived: false } } as Question]}
+      />,
+    );
+    const force = screen.getByText('Force / Contain').closest('li')!;
+    expect(within(force).getByText('Spill')).toBeInTheDocument();
+    expect(within(force).getByRole('button', { name: 'Teach' })).toBeInTheDocument();
+    const leverage = screen.getByText('Leverage').closest('li')!;
+    expect(within(leverage).getByText('✓ Looks good')).toBeInTheDocument();
+    expect(within(leverage).queryByRole('button', { name: 'Teach' })).toBeNull();
+  });
+});
