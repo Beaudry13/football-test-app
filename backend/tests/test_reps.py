@@ -1065,3 +1065,38 @@ class TestTheQuestionsAlreadyWrittenAboutAConcept:
         concept = _concept(client, headers, "Leverage")
         _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
         assert client.get(f"/api/concepts/{concept['id']}/questions", headers=stranger).status_code == 404
+
+
+class TestWhatAPlayerKnows:
+    """One player, by the concepts the coach tagged: HAS, WORK ON, and how each
+    changed - from the coach's own Reps (first tries) and quizzes (graded)."""
+
+    def test_missed_then_retested_correct_moves_to_has(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside, outside = _option(first, "Stay boundary"), _option(second, "Inside"), _option(second, "Outside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        before = client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=headers).get_json()
+        assert [c["name"] for c in before["work_on"]] == ["Motion adjustment"]
+        assert [c["name"] for c in before["has"]] == ["Leverage"]
+        assert before["work_on"][0]["last"]["question_ids"] == [first["id"]]
+
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        again = {o["option_text"]: o["id"] for o in copied["options"]}
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: again["Rotate down"]})
+
+        after = client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=headers).get_json()
+        assert after["work_on"] == []
+        assert sorted(c["name"] for c in after["has"]) == ["Leverage", "Motion adjustment"]
+        trail = next(r for r in after["recent"] if r["name"] == "Motion adjustment")["trail"]
+        assert [(t["outcome"], t["is_retest"]) for t in trail] == [("missed", False), ("got", True)]
+
+    def test_another_organizations_player_is_not_found(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        _rep_, _first, _second, ids, _code, _ = _built(client, headers, app, coach)
+        _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
+        assert client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=stranger).status_code == 404

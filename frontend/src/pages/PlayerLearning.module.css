@@ -1,0 +1,101 @@
+/* What a player knows: HAS, WORK ON, RECENT - one card, readable at a glance. */
+.learning {
+  margin: 1em 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+.title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 22px;
+}
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35em;
+}
+.label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted, #6b7280);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.has {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-success, #157f3b);
+  border: 1px solid currentColor;
+}
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.name {
+  font-weight: 800;
+}
+.where {
+  font-size: 13px;
+  color: var(--nb-text-muted, #6b7280);
+}
+.actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.action {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong, #c9ccd1);
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.trail {
+  font-size: 14px;
+}
+.arrow {
+  color: var(--nb-text-muted, #6b7280);
+}
+.got {
+  color: var(--color-success, #157f3b);
+  font-weight: 700;
+}
+.missed {
+  color: var(--color-danger, #b42318);
+  font-weight: 700;
+}
+.error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-danger, #b42318);
+}

@@ -40,6 +40,36 @@ export function getPlayerHistory(playerId: number): Promise<PlayerHistory> {
   return api.get<PlayerHistory>(`/players/${playerId}/history`);
 }
 
+/** One sitting on one concept: a quiz (graded) or a Rep (first try). */
+export interface LearningEvent {
+  concept_id: number;
+  outcome: 'missed' | 'got';
+  /** The decisions a "retest him" would send back (tap-an-answer only). */
+  question_ids: number[];
+  at: string | null;
+  quiz_id: number;
+  quiz_title: string;
+  kind: 'QUIZ' | 'REP';
+  is_retest: boolean;
+}
+
+export interface LearningConcept {
+  concept_id: number;
+  name: string;
+  last: LearningEvent;
+}
+
+/** What a player knows and what he is still missing, by the concepts you tagged. */
+export interface PlayerLearning {
+  has: LearningConcept[];
+  work_on: LearningConcept[];
+  recent: { concept_id: number; name: string; trail: LearningEvent[] }[];
+}
+
+export function getPlayerLearning(playerId: number): Promise<PlayerLearning> {
+  return api.get<PlayerLearning>(`/players/${playerId}/learning`);
+}
+
 export function updatePlayer(playerId: number, input: PlayerInput): Promise<Player> {
   return api.patch<Player>(`/players/${playerId}`, input);
 }
