@@ -1347,6 +1347,16 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                   <span className={styles.decisionPrompt}>{d.question_text}</span>
                 )}
                 {editing !== d.question_id && d.concept && <span className={styles.decisionConcept}>{d.concept.name}</span>}
+                {editing !== d.question_id && (d.presnap || targetsOf(d)) && (
+                  <span className={styles.decisionHow}>
+                    {[
+                      d.presnap ? `▶ Decides at ${MOMENT_LABEL[momentOf(d.presnap)].toLowerCase()}` : null,
+                      targetsOf(d) ? (d.tap_targets?.some((t) => t.zone) ? '◎ Tap the spot' : '◎ Tap the man') : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                )}
                 <ul className={styles.bars} hidden={editing === d.question_id}>
                   {d.choices.map((c) => (
                     <li key={c.option_id} className={c.is_correct ? styles.barRight : styles.bar}>

@@ -780,6 +780,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                       &#9654; Motion · {MOMENT_LABEL[momentOf(question.presnap)]}
                     </span>
                   )}
+                  {/* Answered by tapping the picture - a man, a gap, a spot. */}
+                  {question.tap_targets && question.tap_targets.length === question.options.length && (
+                    <span className={`${nb.badge} ${nb.badgeNeutral}`}>
+                      &#9678; Tap {question.tap_targets.some((t) => t.zone) ? 'the spot' : 'the man'}
+                    </span>
+                  )}
                   {/* State, not a warning. Stopping a question is a normal
                       authoring decision, so this reads as a label rather than
                       an error - and it is always visible, because a stopped

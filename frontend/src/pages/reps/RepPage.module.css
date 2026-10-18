@@ -57,6 +57,11 @@
   font-size: 13px;
   color: var(--nb-text-muted);
 }
+/* How a decision is played: when he decides, what he taps. */
+.decisionHow {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+}
 /* One player, every decision: open his row. */
 .playerOpen {
   font: inherit;
