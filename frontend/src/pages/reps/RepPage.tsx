@@ -864,7 +864,7 @@ function DecisionEditor({
     targets: decision.tap_targets ?? null,
     image: null,
   }));
-  const [checking, setChecking] = useState(false);
+  const [checking, setChecking] = useState<false | 'look' | 'before-save'>(false);
   const [prompt, setPrompt] = useState(decision.question_text);
   const [answers, setAnswers] = useState(decision.choices.map((c) => ({ text: c.text, correct: c.is_correct })));
   const [concept, setConcept] = useState(decision.concept?.name ?? '');
@@ -883,7 +883,12 @@ function DecisionEditor({
   const renameSpot = (k: number, text: string) =>
     setAnswers((list) => list.map((a, j) => (j === spotIndex(k) ? { ...a, text } : a)));
 
-  const save = async () => {
+  const save = async (spotsChecked = !draft.spotsSuggested) => {
+    // Suggested spots are saved only once the coach has seen and confirmed them.
+    if (!locked && !spotsChecked && targets) {
+      setChecking('before-save');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -937,6 +942,7 @@ function DecisionEditor({
                 playId={decision.motion_play_id}
                 canOpenPlay={canOpenPlay}
                 answers={filled.map((a) => a.text)}
+                firstMan={decision.subject_man?.id ?? null}
               />
             </Suspense>
           )}
@@ -989,9 +995,12 @@ function DecisionEditor({
         )}
         {/* WHAT THEY TAP - checked on the very picture the player gets. */}
         {targets ? (
-          <button type="button" className={styles.editAdd} onClick={() => setChecking(true)}>
-            See what they tap
-          </button>
+          <>
+            {draft.spotsSuggested && <span className={styles.editLocked}>PEIRA suggested these spots - check them.</span>}
+            <button type="button" className={styles.editAdd} onClick={() => setChecking('look')}>
+              See what they tap
+            </button>
+          </>
         ) : (
           !locked &&
           hasPicture &&
@@ -1000,8 +1009,8 @@ function DecisionEditor({
               type="button"
               className={styles.editAdd}
               onClick={() => {
-                setDraft((d) => ({ ...d, targets: spreadTargets(filled.length) }));
-                setChecking(true);
+                setDraft((d) => ({ ...d, targets: spreadTargets(filled.length), spotsSuggested: true }));
+                setChecking('look');
               }}
             >
               Put them on the field - players tap the spot
@@ -1019,8 +1028,14 @@ function DecisionEditor({
           onMove={locked ? undefined : moveSpot}
           onRename={locked ? undefined : renameSpot}
           locked={locked ? 'Players have this one, so its spots are locked.' : undefined}
+          lead={checking === 'before-save' ? 'Check the spots before you save.' : undefined}
           onClose={() => setChecking(false)}
-          onConfirm={() => setChecking(false)}
+          onConfirm={() => {
+            const goOn = checking === 'before-save';
+            setDraft((d) => ({ ...d, spotsSuggested: false }));
+            setChecking(false);
+            if (goOn) void save(true);
+          }}
         />
       )}
       <ConceptPicker

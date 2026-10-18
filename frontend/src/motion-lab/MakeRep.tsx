@@ -164,8 +164,9 @@ export function MakeRep({
   }, [play, answers, filledIdx, presnap, who, onField])
   const tapsSpots = !!targets?.some((t) => 'zone' in t && t.zone)
   /* The coach's "Looks right" holds for the spots he saw: the man, the
-     answers and the field toggle they were suggested from. */
-  const spotsSeen = `${who}|${onField}|${filled.join('|')}`
+     answers, the field toggle and where he put each spot - re-suggesting
+     them asks for his eyes again. */
+  const spotsSeen = `${who}|${onField}|${filled.join('|')}|${answers.map((a) => (a.spot ? `${a.spot.x},${a.spot.y}` : '-')).join(';')}`
   const [confirmed, setConfirmed] = useState<string | null>(null)
   const spotsOk = !tapsSpots || confirmed === spotsSeen
   const [checking, setChecking] = useState<null | 'look' | 'before-make'>(null)
@@ -392,6 +393,18 @@ export function MakeRep({
             <button type="button" className="make-q-link" onClick={() => setChecking('look')}>
               See what they tap
             </button>
+            {tapsSpots && answers.some((a) => a.spot) && (
+              <>
+                {' · '}
+                <button
+                  type="button"
+                  className="make-q-link"
+                  onClick={() => setAnswers((list) => list.map((a) => ({ text: a.text, correct: a.correct })))}
+                >
+                  Suggest spots again
+                </button>
+              </>
+            )}
             {onField && (
               <>
                 {' · '}

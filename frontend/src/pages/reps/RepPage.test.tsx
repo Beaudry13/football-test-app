@@ -588,6 +588,41 @@ describe('the tested man, his moment and his spots', () => {
     expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
+  it('after a man change, "suggest spots again" re-suggests his places - saved only once the coach confirms', async () => {
+    const gaps = {
+      choices: [
+        { option_id: 1, text: 'A gap', is_correct: true, count: 0, players: [] },
+        { option_id: 2, text: 'B gap', is_correct: false, count: 0, players: [] },
+      ],
+      tap_targets: [
+        { x: 0.45, y: 0.5, zone: true },
+        { x: 0.42, y: 0.5, zone: true },
+      ],
+    };
+    open(moving(gaps) as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    await screen.findByText(/Testing the/);
+    // Not offered until the man changes.
+    expect(screen.queryByRole('button', { name: /Suggest spots for/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Change man' }));
+    const pick = screen.getByLabelText('Tap the man to test');
+    pick.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1376, height: 720, right: 1376, bottom: 720, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.click(pick, { clientX: (38.5 + 2) * 24, clientY: (17 - 4.5) * 24 });
+    fireEvent.click(await screen.findByRole('button', { name: 'Suggest spots for the NB again' }));
+    expect(screen.getByText('PEIRA suggested these spots - check them.')).toBeInTheDocument();
+    // Save asks for the check first.
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }));
+    expect(check.getByText('Check the spots before you save.')).toBeInTheDocument();
+    expect(questionsApi.updateQuestion).not.toHaveBeenCalled();
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    // His side now: the NB stands right of the ball.
+    expect(body.tap_targets!.every((t) => t.zone && t.x > 0.5)).toBe(true);
+    expect(body.subject_man).toBe('D6');
+  });
+
   it('the coach checks and moves the spots right in the editor', async () => {
     const targets = [
       { x: 0.3, y: 0.5, zone: true },

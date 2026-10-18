@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { getMotionPlay } from '../api/motionLab'
 import type { TapTarget } from '../components/football/tapTargets'
-import { drawStill, manAt, menSpotsAt, redrawStill, ringOn, wordsFor, type Man } from './decisionMan'
+import { drawStill, manAt, menSpotsAt, redrawStill, ringOn, suggestPlaces, wordsFor, type Man } from './decisionMan'
 import type { Play } from './engine/play'
 import { MomentPicker } from './MomentPicker'
 import { drawPlay } from './playImage'
@@ -16,6 +16,8 @@ export interface PlayDraft {
   targets: TapTarget[] | null
   /** The man changed: the still, redrawn with his ring, to upload on save. */
   image: File | null
+  /** The spots are PEIRA's suggestion: the coach confirms them before they are saved. */
+  spotsSuggested?: boolean
 }
 
 /**
@@ -30,6 +32,7 @@ export default function DecisionPlay({
   playId,
   canOpenPlay,
   answers,
+  firstMan,
 }: {
   draft: PlayDraft
   onChange: (next: PlayDraft) => void
@@ -37,6 +40,8 @@ export default function DecisionPlay({
   /** Motion Lab is open to this coach, so the play itself can be read. */
   canOpenPlay: boolean
   answers: string[]
+  /** The man the decision tested when editing began - "the man changed" is against him. */
+  firstMan: string | null
 }) {
   const [play, setPlay] = useState<Play | null>(null)
   const [picking, setPicking] = useState(false)
@@ -82,6 +87,15 @@ export default function DecisionPlay({
       .catch(() => undefined)
   }
 
+  /* SUGGEST SPOTS AGAIN - offered once the man has changed and the decision
+     is answered by places: PEIRA's geometry for HIM, replacing the spots only
+     because the coach asked, and still his to confirm. */
+  const suggested = useMemo(
+    () => (draft.man && draft.targets?.some((t) => t.zone) ? suggestPlaces(draft.clip, play, answers, draft.man.id) : null),
+    [draft.man, draft.targets, draft.clip, play, answers],
+  )
+  const manChanged = !!draft.man && draft.man.id !== firstMan
+
   const moment: DecisionMoment = draft.clip?.freeze ?? 'snap'
   const setMoment = (m: DecisionMoment) => {
     if (!draft.clip) return
@@ -117,6 +131,18 @@ export default function DecisionPlay({
             onClick={pick}
           />
         </>
+      )}
+      {manChanged && suggested && suggested.length === draft.targets?.length && (
+        <div className={styles.man}>
+          <span className={styles.hint}>His spots are where you put them for the last man.</span>
+          <button
+            type="button"
+            className={styles.link}
+            onClick={() => onChange({ ...draft, targets: suggested, spotsSuggested: true })}
+          >
+            Suggest spots for the {draft.man?.label} again
+          </button>
+        </div>
       )}
       {draft.clip && <MomentPicker moments={clipMoments(draft.clip, play)} value={moment} onChange={setMoment} clip={draft.clip} />}
     </div>

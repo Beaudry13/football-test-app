@@ -11,7 +11,7 @@ import type { TapTarget } from '../components/football/tapTargets'
 import type { Play } from './engine/play'
 import { IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
 import { px } from './playImageLayout'
-import { roleName, tapTargets } from './playRep'
+import { fieldSpots, roleName, tapTargets } from './playRep'
 import { freezeSpots, hasPresnapMotion, presnapFrame, presnapTimeline, type PresnapClip } from './presnap'
 
 export interface Man {
@@ -70,6 +70,16 @@ export function menSpotsAt(clip: PresnapClip, answers: string[]): TapTarget[] | 
     const at = spots.get(p.id) ?? p
     return { x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT }
   })
+}
+
+/** PEIRA's SUGGESTED places for this man (his gaps, his drops) - geometry
+ *  from the alignment, a starting point for the coach, never football truth.
+ *  Null when the answers are not places PEIRA knows. */
+export function suggestPlaces(clip: PresnapClip | null, play: Play | null, answers: string[], manId: string | null): TapTarget[] | null {
+  const still = stillOf(clip, play)
+  if (!still) return null
+  const spots = fieldSpots({ ...still, situation: clip?.situation ?? still.situation } as Play, answers, manId)
+  return spots ? spots.map((at) => ({ x: px(at).x / IMAGE_WIDTH, y: px(at).y / IMAGE_HEIGHT, zone: true })) : null
 }
 
 /** The man drawn nearest a point in the still (picture fractions), or null. */

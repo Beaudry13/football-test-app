@@ -186,6 +186,25 @@ describe('Make a rep from a play', () => {
     expect(input.tap_targets![0].x).toBeLessThan(px({ x: 53.33 / 2, y: 0 }).x / 1376)
   })
 
+  it('spots the coach moved stay put - until he asks PEIRA to suggest them again', async () => {
+    open()
+    fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Your drop?' }))
+    expect(screen.queryByRole('button', { name: 'Suggest spots again' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'See what they tap' }))
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
+    const surface = document.querySelector('[data-tap-surface]') as HTMLElement
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) })
+    const flat = check.getByRole('button', { name: 'Move Flat' })
+    fireEvent.pointerDown(flat, { pointerId: 1 })
+    fireEvent.pointerMove(flat, { pointerId: 1, clientX: 900, clientY: 400 })
+    fireEvent.pointerUp(flat, { pointerId: 1 })
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest spots again' }))
+    // His spots are suggestions again - so they need his eyes again.
+    expect(screen.getByText(/PEIRA suggested where these spots are - check them/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Suggest spots again' })).toBeNull()
+  })
+
   it('answers that name no man or place can still be put on the field - the coach places every spot', async () => {
     open()
     type('The situation', 'Where do you fit?')
