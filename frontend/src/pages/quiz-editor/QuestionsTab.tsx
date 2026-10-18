@@ -612,6 +612,9 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                  has no annotation canvas, and a clip has no fixed frame to
                  draw on. */
               existingImageUrl={question.image?.image_url ?? null}
+              existingTapTargets={question.tap_targets ?? null}
+              existingPresnap={question.presnap ?? null}
+              existingImageHasMarks={(question.image?.annotations?.length ?? 0) > 0}
               annotateHref={
                 question.image ? `/quizzes/${quiz.id}/questions/${question.id}/annotate` : null
               }

@@ -14,6 +14,8 @@ import { RegionDraw, type NormalisedRect } from '../documents/RegionDraw';
 import { ClipRecorder, type RecordedClip } from '../../components/clip/ClipRecorder';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionEditor.module.css';
+import { TapCheck } from '../../components/football/TapCheck';
+import { spreadTargets, type TapTarget } from '../../components/football/tapTargets';
 
 const TRUE_FALSE_OPTIONS: QuestionOptionInput[] = [
   { option_text: 'True', is_correct_answer: true },
@@ -79,6 +81,12 @@ interface QuestionEditorProps {
    *  which owns the canvas, the persisted annotations and the saving. Nothing
    *  about annotation state lives in this form. */
   annotateHref?: string | null;
+  /** The spots players tap on this question's picture, one per answer, if any. */
+  existingTapTargets?: TapTarget[] | null;
+  /** The question's moving picture, when it has one (Motion Lab). */
+  existingPresnap?: Record<string, unknown> | null;
+  /** The coach drew on the picture: spots cannot sit over a marked-up picture. */
+  existingImageHasMarks?: boolean;
 }
 
 /** The image types Peira accepts, in ONE place.
@@ -137,7 +145,17 @@ export function QuestionEditor({
   existingImageUrl = null,
   annotateHref = null,
   onStopSending = null,
+  existingTapTargets = null,
+  existingPresnap = null,
+  existingImageHasMarks = false,
 }: QuestionEditorProps) {
+  /* TAP ANSWERS ON THE PICTURE - the coach's own spots, one per answer, on a
+     photo or a play picture. Nothing is read from the photo: spots start in a
+     plain row and he drags, names, tries and confirms them (TapCheck). Once
+     players have the question its spots are locked, like its right answer. */
+  const [tapTargets, setTapTargets] = useState<TapTarget[] | null>(existingTapTargets);
+  const [spotsToConfirm, setSpotsToConfirm] = useState(false);
+  const [checkingSpots, setCheckingSpots] = useState<false | 'look' | 'before-save'>(false);
   const [questionText, setQuestionText] = useState(initialText);
   /** "Select all that apply". Multiple choice only - see the control below. */
   const [allowsMultiple, setAllowsMultiple] = useState(initialAllowsMultiple);
@@ -150,6 +168,20 @@ export function QuestionEditor({
   /** A refusal Peira can explain, as opposed to an ordinary failure. */
   const [blocked, setBlocked] = useState<{ why: string; instead: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  /** Tap answers fit one-answer multiple choice on a picture without the coach's markings. */
+  const tapsAllowed =
+    questionType === 'multiple_choice' && !allowsMultiple && !!existingImageUrl && !existingImageHasMarks;
+  /** One spot per answer: a new answer gets a spot in the row, a removed one loses its. */
+  const syncedTargets: TapTarget[] = tapTargets
+    ? options.map((_, i) => tapTargets[i] ?? spreadTargets(options.length)[i])
+    : [];
+  const openSpots = (why: 'look' | 'before-save') => {
+    if (tapTargets && tapTargets.length !== options.length) {
+      setTapTargets(syncedTargets);
+      setSpotsToConfirm(true);
+    }
+    setCheckingSpots(why);
+  };
   // The file lives HERE, not on the server, until the coach saves. That is
   // what makes Cancel leave nothing behind: nothing was ever created.
   const [image, setImage] = useState<File | null>(null);
@@ -423,9 +455,13 @@ export function QuestionEditor({
     setOptions((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function handleSubmit(event: FormEvent | null, spotsChecked = !spotsToConfirm) {
+    event?.preventDefault();
     setError(null);
+    if (!spotsChecked && tapTargets) {
+      setCheckingSpots('before-save');
+      return;
+    }
     // The coach may have undone whatever was refused; let the server decide
     // again rather than leaving last attempt's explanation on screen.
     setBlocked(null);
@@ -454,6 +490,10 @@ export function QuestionEditor({
           // The page the coach chose, and the one thing they hid on it. Both
           // omitted entirely when no playbook was used, so an ordinary
           // question's payload is byte-for-byte what it was before.
+          // Spots go only with exactly one per answer, and only when they changed.
+          ...(tapsAllowed && JSON.stringify(tapTargets) !== JSON.stringify(existingTapTargets ?? null)
+            ? { tap_targets: tapTargets && tapTargets.length === options.length ? tapTargets : null }
+            : {}),
           ...(playbookPage
             ? {
                 document_page_id: playbookPage.page.id,
@@ -816,8 +856,81 @@ export function QuestionEditor({
               Opens the drawing canvas for this question, with everything you have already
               drawn on it.
             </p>
+            {tapsAllowed && (
+              <div className={styles.imageActions}>
+                {tapTargets ? (
+                  <>
+                    <span className={styles.imageHint}>
+                      {spotsToConfirm ? 'Spots placed - check them before you save.' : 'Players tap the picture.'}
+                    </span>
+                    <button type="button" className={nb.btnSm} onClick={() => openSpots('look')}>
+                      See what they tap
+                    </button>
+                    {!hasBeenDelivered && (
+                      <button
+                        type="button"
+                        className={nb.btnSm}
+                        onClick={() => {
+                          setTapTargets(null);
+                          setSpotsToConfirm(false);
+                        }}
+                      >
+                        Buttons only
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  !hasBeenDelivered && (
+                    <button
+                      type="button"
+                      className={nb.btnSm}
+                      disabled={options.length < 2}
+                      onClick={() => {
+                        setTapTargets(spreadTargets(options.length));
+                        setSpotsToConfirm(true);
+                        setCheckingSpots('look');
+                      }}
+                    >
+                      Players tap the picture
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+            {existingImageHasMarks && questionType === 'multiple_choice' && (
+              <p className={styles.imageHint}>Tap answers need a picture without your markings.</p>
+            )}
           </div>
         </div>
+      )}
+      {checkingSpots && tapTargets && existingImageUrl && (
+        <TapCheck
+          image={{ image_url: existingImageUrl }}
+          presnap={existingPresnap}
+          targets={syncedTargets}
+          answers={options.map((o) => o.option_text || '(no words yet)')}
+          rightIndex={options.findIndex((o) => o.is_correct_answer)}
+          onMove={
+            hasBeenDelivered
+              ? undefined
+              : (i, at) => setTapTargets(syncedTargets.map((t, j) => (j === i ? { ...t, ...at } : t)))
+          }
+          onRename={
+            hasBeenDelivered
+              ? undefined
+              : (i, text) => setOptions((prev) => prev.map((o, j) => (j === i ? { ...o, option_text: text } : o)))
+          }
+          locked={hasBeenDelivered ? 'Players have this question, so its spots are locked.' : undefined}
+          lead={checkingSpots === 'before-save' ? 'Check the spots before you save.' : undefined}
+          onClose={() => setCheckingSpots(false)}
+          onConfirm={() => {
+            const goOn = checkingSpots === 'before-save';
+            setTapTargets(syncedTargets);
+            setSpotsToConfirm(false);
+            setCheckingSpots(false);
+            if (goOn) void handleSubmit(null, true);
+          }}
+        />
       )}
 
       {allowImage && (
