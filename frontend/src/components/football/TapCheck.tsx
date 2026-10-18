@@ -29,6 +29,7 @@ export function TapCheck({
   onClose,
   lead,
   locked,
+  marker,
 }: {
   image?: { image_url: string } | null;
   presnap?: PresnapClip | Record<string, unknown> | null;
@@ -45,6 +46,8 @@ export function TapCheck({
   lead?: string;
   /** Why the spots cannot move (players have them). */
   locked?: string;
+  /** The coach's "you are this player" ring, as the player will see it. */
+  marker?: { x: number; y: number; r: number } | null;
 }) {
   const places = targets.map((t, i) => (t.zone ? i : -1)).filter((i) => i >= 0);
   const canMove = !!onMove && places.length > 0;
@@ -85,6 +88,7 @@ export function TapCheck({
           image={image}
           presnap={presnap}
           drawn={drawn}
+          marker={marker}
           still
           targets={targets}
           options={options}

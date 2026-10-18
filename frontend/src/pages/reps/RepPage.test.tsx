@@ -775,3 +775,38 @@ describe('a Rep made for the players who missed a quiz question', () => {
     expect(rosterApi.addRosterMembers).not.toHaveBeenCalled();
   });
 });
+
+describe('a Rep decision on a photo', () => {
+  it('the coach rings the player himself and says who he is - saved with the decision', async () => {
+    vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);
+    vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 3, name: 'Motion adjustment', is_archived: false }]);
+    const image = { id: 1, question_id: 11, image_url: '/uploads/photo.png', annotations: [], canvas_width: null, updated_at: '' };
+    open({ ...RESULTS, decisions: [{ ...RESULTS.decisions[0], image, presnap: null, delivered: false }] } as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark the player' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Mark the player' }));
+    const surface = document.querySelector('[data-marker-surface]') as HTMLElement;
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 300, clientY: 200 });
+    fireEvent.pointerUp(surface, { pointerId: 1 });
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Who he is' }), { target: { value: 'Field safety' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
+    expect(screen.getByText("Ringed: you're the Field safety.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect(body).toMatchObject({ subject_marker: { x: 0.3, y: 0.4, r: 0.05 }, subject_role: 'Field safety' });
+  });
+
+  it('a decision players have keeps its ring', async () => {
+    const image = { id: 1, question_id: 11, image_url: '/uploads/photo.png', annotations: [], canvas_width: null, updated_at: '' };
+    open({
+      ...RESULTS,
+      decisions: [{ ...RESULTS.decisions[0], image, presnap: null, delivered: true, subject_marker: { x: 0.3, y: 0.4, r: 0.05 } }],
+    } as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    expect(screen.queryByRole('button', { name: 'Mark the player' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Move the ring' })).toBeNull();
+    expect(screen.getByText(/who it tests, when they decide and where they tap are locked/)).toBeInTheDocument();
+  });
+});

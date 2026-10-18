@@ -33,6 +33,8 @@ import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import { TapCheck } from '../../components/football/TapCheck';
+import { MarkerEditor } from '../../components/football/MarkerEditor';
+import type { Marker } from '../../components/football/tapTargets';
 import { TapResult } from '../../components/football/TapResult';
 import type { PresnapClip } from '../../motion-lab/presnap';
 import type { PlayDraft } from '../../motion-lab/DecisionPlay';
@@ -983,6 +985,11 @@ function DecisionEditor({
     image: null,
   }));
   const [checking, setChecking] = useState<false | 'look' | 'before-save'>(false);
+  /* A PHOTO DECISION'S TESTED MAN: the coach rings him on the picture himself
+     (the quiz editor's MarkerEditor) - a still with no motion to ring him. */
+  const [marker, setMarker] = useState<Marker | null>(decision.subject_marker ?? null);
+  const [marking, setMarking] = useState(false);
+  const canRing = !locked && !!decision.image && !decision.presnap;
   const [prompt, setPrompt] = useState(decision.question_text);
   const [answers, setAnswers] = useState(decision.choices.map((c) => ({ text: c.text, correct: c.is_correct })));
   const [concept, setConcept] = useState(decision.concept?.name ?? '');
@@ -1024,6 +1031,10 @@ function DecisionEditor({
         if (!same(draft.targets, decision.tap_targets) && (!draft.targets || draft.targets.length === sentCount)) {
           play.tap_targets = draft.targets;
         }
+        if (canRing && !same(marker, decision.subject_marker)) play.subject_marker = marker;
+        if (canRing && (draft.role ?? '') !== (decision.subject_role ?? '') && play.subject_man === undefined) {
+          play.subject_role = draft.role || null;
+        }
       }
       await updateQuestion(quizId, decision.question_id, {
         question_text: prompt.trim(),
@@ -1045,8 +1056,33 @@ function DecisionEditor({
 
   return (
     <div className={styles.editor} role="group" aria-label={`Edit decision ${decision.number}`}>
+      {canRing && (
+        <div className={styles.editField}>
+          <span>
+            {marker
+              ? `Ringed${draft.role ? `: you're the ${draft.role}` : ''}.`
+              : 'Who is he in this picture? Ring him so the picture says it.'}
+          </span>
+          <button type="button" className={styles.editAdd} onClick={() => setMarking(true)}>
+            {marker ? 'Move the ring' : 'Mark the player'}
+          </button>
+        </div>
+      )}
+      {marking && decision.image && (
+        <MarkerEditor
+          imageUrl={decision.image.image_url}
+          marker={marker}
+          role={draft.role ?? ''}
+          onClose={() => setMarking(false)}
+          onDone={(next, words) => {
+            setMarker(next);
+            setDraft((d) => ({ ...d, role: words.trim() || null }));
+            setMarking(false);
+          }}
+        />
+      )}
       {locked
-        ? (fromPlay || decision.tap_targets) && (
+        ? (fromPlay || decision.tap_targets || decision.subject_marker) && (
             <p className={styles.editLocked}>
               Players have this one, so who it tests, when they decide and where they tap are locked. Make a variation
               to test something different.
@@ -1140,6 +1176,7 @@ function DecisionEditor({
         <TapCheck
           image={decision.image}
           presnap={draft.clip}
+          marker={draft.clip ? null : marker}
           targets={targets}
           answers={(locked ? answers : filled).map((a) => a.text)}
           rightIndex={(locked ? answers : filled).findIndex((a) => a.correct)}
