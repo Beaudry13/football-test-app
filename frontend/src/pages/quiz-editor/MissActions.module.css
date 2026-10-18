@@ -37,6 +37,43 @@
 .retestLink {
   font-weight: 700;
 }
+/* A quiet in-line action: Pick questions..., Open the play. */
+.link {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-accent, #b8860b);
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* Pick questions: what you already have on the concept, checked into one rep. */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-basis: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-strong, #c9ccd1);
+  border-radius: 8px;
+}
+.pickerNote {
+  font-size: 13px;
+  color: var(--nb-text-muted, #6b7280);
+}
+.pickerRow {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 14px;
+}
+.pickerFrom {
+  color: var(--nb-text-muted, #6b7280);
+  font-size: 12px;
+}
 .error {
   font-size: 13px;
   color: var(--color-danger, #b42318);

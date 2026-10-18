@@ -111,6 +111,7 @@ export function WeakestConcepts({
         title={concept.concept_name ?? 'General'}
         repTitle={`${concept.concept_name ?? 'General'} - Rep`}
         playerIds={concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null)}
+        conceptId={concept.concept_id}
         extraAction={<TeachRetest quizId={quizId} concept={concept} />}
       />
     );

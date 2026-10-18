@@ -2,7 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn() }));
+vi.mock('../../api/reps', () => ({ makeRepFromQuiz: vi.fn(), addDecisions: vi.fn() }));
+vi.mock('../../api/concepts', () => ({ listConceptQuestions: vi.fn() }));
+import * as conceptsApi from '../../api/concepts';
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
 vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
 import * as retestsApi from '../../api/retests';
@@ -229,5 +231,39 @@ describe('retest one question - no concept needed - and did it stick?', () => {
     await waitFor(() =>
       expect(retestsApi.createRetest).toHaveBeenCalledWith(31, { question_ids: [70], player_ids: [42], player_names: [] }),
     );
+  });
+});
+
+describe('a targeted rep from a concept - from what is already written', () => {
+  it('Pick questions: this miss checked, your other quizzes and reps offered - one rep, those players on it', async () => {
+    vi.mocked(conceptsApi.listConceptQuestions).mockResolvedValue([
+      { question_id: 7, quiz_id: 9, quiz_title: 'Week 3', quiz_kind: 'QUIZ', question_text: 'Who has force on toss?', question_type: 'multiple_choice', has_picture: true },
+      { question_id: 50, quiz_id: 12, quiz_title: 'Week 1', quiz_kind: 'QUIZ', question_text: 'Force on sweep?', question_type: 'multiple_choice', has_picture: true },
+      { question_id: 60, quiz_id: 14, quiz_title: 'Toss - Rep', quiz_kind: 'REP', question_text: 'Your fit on toss?', question_type: 'multiple_choice', has_picture: false },
+    ]);
+    vi.mocked(repsApi.addDecisions).mockResolvedValue({} as never);
+    at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pick questions…' }));
+    const picker = within(await screen.findByRole('group', { name: 'Questions for the rep' }));
+    expect(picker.getByRole('checkbox', { name: /Who has force on toss\?/ })).toBeChecked();
+    expect(picker.getByText(/Toss - Rep \(rep\)/)).toBeInTheDocument();
+    fireEvent.click(picker.getByRole('checkbox', { name: /Force on sweep\?/ }));
+    fireEvent.click(picker.getByRole('button', { name: 'Make a rep of 2' }));
+    expect(await screen.findByText('the new rep')).toBeInTheDocument();
+    expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(9, [7], 'Force / Contain - Rep');
+    expect(repsApi.addDecisions).toHaveBeenCalledWith(55, 12, [50]);
+    expect(rosterApi.addRosterMembers).toHaveBeenCalledWith(55, [41, 42]);
+  });
+
+  it('several missed questions on one concept: one tap makes a rep of all of them', () => {
+    const second = { ...question, id: 8, question_text: 'Who spills?' } as Question;
+    at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question, second]} />);
+    expect(screen.getByRole('button', { name: 'Make a rep of all 2 for the 2' })).toBeInTheDocument();
+  });
+
+  it('a miss from Motion Lab opens its play in one tap', () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
+    at(<MissActions quizId={9} questions={[{ ...question, motion_play_id: 14 } as Question]} title="Q3" repTitle="Q3 - Rep" />);
+    expect(screen.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
   });
 });

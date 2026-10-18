@@ -35,6 +35,22 @@ export interface ConceptDuplicateGroup {
   suggested_keep: number;
 }
 
+/** A football problem already written about a concept, in one of your quizzes or Reps. */
+export interface ConceptQuestion {
+  question_id: number;
+  quiz_id: number;
+  quiz_title: string;
+  quiz_kind: string;
+  question_text: string;
+  question_type: string;
+  has_picture: boolean;
+}
+
+/** Your own questions on this concept, across quizzes and Reps (stopped ones left out). */
+export function listConceptQuestions(conceptId: number): Promise<ConceptQuestion[]> {
+  return api.get<ConceptQuestion[]>(`/concepts/${conceptId}/questions`);
+}
+
 export function getConceptDuplicates(): Promise<ConceptDuplicateGroup[]> {
   return api.get<ConceptDuplicateGroup[]>('/concepts/duplicates');
 }

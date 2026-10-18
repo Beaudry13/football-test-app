@@ -1034,3 +1034,34 @@ class TestTheRingOnAPhoto:
         )
         assert moved.status_code == 422
         assert moved.get_json()["reason"] == "delivered_locked"
+
+
+class TestTheQuestionsAlreadyWrittenAboutAConcept:
+    """For a targeted Rep built from what exists: the coach's own questions on
+    a concept, across his quizzes and Reps - never a teammate's, never a
+    stopped one."""
+
+    def test_own_questions_on_the_concept_across_quizzes_and_reps(self, client, register_coach, invite_teammate):
+        coach, _, headers = register_coach()
+        concept = _concept(client, headers, "Motion adjustment")
+        quiz = client.post("/api/quizzes", json={"title": "Week 3"}, headers=headers).get_json()
+        rep = _rep(client, headers)
+        on_quiz = _decision(client, headers, quiz["id"], "Your check?", ["Rotate", "Stay"], concept=concept)
+        on_rep = _decision(client, headers, rep["id"], "Who has #3?", ["Me", "Corner"], concept=concept)
+        _decision(client, headers, quiz["id"], "Untagged one", ["A", "B"])
+        stopped = _decision(client, headers, quiz["id"], "Stopped one", ["A", "B"], concept=concept)
+        client.post(f"/api/quizzes/{quiz['id']}/questions/{stopped['id']}/retire", headers=headers)
+        _, _, teammate = invite_teammate(headers)
+        theirs = client.post("/api/quizzes", json={"title": "Theirs"}, headers=teammate).get_json()
+        _decision(client, teammate, theirs["id"], "Their check?", ["A", "B"], concept=concept)
+
+        found = client.get(f"/api/concepts/{concept['id']}/questions", headers=headers).get_json()
+        assert sorted(f["question_id"] for f in found) == sorted([on_quiz["id"], on_rep["id"]])
+        kinds = {f["question_id"]: f["quiz_kind"] for f in found}
+        assert (kinds[on_quiz["id"]], kinds[on_rep["id"]]) == ("QUIZ", "REP")
+
+    def test_another_organizations_concept_is_not_found(self, client, register_coach):
+        _, _, headers = register_coach()
+        concept = _concept(client, headers, "Leverage")
+        _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
+        assert client.get(f"/api/concepts/{concept['id']}/questions", headers=stranger).status_code == 404
