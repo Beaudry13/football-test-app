@@ -746,3 +746,32 @@ describe('the right spot, in the results', () => {
     expect(card.getByText(/Stay boundary 3 \(27%\)/)).toBeInTheDocument();
   });
 });
+
+describe('a Rep made for the players who missed a quiz question', () => {
+  it('goes to the ones already on it - no position picked for the coach', async () => {
+    vi.mocked(playersApi.listPlayers).mockResolvedValue([
+      { id: 41, first_name: 'Ty', last_name: 'Adams', position: 'CB', is_active: true },
+      { id: 43, first_name: 'Al', last_name: 'Cole', position: 'CB', is_active: true },
+    ] as never);
+    const made = {
+      ...RESULTS,
+      players: [],
+      audience: {
+        label: null,
+        invited: 2,
+        code: null,
+        people: [
+          { player_id: 41, name: 'Ty Adams', position: 'CB' },
+          { player_id: 42, name: 'Bo Brown', position: 'CB' },
+        ],
+      },
+    };
+    open(made as unknown as RepResults);
+    expect(await screen.findByText('Goes to the 2 on it: Ty Adams, Bo Brown')).toBeInTheDocument();
+    const chips = within(await screen.findByRole('group', { name: 'Positions' }));
+    expect(chips.getByRole('button', { name: /Corners/ })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Send rep' }));
+    await waitFor(() => expect(codesApi.activateQuiz).toHaveBeenCalledWith(5, [], 'PRACTICE'));
+    expect(rosterApi.addRosterMembers).not.toHaveBeenCalled();
+  });
+});

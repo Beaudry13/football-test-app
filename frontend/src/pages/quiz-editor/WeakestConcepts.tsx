@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getErrorMessage, resolveMediaUrl } from '../../api/client';
+import { getErrorMessage } from '../../api/client';
 import { createRetest } from '../../api/retests';
-import type { ConceptBreakdown, Question } from '../../api/types';
-import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
+import type { ConceptBreakdown, Question, QuestionBreakdown } from '../../api/types';
+import type { TeachSlide } from '../../components/teach/TeachView';
+import { MissActions } from './MissActions';
+import { quizTeachSlides } from './quizTeach';
 import { RetestAction } from './RetestAction';
 import { playerLabels } from '../../utils/playerDisplayLabel';
 import styles from './WeakestConcepts.module.css';
@@ -22,31 +24,23 @@ import styles from './WeakestConcepts.module.css';
  * this file owns only the wording, so a coach reading "60% missed this" is
  * never being told something the sample cannot support.
  */
-/** TEACH: a concept's questions as the meeting-room view - picture, the
- *  coach's right answer, the reason, and what the misses chose when that is
- *  one question's story. Empty when the quiz's questions are not to hand. */
-function teachSlides(concept: ConceptBreakdown, questions: Question[]): TeachSlide[] {
-  // Who the player is and the Motion Lab play, when a question carries them
-  // (Situational Rep sets both); read without depending on that feature.
-  type Taught = Question & { subject_role?: string | null; motion_play_id?: number | null };
-  const inConcept = questions.filter((q) => q.concept?.id === concept.concept_id && !q.is_retired) as Taught[];
-  return inConcept.map((q) => ({
-    key: q.id,
-    imageUrl: q.image ? resolveMediaUrl(q.image.image_url) : null,
-    role: q.subject_role ?? null,
-    prompt: q.question_text,
-    right:
-      q.question_type === 'fill_blank'
-        ? (q.expected_answers ?? [])
-        : q.options.filter((o) => o.is_correct_answer).map((o) => o.option_text),
-    why: q.answer_explanation ?? null,
-    // The distractor is the concept's, not a question's: name it only when
-    // the concept is one question, so it cannot be pinned on the wrong one.
+/** TEACH: a concept's questions as the meeting-room view (quizTeach) - the
+ *  football picture, the coach's right answer, the reason, and what the misses
+ *  chose: per question from the counts when Results has them, else the
+ *  concept's own distractor when the concept is one question (so it cannot be
+ *  pinned on the wrong one). Empty when the quiz's questions are not to hand. */
+function conceptQuestions(concept: ConceptBreakdown, questions: Question[]): Question[] {
+  return questions.filter((q) => q.concept?.id === concept.concept_id && !q.is_retired);
+}
+function teachSlides(concept: ConceptBreakdown, questions: Question[], breakdown: QuestionBreakdown[] = []): TeachSlide[] {
+  const inConcept = conceptQuestions(concept, questions);
+  return quizTeachSlides(inConcept, breakdown).map((slide) => ({
+    ...slide,
     wrong:
-      inConcept.length === 1 && concept.top_distractor
+      slide.wrong ??
+      (inConcept.length === 1 && concept.top_distractor
         ? { text: concept.top_distractor.option_text, count: concept.top_distractor.count }
-        : null,
-    motionPlayId: q.motion_play_id ?? null,
+        : null),
   }));
 }
 
@@ -88,14 +82,34 @@ export function WeakestConcepts({
   concepts,
   quizId,
   questions = [],
+  breakdown = [],
 }: {
   concepts: ConceptBreakdown[];
   quizId: number;
   /** The quiz's own questions (coach payload), so Teach can show them. */
   questions?: Question[];
+  /** Results' per-question breakdown: what the room chose on each question. */
+  breakdown?: QuestionBreakdown[];
 }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
-  const [teaching, setTeaching] = useState<ConceptBreakdown | null>(null);
+  /** Teach it / Make a rep for the ones who missed it - the loop a Rep has. */
+  const missActions = (concept: ConceptBreakdown, label: string) => {
+    const slides = teachSlides(concept, questions, breakdown);
+    if (slides.length === 0) return null;
+    return (
+      <MissActions
+        quizId={quizId}
+        questions={conceptQuestions(concept, questions)}
+        breakdown={breakdown}
+        slides={slides}
+        teachLabel={label}
+        title={concept.concept_name ?? 'General'}
+        repTitle={`${concept.concept_name ?? 'General'} - Rep`}
+        playerIds={concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null)}
+        extraAction={<TeachRetest quizId={quizId} concept={concept} />}
+      />
+    );
+  };
   /* Nothing tagged, or nothing graded yet: render nothing at all and let
      Results be what it was. An empty "Weakest concept" panel would be a
      permanent reminder of a feature rather than an answer - and every quiz
@@ -251,12 +265,8 @@ export function WeakestConcepts({
             itself. Saying why is more useful than a disabled control. */}
         {/* TEACH, beside Retest: the questions they missed, big, with the
             right answer and the reason - for the meeting room. */}
-        {teachSlides(weakest, questions).length > 0 && (
-          <div className={styles.teachRow}>
-            <button type="button" className={styles.teachButton} onClick={() => setTeaching(weakest)}>
-              Teach it
-            </button>
-          </div>
+        {teachSlides(weakest, questions, breakdown).length > 0 && (
+          <div className={styles.teachRow}>{missActions(weakest, 'Teach it')}</div>
         )}
         {weakest.retestable_question_count > 0 ? (
           <RetestAction
@@ -285,22 +295,10 @@ export function WeakestConcepts({
                 {concept.players_missed_count} of {concept.players_responded_count} players
                 {!concept.has_enough_responses && <span className={styles.thin}> (thin)</span>}
               </span>
-              {teachSlides(concept, questions).length > 0 && (
-                <button type="button" className={styles.teachLink} onClick={() => setTeaching(concept)}>
-                  Teach
-                </button>
-              )}
+              {missActions(concept, 'Teach')}
             </li>
           ))}
         </ul>
-      )}
-      {teaching && (
-        <TeachView
-          title={teaching.concept_name ?? 'General'}
-          slides={teachSlides(teaching, questions)}
-          onClose={() => setTeaching(null)}
-          action={<TeachRetest quizId={quizId} concept={teaching} />}
-        />
       )}
     </section>
   );

@@ -21,6 +21,10 @@
   color: var(--nb-text-muted);
 }
 
+/* A missed question's actions, under its text. */
+.rowActions {
+  margin-top: 4px;
+}
 /* WHERE THEY TAPPED: one picture per tap question. */
 .teamTaps {
   display: flex;

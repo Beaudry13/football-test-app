@@ -32,6 +32,8 @@ import styles from './ResultsTab.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { TapResult } from '../../components/football/TapResult';
+import { MissActions } from './MissActions';
+import { teachable } from './quizTeach';
 import { usableTargets } from '../../components/football/tapTargets';
 
 function slugify(title: string): string {
@@ -196,6 +198,11 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
      Still the server's own per-question counts, merely filtered: the number
      stays something Peira computed rather than something this screen derived,
      and the filter is the same rule the grading queue applies. */
+  /** The live question behind a breakdown row, when it has football to teach from. */
+  const liveTeachable = (questionId: number) => {
+    const question = (quiz.questions ?? []).find((q) => q.id === questionId);
+    return question && teachable(question) ? question : null;
+  };
   /** One-answer questions players answered by tapping, with where they went. */
   const teamTaps = (dashboard?.question_breakdown ?? [])
     .filter((row) => row.answered_count > 0 && row.option_counts)
@@ -241,7 +248,12 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               concept is dropped; ANY OTHER concept is kept, because a retest
               that exposes a second weakness is telling the coach something new
               and suppressing that would be worse than repeating the first. */}
-          <WeakestConcepts concepts={teachNextConcepts} quizId={quiz.id} questions={quiz.questions ?? []} />
+          <WeakestConcepts
+            concepts={teachNextConcepts}
+            quizId={quiz.id}
+            questions={quiz.questions ?? []}
+            breakdown={dashboard?.question_breakdown ?? []}
+          />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than
               inside them. Only when there is something to do: an "0 answers
@@ -335,6 +347,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                       <span className={styles.questionNumber}>Q{row.question_number}</span>
                       {row.question_text}
                     </div>
+                    {row.incorrect_count > 0 && (
+                      <MissActions
+                        quizId={quiz.id}
+                        questions={[question]}
+                        breakdown={dashboard.question_breakdown}
+                        title={`Q${row.question_number}`}
+                        repTitle={`${quiz.title} - Q${row.question_number}`}
+                      />
+                    )}
                     <TapResult
                       image={question.image}
                       presnap={question.presnap}
@@ -375,6 +396,18 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                             "Q12", not to compete with the text. */}
                         <span className={styles.questionNumber}>Q{q.question_number}</span>
                         {q.question_text}
+                        {/* A miss with football to show: Teach it, or make it a Rep. */}
+                        {q.incorrect_count > 0 && liveTeachable(q.question_id) && (
+                          <div className={styles.rowActions}>
+                            <MissActions
+                              quizId={quiz.id}
+                              questions={[liveTeachable(q.question_id)!]}
+                              breakdown={dashboard.question_breakdown}
+                              title={`Q${q.question_number}`}
+                              repTitle={`${quiz.title} - Q${q.question_number}`}
+                            />
+                          </div>
+                        )}
                         {/* Every active exclusion, not a single boolean: a
                             quiz-wide and an assignment-scoped one can overlap,
                             and restoring one leaves the other in force. */}

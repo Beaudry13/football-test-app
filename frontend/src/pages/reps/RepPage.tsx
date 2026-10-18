@@ -258,7 +258,11 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
   const audiences = audiencesFrom(players);
   const likely = suggestedFamily(results.decisions.map((d) => d.subject_role));
   const [positions, setPositions] = useState<string[] | null>(null);
-  const chosen = positions ?? audiences.filter((a) => a.family && a.family === likely).map((a) => a.key);
+  /* Already on its roster (made for the players who missed a quiz question):
+     it goes to them - no position is picked for him. */
+  const onRoster = results.audience.code ? [] : results.audience.people;
+  const chosen =
+    positions ?? (onRoster.length > 0 ? [] : audiences.filter((a) => a.family && a.family === likely).map((a) => a.key));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -306,6 +310,12 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
   return (
     <section className={styles.send} aria-label="Send it">
       <span className={styles.sendLead}>Send it to</span>
+      {onRoster.length > 0 && (
+        <span className={styles.hint} role="status">
+          Goes to the {onRoster.length} on it: {onRoster.map((p) => p.name).join(', ')}
+          {chosen.length > 0 ? ' - and the positions you pick' : ''}
+        </span>
+      )}
       <PositionChips audiences={audiences} chosen={chosen} onChange={setPositions} likely={likely} className={styles.groups} />
       <div className={styles.groups} role="group" aria-label="Groups">
         {(groups ?? []).map((g) => {

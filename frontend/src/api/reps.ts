@@ -247,8 +247,11 @@ export interface RepFromQuiz extends Quiz {
 }
 
 /** EXISTING CONTENT -> REP: a quiz's tap-an-answer questions, copied into a new Rep. */
-export function makeRepFromQuiz(quizId: number, questionIds?: number[]): Promise<RepFromQuiz> {
-  return api.post<RepFromQuiz>(`/quizzes/${quizId}/make-rep`, questionIds ? { question_ids: questionIds } : {});
+export function makeRepFromQuiz(quizId: number, questionIds?: number[], title?: string): Promise<RepFromQuiz> {
+  return api.post<RepFromQuiz>(`/quizzes/${quizId}/make-rep`, {
+    ...(questionIds ? { question_ids: questionIds } : {}),
+    ...(title ? { title } : {}),
+  });
 }
 
 /** Questions from a quiz, added to a Rep that already exists (after its own decisions). */

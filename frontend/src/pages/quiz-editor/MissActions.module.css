@@ -1,0 +1,26 @@
+/* A quiz miss: Teach it, or make it a Rep. */
+.actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.action {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong, #c9ccd1);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.error {
+  font-size: 13px;
+  color: var(--color-danger, #b42318);
+}
