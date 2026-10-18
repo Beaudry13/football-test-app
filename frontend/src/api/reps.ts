@@ -151,6 +151,8 @@ export interface RepSummary {
   signal: {
     kind: 'retest_fixed' | 'retest_missing' | 'retested';
     concept: string;
+    /** The problem's concept (null = the untagged decisions), for deep links. */
+    concept_id?: number | null;
     missed: number;
     responded: number;
     before_pct: number | null;

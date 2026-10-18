@@ -298,6 +298,14 @@ describe('A Rep, for the coach', () => {
     expect(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' })).toBeInTheDocument();
   });
 
+  it("arrives at the retest confirm from Home's \"Retest 1\" - still the coach's tap to send", async () => {
+    open(RESULTS, '/reps/5?retest=3');
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    expect(await card.findByRole('group', { name: 'Retest' })).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Send retest' })).toBeInTheDocument();
+    expect(repsApi.createRepRetest).not.toHaveBeenCalled();
+  });
+
   it('edits a decision right on the page: situation, answers, the right one, concept, reason', async () => {
     vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 3, name: 'Motion adjustment', is_archived: false }]);
     vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);

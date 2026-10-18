@@ -382,6 +382,8 @@ def _signal(results, worst) -> dict | None:
             return {
                 "kind": "retest_fixed" if c["missed"] == 0 else "retest_missing",
                 "concept": c["name"],
+                # Home's "Retest K" opens this Rep's retest for this problem.
+                "concept_id": (c["concept"] or {}).get("id"),
                 "missed": c["missed"],
                 "responded": c["responded"],
                 "before_pct": pct_before,
@@ -393,6 +395,7 @@ def _signal(results, worst) -> dict | None:
         return {
             "kind": "retested",
             "concept": worst["name"],
+            "concept_id": (worst["concept"] or {}).get("id"),
             "retest_id": again["id"],
             "missed": again["missed"],
             "responded": again["responded"],

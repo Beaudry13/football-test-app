@@ -102,15 +102,28 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
         </div>
       )}
       {lingering?.signal && (
+        /* DID IT STICK, AND WHAT NOW: "3 were retested, 1 still misses it"
+           and the next step - teach it again, or send it back to the one.
+           Retest opens the Rep with its confirm up; nothing sends from Home. */
         <div className={styles.nextUp} aria-label="Next up">
           <span className={styles.nextLead}>Next up</span>
           <span className={styles.nextProblem}>
-            <strong className={styles.problemName}>{lingering.signal.concept}</strong> still missed by {lingering.signal.missed} after the
-            retest
+            <strong className={styles.problemName}>{lingering.signal.concept}</strong> {lingering.signal.responded}{' '}
+            {lingering.signal.responded === 1 ? 'was' : 'were'} retested, {lingering.signal.missed} still{' '}
+            {lingering.signal.missed === 1 ? 'misses' : 'miss'} it
           </span>
           <span className={styles.nextActions}>
-            <Link to={`/reps/${lingering.id}`} className={nb.btnPrimary}>
-              Open it
+            <Link
+              to={`/reps/${lingering.id}?teach=${lingering.signal.concept_id ?? 'general'}`}
+              className={nb.btnSecondary}
+            >
+              Teach
+            </Link>
+            <Link
+              to={`/reps/${lingering.id}?retest=${lingering.signal.concept_id ?? 'general'}`}
+              className={nb.btnPrimary}
+            >
+              Retest {lingering.signal.missed}
             </Link>
           </span>
         </div>

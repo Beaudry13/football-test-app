@@ -494,7 +494,7 @@ class TestHomeSummary:
         summary = {s["id"]: s for s in client.get("/api/quizzes/reps-summary", headers=headers).get_json()}
         assert summary[retest["id"]]["signal"] == {
             "kind": "retest_missing", "concept": "Motion adjustment", "missed": 1, "responded": 2,
-            "before_pct": 33, "now_pct": 50,
+            "before_pct": 33, "now_pct": 50, "concept_id": first["concept"]["id"],
         }
         assert summary[rep["id"]]["signal"]["kind"] == "retested"
         assert summary[rep["id"]]["signal"]["retest_id"] == retest["id"]

@@ -152,6 +152,17 @@ export function RepPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, teachAsk]);
 
+  /* Home's "Retest K" lands here: that problem's card, its confirm already
+     up ("Send it back to the K who missed it?"). Still the coach's tap to send. */
+  const [retestAsk, setRetestAsk] = useState<string | null>(null);
+  const retestParam = params.get('retest');
+  useEffect(() => {
+    if (!results || !retestParam) return;
+    setRetestAsk(retestParam);
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, retestParam]);
+
   const problems = results?.concepts.filter((c) => c.missed > 0) ?? [];
   const solid = results?.concepts.filter((c) => c.missed === 0 && c.responded > 0) ?? [];
   // "safeties": the one group's name, else the one position family it went to.
@@ -217,6 +228,7 @@ export function RepPage() {
                     taught={problem.taught ?? null}
                     onTeach={() => teach(problem)}
                     onRetest={() => retest(problem)}
+                    asked={retestAsk === conceptKey(problem)}
                   />
                 ))}
                 {solid.length > 0 && (
@@ -376,6 +388,7 @@ function ProblemCard({
   taught,
   onTeach,
   onRetest,
+  asked = false,
 }: {
   problem: RepConcept;
   who: string;
@@ -384,6 +397,8 @@ function ProblemCard({
   taught: RepTaught | null;
   onTeach: () => void;
   onRetest: () => Promise<void>;
+  /** Arrived from Home's "Retest K": the confirm opens, the card comes into view. */
+  asked?: boolean;
 }) {
   const again = problem.retest ?? null;
   const fixed = !!again && again.responded > 0 && again.missed === 0;
@@ -392,6 +407,12 @@ function ProblemCard({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!asked || problem.retest) return;
+    setConfirming(true);
+    cardRef.current?.scrollIntoView?.({ block: 'center' });
+  }, [asked, problem.retest]);
   const shown = problem.players_missed.slice(0, 8);
   const more = problem.players_missed.length - shown.length;
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
@@ -401,7 +422,11 @@ function ProblemCard({
       .filter((d) => problem.question_ids.includes(d.question_id) && targetsOf(d))
       .sort((a, b) => b.missed - a.missed)[0] ?? null;
   return (
-    <article className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem} aria-label={problem.name}>
+    <article
+      ref={cardRef}
+      className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem}
+      aria-label={problem.name}
+    >
       <h2 className={styles.problemName}>
         {/* The problem's history: is it getting better, who still misses it. */}
         {problem.concept ? (
