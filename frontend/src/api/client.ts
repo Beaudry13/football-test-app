@@ -6,7 +6,8 @@ const TOKEN_STORAGE_KEY = 'football_quiz_access_token';
 
 /** Resolves a server-relative path (e.g. an uploaded image's `/uploads/...` URL) to an absolute URL. */
 export function resolveMediaUrl(path: string): string {
-  if (/^https?:\/\//.test(path)) return path;
+  // Absolute already - a server URL, or a picture still on this device (blob:/data:).
+  if (/^(https?:\/\/|blob:|data:)/.test(path)) return path;
   return `${SERVER_ORIGIN}${path}`;
 }
 

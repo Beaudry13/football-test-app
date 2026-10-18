@@ -168,9 +168,15 @@ export function QuestionEditor({
   /** A refusal Peira can explain, as opposed to an ordinary failure. */
   const [blocked, setBlocked] = useState<{ why: string; instead: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // The file lives HERE, not on the server, until the coach saves. That is
+  // what makes Cancel leave nothing behind: nothing was ever created.
+  const [image, setImage] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  /** The picture spots go on: the saved still, or - creating - the one just chosen. */
+  const pictureUrl = existingImageUrl ?? preview;
   /** Tap answers fit one-answer multiple choice on a picture without the coach's markings. */
   const tapsAllowed =
-    questionType === 'multiple_choice' && !allowsMultiple && !!existingImageUrl && !existingImageHasMarks;
+    questionType === 'multiple_choice' && !allowsMultiple && !!pictureUrl && !existingImageHasMarks;
   /** One spot per answer: a new answer gets a spot in the row, a removed one loses its. */
   const syncedTargets: TapTarget[] = tapTargets
     ? options.map((_, i) => tapTargets[i] ?? spreadTargets(options.length)[i])
@@ -182,10 +188,6 @@ export function QuestionEditor({
     }
     setCheckingSpots(why);
   };
-  // The file lives HERE, not on the server, until the coach saves. That is
-  // what makes Cancel leave nothing behind: nothing was ever created.
-  const [image, setImage] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   /* HELD LOCALLY UNTIL THE QUESTION IS SAVED. The recording lives in memory
      as an unsaved draft exactly as a chosen image file does, and travels with
      the create request - so "Add question" is one operation and a failure
@@ -352,6 +354,9 @@ export function QuestionEditor({
 
   function clearImage() {
     setImage(null);
+    // Spots belong to a picture: no picture, no spots.
+    setTapTargets(null);
+    setSpotsToConfirm(false);
     setImageError(null);
     // Without this, re-picking the SAME file after removing it fires no change
     // event at all and the picker appears broken.
@@ -454,6 +459,50 @@ export function QuestionEditor({
   function removeOption(index: number) {
     setOptions((prev) => prev.filter((_, i) => i !== index));
   }
+
+  /* The spot controls, under whichever picture this question has - saved, or
+     just chosen while creating it (no save-and-come-back). */
+  const tapControls = tapsAllowed && (
+    <div className={styles.imageActions}>
+      {tapTargets ? (
+        <>
+          <span className={styles.imageHint}>
+            {spotsToConfirm ? 'Spots placed - check them before you save.' : 'Players tap the picture.'}
+          </span>
+          <button type="button" className={nb.btnSm} onClick={() => openSpots('look')}>
+            See what they tap
+          </button>
+          {!hasBeenDelivered && (
+            <button
+              type="button"
+              className={nb.btnSm}
+              onClick={() => {
+                setTapTargets(null);
+                setSpotsToConfirm(false);
+              }}
+            >
+              Buttons only
+            </button>
+          )}
+        </>
+      ) : (
+        !hasBeenDelivered && (
+          <button
+            type="button"
+            className={nb.btnSm}
+            disabled={options.length < 2}
+            onClick={() => {
+              setTapTargets(spreadTargets(options.length));
+              setSpotsToConfirm(true);
+              setCheckingSpots('look');
+            }}
+          >
+            Players tap the picture
+          </button>
+        )
+      )}
+    </div>
+  );
 
   async function handleSubmit(event: FormEvent | null, spotsChecked = !spotsToConfirm) {
     event?.preventDefault();
@@ -856,56 +905,16 @@ export function QuestionEditor({
               Opens the drawing canvas for this question, with everything you have already
               drawn on it.
             </p>
-            {tapsAllowed && (
-              <div className={styles.imageActions}>
-                {tapTargets ? (
-                  <>
-                    <span className={styles.imageHint}>
-                      {spotsToConfirm ? 'Spots placed - check them before you save.' : 'Players tap the picture.'}
-                    </span>
-                    <button type="button" className={nb.btnSm} onClick={() => openSpots('look')}>
-                      See what they tap
-                    </button>
-                    {!hasBeenDelivered && (
-                      <button
-                        type="button"
-                        className={nb.btnSm}
-                        onClick={() => {
-                          setTapTargets(null);
-                          setSpotsToConfirm(false);
-                        }}
-                      >
-                        Buttons only
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  !hasBeenDelivered && (
-                    <button
-                      type="button"
-                      className={nb.btnSm}
-                      disabled={options.length < 2}
-                      onClick={() => {
-                        setTapTargets(spreadTargets(options.length));
-                        setSpotsToConfirm(true);
-                        setCheckingSpots('look');
-                      }}
-                    >
-                      Players tap the picture
-                    </button>
-                  )
-                )}
-              </div>
-            )}
+            {tapControls}
             {existingImageHasMarks && questionType === 'multiple_choice' && (
               <p className={styles.imageHint}>Tap answers need a picture without your markings.</p>
             )}
           </div>
         </div>
       )}
-      {checkingSpots && tapTargets && existingImageUrl && (
+      {checkingSpots && tapTargets && pictureUrl && (
         <TapCheck
-          image={{ image_url: existingImageUrl }}
+          image={{ image_url: pictureUrl }}
           presnap={existingPresnap}
           targets={syncedTargets}
           answers={options.map((o) => o.option_text || '(no words yet)')}
@@ -1075,6 +1084,7 @@ export function QuestionEditor({
                   Remove
                 </button>
               </div>
+              {tapControls}
             </div>
           ) : (
             /* A drop target and an explanation, not a bare file input. The

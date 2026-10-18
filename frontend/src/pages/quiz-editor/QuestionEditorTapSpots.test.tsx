@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { QuestionEditor } from './QuestionEditor';
 
@@ -98,5 +99,65 @@ describe('tap spots on an uploaded photo', () => {
     edit({ existingImageHasMarks: true });
     expect(screen.queryByRole('button', { name: 'Players tap the picture' })).toBeNull();
     expect(screen.getByText('Tap answers need a picture without your markings.')).toBeInTheDocument();
+  });
+});
+
+describe('tap spots while creating the question - no save-and-come-back', () => {
+  it('the coach attaches a photo, places and confirms the spots, and they go out with the new question', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <QuestionEditor
+          submitLabel="Add question"
+          onSave={onSave}
+          onCancel={vi.fn()}
+          allowImage
+          initialText="Who gets the ball?"
+          initialType="multiple_choice"
+          initialOptions={options}
+        />
+      </MemoryRouter>,
+    );
+    const photo = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'play.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText('Question image'), photo);
+    await screen.findByAltText('Selected question image');
+    fireEvent.click(screen.getByRole('button', { name: 'Players tap the picture' }));
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }));
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    const [input, file] = onSave.mock.calls[0];
+    expect(file).toBe(photo);
+    expect(input.tap_targets).toHaveLength(2);
+    expect(input.tap_targets.every((t: { zone?: boolean }) => t.zone)).toBe(true);
+  });
+
+  it('removing the photo takes its spots with it', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <QuestionEditor
+          submitLabel="Add question"
+          onSave={onSave}
+          onCancel={vi.fn()}
+          allowImage
+          initialText="Who gets the ball?"
+          initialType="multiple_choice"
+          initialOptions={options}
+        />
+      </MemoryRouter>,
+    );
+    await user.upload(
+      screen.getByLabelText('Question image'),
+      new File([new Uint8Array([0x89])], 'play.png', { type: 'image/png' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Players tap the picture' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'What your players tap' })).getByRole('button', { name: 'Looks right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty('tap_targets');
   });
 });
