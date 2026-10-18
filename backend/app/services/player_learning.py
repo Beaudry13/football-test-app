@@ -17,9 +17,9 @@ Retest correct"). Concepts the coach never tagged are not invented.
 from __future__ import annotations
 
 from app.models import AttemptStatus, PlayerAttempt, Quiz
-from app.models.assessment_mode import GRADED
 from app.models.question import QuestionType
 from app.models.quiz import REP_KIND
+from app.services.attempt_scope import official_only
 from app.services.rep_results import first_tries, rep_attempts
 
 MISSED = "missed"
@@ -67,10 +67,10 @@ def player_learning(coach, player) -> dict:
             firsts = first_tries(mine)
             attempts = [attempt for attempt, _made in firsts.values()]
         else:
-            attempts = PlayerAttempt.query.filter(
+            # The official rule, written once (attempt_scope): practice never counts.
+            attempts = official_only(PlayerAttempt.query).filter(
                 PlayerAttempt.quiz_id == quiz.id,
                 PlayerAttempt.player_id == player.id,
-                PlayerAttempt.mode == GRADED,
                 PlayerAttempt.status == AttemptStatus.SUBMITTED,
             ).all()
         for attempt in attempts:
