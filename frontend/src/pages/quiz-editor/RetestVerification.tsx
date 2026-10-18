@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { Question, RetestVerification as Verification } from '../../api/types';
 import { MissActions } from './MissActions';
 import nb from '../../styles/notebook.module.css';
@@ -164,7 +165,13 @@ export function RetestVerification({
             <ul className={styles.playerList}>
               {v.still_missing.map((player) => (
                 <li key={player.display_name} className={styles.player}>
-                  {player.display_name}
+                  {player.player_id != null ? (
+                    <Link to={`/roster/${player.player_id}`} className={styles.playerLink}>
+                      {player.display_name}
+                    </Link>
+                  ) : (
+                    player.display_name
+                  )}
                 </li>
               ))}
             </ul>

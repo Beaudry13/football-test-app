@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { createRetest } from '../../api/retests';
 import type { ConceptBreakdown, Question, QuestionBreakdown, RetestSummary } from '../../api/types';
@@ -227,7 +227,13 @@ export function WeakestConcepts({
                   key={player.player_id != null ? `player:${player.player_id}` : `name:${player.player_name}`}
                   className={styles.player}
                 >
-                  {missedLabels[index].text}
+                  {player.player_id != null ? (
+                    <Link to={`/roster/${player.player_id}`} className={styles.playerLink}>
+                      {missedLabels[index].text}
+                    </Link>
+                  ) : (
+                    missedLabels[index].text
+                  )}
                   {/* Their position WHEN THEY ANSWERED. Absent rather than
                       guessed when it was never recorded. */}
                   {player.position_at_attempt && (

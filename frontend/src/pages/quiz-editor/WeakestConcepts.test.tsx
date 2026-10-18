@@ -134,6 +134,8 @@ describe('the "Teach next" panel', () => {
     const list = screen.getByText('Who missed it').parentElement!;
     expect(within(list).getByText('Jordan Smith')).toBeInTheDocument();
     expect(within(list).getByText('CB')).toBeInTheDocument();
+    // A rostered player opens his profile: what he knows, what to work on.
+    expect(within(list).getByRole('link', { name: 'Jordan Smith' })).toHaveAttribute('href', '/roster/1');
   });
 
   it('shows NOTHING rather than a guess when position was never recorded', () => {

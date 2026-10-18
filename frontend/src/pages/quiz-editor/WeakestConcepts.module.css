@@ -333,3 +333,12 @@
   font-size: 13px;
   color: var(--nb-text-muted, #6b7280);
 }
+
+/* A rostered player's name opens his profile - what he knows, what to work on. */
+.playerLink {
+  color: inherit;
+  text-decoration: none;
+}
+.playerLink:hover {
+  text-decoration: underline;
+}
