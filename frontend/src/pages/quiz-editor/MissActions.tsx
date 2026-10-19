@@ -35,6 +35,7 @@ export function MissActions({
   retestTargets,
   conceptId,
   show = 'all',
+  startTeaching = false,
 }: {
   quizId: number;
   /** The questions this miss is about, in quiz order. */
@@ -61,6 +62,8 @@ export function MissActions({
    *  Make a rep, Pick questions, Open the play - behind "More". A problem card
    *  splits them: 'teach' beside its Retest, 'more' in its details. */
   show?: 'all' | 'teach' | 'more';
+  /** Arrived from Home's "Teach it" (?teach=<concept>): Teach opens straight away. */
+  startTeaching?: boolean;
 }) {
   const motionLab = useMayUseMotionLab();
   /** The Motion Lab play a missed question came from - the football source, one tap away. */
@@ -75,7 +78,7 @@ export function MissActions({
   const [candidates, setCandidates] = useState<ConceptQuestion[] | null>(null);
   const [checked, setChecked] = useState<number[]>([]);
   const navigate = useNavigate();
-  const [teaching, setTeaching] = useState(false);
+  const [teaching, setTeaching] = useState(startTeaching);
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tappable = questions.filter((q) => q.question_type === 'multiple_choice' || q.question_type === 'true_false');

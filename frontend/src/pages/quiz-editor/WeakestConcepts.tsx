@@ -86,6 +86,7 @@ export function WeakestConcepts({
   questions = [],
   breakdown = [],
   retests = [],
+  teachConceptId = null,
 }: {
   concepts: ConceptBreakdown[];
   quizId: number;
@@ -95,6 +96,8 @@ export function WeakestConcepts({
   breakdown?: QuestionBreakdown[];
   /** How retests built from this quiz went - did it stick, per concept. */
   retests?: RetestSummary[];
+  /** ?teach=<concept> (Home's Next up): that concept's Teach opens on arrival. */
+  teachConceptId?: number | null;
 }) {
   const retestOf = (concept: ConceptBreakdown) => retests.find((t) => t.concept_ids.includes(concept.concept_id));
   const [showAllPlayers, setShowAllPlayers] = useState(false);
@@ -115,6 +118,7 @@ export function WeakestConcepts({
         conceptId={concept.concept_id}
         extraAction={<TeachRetest quizId={quizId} concept={concept} />}
         show={show}
+        startTeaching={show !== 'more' && teachConceptId !== null && concept.concept_id === teachConceptId}
       />
     );
   };

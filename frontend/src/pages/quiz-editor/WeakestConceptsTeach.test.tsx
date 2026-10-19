@@ -71,6 +71,16 @@ describe('Teach, on Results', () => {
     expect(teach.getByRole('link', { name: 'Open the play in Motion Lab' })).toHaveAttribute('href', '/motion-lab/plays/14');
   });
 
+  it("arrives straight in Teach from Home's Next up (?teach=<concept>)", () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
+    render(
+      <MemoryRouter>
+        <WeakestConcepts concepts={[concept()]} quizId={9} questions={[question]} teachConceptId={1} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Teach Force / Contain' })).toBeInTheDocument();
+  });
+
   it('retests the players who missed it right from the teaching screen', async () => {
     const created = vi.spyOn(retestsApi, 'createRetest').mockResolvedValue({ id: 77 } as never);
     const missed = [

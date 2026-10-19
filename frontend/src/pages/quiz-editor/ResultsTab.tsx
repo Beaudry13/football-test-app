@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   exportResultsCsv,
   exportResultsDetailedPdf,
@@ -229,6 +229,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
   /** Questions already shown with their own actions in "Where they tapped". */
   const hasTapCard = (questionId: number) => teamTaps.some(({ row }) => row.question_id === questionId);
   const [exportOpen, setExportOpen] = useState(false);
+  /** Home's Next up "Teach it": ?teach=<concept id> opens that concept's Teach. */
+  const [params] = useSearchParams();
+  const teachAsk = Number(params.get('teach')) || null;
   const ungradedTotal = (dashboard?.question_breakdown ?? [])
     .filter((q) => needsManualGrading(q.question_type) && !q.is_excluded)
     .reduce((total, q) => total + q.ungraded_count, 0);
@@ -271,6 +274,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             questions={quiz.questions ?? []}
             breakdown={dashboard?.question_breakdown ?? []}
             retests={dashboard?.retests ?? []}
+            teachConceptId={teachAsk}
           />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than

@@ -21,6 +21,8 @@ import { useActiveStatus } from '../hooks/useActiveStatus';
 import { FirstSuccessChecklist } from '../components/onboarding/FirstSuccessChecklist';
 import { useMayUseMotionLab } from '../motion-lab/motionLabAccess';
 import { RepsHomeCard } from './reps/RepsHomeCard';
+import { useRepsSummary } from './reps/useRepsSummary';
+import { NextUp } from './home/NextUp';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
@@ -45,6 +47,8 @@ export function DashboardPage() {
      show different faces of the same payload, and two hooks would mean two
      requests for one round trip's worth of data. */
   const activeEntries = useActiveStatus();
+  /** Fetched once: Next up and the Reps card read the same summary. */
+  const reps = useRepsSummary();
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
@@ -279,11 +283,13 @@ export function DashboardPage() {
             <ActiveQuizStatusSection entries={activeEntries} />
             <DashboardQuietNote entries={activeEntries} />
 
-            {/* THE FOOTBALL PROBLEM LEADS. The Reps card opens with Next up -
-                the one problem to deal with now, one tap from Teach or Retest -
-                then the Reps being worked on. Every coach; it stays away until
-                there is a Rep, unless the coach can make one from a play. */}
-            <RepsHomeCard inviteWhenEmpty={motionLab} />
+            {/* THE FOOTBALL PROBLEM LEADS: Next up - the one problem to deal
+                with now, from a Rep or the latest quiz, one tap from Teach or
+                Retest. Then what the coach was working on: Reps, plays. */}
+            <NextUp reps={reps} quizzes={quizzes} />
+            {/* Every coach; it stays away until there is a Rep, unless the
+                coach can make one from a play. */}
+            <RepsHomeCard reps={reps ?? null} showNextUp={false} inviteWhenEmpty={motionLab} />
             {/* The way onto the field, for coaches with Motion Lab: draw a
                 play, pick up an unsaved one, open a recent one. Quieter than
                 Next up: "what I was working on", not "what needs me". */}
