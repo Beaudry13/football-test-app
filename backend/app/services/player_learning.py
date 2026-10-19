@@ -63,8 +63,7 @@ def player_learning(coach, player) -> dict:
             if q.concept is not None:
                 names[q.concept.id] = q.concept.name
         if quiz.kind == REP_KIND:
-            mine = [a for a in rep_attempts(quiz) if a.player_id == player.id]
-            firsts = first_tries(mine)
+            firsts = first_tries(rep_attempts(quiz, player_id=player.id))
             attempts = [attempt for attempt, _made in firsts.values()]
         else:
             # The official rule, written once (attempt_scope): practice never counts.

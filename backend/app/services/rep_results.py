@@ -38,18 +38,35 @@ from __future__ import annotations
 from collections import defaultdict
 from statistics import median
 
-from app.models import PlayerAttempt
+from sqlalchemy.orm import joinedload, selectinload
+
+from app.models import Answer, PlayerAttempt, Question
 from app.models.assessment_mode import PRACTICE
 from app.services.player_identity import PlayerKey
 from app.services.question_snapshots import has_history
 
 
-def rep_attempts(quiz) -> list:
-    """Every attempt at this Rep, oldest first."""
+def rep_attempts(quiz, player_id: int | None = None) -> list:
+    """Every attempt at this Rep, oldest first - or one rostered player's,
+    asked of the database rather than filtered after loading everyone's.
+
+    LOADED WITH WHAT EVERY READER HERE TOUCHES - each attempt's answers, each
+    answer's selections and its question's concept, and the player - in a
+    handful of queries. Read lazily, a Rep run by 80 players cost ~600
+    queries, and Home's summary of four Reps ~2,500 (measured, stabilization).
+    """
+    answers = selectinload(PlayerAttempt.answers)
+    query = PlayerAttempt.query.filter(
+        PlayerAttempt.quiz_id == quiz.id,
+        PlayerAttempt.mode == PRACTICE,
+    )
+    if player_id is not None:
+        query = query.filter(PlayerAttempt.player_id == player_id)
     return (
-        PlayerAttempt.query.filter(
-            PlayerAttempt.quiz_id == quiz.id,
-            PlayerAttempt.mode == PRACTICE,
+        query.options(
+            answers.selectinload(Answer.selected_options),
+            answers.selectinload(Answer.question).joinedload(Question.concept),
+            joinedload(PlayerAttempt.player),
         )
         .order_by(PlayerAttempt.started_at.asc(), PlayerAttempt.id.asc())
         .all()
