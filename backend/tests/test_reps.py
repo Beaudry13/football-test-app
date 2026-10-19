@@ -1095,6 +1095,24 @@ class TestWhatAPlayerKnows:
         trail = next(r for r in after["recent"] if r["name"] == "Motion adjustment")["trail"]
         assert [(t["outcome"], t["is_retest"]) for t in trail] == [("missed", False), ("got", True)]
 
+    def test_a_teammate_sees_the_player_but_not_my_results(self, client, register_coach, app, invite_teammate):
+        # Players are org-shared; results are Coach View - the teammate's
+        # learning view reads only HIS own quizzes and Reps, never mine.
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        assert client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=headers).get_json()["work_on"]
+        _, _, teammate = invite_teammate(headers)
+        seen = client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=teammate)
+        assert seen.status_code == 200
+        assert seen.get_json() == {"has": [], "work_on": [], "recent": []}
+
+    def test_a_malformed_id_fails_safely(self, client, coach_headers):
+        assert client.get("/api/players/not-a-number/learning", headers=coach_headers).status_code == 404
+        assert client.get("/api/players/987654321/learning", headers=coach_headers).status_code == 404
+        assert client.get("/api/players/1/learning").status_code == 401
+
     def test_another_organizations_player_is_not_found(self, client, register_coach, app):
         coach, _, headers = register_coach()
         _rep_, _first, _second, ids, _code, _ = _built(client, headers, app, coach)

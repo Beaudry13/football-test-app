@@ -883,3 +883,64 @@ class TestSubmitResponseContract:
         stored = {a.question_id: a for a in Answer.query.filter_by(attempt_id=attempt_id)}
         assert stored[written["id"]].answer_text == "I set the edge."
         assert stored[tf["id"]].is_correct is True
+
+
+# ---------------------------------------------------------------------------
+# The Rep finish screen: /rep-progress is a READ, proven like a write
+# ---------------------------------------------------------------------------
+
+
+class TestRepProgressIsProvenLikeAnAnswer:
+    """POST /api/play/rep-progress reports a player's own previous run (and, on
+    a Retest, his original). Under PIN security it must ask for the same proof
+    as answering: his attempt token - never just a code and a name."""
+
+    @staticmethod
+    def _as_rep(env):
+        from app.models import Quiz
+        from app.models.quiz import REP_KIND
+
+        db.session.get(Quiz, env.quiz["id"]).kind = REP_KIND
+        db.session.commit()
+
+    @staticmethod
+    def _progress(client, who, token=None):
+        return client.post("/api/play/rep-progress", json=who, headers=token_headers(token))
+
+    def test_without_his_token_it_is_refused(self, client, coach_headers, secured):
+        env = build(client, coach_headers, practice=True, with_drawing=False)
+        self._as_rep(env)
+        claimed(client, env)
+        r = self._progress(client, env.who)
+        assert (r.status_code, reason(r)) == (401, "token_missing")
+
+    def test_another_players_token_reads_nothing(self, client, coach_headers, secured):
+        env = build(client, coach_headers, practice=True, with_drawing=False)
+        self._as_rep(env)
+        mate = make_player(client, coach_headers, "Mike", "Beaudry")
+        mate_pin = give_pin(client, coach_headers, mate["id"])
+        code = activate(client, coach_headers, env.quiz["id"], [env.player["id"], mate["id"]], "Both")
+        claim(client, code, env.player["id"], env.pin)
+        mates = claim(client, code, mate["id"], mate_pin).get_json()["attempt_token"]
+        john = {"access_code_id": code["id"], "player_name": env.player["full_name"], "player_id": env.player["id"]}
+        r = self._progress(client, john, mates)
+        assert (r.status_code, reason(r)) == (401, "token_invalid")
+
+    def test_his_own_token_reads_his_own_progress_and_no_answers(self, client, coach_headers, secured):
+        env = build(client, coach_headers, practice=True, with_drawing=False)
+        self._as_rep(env)
+        token, _, _ = claimed(client, env)
+        r = self._progress(client, env.who, token)
+        assert r.status_code == 200, r.get_json()
+        body = r.get_json()
+        assert set(body) == {"previous", "original"}
+        # Counts and concept names only - never an option, never a right answer.
+        assert "is_correct" not in str(body) and "option" not in str(body)
+
+    def test_an_unknown_or_guessed_code_fails_safely(self, client, coach_headers):
+        r = client.post(
+            "/api/play/rep-progress", json={"access_code_id": 987654321, "player_name": "John Smith", "player_id": 1}
+        )
+        assert r.status_code == 404
+        r = client.post("/api/play/rep-progress", json={"access_code_id": "x", "player_name": ""})
+        assert r.status_code in (400, 422)
