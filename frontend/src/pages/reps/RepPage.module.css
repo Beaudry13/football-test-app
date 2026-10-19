@@ -871,3 +871,8 @@
     width: 100%;
   }
 }
+
+/* After a closed run: sending again is one quiet button below what they missed. */
+.sendAgain {
+  margin: var(--space-4, 16px) 0;
+}

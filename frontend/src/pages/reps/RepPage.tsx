@@ -208,7 +208,10 @@ export function RepPage() {
               />
             )}
 
-            <SendPanel results={results} onSent={load} />
+            {/* BUILD -> SEND -> SEE WHAT THEY MISSED. Sending leads until
+                someone has run it; once a run has closed, what they missed
+                leads and "Send it again" waits below it. */}
+            {(results.players.length === 0 || results.audience.code) && <SendPanel results={results} onSent={load} />}
             <Waiting results={results} />
 
             {results.retest_of && <DidItStick results={results} />}
@@ -247,6 +250,9 @@ export function RepPage() {
               </section>
             )}
 
+            {results.players.length > 0 && !results.audience.code && (
+              <SendPanel results={results} onSent={load} folded />
+            )}
             <Decisions results={results} quizId={id} onChanged={load} />
             {results.players.length > 0 && <Players results={results} />}
           </>
@@ -264,7 +270,9 @@ export function RepPage() {
   );
 }
 
-function SendPanel({ results, onSent }: { results: RepResults; onSent: () => void }) {
+function SendPanel({ results, onSent, folded = false }: { results: RepResults; onSent: () => void; folded?: boolean }) {
+  /** After a closed run: one quiet button until the coach wants to send again. */
+  const [unfolded, setUnfolded] = useState(false);
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [picked, setPicked] = useState<number[]>([]);
   /* WHO, FROM THE ROSTER: position families ("Safeties - FS, S, SS - 11"),
@@ -292,6 +300,16 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
       .then(setPlayers)
       .catch(() => setPlayers([]));
   }, [code]);
+
+  if (folded && !unfolded && !code) {
+    return (
+      <section className={styles.sendAgain} aria-label="Send it again">
+        <button type="button" className={nb.btnSecondary} onClick={() => setUnfolded(true)}>
+          Send it again
+        </button>
+      </section>
+    );
+  }
 
   if (code) {
     const link = playLink(code);
@@ -1248,6 +1266,8 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(false);
+  /** Rearrange: the arrows, the drag grip and Remove - only while asked for. */
+  const [arranging, setArranging] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
   /** Only a decision nobody has received can go - nothing a player has is lost. */
   const remove = (d: RepDecision) =>
@@ -1329,6 +1349,16 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
       {dialog}
       <div className={styles.sectionHead}>
         <h2 className={styles.sectionTitle}>Decisions</h2>
+        {results.decisions.length > 1 && (
+          <button
+            type="button"
+            className={styles.addOpen}
+            aria-pressed={arranging}
+            onClick={() => setArranging((on) => !on)}
+          >
+            {arranging ? 'Done' : 'Rearrange'}
+          </button>
+        )}
         <button type="button" className={styles.addOpen} aria-expanded={adding} onClick={() => setAdding((open) => !open)}>
           + Add decisions
         </button>
@@ -1361,6 +1391,8 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
               className={rowClass}
             >
               <div className={styles.order}>
+                {arranging ? (
+                <>
                 <span
                   className={styles.grip}
                   title="Drag to move it - or use the arrows"
@@ -1382,6 +1414,10 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                 >
                   ▼
                 </button>
+                </>
+                ) : (
+                  <span className={styles.orderNum}>{d.number}</span>
+                )}
               </div>
               {d.image && <img className={styles.thumb} src={resolveMediaUrl(d.image.image_url)} alt="" />}
               <div className={styles.decisionBody}>
@@ -1392,7 +1428,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                       Edit
                     </button>
                   )}
-                  {editing !== d.question_id && !d.delivered && results.decisions.length > 1 && (
+                  {arranging && editing !== d.question_id && !d.delivered && results.decisions.length > 1 && (
                     <button
                       type="button"
                       className={styles.editOpen}

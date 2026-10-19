@@ -148,6 +148,17 @@ describe('A Rep, for the coach', () => {
     expect((screen.getByRole('textbox', { name: 'Rep link' }) as HTMLInputElement).value).toContain('/play/KKFFQY');
   });
 
+  it('after a closed run, what they missed leads and "Send it again" waits, folded, below it', async () => {
+    open({ ...RESULTS, audience: { ...RESULTS.audience, code: null } });
+    const again = await screen.findByRole('button', { name: 'Send it again' });
+    expect(screen.queryByRole('button', { name: 'Send rep' })).toBeNull();
+    // Below the problem, not above it.
+    const card = await screen.findByRole('article', { name: 'Motion adjustment' });
+    expect(card.compareDocumentPosition(again) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(again);
+    expect(await screen.findByRole('button', { name: 'Send rep' })).toBeInTheDocument();
+  });
+
   it("while it is out, says who hasn't run it", async () => {
     open({
       ...RESULTS,
@@ -357,6 +368,9 @@ describe('A Rep, for the coach', () => {
     vi.mocked(questionsApi.reorderQuestions).mockResolvedValue([] as never);
     const second = { ...RESULTS.decisions[0], question_id: 12, number: 2, question_text: 'Who has #3 on the seam?' };
     open({ ...RESULTS, decisions: [RESULTS.decisions[0], second] });
+    // Moving decisions is a mode: the rows stay clean until Rearrange.
+    expect(screen.queryByRole('button', { name: 'Move decision 1 up' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Rearrange' }));
     expect(await screen.findByRole('button', { name: 'Move decision 1 up' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Move decision 1 down' }));
     await waitFor(() => expect(questionsApi.reorderQuestions).toHaveBeenCalledWith(5, [12, 11]));
@@ -367,6 +381,7 @@ describe('A Rep, for the coach', () => {
     vi.mocked(questionsApi.reorderQuestions).mockResolvedValue([] as never);
     const d = (id: number, number: number) => ({ ...RESULTS.decisions[0], question_id: id, number });
     open({ ...RESULTS, decisions: [d(11, 1), d(12, 2), d(13, 3)] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Rearrange' }));
     const decisions = within(await screen.findByRole('region', { name: 'Decisions' }));
     const rows = decisions.getAllByRole('listitem').filter((li) => li.querySelector('[data-testid^="grip-"]'));
     // Rows stacked 100px apart.
@@ -383,6 +398,7 @@ describe('A Rep, for the coach', () => {
   it('a grip let go where it started moves nothing', async () => {
     const d = (id: number, number: number) => ({ ...RESULTS.decisions[0], question_id: id, number });
     open({ ...RESULTS, decisions: [d(11, 1), d(12, 2)] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Rearrange' }));
     const grip = await screen.findByTestId('grip-1');
     fireEvent.pointerDown(grip, { pointerId: 1 });
     fireEvent.pointerUp(grip, { pointerId: 1 });
@@ -483,6 +499,7 @@ describe('a variation of a Rep', () => {
     };
     vi.mocked(questionsApi.deleteQuestion).mockResolvedValue(undefined);
     open(two);
+    await user.click(await screen.findByRole('button', { name: 'Rearrange' }));
     await screen.findByRole('button', { name: 'Remove decision 2' });
     expect(screen.queryByRole('button', { name: 'Remove decision 1' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Remove decision 2' }));
