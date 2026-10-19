@@ -279,18 +279,19 @@ export function DashboardPage() {
             <ActiveQuizStatusSection entries={activeEntries} />
             <DashboardQuietNote entries={activeEntries} />
 
+            {/* THE FOOTBALL PROBLEM LEADS. The Reps card opens with Next up -
+                the one problem to deal with now, one tap from Teach or Retest -
+                then the Reps being worked on. Every coach; it stays away until
+                there is a Rep, unless the coach can make one from a play. */}
+            <RepsHomeCard inviteWhenEmpty={motionLab} />
             {/* The way onto the field, for coaches with Motion Lab: draw a
-                play, pick up an unsaved one, open a recent one. After the live
-                card, so it never pushes time-critical work down. */}
+                play, pick up an unsaved one, open a recent one. Quieter than
+                Next up: "what I was working on", not "what needs me". */}
             {motionLab && (
               <Suspense fallback={null}>
                 <MotionLabHomeCard />
               </Suspense>
             )}
-            {/* Situational Reps: each recent Rep's worst football problem, one
-                tap from Teach and Retest. Every coach; it stays away until
-                there is a Rep, unless the coach can make one from a play. */}
-            <RepsHomeCard inviteWhenEmpty={motionLab} />
 
         {/* Tour target. An attribute rather than a class, so restyling this
             header can never silently unhook the Dashboard Tour - see

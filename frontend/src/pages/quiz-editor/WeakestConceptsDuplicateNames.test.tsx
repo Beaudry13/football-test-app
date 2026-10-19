@@ -4,7 +4,7 @@
  * `position_at_attempt`, and it must stay separate from the label rather than
  * being merged with anything live.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,6 +38,8 @@ function renderPanel(missed: ConceptMissingPlayer[]) {
       <WeakestConcepts quizId={9} concepts={[concept(missed)]} />
     </MemoryRouter>,
   );
+  // Who missed it is one tap down, under "View details".
+  fireEvent.click(screen.getByRole('button', { name: 'View details' }));
 }
 
 let consoleError: ReturnType<typeof vi.spyOn>;

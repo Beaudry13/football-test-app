@@ -61,7 +61,7 @@ export default function MotionLabHomeCard() {
       <div className={styles.actions}>
         {unsaved ? (
           <>
-            <Link to="/motion-lab" className={nb.btnPrimary}>
+            <Link to="/motion-lab" className={nb.btnSecondary}>
               Continue “{unsaved.name}”
             </Link>
             <span className={styles.unsavedTag}>not saved</span>
@@ -70,7 +70,8 @@ export default function MotionLabHomeCard() {
             </Link>
           </>
         ) : (
-          <Link to="/motion-lab" className={nb.btnPrimary}>
+          /* Secondary on Home: Next up (above) holds the one gold action. */
+          <Link to="/motion-lab" className={nb.btnSecondary}>
             Draw a play
           </Link>
         )}

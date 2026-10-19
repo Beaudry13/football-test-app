@@ -222,6 +222,13 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
         !!t.question &&
         !!usableTargets(t.question.tap_targets, t.question.options.length, !!(t.question.image || t.question.presnap)),
     );
+  /* A FOOTBALL PROBLEM LEADS when a concept is ranked (Teach next) or this is
+     a retest (did it stick). Then the evidence below is one tap down;
+     without one, the question-by-question view IS the answer and stays open. */
+  const problemLeads = teachNextConcepts.some((c) => c.player_miss_rate !== null) || !!dashboard?.verification;
+  /** Questions already shown with their own actions in "Where they tapped". */
+  const hasTapCard = (questionId: number) => teamTaps.some(({ row }) => row.question_id === questionId);
+  const [exportOpen, setExportOpen] = useState(false);
   const ungradedTotal = (dashboard?.question_breakdown ?? [])
     .filter((q) => needsManualGrading(q.question_type) && !q.is_excluded)
     .reduce((total, q) => total + q.ungraded_count, 0);
@@ -348,6 +355,15 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               picture itself - the coach's right spot green, every spot someone
               chose with how many chose it. The same picture a Rep reads back
               (TapResult); a view over the counts below, never a score. */}
+          {/* QUESTION BY QUESTION, ONE TAP DOWN. Where they tapped and the
+              per-question table are how a coach checks the problem above -
+              evidence, not the answer - so they fold away while a problem
+              leads, and stay open when they are all there is. */}
+          {(teamTaps.length > 0 || dashboard.question_breakdown.length > 0) && (
+          <details className={styles.evidenceGroup} open={!problemLeads}>
+            <summary className={styles.evidenceSummary}>
+              Question by question <span className={styles.evidenceCount}>({dashboard.question_breakdown.length})</span>
+            </summary>
           {teamTaps.length > 0 && (
             <section className={styles.evidence} aria-label="Where they tapped">
               <h2 className={styles.evidenceHeading}>Where they tapped</h2>
@@ -409,8 +425,10 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                             "Q12", not to compete with the text. */}
                         <span className={styles.questionNumber}>Q{q.question_number}</span>
                         {q.question_text}
-                        {/* A miss with football to show: Teach it, or make it a Rep. */}
-                        {q.incorrect_count > 0 && liveTeachable(q.question_id) && (
+                        {/* A miss with football to show: Teach it, or make it a Rep.
+                            Once only: a question with a tap card above already
+                            has its actions and its retest line there. */}
+                        {q.incorrect_count > 0 && liveTeachable(q.question_id) && !hasTapCard(q.question_id) && (
                           <div className={styles.rowActions}>
                             <MissActions
                               quizId={quiz.id}
@@ -422,7 +440,9 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                             />
                           </div>
                         )}
-                        {questionRetest(q.question_id) && <RetestStatus retest={questionRetest(q.question_id)!} />}
+                        {questionRetest(q.question_id) && !hasTapCard(q.question_id) && (
+                          <RetestStatus retest={questionRetest(q.question_id)!} />
+                        )}
                         {/* Every active exclusion, not a single boolean: a
                             quiz-wide and an assignment-scoped one can overlap,
                             and restoring one leaves the other in force. */}
@@ -462,6 +482,8 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               </div>
             </section>
           )}
+          </details>
+          )}
 
           {/* EXPORTS COME AFTER THE ANSWER, NOT BEFORE IT.
               A coach opens Results to find out how their players did. These
@@ -482,8 +504,20 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               1,948px. That is a presentation problem, not an ordering one -
               the right answer to it is a denser breakdown, which belongs to
               the visual pass and not to this change. */}
+          {/* ONE BUTTON, THREE FILES. Exporting is occasional and deliberate;
+              three permanent buttons answered a question nobody asked on
+              every visit. The choice appears when a coach reaches for it. */}
           <div className={styles.exportRow}>
-            <span className={styles.exportLabel}>Export Results:</span>
+            <button
+              type="button"
+              className={nb.btnSm}
+              aria-expanded={exportOpen}
+              onClick={() => setExportOpen((open) => !open)}
+            >
+              Export…
+            </button>
+            {exportOpen && (
+            <>
             <button
               type="button"
               /* NOT GOLD ANY MORE. Gold on this screen means "the thing to do
@@ -516,6 +550,8 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             >
               {exporting === 'csv' ? 'Exporting…' : 'CSV'}
             </button>
+            </>
+            )}
           </div>
         </>
       )}

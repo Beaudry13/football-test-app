@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,6 +31,9 @@ const concept = (over: Partial<ConceptBreakdown> = {}): ConceptBreakdown => ({
 
 
 /** The panel navigates on success, so every case needs a Router around it. */
+/** Who missed it lives one tap down, under "View details". */
+const openDetails = () => fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+
 function renderPanel(ui: React.ReactElement) {
   return render(
     <MemoryRouter initialEntries={['/quizzes/9']}>
@@ -54,7 +57,7 @@ describe('the "Teach next" panel', () => {
     renderPanel(<WeakestConcepts concepts={[concept()]} quizId={9} />);
 
     expect(screen.getByText('Force / Contain')).toBeInTheDocument();
-    expect(screen.getByText(/6 of 10 players missed this/)).toBeInTheDocument();
+    expect(screen.getByText(/players missed/).textContent).toMatch(/6 of 10 players missed/);
     // The answer-level count belongs to the per-question breakdown, not here.
     expect(screen.queryByText(/of 22/)).not.toBeInTheDocument();
   });
@@ -104,8 +107,8 @@ describe('the "Teach next" panel', () => {
       />,
     );
 
-    expect(screen.getByText(/5 of 6 wrong answers chose/)).toBeInTheDocument();
-    expect(screen.getByText('Safety')).toBeInTheDocument();
+    // What the misses picked most, with its count - never a guess at why.
+    expect(screen.getByText(/Most chose/).textContent).toMatch(/Most chose “Safety” \(5 of 6 wrong answers\)/);
     // The data says what they PICKED; it does not say why.
     expect(screen.queryByText(/misconception/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/believe/i)).not.toBeInTheDocument();
@@ -114,7 +117,7 @@ describe('the "Teach next" panel', () => {
   it('says nothing about patterns when the server withheld one', () => {
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ top_distractor: null })]} />);
 
-    expect(screen.queryByText(/wrong answers chose/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Most chose/)).not.toBeInTheDocument();
   });
 
   it('names who missed it, with their position AT THE TIME', () => {
@@ -131,6 +134,7 @@ describe('the "Teach next" panel', () => {
       />,
     );
 
+    openDetails();
     const list = screen.getByText('Who missed it').parentElement!;
     expect(within(list).getByText('Jordan Smith')).toBeInTheDocument();
     expect(within(list).getByText('CB')).toBeInTheDocument();
@@ -153,6 +157,7 @@ describe('the "Teach next" panel', () => {
         ]}
       />,
     );
+    openDetails();
 
     expect(screen.getByText('Jordan Smith')).toBeInTheDocument();
     expect(screen.queryByText('null')).not.toBeInTheDocument();
@@ -402,7 +407,7 @@ describe('Retest these players', () => {
       />,
     );
 
-    expect(screen.getByText(/All 6 wrong answers chose/)).toBeInTheDocument();
+    expect(screen.getByText(/Most chose/).textContent).toMatch(/\(all 6 wrong answers\)/);
     expect(screen.queryByText(/6 of 6/)).not.toBeInTheDocument();
   });
 });
@@ -433,6 +438,7 @@ describe('a long list of missed players', () => {
     /* Measured at 375px: fourteen chips take 287px and pushed the action to
        y=827, past the fold AND past the fixed bottom nav at 764. */
     renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
+    openDetails();
 
     expect(screen.getByText('Player 1')).toBeInTheDocument();
     expect(screen.getByText('Player 8')).toBeInTheDocument();
@@ -443,6 +449,7 @@ describe('a long list of missed players', () => {
   it('expands and collapses in place', async () => {
     const user = userEvent.setup();
     renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
+    openDetails();
 
     await user.click(screen.getByRole('button', { name: 'and 6 more' }));
     expect(screen.getByText('Player 14')).toBeInTheDocument();
@@ -489,6 +496,7 @@ describe('a long list of missed players', () => {
         ]}
       />,
     );
+    openDetails();
 
     expect(screen.getByText('Player 8')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /more/ })).not.toBeInTheDocument();

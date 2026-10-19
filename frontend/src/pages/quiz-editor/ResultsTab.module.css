@@ -347,3 +347,20 @@
   padding-top: var(--space-5);
   border-top: 1px solid var(--color-border-subtle);
 }
+
+/* Question by question: the evidence, folded while a football problem leads. */
+.evidenceGroup {
+  margin-top: var(--space-6, 24px);
+}
+.evidenceSummary {
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--nb-text);
+  padding: 6px 0;
+}
+.evidenceCount {
+  font-weight: 400;
+  color: var(--nb-text-muted);
+}

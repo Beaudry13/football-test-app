@@ -1,4 +1,4 @@
-﻿import { render, screen, waitFor } from '@testing-library/react';
+﻿import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -79,7 +79,9 @@ describe('ResultsTab exports', () => {
     const exportSpy = vi.spyOn(gradingApi, 'exportResultsDetailedPdf').mockResolvedValue(pdfBlob);
     renderResultsTab();
 
-    await user.click(await screen.findByRole('button', { name: 'Detailed PDF' }));
+    // One Export button; the three files appear when the coach reaches for it.
+    await user.click(await screen.findByRole('button', { name: 'Export…' }));
+    await user.click(screen.getByRole('button', { name: 'Detailed PDF' }));
 
     await waitFor(() => expect(exportSpy).toHaveBeenCalledWith(1));
     expect(downloadUtil.downloadBlob).toHaveBeenCalledWith(pdfBlob, 'week-1-prep-detailed-results.pdf');
@@ -91,7 +93,8 @@ describe('ResultsTab exports', () => {
     const exportSpy = vi.spyOn(gradingApi, 'exportResultsPdf').mockResolvedValue(pdfBlob);
     renderResultsTab();
 
-    await user.click(await screen.findByRole('button', { name: 'Summary PDF' }));
+    await user.click(await screen.findByRole('button', { name: 'Export…' }));
+    await user.click(screen.getByRole('button', { name: 'Summary PDF' }));
 
     await waitFor(() => expect(exportSpy).toHaveBeenCalledWith(1));
     expect(downloadUtil.downloadBlob).toHaveBeenCalledWith(pdfBlob, 'week-1-prep-summary-results.pdf');
@@ -103,7 +106,8 @@ describe('ResultsTab exports', () => {
     const exportSpy = vi.spyOn(gradingApi, 'exportResultsCsv').mockResolvedValue(csvBlob);
     renderResultsTab();
 
-    await user.click(await screen.findByRole('button', { name: 'CSV' }));
+    await user.click(await screen.findByRole('button', { name: 'Export…' }));
+    await user.click(screen.getByRole('button', { name: 'CSV' }));
 
     await waitFor(() => expect(exportSpy).toHaveBeenCalledWith(1));
     expect(downloadUtil.downloadBlob).toHaveBeenCalledWith(csvBlob, 'week-1-prep-results.csv');
@@ -119,7 +123,8 @@ describe('ResultsTab exports', () => {
     );
     renderResultsTab();
 
-    const detailedButton = await screen.findByRole('button', { name: 'Detailed PDF' });
+    await user.click(await screen.findByRole('button', { name: 'Export…' }));
+    const detailedButton = screen.getByRole('button', { name: 'Detailed PDF' });
     const csvButton = screen.getByRole('button', { name: 'CSV' });
     await user.click(detailedButton);
 
@@ -136,7 +141,8 @@ describe('ResultsTab exports', () => {
     vi.spyOn(gradingApi, 'exportResultsCsv').mockRejectedValue(new Error('Request failed'));
     renderResultsTab();
 
-    await user.click(await screen.findByRole('button', { name: 'CSV' }));
+    await user.click(await screen.findByRole('button', { name: 'Export…' }));
+    await user.click(screen.getByRole('button', { name: 'CSV' }));
 
     expect(await screen.findByText('Request failed')).toBeInTheDocument();
     expect(downloadUtil.downloadBlob).not.toHaveBeenCalled();
@@ -157,7 +163,7 @@ describe('ResultsTab exports', () => {
   it('omits the missing-players card once everyone has submitted', async () => {
     renderResultsTab();
 
-    await screen.findByRole('button', { name: 'CSV' });
+    await screen.findByRole('button', { name: 'Export…' });
     expect(screen.queryByText(/Haven't submitted yet/)).not.toBeInTheDocument();
   });
 
@@ -368,6 +374,36 @@ describe('Results leads with what to teach next', () => {
     expect(screen.getByText('Force / Contain')).toBeInTheDocument();
     // Demoted, NOT deleted - this is how a coach checks the claim above it.
     expect(screen.getByText(/turned it in/)).toBeInTheDocument();
+  });
+
+  it('folds the question-by-question evidence while a football problem leads - and opens it when nothing does', async () => {
+    const row = {
+      question_id: 1,
+      question_number: 1,
+      question_text: 'Who has force?',
+      question_type: 'multiple_choice',
+      correct_count: 4,
+      incorrect_count: 6,
+      ungraded_count: 0,
+      is_excluded: false,
+      exclusions: [],
+    };
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      concept_breakdown: [conceptRow],
+      question_breakdown: [row],
+    } as never);
+    renderResultsTab();
+    const summary = await screen.findByText('Question by question');
+    expect(summary.closest('details')).not.toHaveAttribute('open');
+    cleanup();
+
+    vi.spyOn(gradingApi, 'getQuizDashboard').mockResolvedValue({
+      ...sampleDashboard,
+      question_breakdown: [row],
+    } as never);
+    renderResultsTab();
+    expect((await screen.findByText('Question by question')).closest('details')).toHaveAttribute('open');
   });
 
   it('FALLS BACK to ordinary Results when nothing is tagged', async () => {

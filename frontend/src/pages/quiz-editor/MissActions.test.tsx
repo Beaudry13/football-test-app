@@ -103,6 +103,9 @@ beforeEach(() => {
 describe('from a quiz miss', () => {
   it('a concept miss: Make a rep for the ones who missed it - the questions carried, those players on it', async () => {
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
+    // The card leads with Teach and Retest; Make a rep is one tap down.
+    expect(screen.queryByRole('button', { name: 'Make a rep for the 2' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Make a rep for the 2' }));
     expect(await screen.findByText('the new rep')).toBeInTheDocument();
     expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(9, [7], 'Force / Contain - Rep');
@@ -243,6 +246,7 @@ describe('a targeted rep from a concept - from what is already written', () => {
     ]);
     vi.mocked(repsApi.addDecisions).mockResolvedValue({} as never);
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Pick questions…' }));
     const picker = within(await screen.findByRole('group', { name: 'Questions for the rep' }));
     expect(picker.getByRole('checkbox', { name: /Who has force on toss\?/ })).toBeChecked();
@@ -258,12 +262,16 @@ describe('a targeted rep from a concept - from what is already written', () => {
   it('several missed questions on one concept: one tap makes a rep of all of them', () => {
     const second = { ...question, id: 8, question_text: 'Who spills?' } as Question;
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question, second]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
     expect(screen.getByRole('button', { name: 'Make a rep of all 2 for the 2' })).toBeInTheDocument();
   });
 
   it('a miss from Motion Lab opens its play in one tap', () => {
     vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
     at(<MissActions quizId={9} questions={[{ ...question, motion_play_id: 14 } as Question]} title="Q3" repTitle="Q3 - Rep" />);
+    // On a row: Teach shows; the rest waits behind More.
+    expect(screen.queryByRole('link', { name: 'Open the play' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
     expect(screen.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
   });
 });

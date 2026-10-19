@@ -134,8 +134,14 @@ describe('A Rep, for the coach', () => {
     open();
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
     expect(card.getByRole('heading', { name: 'Motion adjustment' })).toBeInTheDocument();
-    expect(card.getByText(/safeties missed/).textContent).toMatch(/4 of 11 safeties missed · most chose “Stay boundary”/);
-    expect(card.getByText('Marcus Hill')).toBeInTheDocument();
+    expect(card.getByText(/safeties missed/).textContent).toMatch(/4 of 11 safeties missed/);
+    expect(card.getByText(/Most chose/).textContent).toMatch(/Most chose “Stay boundary”/);
+    // The problem and the next step on the card; who missed it one tap down.
+    expect(card.queryByText('Marcus Hill')).toBeNull();
+    expect(card.getByRole('button', { name: 'Teach' })).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Retest' })).toBeInTheDocument();
+    fireEvent.click(card.getByRole('button', { name: 'View players' }));
+    expect(card.getAllByText('Marcus Hill').length).toBeGreaterThan(0);
     // What they know is said too, briefly.
     expect(within(screen.getByRole('list', { name: 'What they know' })).getByText(/Leverage/)).toBeInTheDocument();
     // Live: the link to share.
