@@ -103,6 +103,7 @@ export function QuizPreviewPage() {
                 <QuestionInput
                   question={question}
                   index={currentIndex}
+                  showNumber={false}
                   answer={answers[question.id]}
                   onChange={(a) => updateAnswer(question.id, a)}
                 />

@@ -11,7 +11,8 @@ import { renderArrows } from '../../utils/typography';
 import { clearDraft, createDrawingFor, draftKey, saveDraft } from './drawingDraft';
 import { ClipPlayer } from '../../components/clip/ClipPlayer';
 import { PlayPicture } from '../../components/football/PlayPicture';
-import { tapsMen, usableTargets } from '../../components/football/tapTargets';
+import { TapHint, YouAre } from '../../components/football/DecisionWords';
+import { usableTargets } from '../../components/football/tapTargets';
 import styles from './PlayPage.module.css';
 
 
@@ -47,6 +48,7 @@ export function QuestionInput({
   locked = false,
   canRevealClip = false,
   autostartClip = true,
+  showNumber = true,
   verdict = null,
 }: {
   question: Question;
@@ -66,6 +68,8 @@ export function QuestionInput({
   /** False on the all-questions-on-one-page layout, so a screen of clips
    * does not all start playing at once. */
   autostartClip?: boolean;
+  /** False when a progress bar already says "Question 3 of 10" (one at a time). */
+  showNumber?: boolean;
   /** Practice: how the checked answer went - lights the tapped man or spot
    * in the picture, as a Rep does. Never given for a graded question. */
   verdict?: boolean | null;
@@ -225,11 +229,7 @@ export function QuestionInput({
           )}
         </>
       )}
-      {role && (
-        <div className={styles.roleLine}>
-          <span className={styles.roleLead}>You&rsquo;re the</span> <strong>{role}</strong>
-        </div>
-      )}
+      {role && <YouAre role={role} />}
       {usePlayPicture ? (
         <PlayPicture
           marker={marker}
@@ -282,18 +282,18 @@ export function QuestionInput({
           reading the question, and an inline number disappears into the
           sentence on a small screen. */}
       <div className={styles.questionHeader}>
-        <span className={styles.questionNumber} aria-hidden="true">
-          {index + 1}
-        </span>
+        {showNumber && (
+          <span className={styles.questionNumber} aria-hidden="true">
+            {index + 1}
+          </span>
+        )}
         {/* renderArrows is display-only - the coach's stored text keeps the
             literal "->" they typed. See utils/typography.ts. */}
         <strong className={styles.questionText}>{renderArrows(question.question_text)}</strong>
       </div>
       {isUnanswered && <div className={styles.questionRequiredNote}>Please answer this question.</div>}
       {watching && <p className={styles.watchingNote}>Watch the motion…</p>}
-      {tapTargets && !watching && !locked && (
-        <p className={styles.tapHint}>{tapsMen(tapTargets) ? 'Tap the man in the picture' : 'Tap the spot on the field'}</p>
-      )}
+      {tapTargets && !watching && !locked && <TapHint targets={tapTargets} />}
 
       {/* Rendered only for questions the coach opted in. Everything below is
           untouched for every other question, including image questions. */}

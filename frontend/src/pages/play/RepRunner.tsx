@@ -272,6 +272,7 @@ export function RepRunner({
           <QuestionInput
             question={{ ...decision, question_text: '' }}
             index={index}
+            showNumber={false}
             answer={drafts[decision.id]}
             onChange={(a) => setDrafts((d) => ({ ...d, [decision.id]: a }))}
             locked={!!verdict}

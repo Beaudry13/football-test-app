@@ -668,9 +668,7 @@ export function QuizStep({
   const practiceBanner = isPractice && (
     <div className={styles.practiceBanner}>
       <span>Practice</span>
-      <span className={styles.practiceBannerNote}>
-        Instant feedback. This does not count toward your grades.
-      </span>
+      <span className={styles.practiceBannerNote}>It doesn&rsquo;t count.</span>
     </div>
   );
 
@@ -697,6 +695,7 @@ export function QuizStep({
         <QuestionInput
           question={question}
           index={currentIndex}
+          showNumber={false}
           answer={answers[question.id]}
           onChange={(a) => updateAnswer(question.id, a)}
           isUnanswered={unansweredIds.has(question.id)}
