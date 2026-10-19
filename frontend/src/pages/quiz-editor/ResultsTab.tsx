@@ -230,7 +230,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               concept is dropped; ANY OTHER concept is kept, because a retest
               that exposes a second weakness is telling the coach something new
               and suppressing that would be worse than repeating the first. */}
-          <WeakestConcepts concepts={teachNextConcepts} quizId={quiz.id} />
+          <WeakestConcepts concepts={teachNextConcepts} quizId={quiz.id} questions={quiz.questions ?? []} />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than
               inside them. Only when there is something to do: an "0 answers

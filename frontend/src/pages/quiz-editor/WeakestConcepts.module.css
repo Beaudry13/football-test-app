@@ -144,6 +144,37 @@
 
 /* The runners-up: one line each, no card, because they are context for the
    headline rather than four more things to act on. */
+/* TEACH, beside Retest. */
+.teachRow {
+  margin: var(--space-3) 0;
+}
+.teachButton {
+  font: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.teachButton:hover {
+  border-color: var(--nb-accent);
+}
+.teachLink {
+  font: inherit;
+  font-size: 13px;
+  margin-left: var(--space-3);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--peira-accent-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .others {
   list-style: none;
   margin: var(--space-3) 0 0;
