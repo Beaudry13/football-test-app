@@ -37,13 +37,27 @@
 // still retrying is not duplicated by a second session that would then read
 // its own earlier save as someone else's change.
 
+// THE SCRATCH PLAY (Motion Lab opens on the field). Opening Motion Lab must not
+// create a play on the server, so the field a coach lands on is a SCRATCH play:
+// one per coach, kept in this browser (localStorage, under the coach's scope)
+// and NEVER sent. It survives leaving and reloading, like a whiteboard. Saving
+// it (saveScratch) turns it into an ordinary play - from then on it is created
+// on the server and autosaves like every other. Starting a new play replaces
+// the scratch; the previous one is handed back so the page can offer Undo.
+
 import { ApiError } from '../../api/client'
 import * as motionApi from '../../api/motionLab'
 import type { MotionLookRow, MotionPlayDocument, MotionPlayRow } from '../../api/motionLab'
-import { newId, sanitizeLook, sanitizePlay, SCHEMA_VERSION, type Look, type Play } from '../engine/play'
+import type { Player } from '../engine/formation'
+import { newId, newPlay, sanitizeLook, sanitizePlay, SCHEMA_VERSION, type Look, type Play } from '../engine/play'
 import type { PlayRepository } from './playRepository'
+import { SCRATCH_NAME } from '../authoring/scratch'
 
-export type PlaySaveState = 'saved' | 'saving' | 'retrying' | 'conflict' | 'deleted-elsewhere' | 'failed'
+/** `unsaved`: the scratch play - on this device only, not yet saved to PEIRA. */
+export type PlaySaveState = 'saved' | 'saving' | 'retrying' | 'conflict' | 'deleted-elsewhere' | 'failed' | 'unsaved'
+
+/** What a fresh scratch play is called until the coach names it. */
+export { SCRATCH_NAME }
 
 export type MotionApi = Pick<
   typeof motionApi,
@@ -115,6 +129,10 @@ interface Entry {
   attempts: number
   retryTimer: ReturnType<typeof setTimeout> | null
   deleteQueued: boolean
+  /** The scratch play: kept on this device, never sent, until saveScratch. */
+  local: boolean
+  /** The scratch has been edited since it was started (worth an Undo, worth "Continue"). */
+  touched: boolean
 }
 
 // ---- conversions --------------------------------------------------------
@@ -186,6 +204,20 @@ export interface MotionLabSession {
   endDiscard(): void
   retryNow(): void
   pendingCount(): number
+
+  /** The scratch play's id, if there is one. */
+  scratchId(): string | null
+  isScratch(clientId: string): boolean
+  /** The scratch has been edited since it was started. */
+  scratchTouched(): boolean
+  /** Start a fresh scratch play (from these men, or the default formation),
+   *  replacing the old one. Returns its id, and the old one if it had work in it. */
+  startScratch(players?: Player[], name?: string, folderId?: number | null): { id: string; previous: Play | null }
+  /** Put a replaced scratch play back (Undo). */
+  restoreScratch(play: Play): string
+  /** Save the scratch play to PEIRA as an ordinary play, as `play` (its latest
+   *  version, named). It keeps its id, so the editor carries on with it. */
+  saveScratch(play: Play): void
 }
 
 export function createMotionLabSession(options: {
@@ -243,6 +275,8 @@ export function createMotionLabSession(options: {
       attempts: 0,
       retryTimer: null,
       deleteQueued: false,
+      local: false,
+      touched: false,
     }
     entries.set(entry.clientId, entry)
     if (serverId !== null) byServer.set(serverId, entry.clientId)
@@ -265,7 +299,36 @@ export function createMotionLabSession(options: {
     }, delay)
   }
 
+  // ---- the scratch play: this device only, never sent -------------------
+
+  const scratchKey = `${scopePrefix}scratch`
+  let scratch: string | null = null
+
+  function persistScratch(entry: Entry) {
+    drafts.set(scratchKey, JSON.stringify({ play: entry.play, touched: entry.touched, folderId: entry.folderId }))
+  }
+
+  function addScratch(play: Play, touched: boolean, folderId: number | null = null): Entry {
+    const entry = addEntry(play, null, null, folderId)
+    entry.local = true
+    entry.touched = touched
+    scratch = entry.clientId
+    persistScratch(entry)
+    return entry
+  }
+
+  function dropScratch(): Play | null {
+    const entry = scratch ? entries.get(scratch) : undefined
+    scratch = null
+    drafts.remove(scratchKey)
+    if (!entry) return null
+    entries.delete(entry.clientId)
+    if (current === entry.clientId) current = null
+    return entry.touched ? entry.play : null
+  }
+
   async function send(entry: Entry): Promise<void> {
+    if (entry.local) return
     if (entry.inflight || entry.retryTimer || entry.conflict || entry.failure || entry.deleteQueued || !entry.pending) return
     if (!entries.has(entry.clientId)) return
     entry.inflight = true
@@ -358,10 +421,25 @@ export function createMotionLabSession(options: {
     if (look) looks.set(look.id, { look, serverId: row.id, deleteAfterCreate: false })
   }
 
+  // ---- the scratch play left by an earlier page --------------------------
+
+  {
+    let saved: { play?: unknown; touched?: unknown; folderId?: unknown } | null = null
+    try {
+      saved = JSON.parse(drafts.get(scratchKey) ?? 'null')
+    } catch {
+      saved = null
+    }
+    const play = saved ? sanitizePlay(saved.play) : null
+    const folderId = typeof saved?.folderId === 'number' ? saved.folderId : null
+    if (play && !entries.has(play.id)) addScratch(play, saved?.touched === true, folderId)
+    else drafts.remove(scratchKey)
+  }
+
   // ---- recover drafts left by an earlier page ---------------------------
 
   for (const key of drafts.keys()) {
-    if (!key.startsWith(scopePrefix)) continue
+    if (!key.startsWith(scopePrefix) || key === scratchKey) continue
     let draft: Draft | null = null
     try {
       draft = JSON.parse(drafts.get(key) ?? 'null') as Draft
@@ -421,6 +499,14 @@ export function createMotionLabSession(options: {
     savePlay(play) {
       if (discarding.has(play.id)) return true
       let entry = entries.get(play.id)
+      if (entry?.local) {
+        // The scratch play: kept on this device, never sent.
+        if (intentKey(entry.play) !== intentKey(play)) entry.touched = true
+        entry.play = play
+        persistScratch(entry)
+        emit()
+        return true
+      }
       if (!entry) {
         entry = addEntry(play, null, null, null)
         entry.pending = true
@@ -441,6 +527,11 @@ export function createMotionLabSession(options: {
     deletePlay(id) {
       const entry = entries.get(id)
       if (!entry) return true
+      if (entry.local) {
+        dropScratch()
+        emit()
+        return true
+      }
       removeEntry(entry)
       if (entry.inflight) entry.deleteQueued = true
       else void performDelete(entry)
@@ -490,6 +581,7 @@ export function createMotionLabSession(options: {
     stateOf(clientId) {
       const entry = entries.get(clientId)
       if (!entry) return { state: 'saved', message: null }
+      if (entry.local) return { state: 'unsaved', message: null }
       if (entry.conflict === 'changed') return { state: 'conflict', message: null }
       if (entry.conflict === 'deleted') return { state: 'deleted-elsewhere', message: null }
       if (entry.failure) return { state: 'failed', message: entry.failure }
@@ -607,6 +699,38 @@ export function createMotionLabSession(options: {
     },
 
     pendingCount: () => [...entries.values()].filter((entry) => entry.pending || entry.inflight).length,
+
+    scratchId: () => scratch,
+    isScratch: (clientId) => entries.get(clientId)?.local === true,
+    scratchTouched: () => (scratch ? entries.get(scratch)?.touched === true : false),
+
+    startScratch(players, name = SCRATCH_NAME, folderId = null) {
+      const previous = dropScratch()
+      const entry = addScratch({ ...newPlay(name, players), id: newId('scratch_') }, false, folderId)
+      emit()
+      return { id: entry.clientId, previous }
+    },
+
+    restoreScratch(play) {
+      dropScratch()
+      const entry = addScratch(play, true)
+      emit()
+      return entry.clientId
+    },
+
+    saveScratch(play) {
+      const entry = entries.get(play.id)
+      if (!entry?.local) return
+      // From here on it is an ordinary play: created on the server, autosaved.
+      scratch = null
+      drafts.remove(scratchKey)
+      entry.local = false
+      entry.play = play
+      entry.pending = true
+      writeDraft(entry)
+      void send(entry)
+      emit()
+    },
   }
 
   return session
@@ -629,6 +753,20 @@ export function getMotionLabSession(scope: string, plays: MotionPlayRow[], looks
   const session = createMotionLabSession({ plays, looks, draftScope: scope })
   sessions.set(scope, session)
   return session
+}
+
+/**
+ * The coach's scratch play as this browser keeps it, if it has work in it - for
+ * the Library's "Continue your unsaved play". Read-only.
+ */
+export function peekScratch(scope: string, drafts: DraftStore = browserDraftStore): { name: string; updatedAt: number } | null {
+  try {
+    const saved = JSON.parse(drafts.get(`${DRAFT_PREFIX}:${scope}:scratch`) ?? 'null') as { play?: unknown; touched?: unknown } | null
+    const play = saved?.touched === true ? sanitizePlay(saved.play) : null
+    return play ? { name: play.name, updatedAt: play.updatedAt } : null
+  } catch {
+    return null
+  }
 }
 
 /** Tests only. */

@@ -1,0 +1,100 @@
+/* MOTION LAB ON HOME: one card above the quiz list, in the rail's panel look. */
+.card {
+  background: var(--peira-surface);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.libraryLink {
+  font-size: var(--peira-text-meta);
+  color: inherit;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.actions a {
+  /* Links dressed as the notebook's buttons: centre the words the way a <button> does. */
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.unsavedTag {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+  margin-right: var(--space-2);
+}
+
+.plays {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.play {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.thumb {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 160 / 84;
+  border-radius: 6px;
+  background: #2e6b3c;
+  outline: 2px solid transparent;
+  transition: outline-color 120ms;
+}
+
+.play:hover .thumb,
+.play:focus-visible .thumb {
+  outline-color: var(--peira-accent-text);
+}
+
+.playName {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  margin: 0;
+  color: var(--nb-text-muted);
+}

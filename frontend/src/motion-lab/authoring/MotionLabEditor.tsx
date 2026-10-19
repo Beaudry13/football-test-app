@@ -18,11 +18,13 @@ import { buildOrientation, orientationAt } from '../engine/orientation'
 import { applyEngagements, type Engagement } from '../engine/interactions'
 import { hashX, lineToGainY, lookFromPlayers, newId, newPlay, SCHEMA_VERSION, situationLabel, type Look, type PathFilter, type Play, type Situation } from '../engine/play'
 import type { PlayRepository } from '../storage/playRepository'
+import { SCRATCH_NAME } from './scratch'
 import { isEditorKeystroke } from './keyboardScope'
 import { inferMeetPoint, meetPointCameFromPath } from './meetPoint'
 import { playerSummary } from './playerSummary'
 import { StanceControl } from './StanceControl'
-import { withStance } from './stances'
+import { snapX, withStance } from './stances'
+import { DEFENSE_PRESETS, OFFENSE_PRESETS, presetPlayers, type FormationPreset } from './formationPresets'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -253,6 +255,25 @@ function InlineName({ value, onCommit, onCancel, placeholder }: { value: string;
   )
 }
 
+/**
+ * A quick formation, drawn small: the line of scrimmage, the offense below it
+ * or the defense above it - the shape a coach recognises before the name.
+ */
+function PresetThumb({ preset }: { preset: FormationPreset }) {
+  const offense = preset.side === 'offense'
+  return (
+    <svg className="preset-thumb" viewBox="0 0 46 26" width="46" height="26" aria-hidden="true">
+      <line x1="1" x2="45" y1={offense ? 4 : 22} y2={offense ? 4 : 22} className="preset-los" />
+      {preset.men.map(([label, dx, y], i) => (
+        <circle key={`${label}${i}`} cx={23 + dx * 1.1} cy={offense ? 4 - y * 2.6 : 22 - y * 1.45} r={1.7} className={offense ? 'preset-off' : 'preset-def'} />
+      ))}
+    </svg>
+  )
+}
+
+/** The sets offered on an empty play's strip: the four shapes a coach starts from most. */
+const START_PRESETS = OFFENSE_PRESETS.filter((p) => ['spread', 'trips-rt', 'i-form', 'empty'].includes(p.id))
+
 const fmtWhen = (t: number) => {
   const d = new Date(t)
   const today = new Date().toDateString() === d.toDateString()
@@ -279,17 +300,36 @@ const fmtWhen = (t: number) => {
  * the repository - the 400 ms quiet period, which only the editor knows about.
  * Without it the page's indicator said "Saved" for the whole of that window,
  * because the repository had not yet been told anything had changed.
+ *
+ * MOTION LAB OPENS ON THE FIELD (PEIRA). Three optional props let the page keep
+ * an unsaved scratch play out of storage:
+ *   `isUnsaved(id)`  the play is not saved yet: the top bar says so and offers
+ *                    "Save play" (naming it first if it still has the scratch
+ *                    name); Duplicate and Delete are not offered for it.
+ *   `onSaveUnsaved`  called with that play, named, when the coach saves it.
+ *   `onNewPlay`      "New play" (top bar, play menu, a formation) asks the page
+ *                    for a new play instead of writing one to storage itself.
+ * Without them the editor behaves exactly as before.
  */
 export function MotionLabEditor({
   repository,
   exit,
   saveStatus,
   notice,
+  isUnsaved,
+  onSaveUnsaved,
+  onNewPlay,
+  actions,
 }: {
   repository: PlayRepository
   exit?: ReactNode
   saveStatus?: ReactNode | ((editor: { editPending: boolean }) => ReactNode)
   notice?: ReactNode
+  isUnsaved?: (playId: string) => boolean
+  onSaveUnsaved?: (play: Play) => void
+  onNewPlay?: (fromPlayers: Player[], name?: string) => void
+  /** PEIRA's own actions on the play (Make question), at the right of the top bar. */
+  actions?: ReactNode
 }) {
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
@@ -356,7 +396,8 @@ export function MotionLabEditor({
   const phaseRef = useRef<Phase>('route')
   const [hoverCatch, setHoverCatch] = useState<Pt | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look'>(null)
+  /** 'save': naming an unsaved play before it is saved. */
+  const [renaming, setRenaming] = useState<null | 'play' | 'player' | 'look' | 'save'>(null)
   const [showLabels, setShowLabels] = useState(true)
 
   // ---- playback / views ------------------------------------------------
@@ -614,6 +655,13 @@ export function MotionLabEditor({
   const createPlay = (fromPlayers: Player[], name = 'Untitled Play') => {
     // A new play keeps the current look (alignment, no assignments) - a
     // coach rarely wants 22 men back at the default.
+    if (onNewPlay) {
+      // PEIRA: the page starts it (unsaved until the coach saves it).
+      flushSave()
+      setMenuOpen(null)
+      onNewPlay(fromPlayers.map((p) => ({ ...p, path: [] })), name === 'Untitled Play' ? undefined : name)
+      return
+    }
     const p = newPlay(name, fromPlayers)
     repository.savePlay(p)
     setPlays(repository.listPlays())
@@ -626,6 +674,26 @@ export function MotionLabEditor({
     setPlays(repository.listPlays())
     switchTo(p)
     setRenaming('play')
+  }
+  /** The play on screen is not saved yet (PEIRA's scratch play). */
+  const unsaved = !!isUnsaved?.(playId)
+  /** Save the unsaved play under `name` - it carries on, now saved. */
+  const commitSave = (name: string) => {
+    setRenaming(null)
+    if (!name.trim() || !onSaveUnsaved) return
+    const play = { ...latestRef.current(), name: name.trim() }
+    dirtyRef.current = false
+    setSaving(false)
+    // Naming it here is part of saving it, not another edit to save.
+    if (play.name !== playName) skipSaveRef.current = true
+    setPlayName(play.name)
+    onSaveUnsaved(play)
+    showToast(`Saved "${play.name}".`)
+  }
+  const startSave = () => {
+    setMenuOpen(null)
+    if (playName === SCRATCH_NAME || !playName.trim()) setRenaming('save')
+    else commitSave(playName)
   }
   const deletePlay = () => {
     if (!window.confirm(`Delete "${playName}"? This cannot be undone.`)) return
@@ -653,6 +721,21 @@ export function MotionLabEditor({
     setSelectedId(null)
     reset()
     showToast(`Formation "${l.name}" loaded — assignments and the ball were cleared.`)
+  }
+  /** A quick formation replaces one side; the other side keeps its men and its jobs. */
+  const applyPreset = (preset: FormationPreset) => {
+    const men = presetPlayers(preset, snapX(players))
+    const others = players.filter((p) => p.side !== preset.side)
+    setPlayers(preset.side === 'offense' ? [...men, ...others] : [...others, ...men])
+    // Blocks name men from both sides; the ball names offensive men only.
+    setEngagements([])
+    if (preset.side === 'offense') {
+      setBall(null)
+      setBallThen(null)
+    }
+    setSelectedId(null)
+    reset()
+    showToast(`${preset.name} — ${preset.side === 'offense' ? 'offense lined up; its jobs and the ball were cleared' : 'defense lined up; its jobs were cleared'}. ↶ puts it back.`)
   }
   const deleteLook = (l: Look) => {
     if (!window.confirm(`Delete formation "${l.name}"?`)) return
@@ -2341,6 +2424,12 @@ export function MotionLabEditor({
             on "← Library" in a meeting would drop the coach out of teaching
             and into the Library. It comes back the moment he exits. */}
         {!present && exit}
+        {/* PEIRA: starting a play is one obvious click, not a menu. */}
+        {!present && onNewPlay && (
+          <button className="new-play-btn" onClick={() => createPlay(players)} title="Start a new play from this formation">
+            + New play
+          </button>
+        )}
         <div className="brand">
           Peira <span>Motion Lab</span>
         </div>
@@ -2352,6 +2441,8 @@ export function MotionLabEditor({
             <span className="play-name present-name" title={playName}>{playName}</span>
           ) : renaming === 'play' ? (
             <InlineName value={playName} onCommit={(v) => { setPlayName(v); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Play name" />
+          ) : renaming === 'save' ? (
+            <InlineName value="" onCommit={commitSave} onCancel={() => setRenaming(null)} placeholder="Name this play, then Enter" />
           ) : (
             <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} aria-expanded={menuOpen === 'play'} title={present ? playName : 'Play: rename, open, duplicate, delete'}>
               <span className="play-name">{playName}</span>
@@ -2362,24 +2453,33 @@ export function MotionLabEditor({
             <div className="popover play-pop">
               <button onClick={() => { setMenuOpen(null); setRenaming('play') }}>Rename…</button>
               <button onClick={() => createPlay(players)}>New play (this formation)</button>
-              <button onClick={duplicatePlay}>Duplicate</button>
+              {unsaved ? <button onClick={startSave}>Save play</button> : <button onClick={duplicatePlay}>Duplicate</button>}
               {/* SPEC §13: it used to sit in the strip, permanently, for
                   something a coach does once in a while and never by accident. */}
               <button disabled={!hasPaths} onClick={() => { setMenuOpen(null); clearAllPaths() }}>Clear all assignments</button>
-              <button className="pop-clear" onClick={deletePlay}>Delete play</button>
+              {!unsaved && <button className="pop-clear" onClick={deletePlay}>Delete play</button>}
               <div className="pop-title">Open</div>
               <div className="play-list">
                 {plays.map((p) => (
                   <button key={p.id} className={`play-row${p.id === playId ? ' active' : ''}`} onClick={() => { if (p.id !== playId) switchTo(p); setMenuOpen(null) }}>
                     <span className="play-row-name">{p.name}</span>
-                    <span className="play-row-when">{fmtWhen(p.updatedAt)}</span>
+                    <span className="play-row-when">{isUnsaved?.(p.id) ? 'not saved' : fmtWhen(p.updatedAt)}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
         </div>
-        {!present &&
+        {/* An unsaved play says so and offers to save it, where "Saved" would be. */}
+        {!present && unsaved && renaming !== 'save' && (
+          <>
+            <span className="saved unsaved" title="This play is only on this device until you save it">Not saved</span>
+            <button className="gold-line save-play-btn" onClick={startSave} title="Save this play to your Motion Lab">
+              Save play
+            </button>
+          </>
+        )}
+        {!present && !unsaved &&
           (typeof saveStatus === 'function' ? saveStatus({ editPending: saving }) : saveStatus ?? (
             // Saving outranks a past failure: the next edit IS the retry
             // (SPEC §3.3), so while it is pending the honest word is
@@ -2401,6 +2501,7 @@ export function MotionLabEditor({
           It belongs with the man it is talking about, so it moved to the strip.
         */}
         <div className="spacer" />
+        {!present && actions}
 
         {/* "How I am watching", never an editing mode - hence the label
             (SPEC §2, §11.1). ML-UX-2 added the rule that hides it below
@@ -2682,6 +2783,25 @@ export function MotionLabEditor({
               </button>
               {menuOpen === 'formation' && (
                 <div className="popover play-pop-left formation-pop" onKeyDown={(e) => e.stopPropagation()}>
+                  {/* One click to a real formation, instead of dragging eleven men. */}
+                  <div className="pop-title">Line up the offense</div>
+                  <div className="preset-row" aria-label="Offensive formations">
+                    {OFFENSE_PRESETS.map((preset) => (
+                      <button key={preset.id} className="preset-chip" onClick={() => { applyPreset(preset); setMenuOpen(null) }} title={`Line the offense up in ${preset.name}`}>
+                        <PresetThumb preset={preset} />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pop-title">Line up the defense</div>
+                  <div className="preset-row" aria-label="Defensive fronts">
+                    {DEFENSE_PRESETS.map((preset) => (
+                      <button key={preset.id} className="preset-chip" onClick={() => { applyPreset(preset); setMenuOpen(null) }} title={`Line the defense up in ${preset.name}`}>
+                        <PresetThumb preset={preset} />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
                   <div className="pop-title">Save this arrangement</div>
                   {renaming === 'look' ? (
                     <InlineName value="" placeholder="e.g. Trips Right vs Over" onCommit={(v) => { if (v) saveLook(v); setRenaming(null) }} onCancel={() => setRenaming(null)} />
@@ -2716,7 +2836,23 @@ export function MotionLabEditor({
                 </div>
               )}
             </div>
-            <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
+            {/* AN EMPTY PLAY STARTS FROM A FORMATION. Until the first job is
+                drawn, the strip offers the common sets as one-click diagrams -
+                the same quick formations as the menu - instead of a sentence. */}
+            {!hasPaths && !ball && !ballNote ? (
+              <div className="start-row" aria-label="Start from a formation">
+                <span className="start-label">Start from</span>
+                {START_PRESETS.map((preset) => (
+                  <button key={preset.id} className="start-chip" onClick={() => applyPreset(preset)} title={`Line the offense up in ${preset.name}`}>
+                    <PresetThumb preset={preset} />
+                    {preset.name}
+                  </button>
+                ))}
+                <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>or drag a player to move him · click one to give him a job</span>
+              </div>
+            ) : (
+              <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
+            )}
           </>
         )}
       </div>

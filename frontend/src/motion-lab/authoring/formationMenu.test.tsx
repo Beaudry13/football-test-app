@@ -4,7 +4,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { installPointerStubs } from '../testing/pointerStubs'
-import type { Play } from '../engine/play'
+import { newPlay, type Play } from '../engine/play'
 
 /**
  * FORMATION (ML-UX-4, SPEC §13).
@@ -189,5 +189,71 @@ describe('the play menu', () => {
       expect(within(playMenu()!).getByRole('button', { name })).toBeInTheDocument()
     }
     expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+})
+
+describe('quick formations', () => {
+  const saved = () => repo.listPlays().find((p) => p.id === play.id)!
+  const men = (side: 'offense' | 'defense') => saved().players.filter((p) => p.side === side)
+
+  it('line up the offense in one click: the defense keeps its men and its jobs, the ball is cleared', async () => {
+    open(play)
+    const defenseBefore = JSON.stringify(play.players.filter((p) => p.side === 'defense'))
+    fireEvent.click(formationBtn())
+    fireEvent.click(item(/^Trips Rt$/))
+    await settle()
+    const offense = men('offense')
+    expect(offense).toHaveLength(11)
+    expect(offense.map((p) => p.label)).toEqual(['LT', 'LG', 'C', 'RG', 'RT', 'QB', 'RB', 'X', 'Y', 'H', 'Z'])
+    expect(offense.every((p) => p.path.length === 0)).toBe(true)
+    expect(JSON.stringify(men('defense'))).toBe(defenseBefore)
+    expect(saved().ball).toBeNull()
+    expect(saved().engagements).toEqual([])
+    expect(pop()).toBeNull()
+  })
+
+  it('line up the defense: the offense, its jobs and the ball stay', async () => {
+    open(play)
+    const offenseBefore = JSON.stringify(play.players.filter((p) => p.side === 'offense'))
+    const ballBefore = JSON.stringify(play.ball)
+    fireEvent.click(formationBtn())
+    fireEvent.click(item(/^3-4$/))
+    await settle()
+    expect(men('defense').map((p) => p.label)).toEqual(['OLB', 'DE', 'NT', 'DE', 'OLB', 'ILB', 'ILB', 'CB', 'CB', 'FS', 'SS'])
+    expect(JSON.stringify(men('offense'))).toBe(offenseBefore)
+    expect(JSON.stringify(saved().ball)).toBe(ballBefore)
+  })
+
+  it('one undo puts the old formation back', async () => {
+    open(play)
+    fireEvent.click(formationBtn())
+    fireEvent.click(item(/^Empty$/))
+    await settle()
+    expect(men('offense').some((p) => p.label === 'SL')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '↶' }))
+    await settle()
+    expect(JSON.stringify(men('offense'))).toBe(JSON.stringify(play.players.filter((p) => p.side === 'offense')))
+  })
+})
+
+describe('an empty play starts from a formation', () => {
+  const startRow = () => screen.queryByLabelText('Start from a formation')
+
+  it('offers the common sets on the strip until the first job is drawn', async () => {
+    const empty = newPlay('Blank')
+    open(empty)
+    const row = within(startRow()!)
+    expect(row.getAllByRole('button').map((b) => b.textContent)).toEqual(['Spread', 'Trips Rt', 'I-Form', 'Empty'])
+    fireEvent.click(row.getByRole('button', { name: 'I-Form' }))
+    await settle()
+    const offense = repo.listPlays().find((p) => p.id === empty.id)!.players.filter((p) => p.side === 'offense')
+    expect(offense.map((p) => p.label)).toContain('FB')
+    // Still empty of jobs, so still offered.
+    expect(startRow()).not.toBeNull()
+  })
+
+  it('is not there once the play has jobs in it', () => {
+    open(play)
+    expect(startRow()).toBeNull()
   })
 })

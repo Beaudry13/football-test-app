@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
 import { listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor } from './authoring/MotionLabEditor'
+import { MakeQuestion } from './MakeQuestion'
+import type { Player } from './engine/formation'
+import type { Play } from './engine/play'
 import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
 import { VIEWER_3D_URL, viewIn3D } from './viewIn3D'
 import './motionLab.css'
@@ -22,11 +25,28 @@ import './motionLab.css'
  * built-in "Saved" could only mean "accepted locally"), and the one decision
  * the coach must make when a play was changed or deleted somewhere else.
  * Resolving remounts the editor on the chosen version.
+ *
+ * MOTION LAB OPENS ON THE FIELD. At /motion-lab (no play id) the coach lands
+ * straight in the editor, on his SCRATCH play - kept on this device, never
+ * written to PEIRA (apiPlayRepository: the scratch play) - so opening Motion Lab
+ * creates nothing. "Save play" saves it as an ordinary play and the URL moves to
+ * it. "+ New play" starts a fresh scratch play; if the old one had work in it,
+ * Undo puts it back for a few seconds. Opening a saved play leaves the scratch
+ * play where it is: /motion-lab (or "Continue" in the Library) brings it back.
  */
 export default function MotionLabEditorPage() {
   const { playId } = useParams<{ playId: string }>()
   const { coach } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  /** At /motion-lab: the coach's scratch play, not a saved one. */
+  const scratchRoute = playId === undefined
+  /** The Library's "New play" (optionally from a saved formation). */
+  const fresh = (location.state as { fresh?: boolean; players?: Player[]; name?: string; folderId?: number | null } | null) ?? null
+  /** A replaced scratch play the coach can still get back. */
+  const [undoScratch, setUndoScratch] = useState<Play | null>(null)
+  /** The "Make question" panel is open. */
+  const [asking, setAsking] = useState(false)
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -37,21 +57,35 @@ export default function MotionLabEditorPage() {
   /** The editor's own "an edit is on screen and not yet handed over" (see saveStatus). */
   const editPending = useRef(false)
   /** The server id the URL was last set to - so the page can tell the editor
-   *  switching plays (follow it) from the coach navigating (load it). */
-  const urlPlayId = useRef<number | null>(null)
+   *  switching plays (follow it) from the coach navigating (load it). null: the
+   *  URL is /motion-lab, the scratch play. */
+  const urlPlayId = useRef<number | null | undefined>(undefined)
 
   const scope = coach ? `${coach.organization_id}:${coach.id}` : ''
 
   useEffect(() => {
-    const requested = Number(playId)
-    if (session && requested === urlPlayId.current) return
+    const requested = scratchRoute ? null : Number(playId)
+    if (session && requested === urlPlayId.current && !fresh?.fresh) return
     let cancelled = false
     setNotFound(false)
     Promise.all([listMotionPlays(), listMotionLooks()])
       .then(([plays, looks]) => {
         if (cancelled) return
         const loaded = getMotionLabSession(scope, plays, looks)
-        const clientId = loaded.clientIdOf(requested)
+        let clientId: string | null
+        if (requested === null) {
+          // The field, at once: his scratch play, or a fresh one.
+          clientId = loaded.scratchId()
+          if (fresh?.fresh || !clientId) {
+            const started = loaded.startScratch(fresh?.players, fresh?.name, fresh?.folderId ?? null)
+            clientId = started.id
+            setUndoScratch(started.previous)
+          }
+          // A refresh must not start yet another play.
+          if (fresh) navigate(location.pathname, { replace: true, state: null })
+        } else {
+          clientId = loaded.clientIdOf(requested)
+        }
         if (!clientId) {
           setNotFound(true)
           return
@@ -69,7 +103,7 @@ export default function MotionLabEditorPage() {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playId, scope])
+  }, [playId, scope, location.key])
 
   // Follow the session: re-render on save-state changes, keep the URL on the
   // current play once it has a server id, and surface notices.
@@ -82,6 +116,9 @@ export default function MotionLabEditorPage() {
       if (serverId !== null && serverId !== urlPlayId.current) {
         urlPlayId.current = serverId
         navigate(`/motion-lab/plays/${serverId}`, { replace: true })
+      } else if (current && session.isScratch(current) && urlPlayId.current !== null) {
+        urlPlayId.current = null
+        navigate('/motion-lab', { replace: true })
       }
       const fresh = session.takeNotices()
       if (fresh.length) setNotices((current) => [...current, ...fresh])
@@ -93,6 +130,13 @@ export default function MotionLabEditorPage() {
   useEffect(() => {
     session?.endDiscard()
   }, [session, editorKey])
+
+  // Undo for a replaced scratch play is offered for a few seconds, then it is gone.
+  useEffect(() => {
+    if (!undoScratch) return
+    const id = setTimeout(() => setUndoScratch(null), UNDO_MS)
+    return () => clearTimeout(id)
+  }, [undoScratch])
 
   const current = session?.repository.currentPlayId() ?? null
   const status = current && session ? session.stateOf(current) : null
@@ -108,7 +152,7 @@ export default function MotionLabEditorPage() {
       await session.resolveWithLatest(current)
       if (deleted) {
         session.endDiscard()
-        navigate('/motion-lab')
+        navigate('/motion-lab/library')
         return
       }
       setEditorKey((key) => key + 1)
@@ -142,7 +186,7 @@ export default function MotionLabEditorPage() {
           <span>
             <b>This play isn't in your Motion Lab.</b> It may have been deleted.
           </span>
-          <button onClick={() => navigate('/motion-lab')}>Open the Library</button>
+          <button onClick={() => navigate('/motion-lab/library')}>Open the Library</button>
         </div>
       </div>
     )
@@ -170,6 +214,10 @@ export default function MotionLabEditorPage() {
    */
   const open3D = () => {
     const id = session.repository.currentPlayId()
+    if (id && session.isScratch(id)) {
+      setNotices((all) => [...all, 'Save the play first - View in 3D shows the saved play.'])
+      return
+    }
     const serverId = id ? session.serverIdOf(id) : null
     const saved = id !== null && session.stateOf(id).state === 'saved' && !editPending.current
     if (!VIEWER_3D_URL || serverId === null || !saved) {
@@ -178,6 +226,27 @@ export default function MotionLabEditorPage() {
     }
     if (!viewIn3D(VIEWER_3D_URL, serverId)) setNotices((all) => [...all, 'The 3D viewer window was blocked - allow pop-ups for this site.'])
   }
+
+  /** "+ New play": a fresh scratch play from these men. Undo brings the old one back. */
+  const startNewPlay = (players: Player[], name?: string) => {
+    const started = session.startScratch(players, name)
+    session.repository.setCurrentPlayId(started.id)
+    setUndoScratch(started.previous)
+    urlPlayId.current = null
+    if (!scratchRoute) navigate('/motion-lab')
+    setEditorKey((key) => key + 1)
+  }
+  const undoNewPlay = () => {
+    if (!undoScratch) return
+    const id = session.restoreScratch(undoScratch)
+    session.repository.setCurrentPlayId(id)
+    setUndoScratch(null)
+    urlPlayId.current = null
+    if (!scratchRoute) navigate('/motion-lab')
+    setEditorKey((key) => key + 1)
+  }
+  const onScratch = current !== null && session.isScratch(current)
+  const currentPlay = current ? session.repository.listPlays().find((p) => p.id === current) ?? null : null
 
   let notice = null
   if (status?.state === 'conflict') {
@@ -208,6 +277,16 @@ export default function MotionLabEditorPage() {
         </button>
       </div>
     )
+  } else if (undoScratch) {
+    notice = (
+      <div className="ml-notice" role="status">
+        <span>
+          <b>New play started.</b> The unsaved play you had was cleared.
+        </span>
+        <button onClick={undoNewPlay}>Undo</button>
+        <button onClick={() => setUndoScratch(null)}>OK</button>
+      </div>
+    )
   } else if (error || notices.length > 0) {
     notice = (
       <div className="ml-notice" role="status">
@@ -231,10 +310,10 @@ export default function MotionLabEditorPage() {
         repository={session.repository}
         exit={
           <>
-            <button onClick={() => navigate(folderId !== null ? `/motion-lab/folders/${folderId}` : '/motion-lab')} title="Back to the Motion Lab Library">
-              ← Library
+            <button onClick={() => navigate(folderId !== null ? `/motion-lab/folders/${folderId}` : '/motion-lab/library')} title="Your saved plays">
+              Library
             </button>
-            {VIEWER_3D_URL && (
+            {VIEWER_3D_URL && !onScratch && (
               <button onClick={open3D} title="Open the saved play in the PEIRA 3D viewer (development)">
                 View in 3D
               </button>
@@ -251,6 +330,17 @@ export default function MotionLabEditorPage() {
           return <SaveStatus state={shownSaveState(live?.state ?? 'saved', pending)} message={live?.message ?? null} />
         }}
         notice={notice}
+        actions={
+          <div className="ball-menu">
+            <button className={asking ? 'active' : ''} aria-expanded={asking} onClick={() => setAsking((open) => !open)} title="Turn this play into a quiz question">
+              Make question
+            </button>
+            {asking && currentPlay && <MakeQuestion play={currentPlay} onClose={() => setAsking(false)} />}
+          </div>
+        }
+        isUnsaved={(id) => session.isScratch(id)}
+        onSaveUnsaved={(play) => session.saveScratch(play)}
+        onNewPlay={startNewPlay}
       />
     </div>
   )
@@ -273,6 +363,9 @@ export default function MotionLabEditorPage() {
  * The editor's own fallback indicator differs on purpose: a local write really
  * is retried at the next edit's flush.
  */
+/** How long a replaced scratch play can be brought back. */
+const UNDO_MS = 10000
+
 function shownSaveState(session: PlaySaveState, editPending: boolean): PlaySaveState {
   return editPending && session === 'saved' ? 'saving' : session
 }
@@ -280,6 +373,7 @@ function shownSaveState(session: PlaySaveState, editPending: boolean): PlaySaveS
 function SaveStatus({ state, message }: { state: string; message: string | null }) {
   const text: Record<string, string> = {
     saved: 'Saved',
+    unsaved: 'Not saved',
     saving: 'Saving…',
     retrying: 'Not saved — retrying',
     failed: 'Not saved',

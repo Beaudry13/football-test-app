@@ -54,3 +54,20 @@
   margin: 0;
   color: var(--nb-text-muted);
 }
+
+/* The coach's unsaved play (Motion Lab opens on it): one row, above the plays. */
+.unsavedRow {
+  border-left: 3px solid var(--color-accent, #c9a227);
+  margin-bottom: 12px;
+}
+
+.unsavedName {
+  flex: 1;
+  min-width: 0;
+}
+
+.unsavedTag {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.7;
+}

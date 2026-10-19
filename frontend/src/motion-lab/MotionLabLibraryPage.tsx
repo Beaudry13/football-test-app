@@ -5,7 +5,6 @@ import { deleteFolder, renameFolder } from '../api/folders'
 import {
   copyMotionPlay,
   createMotionFolder,
-  createMotionPlay,
   deleteMotionLook,
   deleteMotionPlay,
   listMotionFolders,
@@ -26,8 +25,9 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import nb from '../styles/notebook.module.css'
 import dashboardStyles from '../pages/DashboardPage.module.css'
 import folderStyles from '../pages/FolderPage.module.css'
-import { newPlay, SCHEMA_VERSION } from './engine/play'
-import { toDocument } from './storage/apiPlayRepository'
+import { useAuth } from '../auth/AuthContext'
+import type { Player } from './engine/formation'
+import { peekScratch } from './storage/apiPlayRepository'
 import styles from './MotionLabLibraryPage.module.css'
 
 /**
@@ -48,6 +48,9 @@ export function MotionLabLibraryPage() {
   const folderId = folderParam ? Number(folderParam) : null
   const navigate = useNavigate()
   const { confirm, dialog } = useConfirmDialog()
+  const { coach } = useAuth()
+  /** The coach's unsaved play on this device, if it has work in it. */
+  const unsaved = coach ? peekScratch(`${coach.organization_id}:${coach.id}`) : null
 
   const [folders, setFolders] = useState<Folder[] | null>(null)
   const [plays, setPlays] = useState<MotionPlayRow[] | null>(null)
@@ -109,24 +112,19 @@ export function MotionLabLibraryPage() {
     }
   }
 
-  async function handleNewPlay(fromPlayers?: MotionLookRow) {
-    setBusy(true)
-    setError(null)
-    try {
-      const play = fromPlayers
-        ? newPlay(`${fromPlayers.name} — new play`, fromPlayers.document.players as ReturnType<typeof newPlay>['players'])
-        : newPlay()
-      const created = await createMotionPlay({
-        name: play.name,
-        document: toDocument(play),
-        schema_version: SCHEMA_VERSION,
-        folder_id: folderId,
-      })
-      navigate(`/motion-lab/plays/${created.id}`)
-    } catch (err) {
-      setError(getErrorMessage(err))
-      setBusy(false)
-    }
+  /**
+   * NEW PLAY OPENS THE FIELD - nothing is written until the coach saves it. The
+   * editor starts an unsaved play (in this folder, from this formation if one
+   * was chosen); "Save play" in the editor is what creates it in the Library.
+   */
+  function handleNewPlay(fromLook?: MotionLookRow) {
+    navigate('/motion-lab', {
+      state: {
+        fresh: true,
+        folderId,
+        ...(fromLook ? { players: fromLook.document.players as Player[], name: `${fromLook.name} — new play` } : null),
+      },
+    })
   }
 
   async function handleNewFolder(event: FormEvent) {
@@ -182,7 +180,7 @@ export function MotionLabLibraryPage() {
         <nav className={folderStyles.breadcrumb} aria-label="Motion Lab folder path">
           {folder ? (
             <span className={folderStyles.crumbs}>
-              <Link to="/motion-lab" className={folderStyles.crumb}>
+              <Link to="/motion-lab/library" className={folderStyles.crumb}>
                 Motion Lab
               </Link>
               {ancestors.map((ancestor) => (
@@ -272,6 +270,17 @@ export function MotionLabLibraryPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {unsaved && !folder && (
+        <div className={`${dashboardStyles.folderRow} ${styles.unsavedRow}`} aria-label="Unsaved play">
+          <span className={styles.unsavedName}>
+            <b>{unsaved.name}</b> <span className={styles.unsavedTag}>not saved · on this device</span>
+          </span>
+          <button className={nb.btnSm} onClick={() => navigate('/motion-lab')}>
+            Continue
+          </button>
         </div>
       )}
 

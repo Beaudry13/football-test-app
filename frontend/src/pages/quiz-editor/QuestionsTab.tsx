@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { lazy, Suspense, useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   createQuestion,
@@ -30,6 +30,11 @@ import { MenuButton, MenuItem } from '../../components/ui/MenuButton';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
+
+/* Motion Lab's code (its engine and the play picture) loads only when a coach
+   opens the picker - the quiz editor does not carry it otherwise. */
+const MotionLabPlayPicker = lazy(() => import('../../motion-lab/MotionLabPlayPicker'));
 
 const TYPE_LABELS: Record<string, string> = {
   true_false: 'True / False',
@@ -119,6 +124,10 @@ function MoveToPosition({
 
 export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promise<void> }) {
   const [isAdding, setIsAdding] = useState(false);
+  /* QUIZ -> MOTION LAB: a question from one of the coach's saved plays, for
+     coaches who have Motion Lab. */
+  const motionLab = useMayUseMotionLab();
+  const [pickingPlay, setPickingPlay] = useState(false);
   /* The add form lives at the BOTTOM, because that is where a new question
      lands. The control at the top opens that same form and brings it into
      view, rather than opening a second form somewhere the question will not
@@ -447,7 +456,26 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
           >
             + Add question
           </button>
+          {motionLab && (
+            <button className={nb.btnSecondary} onClick={() => setPickingPlay(true)}>
+              From Motion Lab
+            </button>
+          )}
         </div>
+      )}
+
+      {pickingPlay && (
+        <Modal onDismiss={() => setPickingPlay(false)} ariaLabel="Add a question from Motion Lab" showCloseButton>
+          <Suspense fallback={<p>Loading…</p>}>
+            <MotionLabPlayPicker
+              onPick={async (input, image) => {
+                await handleCreate(input, image);
+                setPickingPlay(false);
+              }}
+              onClose={() => setPickingPlay(false)}
+            />
+          </Suspense>
+        </Modal>
       )}
 
       {justPhotographed && (
@@ -800,9 +828,16 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
              already on screen when a coach reaches it, but it must still focus
              the field - and going through one function is what keeps the two
              entry points from drifting apart again. */
-          <button className={nb.btnPrimary} onClick={openAddForm}>
-            + Add question
-          </button>
+          <div className={styles.addRow}>
+            <button className={nb.btnPrimary} onClick={openAddForm}>
+              + Add question
+            </button>
+            {motionLab && (
+              <button className={nb.btnSecondary} onClick={() => setPickingPlay(true)}>
+                From Motion Lab
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>
