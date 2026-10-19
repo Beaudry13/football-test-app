@@ -1617,7 +1617,21 @@
   border: 1px solid var(--border);
   background: #2e6b3c;
 }
-/* Make rep and Make question sit side by side in the top bar. */
+/* "Use this play": one button in the top bar, its menu under it. */
+.motion-lab-root .popover.use-pop {
+  min-width: 240px;
+}
+.motion-lab-root .popover.use-pop button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 7px 10px;
+}
+.motion-lab-root .use-why {
+  font-size: 11px;
+  color: var(--muted);
+}
 .motion-lab-root .make-actions {
   display: flex;
   flex: none;

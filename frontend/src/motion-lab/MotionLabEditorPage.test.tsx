@@ -115,6 +115,23 @@ describe('Motion Lab editor on the server', () => {
     await waitFor(() => expect(statusText()).toBe('Saved'))
   })
 
+  it('one "Use this play" button holds Make a rep, Make a quiz question and Teach a moment', async () => {
+    seedPlays()
+    await settle()
+    await openEditor(100)
+    // The top bar carries one button for taking the play somewhere else.
+    expect(screen.queryByRole('button', { name: 'Make rep' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Make question' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    const menu = within(screen.getByRole('menu', { name: 'Use this play' }))
+    expect(menu.getByRole('menuitem', { name: /Make a rep/ })).toBeTruthy()
+    expect(menu.getByRole('menuitem', { name: /Make a quiz question/ })).toBeTruthy()
+    fireEvent.click(menu.getByRole('menuitem', { name: /Teach a moment/ }))
+    // One panel at a time: the menu closes, the chosen panel opens.
+    expect(screen.queryByRole('menu', { name: 'Use this play' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Teach this play' })).toBeTruthy()
+  })
+
   it('offers no "View in 3D" unless a 3D viewer is configured - as in every production build', async () => {
     // V6's handoff exists only where VITE_MOTION_LAB_3D_URL is set (a local
     // .env file); with it unset the top bar is exactly what it was.

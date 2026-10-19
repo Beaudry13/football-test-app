@@ -95,7 +95,7 @@ export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }
   return (
     <>
       <div className="popover make-q-pop make-rep-pop" role="dialog" aria-label="Teach this play" onKeyDown={(e) => e.stopPropagation()}>
-        <div className="pop-title">Teach it: put the play on the big screen</div>
+        <div className="pop-title">Teach a moment: the play on the big screen</div>
         <canvas
           ref={preview}
           className="make-q-preview tappable"
