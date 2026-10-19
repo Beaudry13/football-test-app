@@ -306,6 +306,8 @@ export interface Question {
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** THE PRE-SNAP MOMENT (motion-lab/presnap.ts PresnapClip): played, then frozen at the snap. */
   presnap?: Record<string, unknown> | null;
+  /** The coach's "you are this player" ring on a photo (picture fractions). */
+  subject_marker?: { x: number; y: number; r: number } | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {
@@ -660,6 +662,10 @@ export interface QuestionBreakdown {
   correct_count: number;
   incorrect_count: number;
   ungraded_count: number;
+  /** WHERE THE TEAM WENT, for a one-answer question: how many of these same
+   *  answers chose each option (option order). A diagnostic - it changes no
+   *  score. Null for a select-all set or a question without options. */
+  option_counts?: { option_id: number; option_text: string; is_correct: boolean; count: number }[] | null;
   is_excluded: boolean;
   /** Every ACTIVE exclusion covering this question. More than one when a
    *  quiz-wide and an assignment-scoped exclusion overlap - restoring one
@@ -673,8 +679,13 @@ export interface RetestVerification {
   /** "snapshot" = what these players were actually delivered. "live_fallback"
    *  = the delivery predates concept tagging, so the question's current tag
    *  stood in. Never presented to a coach as recorded history. */
-  concept_source: 'snapshot' | 'live_fallback';
+  concept_source: 'snapshot' | 'live_fallback' | 'question';
   concept_ids: number[];
+  /** The original's questions this round re-asked; for an untagged retest,
+   *  the very questions it copied ("question" source). */
+  source_question_ids?: number[];
+  /** This round's own copies - what "retest again" re-asks without a concept. */
+  retest_question_ids?: number[];
   /** Parallel to concept_ids. What another round would be ABOUT - the card
    *  offers one, and its confirmation has to name the concept rather than the
    *  quiz it came from. */
@@ -729,6 +740,22 @@ export interface QuizDashboard {
   /** Present only on a quiz built as a retest; null everywhere else, which is
    *  the signal to render no verification card at all. */
   verification: RetestVerification | null;
+  /** DID IT STICK? How each retest built FROM this quiz went, newest first. */
+  retests?: RetestSummary[];
+}
+
+/** One retest of this quiz, as its own Results would summarise it. */
+export interface RetestSummary {
+  quiz_id: number;
+  title: string;
+  concept_ids: number[];
+  source_question_ids: number[];
+  targeted_total: number;
+  correct_count: number;
+  incorrect_count: number;
+  ungraded_count: number;
+  not_submitted_count: number;
+  is_complete: boolean;
 }
 
 export interface ConceptMissingPlayer {

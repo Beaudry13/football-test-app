@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { QuestionEditor } from './QuestionEditor';
 
@@ -98,5 +99,93 @@ describe('tap spots on an uploaded photo', () => {
     edit({ existingImageHasMarks: true });
     expect(screen.queryByRole('button', { name: 'Players tap the picture' })).toBeNull();
     expect(screen.getByText('Tap answers need a picture without your markings.')).toBeInTheDocument();
+  });
+});
+
+describe('tap spots while creating the question - no save-and-come-back', () => {
+  it('the coach attaches a photo, places and confirms the spots, and they go out with the new question', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <QuestionEditor
+          submitLabel="Add question"
+          onSave={onSave}
+          onCancel={vi.fn()}
+          allowImage
+          initialText="Who gets the ball?"
+          initialType="multiple_choice"
+          initialOptions={options}
+        />
+      </MemoryRouter>,
+    );
+    const photo = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'play.png', { type: 'image/png' });
+    await user.upload(screen.getByLabelText('Question image'), photo);
+    await screen.findByAltText('Selected question image');
+    fireEvent.click(screen.getByRole('button', { name: 'Players tap the picture' }));
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }));
+    fireEvent.click(check.getByRole('button', { name: 'Looks right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    const [input, file] = onSave.mock.calls[0];
+    expect(file).toBe(photo);
+    expect(input.tap_targets).toHaveLength(2);
+    expect(input.tap_targets.every((t: { zone?: boolean }) => t.zone)).toBe(true);
+  });
+
+  it('removing the photo takes its spots with it', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <QuestionEditor
+          submitLabel="Add question"
+          onSave={onSave}
+          onCancel={vi.fn()}
+          allowImage
+          initialText="Who gets the ball?"
+          initialType="multiple_choice"
+          initialOptions={options}
+        />
+      </MemoryRouter>,
+    );
+    await user.upload(
+      screen.getByLabelText('Question image'),
+      new File([new Uint8Array([0x89])], 'play.png', { type: 'image/png' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Players tap the picture' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'What your players tap' })).getByRole('button', { name: 'Looks right' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0]).not.toHaveProperty('tap_targets');
+  });
+});
+
+describe('you are this player - the coach rings the man on his photo', () => {
+  it('tap him, adjust the ring, say who he is - saved with the question', async () => {
+    const onSave = edit();
+    fireEvent.click(screen.getByRole('button', { name: 'Mark the player' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Mark the player' }));
+    const surface = document.querySelector('[data-marker-surface]') as HTMLElement;
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 400, clientY: 250 });
+    fireEvent.pointerUp(surface, { pointerId: 1 });
+    expect(screen.getByTestId('player-ring')).toHaveStyle({ left: '40%', top: '50%' });
+    fireEvent.click(dialog.getByRole('button', { name: 'Bigger' }));
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Who he is' }), { target: { value: 'Mike' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
+    expect(screen.getByText("Ringed: you're the Mike.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save question' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    const [input] = onSave.mock.calls[0];
+    expect(input.subject_marker).toEqual({ x: 0.4, y: 0.5, r: 0.06 });
+    expect(input.subject_role).toBe('Mike');
+  });
+
+  it('once players have the question, the ring stays put', () => {
+    edit({ hasBeenDelivered: true, existingMarker: { x: 0.4, y: 0.5, r: 0.05 }, initialRole: 'Mike' });
+    expect(screen.queryByRole('button', { name: 'Move the ring' })).toBeNull();
+    expect(screen.getByText('Players have this question, so the ring stays.')).toBeInTheDocument();
   });
 });

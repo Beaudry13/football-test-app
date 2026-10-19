@@ -55,6 +55,7 @@ class QuestionCreateSchema(Schema):
         fields.Nested(lambda: TapTargetSchema()), required=False, load_default=None, allow_none=True
     )
     presnap = fields.Dict(required=False, load_default=None, allow_none=True)
+    subject_marker = fields.Nested(lambda: MarkerSchema(), required=False, load_default=None, allow_none=True)
     document_page_id = fields.Int(required=False, load_default=None, allow_none=True)
     region = fields.Nested(lambda: RegionSchema(), required=False, load_default=None, allow_none=True)
     expected_answers = fields.List(
@@ -87,6 +88,16 @@ class QuestionUpdateSchema(Schema):
     subject_man = fields.Str(required=False, allow_none=True, validate=validate.Regexp(r"^[A-Za-z0-9_-]{1,32}$"))
     tap_targets = fields.List(fields.Nested(lambda: TapTargetSchema()), required=False, allow_none=True)
     presnap = fields.Dict(required=False, allow_none=True)
+    subject_marker = fields.Nested(lambda: MarkerSchema(), required=False, allow_none=True)
+
+
+class MarkerSchema(Schema):
+    """The coach's "you are this player" ring on a photo, in picture fractions."""
+
+    x = fields.Float(required=True, validate=validate.Range(min=0, max=1))
+    y = fields.Float(required=True, validate=validate.Range(min=0, max=1))
+    #: Radius, as a fraction of the picture's width.
+    r = fields.Float(required=True, validate=validate.Range(min=0.01, max=0.25))
 
 
 class TapTargetSchema(Schema):

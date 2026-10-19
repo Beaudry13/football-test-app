@@ -29,9 +29,9 @@ from app.services.question_exclusions import (
     load_for_quizzes,
 )
 from app.services.concept_results import concept_breakdown
-from app.services.retest_verification import verification_for
+from app.services.retest_verification import retests_of, verification_for
 from app.services.scoring import count_answers, pending_grading_count
-from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, Quiz
+from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, QuestionType, Quiz
 from app.schemas.grading import GradeAnswerSchema
 from app.services.access_codes import (
     effective_roster_people_for_quiz,
@@ -207,6 +207,36 @@ def grade_answer(answer_id: int):
     return jsonify(answer.to_dict())
 
 
+def _option_counts(question, answers) -> list[dict] | None:
+    """[{option_id, option_text, is_correct, count}] in option order: how many
+    of the given answers chose each option - ONE-ANSWER questions only.
+
+    A "select all that apply" set is deliberately left out (None), for the
+    reason the breakdown carried no distribution at all before: counting the
+    options of a set reads as a distribution of choices it is not (see
+    tests/test_multi_select_results TestTheBreakdownGainedNothing). None too
+    for a question without options to choose."""
+    if (
+        question.question_type not in (QuestionType.MULTIPLE_CHOICE, QuestionType.TRUE_FALSE)
+        or question.allows_multiple_answers
+        or not question.options
+    ):
+        return None
+    tally: dict[int, int] = {}
+    for answer in answers:
+        if answer.selected_option_id is not None:
+            tally[answer.selected_option_id] = tally.get(answer.selected_option_id, 0) + 1
+    return [
+        {
+            "option_id": o.id,
+            "option_text": o.option_text,
+            "is_correct": bool(o.is_correct_answer),
+            "count": tally.get(o.id, 0),
+        }
+        for o in sorted(question.options, key=lambda o: o.position)
+    ]
+
+
 def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
     # Group-aware, same as the quiz-card analytics in list_quizzes: if the
     # quiz's currently active code is restricted to group(s), that's who's
@@ -322,6 +352,11 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
                 # the coach's own note. It is never included in any /play
                 # payload.
                 "exclusions": [row.to_dict(include_reason=True) for row in rows],
+                # WHERE THE TEAM WENT: how many of these same answers chose
+                # each option. A DIAGNOSTIC over the rows counted above - it
+                # filters nothing, regrades nothing and feeds no score. Null
+                # for a question without options to choose from.
+                "option_counts": _option_counts(question, answers),
             }
         )
 
@@ -342,6 +377,9 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         #: retest; None everywhere else, which is the client's signal to render
         #: nothing rather than an empty verification card.
         "verification": verification_for(quiz),
+        #: How each retest built from THIS quiz went - "did it stick?" on the
+        #: original, beside the concept or question it re-asked.
+        "retests": retests_of(quiz),
     }
 
 

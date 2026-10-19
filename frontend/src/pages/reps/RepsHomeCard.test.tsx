@@ -101,6 +101,31 @@ describe('Reps on Home', () => {
     expect(next.queryByRole('link', { name: 'Teach it' })).toBeNull();
   });
 
+  it('after a retest: how many were retested, how many still miss it, and Retest them', async () => {
+    vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
+      rep({
+        id: 4,
+        title: 'Motion adjustment - Retest',
+        is_retest: true,
+        worst: null,
+        signal: {
+          kind: 'retest_missing',
+          concept: 'Motion adjustment',
+          concept_id: 3,
+          missed: 1,
+          responded: 3,
+          before_pct: 64,
+          now_pct: 67,
+        },
+      }),
+    ]);
+    open();
+    const next = within(await screen.findByLabelText('Next up'));
+    expect(next.getByText(/3 were retested, 1 still misses it/)).toBeInTheDocument();
+    expect(next.getByRole('link', { name: 'Retest 1' })).toHaveAttribute('href', '/reps/4?retest=3');
+    expect(next.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/reps/4?teach=3');
+  });
+
   it('with no reps yet, offers the one thing to do', async () => {
     vi.mocked(repsApi.getRepsSummary).mockResolvedValue([]);
     open();

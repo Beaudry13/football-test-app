@@ -7,6 +7,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor } from './authoring/MotionLabEditor'
 import { MakeQuestion } from './MakeQuestion'
 import { MakeRep } from './MakeRep'
+import { TeachPlay } from './TeachPlay'
 import type { Player } from './engine/formation'
 import type { Play } from './engine/play'
 import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
@@ -52,6 +53,8 @@ export default function MotionLabEditorPage() {
   const intoRep = Number(new URLSearchParams(location.search).get('rep')) || null
   /** The "Make rep" panel is open. One panel at a time. */
   const [repping, setRepping] = useState(intoRep !== null)
+  /** The "Teach" panel is open: this play on the meeting-room screen. */
+  const [teachingPlay, setTeachingPlay] = useState(false)
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -342,6 +345,7 @@ export default function MotionLabEditorPage() {
               aria-expanded={repping}
               onClick={() => {
                 setAsking(false)
+                setTeachingPlay(false)
                 setRepping((open) => !open)
               }}
               title="Put a player in this play: a Situational Rep"
@@ -353,12 +357,26 @@ export default function MotionLabEditorPage() {
               aria-expanded={asking}
               onClick={() => {
                 setRepping(false)
+                setTeachingPlay(false)
                 setAsking((open) => !open)
               }}
               title="Turn this play into a quiz question"
             >
               Make question
             </button>
+            <button
+              className={teachingPlay ? 'active' : ''}
+              aria-expanded={teachingPlay}
+              onClick={() => {
+                setRepping(false)
+                setAsking(false)
+                setTeachingPlay((open) => !open)
+              }}
+              title="Put this play on the big screen: the motion, the moment, your coaching point"
+            >
+              Teach
+            </button>
+            {teachingPlay && currentPlay && <TeachPlay play={currentPlay} onClose={() => setTeachingPlay(false)} />}
             {repping && currentPlay && (
               <MakeRep
                 play={currentPlay}

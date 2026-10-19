@@ -298,6 +298,14 @@ describe('A Rep, for the coach', () => {
     expect(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' })).toBeInTheDocument();
   });
 
+  it("arrives at the retest confirm from Home's \"Retest 1\" - still the coach's tap to send", async () => {
+    open(RESULTS, '/reps/5?retest=3');
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    expect(await card.findByRole('group', { name: 'Retest' })).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Send retest' })).toBeInTheDocument();
+    expect(repsApi.createRepRetest).not.toHaveBeenCalled();
+  });
+
   it('edits a decision right on the page: situation, answers, the right one, concept, reason', async () => {
     vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 3, name: 'Motion adjustment', is_archived: false }]);
     vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);
@@ -741,6 +749,72 @@ describe('the right spot, in the results', () => {
     expect(stay.className).toMatch(/wrong/);
     expect(stay).toHaveTextContent('3');
     expect(card.getByRole('button', { name: 'Tap Rotate down' })).toHaveTextContent('7');
-    expect(card.getByText(/how many tapped it/)).toBeInTheDocument();
+    // Every answer, most tapped first, with how many and what share.
+    expect(card.getByText(/✓ Rotate down 7 \(64%\)/)).toBeInTheDocument();
+    expect(card.getByText(/Stay boundary 3 \(27%\)/)).toBeInTheDocument();
+  });
+});
+
+describe('a Rep made for the players who missed a quiz question', () => {
+  it('goes to the ones already on it - no position picked for the coach', async () => {
+    vi.mocked(playersApi.listPlayers).mockResolvedValue([
+      { id: 41, first_name: 'Ty', last_name: 'Adams', position: 'CB', is_active: true },
+      { id: 43, first_name: 'Al', last_name: 'Cole', position: 'CB', is_active: true },
+    ] as never);
+    const made = {
+      ...RESULTS,
+      players: [],
+      audience: {
+        label: null,
+        invited: 2,
+        code: null,
+        people: [
+          { player_id: 41, name: 'Ty Adams', position: 'CB' },
+          { player_id: 42, name: 'Bo Brown', position: 'CB' },
+        ],
+      },
+    };
+    open(made as unknown as RepResults);
+    expect(await screen.findByText('Goes to the 2 on it: Ty Adams, Bo Brown')).toBeInTheDocument();
+    const chips = within(await screen.findByRole('group', { name: 'Positions' }));
+    expect(chips.getByRole('button', { name: /Corners/ })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Send rep' }));
+    await waitFor(() => expect(codesApi.activateQuiz).toHaveBeenCalledWith(5, [], 'PRACTICE'));
+    expect(rosterApi.addRosterMembers).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Rep decision on a photo', () => {
+  it('the coach rings the player himself and says who he is - saved with the decision', async () => {
+    vi.mocked(questionsApi.updateQuestion).mockResolvedValue({} as never);
+    vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 3, name: 'Motion adjustment', is_archived: false }]);
+    const image = { id: 1, question_id: 11, image_url: '/uploads/photo.png', annotations: [], canvas_width: null, updated_at: '' };
+    open({ ...RESULTS, decisions: [{ ...RESULTS.decisions[0], image, presnap: null, delivered: false }] } as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark the player' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Mark the player' }));
+    const surface = document.querySelector('[data-marker-surface]') as HTMLElement;
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500, right: 1000, bottom: 500, x: 0, y: 0, toJSON: () => ({}) });
+    fireEvent.pointerDown(surface, { pointerId: 1, clientX: 300, clientY: 200 });
+    fireEvent.pointerUp(surface, { pointerId: 1 });
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Who he is' }), { target: { value: 'Field safety' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
+    expect(screen.getByText("Ringed: you're the Field safety.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(questionsApi.updateQuestion).toHaveBeenCalled());
+    const [, , body] = vi.mocked(questionsApi.updateQuestion).mock.calls[0];
+    expect(body).toMatchObject({ subject_marker: { x: 0.3, y: 0.4, r: 0.05 }, subject_role: 'Field safety' });
+  });
+
+  it('a decision players have keeps its ring', async () => {
+    const image = { id: 1, question_id: 11, image_url: '/uploads/photo.png', annotations: [], canvas_width: null, updated_at: '' };
+    open({
+      ...RESULTS,
+      decisions: [{ ...RESULTS.decisions[0], image, presnap: null, delivered: true, subject_marker: { x: 0.3, y: 0.4, r: 0.05 } }],
+    } as RepResults);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit decision 1' }));
+    expect(screen.queryByRole('button', { name: 'Mark the player' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Move the ring' })).toBeNull();
+    expect(screen.getByText(/who it tests, when they decide and where they tap are locked/)).toBeInTheDocument();
   });
 });

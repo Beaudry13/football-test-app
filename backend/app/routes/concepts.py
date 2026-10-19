@@ -144,6 +144,48 @@ def _close(a: str, b: str) -> bool:
     return row[-1] <= 2
 
 
+@concepts_bp.get("/concepts/<int:concept_id>/questions")
+@jwt_required()
+def concept_questions(concept_id: int):
+    """THE FOOTBALL PROBLEMS ALREADY WRITTEN ABOUT ONE CONCEPT - the coach's
+    own quizzes' and Reps' questions tagged with it, newest quiz first, so a
+    targeted Rep can be built from what exists instead of rewritten. Own-only,
+    like every list (utils/auth.get_visible_quiz). Stopped questions are left
+    out: they would be undeliverable."""
+    from app.models import Question, Quiz
+
+    coach = current_coach()
+    concept = db.session.get(Concept, concept_id)
+    if concept is None or concept.organization_id != coach.organization_id:
+        raise ApiError("That concept does not exist", status_code=404)
+    rows = (
+        Question.query.join(Quiz, Quiz.id == Question.quiz_id)
+        .filter(
+            Question.concept_id == concept_id,
+            Question.retired_at.is_(None),
+            Quiz.organization_id == coach.organization_id,
+            Quiz.coach_id == coach.id,
+        )
+        .order_by(Quiz.updated_at.desc(), Quiz.id.desc(), Question.position)
+        .limit(40)
+        .all()
+    )
+    return jsonify(
+        [
+            {
+                "question_id": q.id,
+                "quiz_id": q.quiz_id,
+                "quiz_title": q.quiz.title,
+                "quiz_kind": q.quiz.kind,
+                "question_text": q.question_text,
+                "question_type": q.question_type.value,
+                "has_picture": bool(q.image or q.presnap),
+            }
+            for q in rows
+        ]
+    )
+
+
 @concepts_bp.get("/concepts/duplicates")
 @jwt_required()
 def concept_duplicates():

@@ -107,6 +107,12 @@
   font-size: 24px;
   font-weight: 700;
   line-height: 1.3;
+  /* A coaching point written over a few lines keeps its lines. */
+  white-space: pre-line;
+}
+/* Focus moves to the screen so it has the keys; no ring around the whole room. */
+.teach:focus {
+  outline: none;
 }
 .right {
   margin: 0;

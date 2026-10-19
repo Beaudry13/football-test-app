@@ -322,3 +322,23 @@
     flex: 1 1 auto;
   }
 }
+
+/* A concept row in a Rep's words: what they chose instead, or that it is fine. */
+.looksGood {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--peira-success, #2f9e57);
+}
+.otherChose {
+  font-size: 13px;
+  color: var(--nb-text-muted, #6b7280);
+}
+
+/* A rostered player's name opens his profile - what he knows, what to work on. */
+.playerLink {
+  color: inherit;
+  text-decoration: none;
+}
+.playerLink:hover {
+  text-decoration: underline;
+}

@@ -810,11 +810,16 @@ class TestTheBreakdownGainedNothing:
     def test_it_still_reports_counts_and_no_set_specific_field(
         self, client, coach_headers, multi
     ):
-        """STILL NO PER-OPTION DISTRIBUTION HERE. "Most common combination" is
-        an analytics question, not a display one, and v1 answers it by letting
-        a coach open the player's row. The breakdown carries no per-option
-        distribution to become misleading for a set, which is why nothing here
-        needed a fallback.
+        """STILL NO PER-OPTION DISTRIBUTION FOR A SET. "Most common combination"
+        is an analytics question, not a display one, and v1 answers it by
+        letting a coach open the player's row. The breakdown carries no
+        per-option distribution to become misleading for a set.
+
+        `option_counts` (Situational Rep / quiz coaching) is the deliberate,
+        coach-requested exception for ONE-ANSWER questions - where each player
+        made exactly one choice, so a count per option IS the distribution of
+        choices ("where did everybody tap?"). For a set it is None, asserted
+        below, which is the line this guard exists to hold.
 
         Phase C added `concept` - a single nullable tag naming what the
         question is about. It is deliberately NOT the thing this guard exists
@@ -846,4 +851,23 @@ class TestTheBreakdownGainedNothing:
             "is_excluded",
             "exclusions",
             "concept",
+            "option_counts",
         }
+        # A set gets no per-option counts - they would not be a distribution.
+        assert row["option_counts"] is None
+
+
+class TestWhereEverybodyWent:
+    """One-answer questions: how many chose each option, over the same answers
+    the counts above are made from. Nothing regraded, nothing filtered."""
+
+    def test_a_one_answer_question_counts_each_option(self, client, coach_headers, single):
+        answer_single_and_submit(client, single, "Cover 3")
+        row = client.get(
+            f"/api/quizzes/{single['quiz_id']}/dashboard", headers=coach_headers
+        ).get_json()["question_breakdown"][0]
+        assert row["option_counts"] == [
+            {"option_id": single["ids"]["Cover 2"], "option_text": "Cover 2", "is_correct": True, "count": 0},
+            {"option_id": single["ids"]["Cover 3"], "option_text": "Cover 3", "is_correct": False, "count": 1},
+        ]
+        assert (row["correct_count"], row["incorrect_count"]) == (0, 1)

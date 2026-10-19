@@ -51,6 +51,8 @@ export interface RepDecision {
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** Which man in the play it tests - the one ringed - and his label ("FS"). */
   subject_man?: { id: string; label: string | null } | null;
+  /** The coach's ring on a photo. */
+  subject_marker?: { x: number; y: number; r: number } | null;
   /** A player has received it: answers can be reworded or added, the right one is locked. */
   delivered?: boolean;
   is_retired: boolean;
@@ -149,6 +151,8 @@ export interface RepSummary {
   signal: {
     kind: 'retest_fixed' | 'retest_missing' | 'retested';
     concept: string;
+    /** The problem's concept (null = the untagged decisions), for deep links. */
+    concept_id?: number | null;
     missed: number;
     responded: number;
     before_pct: number | null;
@@ -247,8 +251,11 @@ export interface RepFromQuiz extends Quiz {
 }
 
 /** EXISTING CONTENT -> REP: a quiz's tap-an-answer questions, copied into a new Rep. */
-export function makeRepFromQuiz(quizId: number, questionIds?: number[]): Promise<RepFromQuiz> {
-  return api.post<RepFromQuiz>(`/quizzes/${quizId}/make-rep`, questionIds ? { question_ids: questionIds } : {});
+export function makeRepFromQuiz(quizId: number, questionIds?: number[], title?: string): Promise<RepFromQuiz> {
+  return api.post<RepFromQuiz>(`/quizzes/${quizId}/make-rep`, {
+    ...(questionIds ? { question_ids: questionIds } : {}),
+    ...(title ? { title } : {}),
+  });
 }
 
 /** Questions from a quiz, added to a Rep that already exists (after its own decisions). */

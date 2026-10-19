@@ -4,6 +4,13 @@
 // One target per answer, as fractions of the picture: a man (a ring on him) or,
 // with `zone`, a place on the field (a gap, a drop) shown labelled.
 
+/** The coach's "you are this player" ring on a photo: picture fractions, r of its width. */
+export interface Marker {
+  x: number
+  y: number
+  r: number
+}
+
 export interface TapTarget {
   x: number
   y: number

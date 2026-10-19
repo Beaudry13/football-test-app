@@ -17,6 +17,7 @@ import { getErrorMessage } from '../api/client';
 import type { Group, PlayerHistory } from '../api/types';
 import { listGroups } from '../api/groups';
 import { PlayerGroups } from './PlayerGroups';
+import { PlayerLearning } from './PlayerLearning';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useConfirmDialog } from '../components/ConfirmDialog';
 import { PlayerAvatar } from '../components/PlayerAvatar';
@@ -363,6 +364,10 @@ export function PlayerProfilePage() {
               memberOf={history.current_groups}
               onChanged={load}
             />
+
+            {/* What does he know, and what is he still missing? - before the
+                numbers, because it says what to coach next. */}
+            <PlayerLearning playerId={id} firstName={history.player.first_name} />
 
             <div className={styles.statsGrid}>
               <div className={nb.card}>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
@@ -54,9 +54,25 @@ export function TeachView({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+  /* THE SCREEN HAS THE KEYS while it is up: focus moves to it, and a key
+     pressed here stays here - Motion Lab's own shortcuts (Space plays, Delete
+     clears a path) must not act on the play underneath the meeting room. */
+  const screenRef = useRef<HTMLDivElement>(null);
+  useEffect(() => screenRef.current?.focus(), []);
   if (!slide) return null;
   return createPortal(
-    <div className={styles.teach} role="dialog" aria-modal="true" aria-label={`Teach ${title}`}>
+    <div
+      ref={screenRef}
+      tabIndex={-1}
+      className={styles.teach}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Teach ${title}`}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Escape') onClose();
+      }}
+    >
       <div className={styles.bar}>
         <span className={styles.title}>{title}</span>
         {slides.length > 1 && (

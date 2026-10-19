@@ -18,8 +18,9 @@ from app.services.attempt_scope import official_only
 from app.services.player_identity import PlayerKey, representative_attempts
 
 
-def missed_by_player(quiz, concept_id: int) -> dict[PlayerKey, set[int]]:
-    """`{PlayerKey: {question_id, ...}}` for one concept.
+def missed_by_player(quiz, concept_id: int | None, question_ids: set[int] | None = None) -> dict[PlayerKey, set[int]]:
+    """`{PlayerKey: {question_id, ...}}` for one concept - or, with no concept,
+    for exactly `question_ids` (an untagged miss, retested by its questions).
 
     KEYED BY PLAYER IDENTITY, NOT BY ATTEMPT. A quiz can hold several access
     codes and attempt uniqueness is scoped to one of them, so keying on
@@ -49,7 +50,11 @@ def missed_by_player(quiz, concept_id: int) -> dict[PlayerKey, set[int]]:
         .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
         .all()
     )
-    concept_question_ids = {q.id for q in quiz.questions if q.concept_id == concept_id}
+    concept_question_ids = (
+        {q.id for q in quiz.questions if q.concept_id == concept_id}
+        if concept_id is not None
+        else {q.id for q in quiz.questions if q.id in (question_ids or set())}
+    )
     if not concept_question_ids:
         return {}
 
@@ -64,14 +69,16 @@ def missed_by_player(quiz, concept_id: int) -> dict[PlayerKey, set[int]]:
     return missed
 
 
-def eligible_players(quiz, concept_id: int) -> dict[PlayerKey, PlayerAttempt]:
+def eligible_players(
+    quiz, concept_id: int | None, question_ids: set[int] | None = None
+) -> dict[PlayerKey, PlayerAttempt]:
     """`{PlayerKey: representative attempt}` for everyone who missed something.
 
     Returns a mapping rather than a list so a caller targeting players by id or
     name never has to re-derive identity - which is where a second, subtly
     different rule would otherwise appear.
     """
-    missed = missed_by_player(quiz, concept_id)
+    missed = missed_by_player(quiz, concept_id, question_ids)
     if not missed:
         return {}
     attempts = representative_attempts(
@@ -83,7 +90,7 @@ def eligible_players(quiz, concept_id: int) -> dict[PlayerKey, PlayerAttempt]:
 
 
 def questions_to_copy(
-    quiz, concept_id: int, player_keys: set[PlayerKey]
+    quiz, concept_id: int | None, player_keys: set[PlayerKey], question_ids: set[int] | None = None
 ) -> tuple[set[int], list[Question]]:
     """`(copyable question ids, retired questions that were skipped)`.
 
@@ -101,7 +108,7 @@ def questions_to_copy(
     answer is worse than one that says a question was left out. The caller
     tells the coach.
     """
-    missed = missed_by_player(quiz, concept_id)
+    missed = missed_by_player(quiz, concept_id, question_ids)
     wanted: set[int] = set()
     for key, question_ids in missed.items():
         if key in player_keys:

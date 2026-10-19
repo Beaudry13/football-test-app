@@ -31,6 +31,7 @@ import { RepRunner } from './RepRunner';
 import { SubmittedStep } from './SubmittedStep';
 import player from '../../styles/player.module.css';
 import styles from './PlayPage.module.css';
+import { clearPracticeReview, readPracticeReview, savePracticeReview } from './practiceReviewStore';
 
 /** Work on screen when the server asked the player to prove who they are
  *  mid-quiz, kept so proving it does not cost them what they had not saved. */
@@ -164,6 +165,25 @@ export function PlayPage() {
         const joined = await validateCode(urlCode);
         if (cancelled) return;
         if (wasActiveInThisTab(urlCode)) {
+          /* A practice he finished in this tab comes back as he left it -
+             Practice complete, with Review missed - not as a fresh run. */
+          const finished = readPracticeReview(urlCode, remembered);
+          const questions = joined.quiz.questions ?? [];
+          if (finished && finished.order.every((id) => questions.some((q) => q.id === id))) {
+            setStep({
+              name: 'practice-complete',
+              code: urlCode,
+              joined,
+              player: remembered,
+              feedback: finished.feedback,
+              review: {
+                questions: finished.order.map((id) => questions.find((q) => q.id === id)!),
+                chosen: finished.chosen,
+              },
+              run: 0,
+            });
+            return;
+          }
           const outcome = await enterAsPlayer({
             code: urlCode,
             accessCodeId: joined.access_code_id,
@@ -252,6 +272,7 @@ export function PlayPage() {
 
   async function handleTryAgain() {
     if (step.name !== 'practice-complete') return;
+    clearPracticeReview(step.code);
     // A new attempt, not a cleared one. Practice retakes are unlimited
     // because the database's uniqueness rule covers graded attempts only,
     // so this simply starts another - the finished one stays as history.
@@ -390,7 +411,10 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onSubmitted={() => setStep({ name: 'submitted', code: step.code, player: step.player })}
-          onPracticeComplete={(feedback, review) =>
+          onPracticeComplete={(feedback, review) => {
+            if (review) {
+              savePracticeReview(step.code, step.player, feedback, review.questions.map((q) => q.id), review.chosen);
+            }
             setStep({
               name: 'practice-complete',
               code: step.code,
@@ -399,8 +423,8 @@ export function PlayPage() {
               feedback,
               review,
               run: step.run,
-            })
-          }
+            });
+          }}
         />
       )}
       {step.name === 'practice-complete' && (

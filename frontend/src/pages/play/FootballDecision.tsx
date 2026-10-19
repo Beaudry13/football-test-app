@@ -56,6 +56,7 @@ export function Decision({
         still={still}
         onMotionDone={onMotionDone}
         pictureClassName={styles.picture}
+        marker={question.subject_marker}
         motionKey={question.id}
       />
       <h1 className={styles.prompt}>{question.question_text}</h1>

@@ -494,7 +494,7 @@ class TestHomeSummary:
         summary = {s["id"]: s for s in client.get("/api/quizzes/reps-summary", headers=headers).get_json()}
         assert summary[retest["id"]]["signal"] == {
             "kind": "retest_missing", "concept": "Motion adjustment", "missed": 1, "responded": 2,
-            "before_pct": 33, "now_pct": 50,
+            "before_pct": 33, "now_pct": 50, "concept_id": first["concept"]["id"],
         }
         assert summary[rep["id"]]["signal"]["kind"] == "retested"
         assert summary[rep["id"]]["signal"]["retest_id"] == retest["id"]
@@ -988,3 +988,115 @@ class TestTheTestedMan:
         reworded = client.patch(url, json={"subject_role": "Boundary safety", "subject_man": "D9"}, headers=coach_headers)
         assert reworded.status_code == 200, reworded.get_json()
         assert reworded.get_json()["subject_role"] == "Boundary safety"
+
+
+class TestTheRingOnAPhoto:
+    """A coach-placed 'you are this player' ring on an uploaded photo: placed,
+    kept in copies, sane in size - and, once players have it, locked."""
+
+    def _q(self, client, headers, quiz_id, **extra):
+        return client.post(
+            f"/api/quizzes/{quiz_id}/questions",
+            json={
+                "question_text": "Your read?",
+                "question_type": "multiple_choice",
+                "options": [{"option_text": "Fit A", "is_correct_answer": True}, {"option_text": "Fit B"}],
+                "subject_role": "Mike",
+                **extra,
+            },
+            headers=headers,
+        )
+
+    def test_placed_returned_and_copied(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "Fits"}, headers=coach_headers).get_json()
+        ring = {"x": 0.4, "y": 0.55, "r": 0.05}
+        made = self._q(client, coach_headers, quiz["id"], subject_marker=ring)
+        assert made.status_code == 201, made.get_json()
+        assert made.get_json()["subject_marker"] == ring
+        copy = client.post(f"/api/quizzes/{quiz['id']}/duplicate", headers=coach_headers).get_json()
+        assert copy["questions"][0]["subject_marker"] == ring
+
+    def test_a_ring_off_the_picture_or_the_size_of_it_is_refused(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "Fits"}, headers=coach_headers).get_json()
+        assert self._q(client, coach_headers, quiz["id"], subject_marker={"x": 1.4, "y": 0.5, "r": 0.05}).status_code == 422
+        assert self._q(client, coach_headers, quiz["id"], subject_marker={"x": 0.4, "y": 0.5, "r": 0.9}).status_code == 422
+
+    def test_once_players_have_it_the_ring_stays(self, client, coach_headers):
+        rep = _rep(client, coach_headers)
+        made = self._q(client, coach_headers, rep["id"], subject_marker={"x": 0.4, "y": 0.55, "r": 0.05}).get_json()
+        ids = _players(client, coach_headers, rep["id"])
+        code = _send(client, coach_headers, rep["id"])
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {made["id"]: made["options"][0]["id"]})
+        moved = client.patch(
+            f"/api/quizzes/{rep['id']}/questions/{made['id']}",
+            json={"subject_marker": {"x": 0.7, "y": 0.55, "r": 0.05}},
+            headers=coach_headers,
+        )
+        assert moved.status_code == 422
+        assert moved.get_json()["reason"] == "delivered_locked"
+
+
+class TestTheQuestionsAlreadyWrittenAboutAConcept:
+    """For a targeted Rep built from what exists: the coach's own questions on
+    a concept, across his quizzes and Reps - never a teammate's, never a
+    stopped one."""
+
+    def test_own_questions_on_the_concept_across_quizzes_and_reps(self, client, register_coach, invite_teammate):
+        coach, _, headers = register_coach()
+        concept = _concept(client, headers, "Motion adjustment")
+        quiz = client.post("/api/quizzes", json={"title": "Week 3"}, headers=headers).get_json()
+        rep = _rep(client, headers)
+        on_quiz = _decision(client, headers, quiz["id"], "Your check?", ["Rotate", "Stay"], concept=concept)
+        on_rep = _decision(client, headers, rep["id"], "Who has #3?", ["Me", "Corner"], concept=concept)
+        _decision(client, headers, quiz["id"], "Untagged one", ["A", "B"])
+        stopped = _decision(client, headers, quiz["id"], "Stopped one", ["A", "B"], concept=concept)
+        client.post(f"/api/quizzes/{quiz['id']}/questions/{stopped['id']}/retire", headers=headers)
+        _, _, teammate = invite_teammate(headers)
+        theirs = client.post("/api/quizzes", json={"title": "Theirs"}, headers=teammate).get_json()
+        _decision(client, teammate, theirs["id"], "Their check?", ["A", "B"], concept=concept)
+
+        found = client.get(f"/api/concepts/{concept['id']}/questions", headers=headers).get_json()
+        assert sorted(f["question_id"] for f in found) == sorted([on_quiz["id"], on_rep["id"]])
+        kinds = {f["question_id"]: f["quiz_kind"] for f in found}
+        assert (kinds[on_quiz["id"]], kinds[on_rep["id"]]) == ("QUIZ", "REP")
+
+    def test_another_organizations_concept_is_not_found(self, client, register_coach):
+        _, _, headers = register_coach()
+        concept = _concept(client, headers, "Leverage")
+        _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
+        assert client.get(f"/api/concepts/{concept['id']}/questions", headers=stranger).status_code == 404
+
+
+class TestWhatAPlayerKnows:
+    """One player, by the concepts the coach tagged: HAS, WORK ON, and how each
+    changed - from the coach's own Reps (first tries) and quizzes (graded)."""
+
+    def test_missed_then_retested_correct_moves_to_has(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside, outside = _option(first, "Stay boundary"), _option(second, "Inside"), _option(second, "Outside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        before = client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=headers).get_json()
+        assert [c["name"] for c in before["work_on"]] == ["Motion adjustment"]
+        assert [c["name"] for c in before["has"]] == ["Leverage"]
+        assert before["work_on"][0]["last"]["question_ids"] == [first["id"]]
+
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        sent = _send(client, headers, retest["id"])
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        again = {o["option_text"]: o["id"] for o in copied["options"]}
+        _play(client, sent, "Bo Brown", ids["Bo Brown"], {copied["id"]: again["Rotate down"]})
+
+        after = client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=headers).get_json()
+        assert after["work_on"] == []
+        assert sorted(c["name"] for c in after["has"]) == ["Leverage", "Motion adjustment"]
+        trail = next(r for r in after["recent"] if r["name"] == "Motion adjustment")["trail"]
+        assert [(t["outcome"], t["is_retest"]) for t in trail] == [("missed", False), ("got", True)]
+
+    def test_another_organizations_player_is_not_found(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        _rep_, _first, _second, ids, _code, _ = _built(client, headers, app, coach)
+        _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
+        assert client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=stranger).status_code == 404

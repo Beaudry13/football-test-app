@@ -377,7 +377,10 @@ class TestWhatIsNotCopied:
 #: Everything on a duplicated question that must match, derived from the model
 #: rather than hand-listed so a NEW authored column fails here instead of being
 #: silently dropped the way answer_explanation was.
-QUESTION_IDENTITY_COLUMNS = {"id", "quiz_id", "created_at"}
+#: Columns that SHOULD differ on a copy. copied_from_question_id is provenance:
+#: a copy points at the question it was copied from (what lets an untagged
+#: retest say whether it stuck), so it is never the original's own value.
+QUESTION_IDENTITY_COLUMNS = {"id", "quiz_id", "created_at", "copied_from_question_id"}
 
 
 class TestDuplicateFidelityGuard:
@@ -408,6 +411,8 @@ class TestDuplicateFidelityGuard:
                 assert getattr(duplicate, column) == getattr(original, column), (
                     f"duplicate_quiz does not copy Question.{column}"
                 )
+            # The one deliberate difference: the copy remembers its source.
+            assert duplicate.copied_from_question_id == original.id
 
     def test_every_authored_image_column_is_copied_except_the_asset(
         self, client, coach_headers, authored

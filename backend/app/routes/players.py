@@ -138,6 +138,18 @@ def get_player_history(player_id: int):
     return jsonify(payload)
 
 
+@players_bp.get("/<int:player_id>/learning")
+@jwt_required()
+def get_player_learning(player_id: int):
+    """What this player knows and what he is still missing, by the concepts
+    the coach tagged - from the coach's own quizzes (graded) and Reps (first
+    tries). Coach View scope, like the history above (services/player_learning)."""
+    from app.services.player_learning import player_learning
+
+    player = get_org_player(player_id)
+    return jsonify(player_learning(current_coach(), player))
+
+
 def _one_time(payload: dict, status: int = 200):
     """A response carrying a raw PIN. It must never be cached anywhere - not by
     the browser, not by a proxy - because the PIN in it cannot be shown again

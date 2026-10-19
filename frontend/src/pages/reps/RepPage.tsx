@@ -33,6 +33,8 @@ import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import { TapCheck } from '../../components/football/TapCheck';
+import { MarkerEditor } from '../../components/football/MarkerEditor';
+import type { Marker } from '../../components/football/tapTargets';
 import { TapResult } from '../../components/football/TapResult';
 import type { PresnapClip } from '../../motion-lab/presnap';
 import type { PlayDraft } from '../../motion-lab/DecisionPlay';
@@ -150,6 +152,17 @@ export function RepPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, teachAsk]);
 
+  /* Home's "Retest K" lands here: that problem's card, its confirm already
+     up ("Send it back to the K who missed it?"). Still the coach's tap to send. */
+  const [retestAsk, setRetestAsk] = useState<string | null>(null);
+  const retestParam = params.get('retest');
+  useEffect(() => {
+    if (!results || !retestParam) return;
+    setRetestAsk(retestParam);
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, retestParam]);
+
   const problems = results?.concepts.filter((c) => c.missed > 0) ?? [];
   const solid = results?.concepts.filter((c) => c.missed === 0 && c.responded > 0) ?? [];
   // "safeties": the one group's name, else the one position family it went to.
@@ -215,6 +228,7 @@ export function RepPage() {
                     taught={problem.taught ?? null}
                     onTeach={() => teach(problem)}
                     onRetest={() => retest(problem)}
+                    asked={retestAsk === conceptKey(problem)}
                   />
                 ))}
                 {solid.length > 0 && (
@@ -258,7 +272,11 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
   const audiences = audiencesFrom(players);
   const likely = suggestedFamily(results.decisions.map((d) => d.subject_role));
   const [positions, setPositions] = useState<string[] | null>(null);
-  const chosen = positions ?? audiences.filter((a) => a.family && a.family === likely).map((a) => a.key);
+  /* Already on its roster (made for the players who missed a quiz question):
+     it goes to them - no position is picked for him. */
+  const onRoster = results.audience.code ? [] : results.audience.people;
+  const chosen =
+    positions ?? (onRoster.length > 0 ? [] : audiences.filter((a) => a.family && a.family === likely).map((a) => a.key));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -306,6 +324,12 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
   return (
     <section className={styles.send} aria-label="Send it">
       <span className={styles.sendLead}>Send it to</span>
+      {onRoster.length > 0 && (
+        <span className={styles.hint} role="status">
+          Goes to the {onRoster.length} on it: {onRoster.map((p) => p.name).join(', ')}
+          {chosen.length > 0 ? ' - and the positions you pick' : ''}
+        </span>
+      )}
       <PositionChips audiences={audiences} chosen={chosen} onChange={setPositions} likely={likely} className={styles.groups} />
       <div className={styles.groups} role="group" aria-label="Groups">
         {(groups ?? []).map((g) => {
@@ -364,6 +388,7 @@ function ProblemCard({
   taught,
   onTeach,
   onRetest,
+  asked = false,
 }: {
   problem: RepConcept;
   who: string;
@@ -372,6 +397,8 @@ function ProblemCard({
   taught: RepTaught | null;
   onTeach: () => void;
   onRetest: () => Promise<void>;
+  /** Arrived from Home's "Retest K": the confirm opens, the card comes into view. */
+  asked?: boolean;
 }) {
   const again = problem.retest ?? null;
   const fixed = !!again && again.responded > 0 && again.missed === 0;
@@ -380,6 +407,12 @@ function ProblemCard({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!asked || problem.retest) return;
+    setConfirming(true);
+    cardRef.current?.scrollIntoView?.({ block: 'center' });
+  }, [asked, problem.retest]);
   const shown = problem.players_missed.slice(0, 8);
   const more = problem.players_missed.length - shown.length;
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
@@ -389,7 +422,11 @@ function ProblemCard({
       .filter((d) => problem.question_ids.includes(d.question_id) && targetsOf(d))
       .sort((a, b) => b.missed - a.missed)[0] ?? null;
   return (
-    <article className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem} aria-label={problem.name}>
+    <article
+      ref={cardRef}
+      className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem}
+      aria-label={problem.name}
+    >
       <h2 className={styles.problemName}>
         {/* The problem's history: is it getting better, who still misses it. */}
         {problem.concept ? (
@@ -973,6 +1010,11 @@ function DecisionEditor({
     image: null,
   }));
   const [checking, setChecking] = useState<false | 'look' | 'before-save'>(false);
+  /* A PHOTO DECISION'S TESTED MAN: the coach rings him on the picture himself
+     (the quiz editor's MarkerEditor) - a still with no motion to ring him. */
+  const [marker, setMarker] = useState<Marker | null>(decision.subject_marker ?? null);
+  const [marking, setMarking] = useState(false);
+  const canRing = !locked && !!decision.image && !decision.presnap;
   const [prompt, setPrompt] = useState(decision.question_text);
   const [answers, setAnswers] = useState(decision.choices.map((c) => ({ text: c.text, correct: c.is_correct })));
   const [concept, setConcept] = useState(decision.concept?.name ?? '');
@@ -1014,6 +1056,10 @@ function DecisionEditor({
         if (!same(draft.targets, decision.tap_targets) && (!draft.targets || draft.targets.length === sentCount)) {
           play.tap_targets = draft.targets;
         }
+        if (canRing && !same(marker, decision.subject_marker)) play.subject_marker = marker;
+        if (canRing && (draft.role ?? '') !== (decision.subject_role ?? '') && play.subject_man === undefined) {
+          play.subject_role = draft.role || null;
+        }
       }
       await updateQuestion(quizId, decision.question_id, {
         question_text: prompt.trim(),
@@ -1035,8 +1081,33 @@ function DecisionEditor({
 
   return (
     <div className={styles.editor} role="group" aria-label={`Edit decision ${decision.number}`}>
+      {canRing && (
+        <div className={styles.editField}>
+          <span>
+            {marker
+              ? `Ringed${draft.role ? `: you're the ${draft.role}` : ''}.`
+              : 'Who is he in this picture? Ring him so the picture says it.'}
+          </span>
+          <button type="button" className={styles.editAdd} onClick={() => setMarking(true)}>
+            {marker ? 'Move the ring' : 'Mark the player'}
+          </button>
+        </div>
+      )}
+      {marking && decision.image && (
+        <MarkerEditor
+          imageUrl={decision.image.image_url}
+          marker={marker}
+          role={draft.role ?? ''}
+          onClose={() => setMarking(false)}
+          onDone={(next, words) => {
+            setMarker(next);
+            setDraft((d) => ({ ...d, role: words.trim() || null }));
+            setMarking(false);
+          }}
+        />
+      )}
       {locked
-        ? (fromPlay || decision.tap_targets) && (
+        ? (fromPlay || decision.tap_targets || decision.subject_marker) && (
             <p className={styles.editLocked}>
               Players have this one, so who it tests, when they decide and where they tap are locked. Make a variation
               to test something different.
@@ -1130,6 +1201,7 @@ function DecisionEditor({
         <TapCheck
           image={decision.image}
           presnap={draft.clip}
+          marker={draft.clip ? null : marker}
           targets={targets}
           answers={(locked ? answers : filled).map((a) => a.text)}
           rightIndex={(locked ? answers : filled).findIndex((a) => a.correct)}

@@ -31,6 +31,11 @@ import { hasResponseDenominator } from '../../utils/responseSummary';
 import styles from './ResultsTab.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { EmptyState } from '../../components/ui/EmptyState';
+import { TapResult } from '../../components/football/TapResult';
+import { MissActions } from './MissActions';
+import { RetestStatus } from './RetestStatus';
+import { teachable } from './quizTeach';
+import { usableTargets } from '../../components/football/tapTargets';
 
 function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'quiz';
@@ -194,6 +199,29 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
      Still the server's own per-question counts, merely filtered: the number
      stays something Peira computed rather than something this screen derived,
      and the filter is the same rule the grading queue applies. */
+  /** Who missed a question, from the responses on this page - the server
+   *  re-checks it before a retest is built. */
+  const missedBy = (questionId: number) =>
+    (responses ?? [])
+      .filter((r) => (r.answers ?? []).some((a) => a.question_id === questionId && a.is_correct === false))
+      .map((r) => ({ player_id: r.player_id ?? null, player_name: r.player_name }));
+  /** The latest retest that re-asked exactly this question (untagged retests). */
+  const questionRetest = (questionId: number) =>
+    (dashboard?.retests ?? []).find((t) => t.concept_ids.length === 0 && t.source_question_ids.includes(questionId));
+  /** The live question behind a breakdown row, when it has football to teach from. */
+  const liveTeachable = (questionId: number) => {
+    const question = (quiz.questions ?? []).find((q) => q.id === questionId);
+    return question && teachable(question) ? question : null;
+  };
+  /** One-answer questions players answered by tapping, with where they went. */
+  const teamTaps = (dashboard?.question_breakdown ?? [])
+    .filter((row) => row.answered_count > 0 && row.option_counts)
+    .map((row) => ({ row, question: (quiz.questions ?? []).find((q) => q.id === row.question_id) }))
+    .filter(
+      (t): t is { row: (typeof t)['row']; question: NonNullable<(typeof t)['question']> } =>
+        !!t.question &&
+        !!usableTargets(t.question.tap_targets, t.question.options.length, !!(t.question.image || t.question.presnap)),
+    );
   const ungradedTotal = (dashboard?.question_breakdown ?? [])
     .filter((q) => needsManualGrading(q.question_type) && !q.is_excluded)
     .reduce((total, q) => total + q.ungraded_count, 0);
@@ -209,7 +237,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               not how the team scored - it is whether the players they sent it
               to are any different. Renders nothing on an ordinary quiz, so
               every other Results page is untouched. */}
-          <RetestVerification verification={dashboard.verification} quizId={quiz.id} />
+          <RetestVerification verification={dashboard.verification} quizId={quiz.id} questions={quiz.questions ?? []} />
 
           {/* WHAT SHOULD I TEACH NEXT, FIRST.
               Results used to open with a team average - which answers "how did
@@ -230,7 +258,13 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
               concept is dropped; ANY OTHER concept is kept, because a retest
               that exposes a second weakness is telling the coach something new
               and suppressing that would be worse than repeating the first. */}
-          <WeakestConcepts concepts={teachNextConcepts} quizId={quiz.id} questions={quiz.questions ?? []} />
+          <WeakestConcepts
+            concepts={teachNextConcepts}
+            quizId={quiz.id}
+            questions={quiz.questions ?? []}
+            breakdown={dashboard?.question_breakdown ?? []}
+            retests={dashboard?.retests ?? []}
+          />
 
           {/* GRADING IS AN ACTION, so it sits above the grades rather than
               inside them. Only when there is something to do: an "0 answers
@@ -310,6 +344,46 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
             </section>
           )}
 
+          {/* WHERE DID EVERYBODY TAP? The team's choices on the football
+              picture itself - the coach's right spot green, every spot someone
+              chose with how many chose it. The same picture a Rep reads back
+              (TapResult); a view over the counts below, never a score. */}
+          {teamTaps.length > 0 && (
+            <section className={styles.evidence} aria-label="Where they tapped">
+              <h2 className={styles.evidenceHeading}>Where they tapped</h2>
+              <div className={styles.teamTaps}>
+                {teamTaps.map(({ row, question }) => (
+                  <div key={row.question_id} className={styles.teamTap}>
+                    <div className={styles.teamTapQuestion}>
+                      <span className={styles.questionNumber}>Q{row.question_number}</span>
+                      {row.question_text}
+                    </div>
+                    {row.incorrect_count > 0 && (
+                      <MissActions
+                        quizId={quiz.id}
+                        questions={[question]}
+                        breakdown={dashboard.question_breakdown}
+                        title={`Q${row.question_number}`}
+                        repTitle={`${quiz.title} - Q${row.question_number}`}
+                        retestTargets={missedBy(row.question_id)}
+                      />
+                    )}
+                    {questionRetest(row.question_id) && <RetestStatus retest={questionRetest(row.question_id)!} />}
+                    <TapResult
+                      image={question.image}
+                      presnap={question.presnap}
+                      targets={question.tap_targets}
+                      options={question.options.map((o) => ({ id: o.id, option_text: o.option_text }))}
+                      correctIds={(row.option_counts ?? []).filter((c) => c.is_correct).map((c) => c.option_id)}
+                      counts={Object.fromEntries((row.option_counts ?? []).map((c) => [c.option_id, c.count]))}
+                      motionKey={`team-${row.question_id}`}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {dashboard.question_breakdown.length > 0 && (
             <section className={styles.evidence}>
               <h2 className={styles.evidenceHeading}>Per-question breakdown</h2>
@@ -335,6 +409,20 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                             "Q12", not to compete with the text. */}
                         <span className={styles.questionNumber}>Q{q.question_number}</span>
                         {q.question_text}
+                        {/* A miss with football to show: Teach it, or make it a Rep. */}
+                        {q.incorrect_count > 0 && liveTeachable(q.question_id) && (
+                          <div className={styles.rowActions}>
+                            <MissActions
+                              quizId={quiz.id}
+                              questions={[liveTeachable(q.question_id)!]}
+                              breakdown={dashboard.question_breakdown}
+                              title={`Q${q.question_number}`}
+                              repTitle={`${quiz.title} - Q${q.question_number}`}
+                              retestTargets={missedBy(q.question_id)}
+                            />
+                          </div>
+                        )}
+                        {questionRetest(q.question_id) && <RetestStatus retest={questionRetest(q.question_id)!} />}
                         {/* Every active exclusion, not a single boolean: a
                             quiz-wide and an assignment-scoped one can overlap,
                             and restoring one leaves the other in force. */}
