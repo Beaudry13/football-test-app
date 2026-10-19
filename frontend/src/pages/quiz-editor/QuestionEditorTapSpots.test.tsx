@@ -175,7 +175,7 @@ describe('you are this player - the coach rings the man on his photo', () => {
     fireEvent.click(dialog.getByRole('button', { name: 'Bigger' }));
     fireEvent.change(dialog.getByRole('textbox', { name: 'Who he is' }), { target: { value: 'Mike' } });
     fireEvent.click(dialog.getByRole('button', { name: 'Done' }));
-    expect(screen.getByText("Ringed: you're the Mike.")).toBeInTheDocument();
+    expect(screen.getByText("✓ You're the Mike")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save question' }));
     await waitFor(() => expect(onSave).toHaveBeenCalled());
     const [input] = onSave.mock.calls[0];
