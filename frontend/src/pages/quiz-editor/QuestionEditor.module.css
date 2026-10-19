@@ -286,6 +286,23 @@
   min-width: 0;
 }
 
+.conceptMatch {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 14px;
+  color: var(--nb-text-muted);
+}
+.conceptMatchUse {
+  font: inherit;
+  font-weight: 700;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--peira-accent-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .conceptCreateActions {
   display: flex;
   gap: var(--space-2);

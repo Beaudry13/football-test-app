@@ -22,6 +22,29 @@ vi.mock('../../components/annotation/AnnotationViewer', () => ({
   ),
 }));
 
+// The moving picture's own business is tested in motion-lab; here it is a
+// stand-in that reports how it was asked to play and can be brought to the freeze.
+vi.mock('../../motion-lab/PresnapPicture', () => ({
+  default: ({
+    onDone,
+    still,
+    autoplay,
+    children,
+  }: {
+    onDone?: () => void;
+    still?: boolean;
+    autoplay?: boolean;
+    children?: unknown;
+  }) => (
+    <div data-testid="moving-play" data-still={String(!!still)} data-autoplay={String(autoplay)}>
+      <button type="button" onClick={onDone}>
+        bring it to the freeze
+      </button>
+      {children as never}
+    </div>
+  ),
+}));
+
 const baseQuestion: Question = {
   id: 1,
   quiz_id: 1,
@@ -248,5 +271,152 @@ describe('QuestionInput fill-in-the-blank', () => {
     // the component does not render them even if one ever leaked through.
     render(<QuestionInput question={fillBlank} index={0} answer={undefined} onChange={vi.fn()} />);
     expect(screen.queryByText(/Cover 3/)).not.toBeInTheDocument();
+  });
+});
+
+describe('QuestionInput - a Motion Lab play, moving', () => {
+  const CLIP = { v: 1, situation: {}, highlight: null, players: [], freeze: 'mid' };
+  const moving: Question = {
+    ...baseQuestion,
+    presnap: CLIP,
+    image: {
+      id: 9,
+      question_id: 1,
+      image_url: '/uploads/freeze.png',
+      annotations: [],
+      canvas_width: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    },
+  };
+
+  it('plays the motion in place of the still, and the answers wait for the freeze', async () => {
+    render(<QuestionInput question={moving} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(await screen.findByTestId('moving-play')).toHaveAttribute('data-autoplay', 'true');
+    expect(screen.queryByAltText('Film still')).not.toBeInTheDocument();
+    expect(screen.getByText('Watch the motion…')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'bring it to the freeze' }));
+    expect(screen.queryByText('Watch the motion…')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('does not make a player re-watch to change an answer already given', async () => {
+    render(<QuestionInput question={moving} index={0} answer={{ selected_option_id: 2 }} onChange={vi.fn()} />);
+    await screen.findByTestId('moving-play');
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('a checked question shows the frozen moment, not the motion again', async () => {
+    render(<QuestionInput question={moving} index={0} answer={{ selected_option_id: 1 }} onChange={vi.fn()} locked />);
+    expect(await screen.findByTestId('moving-play')).toHaveAttribute('data-still', 'true');
+  });
+
+  it('on the all-on-one-page layout a play waits for a tap rather than starting on its own', async () => {
+    render(<QuestionInput question={moving} index={0} answer={undefined} onChange={vi.fn()} autostartClip={false} />);
+    expect(await screen.findByTestId('moving-play')).toHaveAttribute('data-autoplay', 'false');
+  });
+
+  it('a Draw question offers the board only once the play has frozen', async () => {
+    const draw: Question = { ...moving, question_type: 'draw_response', options: [] };
+    render(<QuestionInput question={draw} index={0} answer={undefined} onChange={vi.fn()} />);
+    await screen.findByTestId('moving-play');
+    expect(screen.queryByRole('button', { name: /Draw your answer/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'bring it to the freeze' }));
+    expect(screen.getByRole('button', { name: /Draw your answer/ })).toBeInTheDocument();
+  });
+
+  it('a question without motion is untouched', () => {
+    render(<QuestionInput question={{ ...moving, presnap: null }} index={0} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.getByAltText('Film still')).toBeInTheDocument();
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+});
+
+describe('QuestionInput - answers in the picture, as in a Rep', () => {
+  const still = {
+    id: 9,
+    question_id: 1,
+    image_url: '/uploads/play.png',
+    annotations: [],
+    canvas_width: null,
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+  const tappable: Question = {
+    ...baseQuestion,
+    question_text: 'Who gets the ball?',
+    image: still,
+    options: [
+      { id: 1, question_id: 1, option_text: 'X', position: 0, is_correct_answer: true },
+      { id: 2, question_id: 1, option_text: 'Z', position: 1, is_correct_answer: false },
+    ],
+    tap_targets: [
+      { x: 0.1, y: 0.5 },
+      { x: 0.9, y: 0.5 },
+    ],
+  };
+
+  it('a man is tapped in the picture to answer - the buttons still work too', async () => {
+    const onChange = vi.fn();
+    render(<QuestionInput question={tappable} index={0} answer={undefined} onChange={onChange} />);
+    expect(screen.getByText('Tap the man in the picture')).toBeInTheDocument();
+    const z = screen.getByRole('button', { name: 'Tap Z' });
+    expect(z).toHaveStyle({ left: '90%', top: '50%' });
+    await userEvent.click(z);
+    expect(onChange).toHaveBeenCalledWith({ selected_option_id: 2 });
+    expect(screen.getAllByRole('radio')).toHaveLength(2);
+  });
+
+  it('a place is a labelled spot on the field', async () => {
+    const gaps: Question = {
+      ...tappable,
+      question_text: 'What is your gap?',
+      options: [
+        { id: 1, question_id: 1, option_text: 'A gap', position: 0, is_correct_answer: true },
+        { id: 2, question_id: 1, option_text: 'B gap', position: 1, is_correct_answer: false },
+      ],
+      tap_targets: [
+        { x: 0.48, y: 0.5, zone: true },
+        { x: 0.6, y: 0.3, zone: true },
+      ],
+    };
+    const onChange = vi.fn();
+    render(<QuestionInput question={gaps} index={0} answer={{ selected_option_id: 1 }} onChange={onChange} />);
+    expect(screen.getByText('Tap the spot on the field')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tap A gap' })).toHaveTextContent('A gap');
+    await userEvent.click(screen.getByRole('button', { name: 'Tap B gap' }));
+    expect(onChange).toHaveBeenCalledWith({ selected_option_id: 2 });
+  });
+
+  it('the spots wait for the motion to freeze, like the buttons', async () => {
+    const moving: Question = { ...tappable, presnap: { v: 1, situation: {}, highlight: null, players: [] } };
+    const onChange = vi.fn();
+    render(<QuestionInput question={moving} index={0} answer={undefined} onChange={onChange} />);
+    expect(await screen.findByRole('button', { name: 'Tap Z' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'bring it to the freeze' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Tap Z' }));
+    expect(onChange).toHaveBeenCalledWith({ selected_option_id: 2 });
+  });
+
+  it('a checked question cannot be re-answered from the picture', () => {
+    const onChange = vi.fn();
+    render(<QuestionInput question={tappable} index={0} answer={{ selected_option_id: 1 }} onChange={onChange} locked />);
+    expect(screen.getByRole('button', { name: 'Tap Z' })).toBeDisabled();
+    expect(screen.queryByText('Tap the man in the picture')).not.toBeInTheDocument();
+  });
+
+  it('practice: a checked tap lights the man - right or wrong - as a Rep does', () => {
+    render(
+      <QuestionInput question={tappable} index={0} answer={{ selected_option_id: 2 }} onChange={vi.fn()} locked verdict={false} />,
+    );
+    expect(screen.getByRole('button', { name: 'Tap Z' }).className).toMatch(/wrong/);
+    expect(screen.getByRole('button', { name: 'Tap X' }).className).not.toMatch(/wrong|right/);
+  });
+
+  it('select-all-that-apply questions keep their checkboxes only', () => {
+    render(
+      <QuestionInput question={{ ...tappable, allows_multiple_answers: true }} index={0} answer={undefined} onChange={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Tap Z' })).not.toBeInTheDocument();
+    expect(screen.getByAltText('Film still')).toBeInTheDocument();
   });
 });

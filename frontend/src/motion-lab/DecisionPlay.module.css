@@ -1,0 +1,35 @@
+/* THE PLAY SIDE OF A DECISION, on the Rep page: who it tests, when he decides. */
+.play {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.man {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 14px;
+}
+.link {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--nb-accent, #f7c948);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.hint {
+  font-size: 13px;
+  color: var(--nb-text-muted, #8b8f96);
+}
+.pick {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  cursor: crosshair;
+}

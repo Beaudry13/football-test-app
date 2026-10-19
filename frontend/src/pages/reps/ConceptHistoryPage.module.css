@@ -1,0 +1,82 @@
+/* ONE FOOTBALL PROBLEM, OVER TIME: the trend, the next step, who, the reps. */
+.trend {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--nb-text-muted);
+}
+.trendMore,
+.arrow {
+  font-weight: 400;
+}
+.now {
+  color: var(--nb-text);
+}
+.trendNote {
+  margin: 2px 0 var(--space-5);
+  font-size: 14px;
+  color: var(--nb-text-muted);
+}
+.next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.block {
+  margin-bottom: var(--space-5);
+}
+.blockTitle {
+  margin: 0 0 var(--space-2);
+  font-size: 15px;
+  font-weight: 800;
+}
+.none {
+  margin: 0;
+  color: var(--nb-text-muted);
+  font-size: 14px;
+}
+.recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.recentRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+.recentRow:hover {
+  border-color: var(--nb-accent);
+}
+.recentTitle {
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+}
+.recentPct {
+  font-weight: 800;
+}
+.recentMeta {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}
+.retestTag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--color-border-strong);
+  color: var(--nb-text-muted);
+}

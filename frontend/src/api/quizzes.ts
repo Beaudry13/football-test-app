@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { ActiveQuizStatus, Quiz } from './types';
+import type { ActiveQuizStatus, Quiz, QuizKind } from './types';
 
 export function listQuizzes(): Promise<Quiz[]> {
   return api.get<Quiz[]>('/quizzes');
@@ -18,6 +18,8 @@ export function createQuiz(input: {
   description?: string | null;
   one_question_at_a_time?: boolean;
   require_all_answers?: boolean;
+  /** REP makes a Situational Rep. Set once, at creation. */
+  kind?: QuizKind;
 }): Promise<Quiz> {
   return api.post<Quiz>('/quizzes', input);
 }

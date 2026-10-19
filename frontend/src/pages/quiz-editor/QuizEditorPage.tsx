@@ -107,9 +107,15 @@ export function QuizEditorPage() {
 
   return (
     <div>
-      <Link to="/dashboard" className={styles.backLink}>
-        <Icon name="back" size={14} /> All Quizzes
-      </Link>
+      {quiz.kind === 'REP' ? (
+        <Link to={`/reps/${quiz.id}`} className={styles.backLink}>
+          <Icon name="back" size={14} /> Back to the rep
+        </Link>
+      ) : (
+        <Link to="/dashboard" className={styles.backLink}>
+          <Icon name="back" size={14} /> All Quizzes
+        </Link>
+      )}
 
       <ErrorBanner message={error} />
 

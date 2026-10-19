@@ -8,6 +8,7 @@ import { FolderPage } from './FolderPage';
 import * as quizzesApi from '../api/quizzes';
 import * as foldersApi from '../api/folders';
 import * as motionApi from '../api/motionLab';
+import * as repsApi from '../api/reps';
 import * as authContext from '../auth/AuthContext';
 import { openRowMenu } from '../test/rowMenu';
 import { acceptConfirm, cancelConfirm } from '../test/confirmDialog';
@@ -84,6 +85,8 @@ describe('DashboardPage', () => {
     // forced to mock it individually. See ActiveQuizStatus.test.tsx for
     // that section's own dedicated coverage.
     vi.spyOn(quizzesApi, 'getActiveStatus').mockResolvedValue([]);
+    // Every coach's Home asks for the Reps summary; none by default.
+    vi.spyOn(repsApi, 'getRepsSummary').mockResolvedValue([]);
     mockAuth();
   });
 

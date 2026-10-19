@@ -816,16 +816,39 @@ describe('tagging a question with a concept', () => {
   it('does not submit the QUESTION when Enter names a concept', async () => {
     // The coach opened a text field to name a label; Enter there must not
     // save a half-written question.
-    vi.mocked(createConcept).mockResolvedValue(concept(9, 'Run Fit'));
+    vi.mocked(createConcept).mockResolvedValue(concept(9, 'Pass Pro'));
     const user = userEvent.setup();
     const { onSave } = renderEditor();
     await waitFor(() => expect(listConcepts).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: 'New' }));
-    await user.type(screen.getByLabelText('New concept name'), 'Run Fit{Enter}');
+    await user.type(screen.getByLabelText('New concept name'), 'Pass Pro{Enter}');
 
     await waitFor(() => expect(createConcept).toHaveBeenCalled());
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('naming a concept the team already has - any case or punctuation - picks it instead of making a copy', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.type(screen.getByLabelText('New concept name'), 'run-FIT');
+    expect(screen.getByText(/You already have/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(createConcept).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Concept')).toHaveValue('2');
+  });
+
+  it('a near-copy is offered the concept it probably means', async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    await waitFor(() => expect(listConcepts).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: 'New' }));
+    await user.type(screen.getByLabelText('New concept name'), 'Force / Contai');
+    await user.click(screen.getByRole('button', { name: 'Force / Contain' }));
+    expect(createConcept).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Concept')).toHaveValue('1');
   });
 
   it('says so when a concept cannot be created, without losing the question', async () => {

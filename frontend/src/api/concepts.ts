@@ -28,3 +28,18 @@ export function listConcepts(): Promise<Concept[]> {
 export function createConcept(name: string): Promise<Concept> {
   return api.post<Concept>('/concepts', { name });
 }
+
+/** Concepts that look like one idea, each with how many questions use it. */
+export interface ConceptDuplicateGroup {
+  concepts: { id: number; name: string; question_count: number }[];
+  suggested_keep: number;
+}
+
+export function getConceptDuplicates(): Promise<ConceptDuplicateGroup[]> {
+  return api.get<ConceptDuplicateGroup[]>('/concepts/duplicates');
+}
+
+/** Merge spellings into the kept concept: questions retagged, the rest archived. Admins only. */
+export function mergeConcepts(keepId: number, mergeIds: number[]): Promise<{ kept: Concept; retagged: number }> {
+  return api.post('/concepts/merge', { keep_id: keepId, merge_ids: mergeIds });
+}

@@ -40,6 +40,21 @@ class QuestionCreateSchema(Schema):
     allows_multiple_answers = fields.Bool(required=False, load_default=False)
     position = fields.Int(required=False, load_default=None)
     answer_explanation = _ANSWER_EXPLANATION
+    #: Situational Rep: who the player is ("Boundary safety"), and the Motion
+    #: Lab play the decision came from. Both optional on any question.
+    subject_role = fields.Str(
+        required=False, load_default=None, allow_none=True, validate=validate.Length(max=60)
+    )
+    motion_play_id = fields.Int(required=False, load_default=None, allow_none=True)
+    #: Which man in the play the decision tests (a Motion Lab player id).
+    subject_man = fields.Str(
+        required=False, load_default=None, allow_none=True,
+        validate=validate.Regexp(r"^[A-Za-z0-9_-]{1,32}$"),
+    )
+    tap_targets = fields.List(
+        fields.Nested(lambda: TapTargetSchema()), required=False, load_default=None, allow_none=True
+    )
+    presnap = fields.Dict(required=False, load_default=None, allow_none=True)
     document_page_id = fields.Int(required=False, load_default=None, allow_none=True)
     region = fields.Nested(lambda: RegionSchema(), required=False, load_default=None, allow_none=True)
     expected_answers = fields.List(
@@ -65,6 +80,22 @@ class QuestionUpdateSchema(Schema):
     answer_explanation = fields.Str(
         required=False, allow_none=True, validate=validate.Length(max=2000)
     )
+    # No load_default, like concept_id: a partial edit that never mentions
+    # them must not clear them.
+    subject_role = fields.Str(required=False, allow_none=True, validate=validate.Length(max=60))
+    motion_play_id = fields.Int(required=False, allow_none=True)
+    subject_man = fields.Str(required=False, allow_none=True, validate=validate.Regexp(r"^[A-Za-z0-9_-]{1,32}$"))
+    tap_targets = fields.List(fields.Nested(lambda: TapTargetSchema()), required=False, allow_none=True)
+    presnap = fields.Dict(required=False, allow_none=True)
+
+
+class TapTargetSchema(Schema):
+    """Where one answer stands in the picture, as fractions of its size."""
+
+    x = fields.Float(required=True, validate=validate.Range(min=0, max=1))
+    y = fields.Float(required=True, validate=validate.Range(min=0, max=1))
+    #: A place on the field (a gap, a drop) rather than a man - shown labelled.
+    zone = fields.Bool(required=False)
 
 
 class RegionSchema(Schema):

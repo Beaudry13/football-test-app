@@ -1,0 +1,121 @@
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.head h1 {
+  margin: 0;
+}
+.tag {
+  margin: 4px 0 0;
+  color: var(--nb-text-muted);
+}
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.empty {
+  padding: var(--space-5);
+  border: 1px dashed var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  color: var(--nb-text-muted);
+}
+/* MY REPS | ALL REPS - an admin's one switch. */
+.scope {
+  display: inline-flex;
+  margin: 0 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.scopeButton {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+}
+.scopeOn {
+  background: var(--color-accent-bg);
+  color: var(--nb-text);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+  color: inherit;
+  text-decoration: none;
+}
+.row:hover {
+  border-color: var(--nb-accent);
+}
+.title {
+  font-weight: 700;
+}
+.meta {
+  color: var(--nb-text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.makeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.picker {
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.pickerHint {
+  margin: 0 0 var(--space-3);
+  color: var(--nb-text-muted);
+}
+.pickList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+.pickRow .title {
+  flex: 1 1 200px;
+}
+.rowError {
+  flex-basis: 100%;
+  color: var(--peira-danger);
+  font-size: 14px;
+}

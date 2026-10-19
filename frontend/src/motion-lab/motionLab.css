@@ -1617,6 +1617,132 @@
   border: 1px solid var(--border);
   background: #2e6b3c;
 }
+/* Make rep and Make question sit side by side in the top bar. */
+.motion-lab-root .make-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  white-space: nowrap;
+}
+/* SITUATIONAL REP: the "Make rep" panel - the Make question panel's look, taller. */
+.motion-lab-root .popover.make-rep-pop {
+  width: 420px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+/* A quiet in-line action ("See what they tap"). */
+.motion-lab-root .make-q-link {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* Make rep stays in reach however tall the panel gets. */
+.motion-lab-root .make-rep-pop .make-q-actions {
+  position: sticky;
+  bottom: -12px;
+  margin: 0 -12px -12px;
+  padding: 10px 12px 12px;
+  background: #1d2024;
+  border-top: 1px solid var(--border);
+}
+.motion-lab-root .make-q-check-row {
+  display: flex;
+  gap: 14px;
+}
+.motion-lab-root .make-q-field input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.motion-lab-root .make-rep-sets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.motion-lab-root .make-rep-sets button,
+.motion-lab-root .make-rep-add {
+  font-size: 12px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.motion-lab-root .make-rep-add {
+  align-self: flex-start;
+}
+.motion-lab-root .make-rep-answer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.motion-lab-root .make-rep-answer input {
+  flex: 1;
+  min-width: 0;
+}
+.motion-lab-root .make-rep-right {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  font-size: 14px;
+  line-height: 1;
+}
+.motion-lab-root .make-rep-right.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #111;
+}
+.motion-lab-root .make-rep-drop {
+  flex: none;
+  width: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+}
+.motion-lab-root .make-rep-concept label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.motion-lab-root .make-rep-mean {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: underline;
+}
+.motion-lab-root .make-rep-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text);
+  padding: 4px 2px 8px;
+}
+.motion-lab-root .make-rep-check {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #111;
+  font-weight: 800;
+}
 .motion-lab-root .make-q-preview.tappable {
   cursor: pointer;
 }

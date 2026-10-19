@@ -13,6 +13,8 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import AccessCode, Group
 from app.models.question import QuestionType
+from app.models.assessment_mode import PRACTICE
+from app.models.quiz import REP_KIND
 from app.schemas.access_code import ActivateQuizSchema, SetExpirySchema
 from app.services import player_enforcement
 from app.services.access_codes import generate_unique_code, players_without_pins
@@ -186,7 +188,10 @@ def activate_quiz(quiz_id: int):
         is_active=True,
         # The assignment decides how the quiz is being used. Every attempt
         # started under this code copies it and freezes it.
-        mode=data["mode"],
+        # A REP IS ALWAYS PRACTICE-DELIVERED: its point is the immediate
+        # verdict and the coach's explanation, which only practice gives. Its
+        # results are read by services/rep_results, never folded into grades.
+        mode=PRACTICE if quiz.kind == REP_KIND else data["mode"],
         # Practice-only. Stored regardless of mode so the value survives if a
         # coach flips the mode while filling the form, but frozen_question_order
         # ignores it for anything graded.

@@ -1002,6 +1002,12 @@ class TestOfficialScopeGuard:
         # dashboard exists to show. These are adoption numbers for the
         # operator, not performance numbers for a coach.
         "app/services/platform_metrics.py",
+        # Situational Rep diagnostics. A Rep is always PRACTICE-delivered (its
+        # point is the immediate verdict), so its first tries live in practice
+        # attempts. It reads them for ONE REP quiz, explicitly filtered to
+        # PRACTICE, and produces a diagnosis - never a grade, an average or an
+        # export that official results show.
+        "app/services/rep_results.py",
     }
 
     def test_every_reporting_query_goes_through_attempt_scope(self):

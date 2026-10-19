@@ -22,6 +22,17 @@ export interface QuestionInput {
    *  never before. Sent as an empty string to clear it; the server stores
    *  that as null so "no explanation" has one representation, not two. */
   answer_explanation?: string | null;
+  /** SITUATIONAL REP: who the player is ("Boundary safety"), and the Motion
+   *  Lab play the decision came from. Optional on any question. */
+  subject_role?: string | null;
+  motion_play_id?: number | null;
+  /** One {x, y} (fractions of the picture) per option, so a player taps the man. */
+  /** Which man in the play the decision tests (a Motion Lab player id). */
+  subject_man?: string | null;
+  /** `zone`: a place on the field (a gap, a drop), shown labelled - not a man. */
+  tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
+  /** The pre-snap moment to play before the question (motion-lab/presnap.ts). */
+  presnap?: object | null;
   /** A PLAYBOOK PAGE AS THIS QUESTION'S PICTURE. Optional, and independent of
    *  `question_type` - a page says what the player SEES, never how they
    *  answer. */

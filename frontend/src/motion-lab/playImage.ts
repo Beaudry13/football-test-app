@@ -21,8 +21,13 @@ export { IMAGE_HEIGHT, IMAGE_WIDTH } from './playImageLayout'
 export interface PlayImageOptions {
   /** Draw each man's route and pre-snap motion. */
   routes: boolean
+  /** Draw the pre-snap motion WITHOUT the routes ("#3 motions across - your
+   *  check?"). Implied by `routes`. */
+  motion?: boolean
   /** The man the question is about ("You're the X"): ringed in gold. */
   highlight?: string | null
+  /** Draw the football at the snapper's feet (false once it has been snapped). */
+  ball?: boolean
 }
 
 const COLORS = {
@@ -67,7 +72,7 @@ function line(ctx: CanvasRenderingContext2D, pts: Pt[], dashed: boolean) {
   ctx.setLineDash([])
 }
 
-function drawRoutes(ctx: CanvasRenderingContext2D, players: Player[]) {
+function drawRoutes(ctx: CanvasRenderingContext2D, players: Player[], routes = true) {
   ctx.lineWidth = 0.16 * U
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
@@ -77,7 +82,7 @@ function drawRoutes(ctx: CanvasRenderingContext2D, players: Player[]) {
     ctx.fillStyle = color
     const motion = p.motion ?? []
     if (motion.length >= 2) line(ctx, motion, true)
-    if (p.path.length >= 2) {
+    if (routes && p.path.length >= 2) {
       line(ctx, p.path, false)
       arrowHead(ctx, p.path[p.path.length - 2], p.path[p.path.length - 1])
     } else if (motion.length >= 2) {
@@ -158,10 +163,11 @@ export function drawPlay(ctx: CanvasRenderingContext2D, play: Play, options: Pla
   if (toGain !== null && toGain < Y_MAX) rule(toGain, COLORS.toGain)
 
   if (options.routes) drawRoutes(ctx, play.players)
+  else if (options.motion) drawRoutes(ctx, play.players, false)
 
   // The football, at the snapper's feet.
   const snapper = play.players.find((p) => p.side === 'offense' && p.role === 'snapper') ?? play.players.find((p) => p.side === 'offense' && p.label === 'C')
-  if (snapper) {
+  if (snapper && options.ball !== false) {
     const b = px({ x: snapper.x, y: 0 })
     ctx.fillStyle = COLORS.ball
     ctx.beginPath()

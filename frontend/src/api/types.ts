@@ -201,6 +201,8 @@ export interface RetestContext {
   stopped_in_parent: number;
 }
 
+export type QuizKind = 'QUIZ' | 'REP';
+
 export interface Quiz {
   id: number;
   retest_of?: RetestContext;
@@ -210,6 +212,9 @@ export interface Quiz {
   created_by_username: string | null;
   title: string;
   description: string | null;
+  /** QUIZ, or REP for a Situational Rep (one decision per screen, immediate
+   *  feedback). Absent from older payloads, which are all quizzes. */
+  kind?: QuizKind;
   one_question_at_a_time: boolean;
   require_all_answers: boolean;
   folder_id: number | null;
@@ -293,6 +298,14 @@ export interface Question {
   position: number;
   options: QuestionOption[];
   image: QuestionImage | null;
+  /** SITUATIONAL REP: who the player is in this decision ("Boundary safety"). */
+  subject_role?: string | null;
+  /** The Motion Lab play the decision was made from. Coach payload only. */
+  motion_play_id?: number | null;
+  /** TAP THE MAN: one spot per option (option order), as fractions of the picture. */
+  tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
+  /** THE PRE-SNAP MOMENT (motion-lab/presnap.ts PresnapClip): played, then frozen at the snap. */
+  presnap?: Record<string, unknown> | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {
@@ -801,6 +814,8 @@ export interface ActiveAttemptSummary {
 export interface ActiveQuizStatus {
   quiz_id: number;
   quiz_title: string;
+  /** REP for a Situational Rep. Absent from older payloads (all quizzes). */
+  quiz_kind?: QuizKind;
   access_code_id: number;
   code: string;
   expires_at: string;

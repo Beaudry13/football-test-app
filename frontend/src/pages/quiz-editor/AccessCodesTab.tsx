@@ -7,9 +7,12 @@ import {
 } from '../../api/accessCodes';
 import { listGroups } from '../../api/groups';
 import { ApiError, getErrorMessage } from '../../api/client';
-import { generateMissingPins, type IssuedPin } from '../../api/players';
+import { generateMissingPins, listPlayers, type IssuedPin } from '../../api/players';
+import { addRosterMembers, getRoster } from '../../api/roster';
+import { audiencesFrom, chosenPlayerIds, groupPlayerIds } from '../reps/audiences';
+import { PositionChips } from '../reps/PositionChips';
 import { PinSheetDialog } from '../../components/pins/PinSheetDialog';
-import type { AccessCode, AssessmentMode, Group, Quiz } from '../../api/types';
+import type { AccessCode, AssessmentMode, Group, Player, Quiz, Roster } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { AvailableUntil } from './AvailableUntil';
@@ -75,10 +78,16 @@ const MODE_OPTIONS: { value: AssessmentMode; label: string; hint: string }[] = [
 function ModePicker({
   mode,
   onChange,
+  rep = false,
 }: {
   mode: AssessmentMode;
   onChange: (mode: AssessmentMode) => void;
+  /** A Situational Rep: always sent for immediate feedback, so no choice. */
+  rep?: boolean;
 }) {
+  if (rep) {
+    return <p className={styles.modePicker}>A Rep always goes out for immediate feedback: each player sees right or wrong, and your reason, as he answers.</p>;
+  }
   return (
     <fieldset className={styles.modePicker}>
       <legend>How should this count?</legend>
@@ -115,7 +124,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   // GRADED is the default, and reverting to it after each activation is
   // deliberate: sending a practice quiz is the deliberate act, and a sticky
   // PRACTICE would make the next real assessment silently not count.
-  const [mode, setMode] = useState<AssessmentMode>('GRADED');
+  const [mode, setMode] = useState<AssessmentMode>(quiz.kind === 'REP' ? 'PRACTICE' : 'GRADED');
   // Practice-only. Reset when the coach switches back to graded so a
   // toggle left on cannot travel silently into a graded activation.
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
@@ -134,6 +143,21 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const [needPins, setNeedPins] = useState<PlayerNeedingPin[] | null>(null);
   const [isIssuingPins, setIsIssuingPins] = useState(false);
   const [pinSheet, setPinSheet] = useState<IssuedPin[] | null>(null);
+  /* WHO, FROM THE ROSTER: the same position chips a Rep is sent with. Picked
+     positions join this quiz's own roster - no throwaway group - and the code
+     goes to that roster, so the line under the chips says exactly who that is. */
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [roster, setRoster] = useState<Roster | null>(null);
+  const [positions, setPositions] = useState<string[]>([]);
+  const audiences = audiencesFrom(players);
+  const fromPositions = chosenPlayerIds(audiences, positions);
+  const onRoster = new Set(
+    (roster?.players ?? []).map((p) => p.player?.id).filter((id): id is number => id != null),
+  );
+  const rosterCount = roster?.players.length ?? 0;
+  const joining = [...new Set([...fromPositions, ...groupPlayerIds(groups, selectedGroupIds)])].filter(
+    (id) => !onRoster.has(id),
+  ).length;
 
   // The API refuses to activate a quiz with no questions (422). That one is
   // unambiguous from data this tab already has, so the button says so rather
@@ -165,6 +189,15 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       .catch((err) => setError(getErrorMessage(err)));
   }, []);
 
+  useEffect(() => {
+    listPlayers({ active: 'true' })
+      .then(setPlayers)
+      .catch(() => setPlayers([]));
+    getRoster(quiz.id)
+      .then(setRoster)
+      .catch(() => setRoster(null));
+  }, [quiz.id]);
+
   function toggleGroup(groupId: number) {
     setSelectedGroupIds((prev) =>
       prev.includes(groupId) ? prev.filter((id) => id !== groupId) : [...prev, groupId],
@@ -176,9 +209,18 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     setNeedPins(null);
     setIsActivating(true);
     try {
-      await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions, availableUntil);
+      if (fromPositions.length > 0) {
+        // Positions join this quiz's roster - and any picked groups' players
+        // with them - and the code goes to that roster.
+        const ids = [...new Set([...fromPositions, ...groupPlayerIds(groups, selectedGroupIds)])];
+        setRoster(await addRosterMembers(quiz.id, ids));
+        await activateQuiz(quiz.id, [], mode, randomizeQuestions, availableUntil);
+      } else {
+        await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions, availableUntil);
+      }
       await load();
       setMode('GRADED');
+      setPositions([]);
       // The new code is live; the panel that made it has nothing left to say.
       setShowReactivate(false);
     } catch (err) {
@@ -345,6 +387,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 </p>
                 <AvailableUntil value={availableUntil} onChange={setAvailableUntil} />
                 <ModePicker
+                  rep={quiz.kind === 'REP'}
                   mode={mode}
                   onChange={(next) => {
                     setMode(next);
@@ -392,9 +435,25 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 Activate. */}
             <AvailableUntil value={availableUntil} onChange={setAvailableUntil} />
 
+            {audiences.length > 0 && (
+              <div className={styles.groupPicker}>
+                <strong>Send to positions (optional)</strong>
+                <PositionChips audiences={audiences} chosen={positions} onChange={setPositions} className={styles.positionChips} />
+                {fromPositions.length > 0 && (
+                  <p className={styles.reach} role="status">
+                    {rosterCount === 0
+                      ? `Goes to ${joining} ${joining === 1 ? 'player' : 'players'}.`
+                      : `Goes to this quiz's roster: ${rosterCount + joining} players - the ${rosterCount} already on it${
+                          joining > 0 ? ` and ${joining} more` : ''
+                        }.`}
+                  </p>
+                )}
+              </div>
+            )}
+
             {groups.length > 0 && (
               <div className={styles.groupPicker}>
-                <strong>Restrict to saved group(s) (optional)</strong>
+                <strong>{fromPositions.length > 0 ? 'Add saved group(s) too (optional)' : 'Restrict to saved group(s) (optional)'}</strong>
                 <div className={styles.groupCheckboxList}>
                   {groups.map((group) => (
                     <label key={group.id} className={styles.groupCheckboxItem}>
@@ -412,6 +471,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
 
             <>
               <ModePicker
+                rep={quiz.kind === 'REP'}
                 mode={mode}
                 onChange={(next) => {
                   setMode(next);

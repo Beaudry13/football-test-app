@@ -81,6 +81,8 @@ describe('From Motion Lab, in the quiz editor', () => {
     expect(quizId).toBe(500);
     expect(input).toMatchObject({ question_type: 'multiple_choice', question_text: 'Who gets the ball on this play?' });
     expect(input.options.filter((o) => o.is_correct_answer).map((o) => o.option_text)).toEqual(['X']);
+    // Tapped like a Rep: one spot per choice, on the man.
+    expect(input.tap_targets).toHaveLength(input.options.length);
     expect((image as File).type).toBe('image/png');
     await waitFor(() => expect(reload).toHaveBeenCalled());
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Motion Lab plays' })).toBeNull());
@@ -93,7 +95,52 @@ describe('From Motion Lab, in the quiz editor', () => {
     fireEvent.click(await list.findByRole('button', { name: 'Draw your assignment: Inside Zone' }));
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled());
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0];
-    expect(input).toEqual({ question_text: 'Draw your assignment on this play.', question_type: 'draw_response', options: [] });
+    expect(input).toEqual({ question_text: 'Draw your assignment on this play.', question_type: 'draw_response', options: [], motion_play_id: 15 });
+  });
+
+  it('a play with pre-snap motion plays it before the player draws, frozen at the snap', async () => {
+    const jet = newPlay('Jet Sweep');
+    const h = jet.players.find((p) => p.label === 'H')!;
+    h.motion = [{ x: h.x, y: h.y }, { x: h.x - 14, y: h.y }];
+    vi.mocked(motionApi.listMotionPlays).mockResolvedValue([row(16, jet, '2026-10-12T00:00:00Z')] as never);
+    open(true);
+    fireEvent.click(screen.getByRole('button', { name: 'From Motion Lab' }));
+    const list = within(await screen.findByRole('list', { name: 'Motion Lab plays' }));
+    expect(await list.findByText('· motion plays')).toBeInTheDocument();
+    fireEvent.click(list.getByRole('button', { name: 'Draw your assignment: Jet Sweep' }));
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled());
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0];
+    expect(input.motion_play_id).toBe(16);
+    const clip = input.presnap as { freeze?: string; players: { id: string; motion?: unknown }[] };
+    expect(clip.freeze).toBeUndefined();
+    expect(clip.players.find((p) => p.id === h.id)!.motion).toBeTruthy();
+  });
+
+  it('a question that plays its motion says so in the list - and when it stops', () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
+    const moving = {
+      ...quiz,
+      question_count: 1,
+      questions: [
+        {
+          id: 1,
+          quiz_id: 500,
+          question_text: 'Who has the flat?',
+          question_type: 'multiple_choice',
+          position: 0,
+          options: [],
+          image: null,
+          concept: null,
+          presnap: { v: 1, situation: {}, highlight: null, players: [], freeze: 'mid' },
+        },
+      ],
+    } as unknown as Quiz;
+    render(
+      <MemoryRouter>
+        <QuestionsTab quiz={moving} reload={vi.fn(async () => undefined)} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('▶ Motion · Mid-motion')).toBeInTheDocument();
   });
 
   it('is not offered to a coach without Motion Lab', () => {

@@ -37,6 +37,7 @@ from app.models import (
 from app.models import CompetitionSession, QuestionClip
 from app.models.competition import LOBBY
 from app.models.question_region import RegionRole
+from app.models.motion_lab import MotionPlay
 from app.schemas.question import (
     AnnotationsUpdateSchema,
     QuestionCreateSchema,
@@ -86,6 +87,88 @@ def _validated_concept_id(quiz, concept_id):
     if concept is None or concept.organization_id != quiz.organization_id:
         raise ApiError("That concept does not exist", status_code=422)
     return concept.id
+
+
+def _validated_motion_play_id(quiz, motion_play_id):
+    """A Motion Lab play id proven to belong to this quiz's organization, or None.
+
+    Same rule as concepts: an id from a client is never trusted across a
+    tenant boundary.
+    """
+    if motion_play_id is None:
+        return None
+    play = db.session.get(MotionPlay, motion_play_id)
+    if play is None or play.organization_id != quiz.organization_id:
+        raise ApiError("That Motion Lab play does not exist", status_code=422)
+    return play.id
+
+
+def _validated_tap_targets(targets, option_count: int):
+    """One target per option, or none at all. A count that does not match the
+    options would let a tap land on the wrong answer - refused, not guessed."""
+    if not targets:
+        return None
+    if len(targets) != option_count:
+        raise ApiError(
+            "Give one tap target per answer, or none", status_code=422, reason="tap_targets_mismatch"
+        )
+    return [
+        {"x": float(t["x"]), "y": float(t["y"]), **({"zone": True} if t.get("zone") else {})}
+        for t in targets
+    ]
+
+
+#: Keys a pre-snap man may carry - the pre-snap part of a Motion Lab player.
+_PRESNAP_MAN_KEYS = {"id", "side", "label", "x", "y", "speed", "timing", "motion", "path"}
+
+
+def _validated_presnap(presnap):
+    """The pre-snap moment, kept to what it is for: a small list of men with
+    alignments and authored motion, and the situation. Anything else - a post-
+    snap route, the ball, blocks - is refused, because on a player's screen it
+    would answer the question. Size-capped: it rides in every delivery."""
+    if not presnap:
+        return None
+    men = presnap.get("players")
+    if not isinstance(men, list) or not 1 <= len(men) <= 30:
+        raise ApiError("The pre-snap moment needs its players", status_code=422, reason="presnap_invalid")
+    for man in men:
+        if not isinstance(man, dict) or set(man) - _PRESNAP_MAN_KEYS:
+            raise ApiError("The pre-snap moment holds alignment and motion only", status_code=422, reason="presnap_invalid")
+        if not isinstance(man.get("x"), (int, float)) or not isinstance(man.get("y"), (int, float)):
+            raise ApiError("Every man in the pre-snap moment needs a spot", status_code=422, reason="presnap_invalid")
+        for key in ("motion", "path"):
+            pts = man.get(key)
+            if pts is not None and (not isinstance(pts, list) or len(pts) > 200):
+                raise ApiError("A motion path is too long", status_code=422, reason="presnap_invalid")
+        # A path is stored only when it IS pre-snap motion (legacy timing).
+        if man.get("path") and man.get("timing") != "pre-snap":
+            raise ApiError("Routes after the snap do not belong in the pre-snap moment", status_code=422, reason="presnap_invalid")
+    if set(presnap) - {"v", "situation", "players", "highlight", "freeze", "after"}:
+        raise ApiError("The pre-snap moment holds alignment and motion only", status_code=422, reason="presnap_invalid")
+    if presnap.get("freeze") not in (None, "before", "mid", "snap", "after"):
+        raise ApiError("Unknown decision moment", status_code=422, reason="presnap_invalid")
+    after = presnap.get("after")
+    if after is not None:
+        # Only the beat after the snap - a second or two at most, never a route.
+        samples = after.get("samples") if isinstance(after, dict) else None
+        if (
+            not isinstance(samples, list)
+            or len(samples) > 30
+            or not isinstance(after.get("duration"), (int, float))
+            or not 0 < after["duration"] <= 2
+            or any(not isinstance(s, dict) or not isinstance(s.get("pts"), list) or len(s["pts"]) > 25 for s in samples)
+        ):
+            raise ApiError("The beat after the snap is a short one", status_code=422, reason="presnap_invalid")
+    if len(json.dumps(presnap)) > 64_000:
+        raise ApiError("The pre-snap moment is too large", status_code=422, reason="presnap_invalid")
+    return presnap
+
+
+def _clean_role(role):
+    """'  Boundary safety ' -> 'Boundary safety'; blank -> None."""
+    role = (role or "").strip()
+    return role or None
 
 
 def _replace_options(question: Question, options: list[dict]) -> None:
@@ -441,6 +524,11 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
     if next_position is None:
         next_position = len(quiz.questions)
 
+    # Validated before the insert, like everything above (see the ordering rule).
+    motion_play_id = _validated_motion_play_id(quiz, data.get("motion_play_id"))
+    tap_targets = _validated_tap_targets(data.get("tap_targets"), len(data["options"]))
+    presnap = _validated_presnap(data.get("presnap"))
+
     question = Question(
         quiz_id=quiz.id,
         question_text=data["question_text"],
@@ -449,6 +537,11 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         position=next_position,
         allows_multiple_answers=allows_multiple,
         concept_id=_validated_concept_id(quiz, data.get("concept_id")),
+        subject_role=_clean_role(data.get("subject_role")),
+        subject_man=data.get("subject_man"),
+        motion_play_id=motion_play_id,
+        tap_targets=tap_targets,
+        presnap=presnap,
     )
     db.session.add(question)
     db.session.flush()
@@ -736,6 +829,38 @@ def update_question(quiz_id: int, question_id: int):
         # deliberately has no load_default, so an edit that never mentions the
         # concept leaves the key absent and the existing tag alone.
         question.concept_id = _validated_concept_id(question.quiz, data.get("concept_id"))
+    # WHAT A PLAYER WAS TESTED ON stays what it was once he has it: which man
+    # the decision is about, when he decides, and where he taps. The same rule
+    # as the right answer - a change would quietly rewrite results players
+    # already have. (Rewording "You're the..." stays open: same man, new words.)
+    if delivered:
+        for key, current in (
+            ("subject_man", question.subject_man),
+            ("presnap", question.presnap),
+            ("tap_targets", question.tap_targets),
+        ):
+            if key in data and data.get(key) != current:
+                raise ApiError(
+                    "Players have this one, so who it is about, when they decide and "
+                    "where they tap are locked. Make a variation to test something different.",
+                    status_code=422,
+                    reason="delivered_locked",
+                )
+    if "subject_role" in data:
+        question.subject_role = _clean_role(data.get("subject_role"))
+    if "subject_man" in data:
+        question.subject_man = data.get("subject_man")
+    if "motion_play_id" in data:
+        question.motion_play_id = _validated_motion_play_id(question.quiz, data.get("motion_play_id"))
+    if "presnap" in data:
+        question.presnap = _validated_presnap(data.get("presnap"))
+    if "tap_targets" in data:
+        count = len(data["options"]) if "options" in data else len(question.options)
+        question.tap_targets = _validated_tap_targets(data.get("tap_targets"), count)
+    elif "options" in data and question.tap_targets and len(question.tap_targets) != len(data["options"]):
+        # The answers changed under the targets: drop them rather than let a
+        # tap land on the wrong man. The buttons still work.
+        question.tap_targets = None
 
     # Deliberately NOT guarded by _reject_if_already_answered: the explanation
     # is teaching material shown after the fact, so improving it changes

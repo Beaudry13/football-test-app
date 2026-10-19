@@ -132,6 +132,28 @@ class Question(db.Model):
     )
     position = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), server_default=db.func.now())
+    #: SITUATIONAL REP: who the player IS in this decision ("Boundary safety"),
+    #: as the coach says it. Shown to the player above the picture. Optional on
+    #: any question; a Rep's decisions normally carry one.
+    subject_role = db.Column(db.String(60), nullable=True)
+    #: The Motion Lab play this decision was made from, so the coach's "Teach"
+    #: opens it. Provenance only - the question's picture is its own copy.
+    motion_play_id = db.Column(
+        db.Integer, db.ForeignKey("motion_plays.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: TAP THE MAN: for a decision whose answers are players, one {x, y} per
+    #: option (in option order) as fractions of the picture, so the player taps
+    #: the man instead of a button. Null on every other question.
+    tap_targets = db.Column(JSONB, nullable=True)
+    #: THE PRE-SNAP MOMENT: for a decision made from a Motion Lab play with
+    #: authored motion, that play's pre-snap part (alignment, motion, speeds,
+    #: situation) so the player's screen runs the motion and freezes at the
+    #: snap. Never routes, ball or blocks - they would answer the question.
+    presnap = db.Column(JSONB, nullable=True)
+    #: WHICH MAN the decision tests: the Motion Lab player id ("D4") ringed in
+    #: its picture and pre-snap moment. `subject_role` is the coach's words for
+    #: him; this keeps words, ring and picture about the same man.
+    subject_man = db.Column(db.String(32), nullable=True)
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -257,6 +279,18 @@ class Question(db.Model):
                 else None
             ),
             "position": self.position,
+            # Who the player is in this decision. Not a secret - it is the
+            # first thing a player must read.
+            "subject_role": self.subject_role,
+            # Where each answer stands in the picture - what the player taps.
+            # Not a secret: every answer is a target, the right one is not marked.
+            "tap_targets": self.tap_targets,
+            # The pre-snap motion to play before the question - alignment and
+            # motion only, nothing that answers it.
+            "presnap": self.presnap,
+            # Which man in the play the decision is about - not a secret, he
+            # is ringed in the picture.
+            "subject_man": self.subject_man,
             # Gated by the same flag as the correct answers: the explanation
             # is teaching material, and a player taking a graded quiz must
             # not receive it. The play routes decide when to include it - in
@@ -305,6 +339,7 @@ class Question(db.Model):
         # player would hand them the answer to a question whose whole purpose
         # is that they cannot see it.
         if include_correct_answers:
+            data["motion_play_id"] = self.motion_play_id
             data["answer_explanation"] = self.answer_explanation
             data["expected_answers"] = self.expected_answers or []
             data["answer_matching"] = self.answer_matching

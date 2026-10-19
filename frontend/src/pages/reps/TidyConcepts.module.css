@@ -1,0 +1,59 @@
+.tidy {
+  margin-bottom: var(--space-5);
+}
+.lead {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px dashed var(--nb-accent);
+  background: transparent;
+  color: var(--peira-accent-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+.groups {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.choices legend {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+  margin-bottom: 4px;
+}
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.name {
+  font-weight: 700;
+}
+.count {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}

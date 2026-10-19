@@ -63,6 +63,12 @@
   white-space: nowrap;
 }
 
+/* The question will play this play's motion before the player answers. */
+.motionTag {
+  font-weight: 500;
+  color: var(--color-text-muted, #6b7280);
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

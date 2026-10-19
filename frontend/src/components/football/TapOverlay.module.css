@@ -1,0 +1,146 @@
+/* THE ANSWERS, IN THE PICTURE - one layer for every football question. */
+.surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.surface > * {
+  pointer-events: auto;
+}
+
+/* A man: a ring on him. */
+.target {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  border: 3px solid rgba(217, 164, 65, 0.85);
+  background: rgba(217, 164, 65, 0.12);
+  cursor: pointer;
+  animation: tap-target-pulse 1.6s ease-in-out infinite;
+}
+.target:disabled {
+  cursor: default;
+  animation: none;
+  opacity: 0.35;
+}
+
+/* A place on the field - a gap, a drop - labelled, since no man is there. */
+.zone {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2px solid rgba(217, 164, 65, 0.9);
+  background: rgba(15, 16, 18, 0.72);
+  color: #f7e7c0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.zone:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* Close places in one row: the buttons upfield, a dot on each true spot. */
+.row {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+}
+.row .zone {
+  position: static;
+  transform: none;
+}
+.dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: rgba(247, 201, 72, 0.95);
+  box-shadow: 0 0 0 2px rgba(15, 16, 18, 0.6);
+  pointer-events: none;
+}
+
+/* The coach's check: a place he can drag. */
+.dotMovable {
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+.movable {
+  cursor: grab;
+  touch-action: none;
+  border-style: dashed;
+}
+
+/* A result's tag on an answer: "3", "Ty". */
+.badge {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #0f1012;
+  color: #f7e7c0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.row .zone,
+.zone {
+  overflow: visible;
+}
+.row .zone {
+  position: relative;
+}
+
+.on,
+.target:disabled.on,
+.zone:disabled.on {
+  opacity: 1;
+  border-color: var(--peira-accent-text, #f7c948);
+  background: rgba(217, 164, 65, 0.3);
+}
+.right,
+.target:disabled.right,
+.zone:disabled.right {
+  border-color: var(--peira-success, #6fcf8a);
+  background: rgba(111, 207, 138, 0.3);
+}
+.wrong,
+.target:disabled.wrong,
+.zone:disabled.wrong {
+  border-color: var(--peira-danger, #e2573a);
+  background: rgba(226, 87, 58, 0.3);
+}
+
+@keyframes tap-target-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .target {
+    animation: none;
+  }
+}

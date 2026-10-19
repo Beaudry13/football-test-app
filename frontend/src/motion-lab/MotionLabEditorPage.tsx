@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor } from './authoring/MotionLabEditor'
 import { MakeQuestion } from './MakeQuestion'
+import { MakeRep } from './MakeRep'
 import type { Player } from './engine/formation'
 import type { Play } from './engine/play'
 import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
@@ -47,6 +48,10 @@ export default function MotionLabEditorPage() {
   const [undoScratch, setUndoScratch] = useState<Play | null>(null)
   /** The "Make question" panel is open. */
   const [asking, setAsking] = useState(false)
+  /** A Rep's "Add decisions" sends the coach here with ?rep=<id>: Make rep opens, aimed at it. */
+  const intoRep = Number(new URLSearchParams(location.search).get('rep')) || null
+  /** The "Make rep" panel is open. One panel at a time. */
+  const [repping, setRepping] = useState(intoRep !== null)
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -331,11 +336,44 @@ export default function MotionLabEditorPage() {
         }}
         notice={notice}
         actions={
-          <div className="ball-menu">
-            <button className={asking ? 'active' : ''} aria-expanded={asking} onClick={() => setAsking((open) => !open)} title="Turn this play into a quiz question">
+          <div className="ball-menu make-actions">
+            <button
+              className={repping ? 'active' : ''}
+              aria-expanded={repping}
+              onClick={() => {
+                setAsking(false)
+                setRepping((open) => !open)
+              }}
+              title="Put a player in this play: a Situational Rep"
+            >
+              Make rep
+            </button>
+            <button
+              className={asking ? 'active' : ''}
+              aria-expanded={asking}
+              onClick={() => {
+                setRepping(false)
+                setAsking((open) => !open)
+              }}
+              title="Turn this play into a quiz question"
+            >
               Make question
             </button>
-            {asking && currentPlay && <MakeQuestion play={currentPlay} onClose={() => setAsking(false)} />}
+            {repping && currentPlay && (
+              <MakeRep
+                play={currentPlay}
+                motionPlayId={current ? session.serverIdOf(current) : null}
+                onClose={() => setRepping(false)}
+                intoRep={intoRep}
+              />
+            )}
+            {asking && currentPlay && (
+              <MakeQuestion
+                play={currentPlay}
+                motionPlayId={current ? session.serverIdOf(current) : null}
+                onClose={() => setAsking(false)}
+              />
+            )}
           </div>
         }
         isUnsaved={(id) => session.isScratch(id)}

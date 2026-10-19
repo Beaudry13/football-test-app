@@ -20,6 +20,7 @@ import { DashboardRail, DashboardQuietNote } from './DashboardRail';
 import { useActiveStatus } from '../hooks/useActiveStatus';
 import { FirstSuccessChecklist } from '../components/onboarding/FirstSuccessChecklist';
 import { useMayUseMotionLab } from '../motion-lab/motionLabAccess';
+import { RepsHomeCard } from './reps/RepsHomeCard';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
@@ -65,7 +66,8 @@ export function DashboardPage() {
   async function refresh() {
     try {
       const [quizList, folderList] = await Promise.all([listQuizzes(), listFolders()]);
-      setQuizzes(quizList);
+      // Situational Reps have their own page (/reps); the worklist is quizzes.
+      setQuizzes(quizList.filter((q) => q.kind !== 'REP'));
       setFolders(folderList);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -285,6 +287,10 @@ export function DashboardPage() {
                 <MotionLabHomeCard />
               </Suspense>
             )}
+            {/* Situational Reps: each recent Rep's worst football problem, one
+                tap from Teach and Retest. Every coach; it stays away until
+                there is a Rep, unless the coach can make one from a play. */}
+            <RepsHomeCard inviteWhenEmpty={motionLab} />
 
         {/* Tour target. An attribute rather than a class, so restyling this
             header can never silently unhook the Dashboard Tour - see

@@ -21,6 +21,7 @@ import nb from '../../styles/notebook.module.css';
 import { describeExclusionScope } from './assignmentLabel';
 import { countPlayerAwaitingGrades } from './gradingQueue';
 import styles from './ResultsTab.module.css';
+import { TapResult } from '../../components/football/TapResult';
 
 /** Shared empty default, so an unsupplied lookup does not allocate a new Map
  *  on every render and retrigger memoised children. */
@@ -144,9 +145,32 @@ function AnswerRow({
           </div>
         )
       ) : (
-        <div className={styles.answerValue}>
-          {selectedAnswer ?? (answer.answer_text || <em>No answer</em>)}
-        </div>
+        <>
+          <div className={styles.answerValue}>
+            {selectedAnswer ?? (answer.answer_text || <em>No answer</em>)}
+          </div>
+          {/* A TAP ANSWER, SEEN: his tap and the right spot on the picture he
+              tapped. The spots are the live question's - they are locked once a
+              player has the question (routes/questions), so live is what he saw. */}
+          {!allowsMultiple && live && live.tap_targets && (
+            <TapResult
+              image={live.image}
+              presnap={live.presnap}
+              targets={live.tap_targets}
+              options={live.options.map((o) => ({
+                id: o.id,
+                // His words: as delivered, not as reworded since.
+                option_text: delivered?.options.find((d) => d.id === o.id)?.option_text ?? o.option_text,
+              }))}
+              correctIds={(delivered ?? live).options
+                .filter((o) => o.is_correct_answer && o.id !== null)
+                .map((o) => o.id as number)}
+              chosenIds={answer.selected_option_id != null ? [answer.selected_option_id] : []}
+              who="Tapped"
+              motionKey={`${answer.id}`}
+            />
+          )}
+        </>
       )}
 
       <ErrorBanner message={error} />

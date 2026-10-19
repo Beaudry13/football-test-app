@@ -32,15 +32,25 @@ function PathProbe() {
   return null
 }
 
+/** Jet motion by H, and routes after the snap. */
+function withMotion(): Play {
+  const play = newPlay('Jet')
+  const h = play.players.find((p) => p.label === 'H')!
+  h.motion = [{ x: h.x, y: h.y }, { x: h.x - 14, y: h.y }]
+  const x = play.players.find((p) => p.label === 'X')!
+  x.path = [{ x: x.x, y: x.y }, { x: x.x, y: 15 }]
+  return play
+}
+
 const passTo = (targetId: string): Play => ({ ...newPlay('Jet Dig'), ball: { kind: 'pass', targetId, catchPoint: { x: 17, y: 11 } } })
 
-function open(play: Play) {
+function open(play: Play, motionPlayId: number | null = null) {
   const onClose = vi.fn()
   render(
     <MemoryRouter initialEntries={['/motion-lab']}>
       <PathProbe />
       <Routes>
-        <Route path="/motion-lab" element={<MakeQuestion play={play} onClose={onClose} />} />
+        <Route path="/motion-lab" element={<MakeQuestion play={play} motionPlayId={motionPlayId} onClose={onClose} />} />
         <Route path="/quizzes/:quizId" element={<div>quiz editor</div>} />
       </Routes>
     </MemoryRouter>,
@@ -67,6 +77,8 @@ describe('Make a quiz question from a play', () => {
     expect(screen.getByRole('radio', { name: 'Draw your assignment' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.queryByRole('radio', { name: 'Who gets the ball?' })).toBeNull()
     expect(screen.getByRole('checkbox', { name: 'Show the routes' })).not.toBeChecked()
+    // No pre-snap motion in this play, so there is nothing to play.
+    expect(screen.queryByRole('checkbox', { name: 'Play the motion' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
     await waitFor(() => expect(lastPath).toBe('/quizzes/31'))
     expect(quizzesApi.createQuiz).toHaveBeenCalledWith({ title: 'Trips Right Smash' })
@@ -145,6 +157,29 @@ describe('Make a quiz question from a play', () => {
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: true })
   })
 
+  it('"Who gets the ball?" is answered by tapping the man, as in a Rep', async () => {
+    const play = passTo('O8')
+    open(play)
+    fireEvent.click(screen.getByRole('radio', { name: 'Who gets the ball?' }))
+    expect(screen.getByText(/players tap the man in the picture/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.tap_targets).toHaveLength(input.options.length)
+    const x = play.players.find((p) => p.label === 'X')!
+    const at = input.options.findIndex((o) => o.option_text === 'X')
+    expect(input.tap_targets![at].x).toBeCloseTo(px(x).x / 1376)
+  })
+
+  it('the coach can try what a player taps before making it', async () => {
+    open(passTo('O8'))
+    fireEvent.click(screen.getByRole('radio', { name: 'Who gets the ball?' }))
+    fireEvent.click(screen.getByRole('button', { name: 'See what they tap' }))
+    const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
+    fireEvent.click(check.getByRole('button', { name: 'Tap X' }))
+    expect(check.getByRole('status')).toHaveTextContent('That answers “X” - the right one.')
+  })
+
   it('says what went wrong and stays open', async () => {
     vi.mocked(questionsApi.createQuestion).mockRejectedValue(new Error('The picture is too large.'))
     open(newPlay('Jet Dig'))
@@ -152,6 +187,43 @@ describe('Make a quiz question from a play', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('The picture is too large.')
     expect(lastPath).toBe('/motion-lab')
     expect(screen.getByRole('button', { name: 'Make question' })).toBeEnabled()
+  })
+
+  it('a play with pre-snap motion plays it for the player, frozen at the moment the coach picks', async () => {
+    const play = withMotion()
+    const h = play.players.find((p) => p.label === 'H')!
+    open(play, 14)
+    expect(screen.getByRole('checkbox', { name: 'Play the motion' })).toBeChecked()
+    const moments = within(screen.getByRole('radiogroup', { name: 'Decide at' }))
+    expect(moments.getByRole('radio', { name: 'Snap' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(moments.getByRole('radio', { name: 'Mid-motion' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    expect(input.question_type).toBe('draw_response')
+    expect((input.presnap as { freeze?: string }).freeze).toBe('mid')
+    expect(input.motion_play_id).toBe(14)
+    // The picture a drawing goes on is the play AT the moment: H part-way across, no routes.
+    const [frame, options] = vi.mocked(image.playImage).mock.calls[0]
+    expect(options).toMatchObject({ routes: false, motion: true })
+    const hAt = frame.players.find((p) => p.id === h.id)!
+    expect(hAt.x).toBeLessThan(h.x)
+    expect(hAt.x).toBeGreaterThan(h.x - 14)
+  })
+
+  it('the play moving or a still with its routes - one or the other', async () => {
+    open(withMotion())
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show the routes' }))
+    expect(screen.getByRole('checkbox', { name: 'Play the motion' })).not.toBeChecked()
+    expect(screen.queryByRole('radiogroup', { name: 'Decide at' })).toBeNull()
+    // And back: the motion plays again, the routes go - then routes once more.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Play the motion' }))
+    expect(screen.getByRole('checkbox', { name: 'Show the routes' })).not.toBeChecked()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show the routes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1].presnap).toBeUndefined()
+    expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: true })
   })
 
   it('Cancel closes it', () => {

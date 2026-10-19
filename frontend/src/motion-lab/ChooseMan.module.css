@@ -1,0 +1,11 @@
+/* TWO CBs - WHICH ONE? The coach taps the man he means. */
+.choose {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 640px;
+}
+.ask {
+  font-size: 14px;
+  font-weight: 700;
+}

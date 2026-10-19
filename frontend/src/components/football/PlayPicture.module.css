@@ -1,0 +1,12 @@
+/* A question's football picture: a still, with room for the answers over it. */
+.wrap {
+  position: relative;
+}
+.picture {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #2e6b3c;
+}

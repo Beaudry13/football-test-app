@@ -38,6 +38,14 @@ export const SECTION_LINKS: SectionLink[] = [
     isActive: (path) => path.startsWith('/motion-lab'),
     visibleTo: mayUseMotionLab,
   },
+  // SITUATIONAL REP (experimental) - for every coach: a Rep is made from quiz
+  // content, which every coach has. Making one from a Motion Lab play stays
+  // behind Motion Lab's own gate.
+  {
+    to: '/reps',
+    label: 'Reps',
+    isActive: (path) => path.startsWith('/reps'),
+  },
   {
     to: '/documents',
     label: 'Playbooks',

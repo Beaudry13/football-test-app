@@ -26,6 +26,13 @@ import {
 import type { DrawingDocument } from '../../components/drawing/types';
 import { isAuthRefusal } from './playerEntry';
 
+/** What a practice run hands its end screen for Review Missed. */
+export interface PracticeReview {
+  questions: Question[];
+  /** Option ids he picked, per question. */
+  chosen: Record<number, number[]>;
+}
+
 const AUTOSAVE_DEBOUNCE_MS = 800;
 /** Longer than the text debounce. A drawing payload is orders of magnitude
  * larger, and a player mid-stroke produces changes continuously rather than in
@@ -167,7 +174,7 @@ export function QuizStep({
   onSubmitted: () => void;
   /** Practice ends on its own screen, not the results page - a practice
    * attempt never becomes a result a coach reviews. */
-  onPracticeComplete?: (feedback: PracticeFeedback[]) => void;
+  onPracticeComplete?: (feedback: PracticeFeedback[], review?: PracticeReview) => void;
 }) {
   const isPractice = mode === 'PRACTICE';
   // The delivered version wins. A refresh mid-quiz re-runs validate-code and
@@ -599,7 +606,16 @@ export function QuizStep({
         })),
       }, ...tokenArgs());
       if (isPractice && onPracticeComplete) {
-        onPracticeComplete(questions.map((q) => feedback[q.id]).filter(Boolean));
+        onPracticeComplete(questions.map((q) => feedback[q.id]).filter(Boolean), {
+          // For Review Missed: the questions as he met them, and what he picked.
+          questions,
+          chosen: Object.fromEntries(
+            questions.map((q) => {
+              const a = answers[q.id];
+              return [q.id, a?.selected_option_ids?.length ? a.selected_option_ids : a?.selected_option_id != null ? [a.selected_option_id] : []];
+            }),
+          ),
+        });
       } else {
         onSubmitted();
       }
@@ -686,6 +702,7 @@ export function QuizStep({
           isUnanswered={unansweredIds.has(question.id)}
           drawingScope={drawingScope}
           locked={Boolean(checked)}
+          verdict={checked ? checked.is_correct : null}
           /* THE SAME RULE THAT GOVERNS SUBMITTING decides whether the rest of
              the play may be shown. Reusing `isAnswered` rather than writing a
              second rule is the point: a blank box or an untouched choice must
@@ -752,6 +769,7 @@ export function QuizStep({
               isUnanswered={unansweredIds.has(question.id)}
               drawingScope={drawingScope}
               locked={Boolean(checked)}
+              verdict={checked ? checked.is_correct : null}
               canRevealClip={isAnswered(question, answers[question.id])}
               /* EVERY QUESTION IS ON SCREEN AT ONCE HERE, so nothing may start
                  on its own - twenty clips playing together is a wall of film

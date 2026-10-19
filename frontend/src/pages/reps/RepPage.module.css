@@ -1,0 +1,873 @@
+/* A SITUATIONAL REP for the coach: the football problem first, big. */
+.back {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  color: var(--nb-text-muted);
+  text-decoration: none;
+  font-size: var(--peira-text-meta);
+}
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-5);
+}
+.head h1 {
+  margin: 0;
+}
+.kicker {
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text);
+}
+.meta {
+  color: var(--nb-text-muted);
+}
+
+.send {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.sendLead {
+  font-weight: 700;
+}
+/* The words and the ring: which man is ringed, and a warning when the words name another job. */
+.ringNote {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+  white-space: nowrap;
+}
+.ringWarn {
+  flex-basis: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-danger, #b42318);
+}
+.editLocked {
+  margin: 0;
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}
+/* How a decision is played: when he decides, what he taps. */
+.decisionHow {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+}
+/* One player, every decision: open his row. */
+.playerOpen {
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.playerDetail td {
+  background: var(--peira-surface);
+}
+.playerDecisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.playerDecision {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.playerDecisionText {
+  font-size: 14px;
+}
+/* A VARIATION: copy the Rep, change what is different, send it. */
+.variationOpen {
+  align-self: flex-start;
+  margin-top: 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.variation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--nb-accent);
+  border-radius: 10px;
+  background: var(--color-accent-bg);
+}
+.variationTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.variationTop > button {
+  margin-left: auto;
+}
+.variationKicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nb-accent);
+}
+.variationOf {
+  color: var(--nb-text-muted);
+  font-size: 14px;
+}
+.variationName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.variationName input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 6px;
+}
+.variationMan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.variationMan select {
+  font: inherit;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-strong);
+}
+.variationSaid {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.variationHint {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nb-text-muted);
+}
+/* A problem's name opens its history - quietly, still a heading. */
+.problemLink {
+  color: inherit;
+  text-decoration: none;
+}
+.problemLink:hover {
+  text-decoration: underline;
+}
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+.group {
+  white-space: nowrap;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.groupOn {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  font-weight: 700;
+}
+.suggested {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--nb-accent);
+  color: var(--color-accent-contrast);
+}
+.groupCount {
+  color: var(--nb-text-muted);
+  font-weight: 400;
+}
+.hint {
+  color: var(--nb-text-muted);
+  font-size: 14px;
+}
+.liveRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.livePip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--peira-success);
+}
+.liveText {
+  font-weight: 700;
+}
+.linkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+.code {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.link {
+  flex: 1;
+  min-width: 200px;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--nb-card-border);
+  background: var(--color-surface-input);
+  color: var(--nb-text);
+}
+
+/* DID IT STICK - a retest's first answer. */
+.stick {
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-5);
+  border: 1px solid var(--nb-card-border);
+  border-left: 4px solid var(--nb-accent);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.stickLead {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--nb-text-muted);
+}
+.stickLead a {
+  color: inherit;
+  font-weight: 700;
+}
+.stickList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stickRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 16px;
+}
+.stickName {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.stickBefore {
+  color: var(--peira-danger);
+}
+.stickArrow {
+  color: var(--nb-text-muted);
+}
+.stickNow {
+  font-weight: 700;
+}
+.stickFixed {
+  font-weight: 800;
+  color: var(--peira-success);
+}
+.stickWaiting {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}
+
+.roleField {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--peira-accent-text);
+  font-weight: 700;
+}
+.roleField input {
+  font: inherit;
+  font-weight: 700;
+  color: var(--peira-accent-text);
+  background: transparent;
+  border: 1px dashed transparent;
+  border-radius: 4px;
+  padding: 2px 6px;
+  min-width: 0;
+  width: 16ch;
+}
+.roleField input:hover,
+.roleField input:focus {
+  border-color: var(--nb-card-border);
+  outline: none;
+}
+.roleField input::placeholder {
+  color: var(--nb-text-muted);
+  font-weight: 400;
+}
+
+.waiting,
+.allClear {
+  padding: var(--space-5);
+  border-radius: var(--peira-radius-md);
+  border: 1px dashed var(--nb-card-border);
+  color: var(--nb-text-muted);
+}
+.allClear {
+  border-style: solid;
+  border-color: var(--peira-success);
+  color: var(--nb-text);
+  font-weight: 700;
+}
+
+.problem {
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--nb-card-border);
+  border-left: 4px solid var(--peira-danger);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.problemFixed {
+  border-left-color: var(--peira-success);
+}
+.nextLine {
+  margin: 0 0 var(--space-3);
+  font-weight: 700;
+  color: var(--peira-accent-text);
+}
+.nextFixed {
+  color: var(--peira-success);
+}
+.toGo {
+  font-weight: 400;
+  color: var(--nb-text-muted);
+}
+.linkButton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.problemName {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.problemLine {
+  margin: 0 0 var(--space-3);
+  font-size: 17px;
+  color: var(--nb-text);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--space-4);
+}
+.waitingOn {
+  margin: calc(-1 * var(--space-4)) 0 var(--space-5);
+  font-size: 14px;
+  color: var(--nb-text-muted);
+}
+.waitingLead {
+  font-weight: 700;
+  color: var(--nb-text);
+}
+.chip {
+  text-decoration: none;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--peira-chip, var(--color-accent-bg));
+  color: var(--nb-text);
+}
+.more {
+  font-size: 13px;
+  color: var(--nb-text-muted);
+  align-self: center;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-bg);
+}
+.confirm span {
+  flex: 1 1 240px;
+  font-weight: 600;
+}
+
+.table {
+  width: 100%;
+  margin-top: var(--space-4);
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.table th {
+  text-align: left;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+.table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--nb-card-border);
+}
+.qNum {
+  color: var(--nb-text-muted);
+}
+.pos {
+  color: var(--nb-text-muted);
+  font-size: 12px;
+}
+.missedCell {
+  color: var(--peira-danger);
+  font-weight: 700;
+}
+
+.solid {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.solid li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-card-border);
+}
+.tick {
+  color: var(--peira-success);
+  font-weight: 800;
+}
+.solidCount {
+  color: var(--nb-text-muted);
+  font-size: 13px;
+}
+
+.section {
+  margin-top: var(--space-7);
+}
+.sectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.sectionTitle {
+  margin: 0 0 var(--space-3);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+.edit {
+  font-size: var(--peira-text-meta);
+  color: inherit;
+}
+.decisions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.decision {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.thumb {
+  flex: none;
+  width: 180px;
+  height: auto;
+  align-self: flex-start;
+  border-radius: 6px;
+}
+.decisionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.addOpen {
+  font: inherit;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-accent);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.order {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.order button {
+  font: inherit;
+  font-size: 11px;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--nb-card-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+}
+.order button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* The drag grip, and where a dragged decision will land. */
+.grip {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--nb-text-muted);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.dragging {
+  opacity: 0.45;
+}
+.dropBefore {
+  box-shadow: 0 -3px 0 var(--nb-accent);
+}
+.dropAfter {
+  box-shadow: 0 3px 0 var(--nb-accent);
+}
+.orderNum {
+  font-weight: 800;
+  font-size: 14px;
+}
+.adder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--peira-radius-md);
+  background: var(--peira-surface);
+}
+.adderTabs {
+  display: flex;
+  gap: 6px;
+}
+.adderTabs button {
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-card-border);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.adderTabs button[aria-selected='true'] {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  font-weight: 700;
+}
+.adderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.adderRow {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font: inherit;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--nb-text);
+  text-decoration: none;
+  cursor: pointer;
+}
+.adderRow:hover {
+  border-color: var(--nb-accent);
+}
+.adderMeta {
+  color: var(--nb-text-muted);
+  font-size: 13px;
+}
+.adderPick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.adderPickHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.adderQuestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.adderQuestionOn {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+}
+.decisionTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.editOpen {
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-card-border);
+  background: transparent;
+  color: var(--nb-text-muted);
+  cursor: pointer;
+}
+.editOpen:hover {
+  border-color: var(--nb-accent);
+  color: var(--nb-text);
+}
+.decisionConcept {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.editField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--nb-text-muted);
+}
+.editField textarea,
+.editField input,
+.editAnswer input {
+  font: inherit;
+  font-size: 14px;
+  color: var(--nb-text);
+  background: var(--color-surface-input);
+  border: 1px solid var(--nb-card-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.editAnswer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.editAnswer input {
+  flex: 1;
+  min-width: 0;
+}
+.editRight {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-border-strong);
+  background: transparent;
+  color: #111;
+  font-weight: 800;
+  cursor: pointer;
+}
+.editRightOn {
+  border-color: var(--peira-success);
+  background: var(--peira-success);
+}
+.editRight:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+.editDrop {
+  flex: none;
+  width: 24px;
+  border: 0;
+  background: transparent;
+  color: var(--nb-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.editAdd,
+.editChip {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-card-border);
+  background: transparent;
+  color: var(--nb-text);
+  cursor: pointer;
+}
+.editChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.editMean {
+  font: inherit;
+  font-weight: 700;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--peira-accent-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.editNote {
+  font-size: 12px;
+}
+.editActions {
+  display: flex;
+  gap: var(--space-2);
+}
+.decisionPrompt {
+  font-weight: 600;
+}
+.decisionRole {
+  color: var(--peira-accent-text);
+}
+.bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bar,
+.barRight {
+  display: grid;
+  grid-template-columns: minmax(90px, 160px) 1fr 28px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.barRight .barLabel {
+  font-weight: 700;
+  color: var(--peira-success);
+}
+.barTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--nb-card-border);
+  overflow: hidden;
+}
+.barFill {
+  display: block;
+  height: 100%;
+  background: var(--peira-danger);
+}
+.barRight .barFill {
+  background: var(--peira-success);
+}
+.barCount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.median {
+  font-size: 12px;
+  color: var(--nb-text-muted);
+}
+@media (max-width: 640px) {
+  .decision {
+    flex-direction: column;
+  }
+  .thumb {
+    width: 100%;
+  }
+}
