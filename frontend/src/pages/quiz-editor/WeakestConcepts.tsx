@@ -4,6 +4,7 @@ import { getErrorMessage } from '../../api/client';
 import { createRetest } from '../../api/retests';
 import type { ConceptBreakdown, Question, QuestionBreakdown, RetestSummary } from '../../api/types';
 import type { TeachSlide } from '../../components/teach/TeachView';
+import { FootballProblem } from '../../components/football/FootballProblem';
 import { MissActions } from './MissActions';
 import { RetestStatus } from './RetestStatus';
 import { quizTeachSlides } from './quizTeach';
@@ -85,6 +86,7 @@ export function WeakestConcepts({
   questions = [],
   breakdown = [],
   retests = [],
+  teachConceptId = null,
 }: {
   concepts: ConceptBreakdown[];
   quizId: number;
@@ -94,11 +96,13 @@ export function WeakestConcepts({
   breakdown?: QuestionBreakdown[];
   /** How retests built from this quiz went - did it stick, per concept. */
   retests?: RetestSummary[];
+  /** ?teach=<concept> (Home's Next up): that concept's Teach opens on arrival. */
+  teachConceptId?: number | null;
 }) {
   const retestOf = (concept: ConceptBreakdown) => retests.find((t) => t.concept_ids.includes(concept.concept_id));
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   /** Teach it / Make a rep for the ones who missed it - the loop a Rep has. */
-  const missActions = (concept: ConceptBreakdown, label: string) => {
+  const missActions = (concept: ConceptBreakdown, label: string, show: 'all' | 'teach' | 'more' = 'all') => {
     const slides = teachSlides(concept, questions, breakdown);
     if (slides.length === 0) return null;
     return (
@@ -113,6 +117,8 @@ export function WeakestConcepts({
         playerIds={concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null)}
         conceptId={concept.concept_id}
         extraAction={<TeachRetest quizId={quizId} concept={concept} />}
+        show={show}
+        startTeaching={show !== 'more' && teachConceptId !== null && concept.concept_id === teachConceptId}
       />
     );
   };
@@ -167,134 +173,116 @@ export function WeakestConcepts({
         Teach next
       </h2>
 
-      <div className={styles.headline}>
-        <div className={styles.conceptName}>{weakest.concept_name}</div>
-        <p className={styles.missLine}>
-          {/* PLAYERS, AND IT SAYS SO. This line used to read "12 of 20 missed"
-              directly above a list of six names, because the count was answers
-              and the list was people. A coach asking what to teach is asking
-              who needs teaching, so the headline is stated in the same unit as
-              the names underneath it and names that unit out loud. The
-              answer-level figures are still on the page, in the per-question
-              breakdown where the unit cannot be mistaken.
+      {/* THE FOOTBALL PROBLEM, then the next step - the same card a Rep
+          uses (FootballProblem). Who missed it and every further action are
+          one tap down; the coach is not asked to read them to know what to do.
 
-              The COUNT leads, not the percentage. "6 of 10 players" is a fact a
-              coach can act on; "60%" is the same fact needing arithmetic first,
-              and reads far more confident than a small sample deserves. */}
-          <strong>
-            {weakest.players_missed_count} of {weakest.players_responded_count} player
-            {weakest.players_responded_count === 1 ? '' : 's'} missed this
-          </strong>
-          {!weakest.has_enough_responses && (
-            <span className={styles.thin}> &mdash; too few answers to be sure yet</span>
-          )}
-        </p>
-
-        {weakest.top_distractor && (
-          <p className={styles.distractor}>
-            {/* Deliberately "chose", not "believe" or "have a misconception".
-                The data says what they picked; it does not say why.
-
-                "WRONG ANSWERS", not "misses" - this is the one figure on the
-                panel that is genuinely about answers rather than people, since
-                it describes a distribution across options, so it names its own
-                unit instead of borrowing the headline's.
-
-                "All 6" rather than "6 of the 6": when every wrong answer chose
-                the same option, "6 of the 6" reads like a ratio while carrying
-                none of the information one. */}
-            {weakest.top_distractor.count === weakest.top_distractor.of_misses ? (
-              <>
-                All {weakest.top_distractor.of_misses} wrong answers chose{' '}
-              </>
-            ) : (
-              <>
-                {weakest.top_distractor.count} of {weakest.top_distractor.of_misses} wrong
-                answers chose{' '}
-              </>
+          PLAYERS, AND IT SAYS SO: the count is people, in the same unit as
+          the names under "View details"; the answer-level figures stay in the
+          question-by-question evidence where the unit cannot be mistaken.
+          "Most chose" names the wrong answer the misses picked most, with the
+          count beside it - what they picked, never why. */}
+      <FootballProblem
+        headingLevel={3}
+        name={weakest.concept_name}
+        label={weakest.concept_name ?? 'General'}
+        missed={weakest.players_missed_count}
+        responded={weakest.players_responded_count}
+        who={weakest.players_responded_count === 1 ? 'player' : 'players'}
+        thin={!weakest.has_enough_responses}
+        chose={
+          weakest.top_distractor
+            ? {
+                text: weakest.top_distractor.option_text,
+                detail:
+                  weakest.top_distractor.count === weakest.top_distractor.of_misses
+                    ? `all ${weakest.top_distractor.of_misses} wrong answers`
+                    : `${weakest.top_distractor.count} of ${weakest.top_distractor.of_misses} wrong answers`,
+              }
+            : null
+        }
+        note={
+          <>
+            {weakest.ungraded_count > 0 && (
+              <p className={styles.ungradedNote}>
+                {weakest.ungraded_count} answer{weakest.ungraded_count === 1 ? '' : 's'} here still need
+                {weakest.ungraded_count === 1 ? 's' : ''} grading, and {weakest.ungraded_count === 1 ? 'is' : 'are'} not
+                counted above.
+              </p>
             )}
-            <strong>{weakest.top_distractor.option_text}</strong>
-          </p>
-        )}
-
-        {weakest.players_missed.length > 0 && (
-          <div className={styles.players}>
-            <div className={styles.playersLabel}>Who missed it</div>
-            <ul className={styles.playerList}>
-              {shownPlayers.map((player, index) => (
-                <li
-                  // THE PERSON, not the name: two same-named players shared a key.
-                  key={player.player_id != null ? `player:${player.player_id}` : `name:${player.player_name}`}
-                  className={styles.player}
-                >
-                  {player.player_id != null ? (
-                    <Link to={`/roster/${player.player_id}`} className={styles.playerLink}>
-                      {missedLabels[index].text}
-                    </Link>
-                  ) : (
-                    missedLabels[index].text
+            {/* OFFERED ONLY WHEN IT CAN SUCCEED: every question they missed
+                may since have been stopped - saying why beats a dead button. */}
+            {weakest.retestable_question_count === 0 && (
+              <p className={styles.ungradedNote}>
+                Every question they missed here has been stopped, so there is nothing to retest.
+              </p>
+            )}
+          </>
+        }
+        status={retestOf(weakest) && <RetestStatus retest={retestOf(weakest)!} />}
+        actions={
+          <>
+            {/* TEACH, beside Retest: the questions they missed, big, with the
+                right answer and the reason - for the meeting room. */}
+            {missActions(weakest, 'Teach it', 'teach')}
+            {/* Peira assembles a draft; it does not send anything. */}
+            {weakest.retestable_question_count > 0 && (
+              <RetestAction
+                quizId={quizId}
+                conceptId={weakest.concept_id}
+                conceptName={weakest.concept_name}
+                targets={weakest.players_missed}
+                retiredCount={weakest.retired_missed_question_count}
+              />
+            )}
+          </>
+        }
+        detailsLabel="View details"
+        details={
+          <>
+            {weakest.players_missed.length > 0 && (
+              <div className={styles.players}>
+                <div className={styles.playersLabel}>Who missed it</div>
+                <ul className={styles.playerList}>
+                  {shownPlayers.map((player, index) => (
+                    <li
+                      // THE PERSON, not the name: two same-named players shared a key.
+                      key={player.player_id != null ? `player:${player.player_id}` : `name:${player.player_name}`}
+                      className={styles.player}
+                    >
+                      {player.player_id != null ? (
+                        <Link to={`/roster/${player.player_id}`} className={styles.playerLink}>
+                          {missedLabels[index].text}
+                        </Link>
+                      ) : (
+                        missedLabels[index].text
+                      )}
+                      {/* Their position WHEN THEY ANSWERED. Absent rather than
+                          guessed when it was never recorded. */}
+                      {player.position_at_attempt && (
+                        <span className={styles.position}>{player.position_at_attempt}</span>
+                      )}
+                    </li>
+                  ))}
+                  {canToggle && (
+                    <li className={styles.moreItem}>
+                      <button
+                        type="button"
+                        className={styles.moreToggle}
+                        onClick={() => setShowAllPlayers((open) => !open)}
+                      >
+                        {showAllPlayers ? 'Show fewer' : `and ${hiddenCount} more`}
+                      </button>
+                    </li>
                   )}
-                  {/* Their position WHEN THEY ANSWERED. Absent rather than
-                      guessed when it was never recorded. */}
-                  {player.position_at_attempt && (
-                    <span className={styles.position}>{player.position_at_attempt}</span>
-                  )}
-                </li>
-              ))}
-              {/* INSIDE the chip list, not below it. As its own block the
-                  toggle cost a full 44px row plus margin and pushed the action
-                  to y=783 - behind the fixed bottom nav that starts at 764. As
-                  a list item it wraps into the row the chips already occupy. */}
-              {canToggle && (
-                <li className={styles.moreItem}>
-                  <button
-                    type="button"
-                    className={styles.moreToggle}
-                    onClick={() => setShowAllPlayers((open) => !open)}
-                  >
-                    {showAllPlayers ? 'Show fewer' : `and ${hiddenCount} more`}
-                  </button>
-                </li>
-              )}
-            </ul>
-          </div>
-        )}
-
-        {weakest.ungraded_count > 0 && (
-          <p className={styles.ungradedNote}>
-            {weakest.ungraded_count} answer{weakest.ungraded_count === 1 ? '' : 's'} here still need
-            {weakest.ungraded_count === 1 ? 's' : ''} grading, and {weakest.ungraded_count === 1 ? 'is' : 'are'} not counted
-            above.
-          </p>
-        )}
-        {/* THE ACTION, on the one thing a coach is meant to do something
-            about. Peira assembles a draft; it does not send anything.
-
-            OFFERED ONLY WHEN IT CAN SUCCEED. Every question these players
-            missed may since have been stopped, and retirement is deliberately
-            carried through copying - so the action would have returned a
-            predictable 422 on a button Peira had put in front of the coach
-            itself. Saying why is more useful than a disabled control. */}
-        {/* TEACH, beside Retest: the questions they missed, big, with the
-            right answer and the reason - for the meeting room. */}
-        {teachSlides(weakest, questions, breakdown).length > 0 && (
-          <div className={styles.teachRow}>{missActions(weakest, 'Teach it')}</div>
-        )}
-        {retestOf(weakest) && <RetestStatus retest={retestOf(weakest)!} />}
-        {weakest.retestable_question_count > 0 ? (
-          <RetestAction
-            quizId={quizId}
-            conceptId={weakest.concept_id}
-            conceptName={weakest.concept_name}
-            targets={weakest.players_missed}
-            retiredCount={weakest.retired_missed_question_count}
-          />
-        ) : (
-          <p className={styles.ungradedNote}>
-            Every question they missed here has been stopped, so there is nothing to retest.
-          </p>
-        )}
-      </div>
+                </ul>
+              </div>
+            )}
+            {/* Make a rep of it, pick more questions on it, open its play. */}
+            {missActions(weakest, 'Teach it', 'more')}
+          </>
+        }
+      />
 
       {rest.length > 0 && (
         <ul className={styles.others}>

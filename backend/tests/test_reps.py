@@ -1095,8 +1095,64 @@ class TestWhatAPlayerKnows:
         trail = next(r for r in after["recent"] if r["name"] == "Motion adjustment")["trail"]
         assert [(t["outcome"], t["is_retest"]) for t in trail] == [("missed", False), ("got", True)]
 
+    def test_a_teammate_sees_the_player_but_not_my_results(self, client, register_coach, app, invite_teammate):
+        # Players are org-shared; results are Coach View - the teammate's
+        # learning view reads only HIS own quizzes and Reps, never mine.
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: stay, second["id"]: inside})
+        assert client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=headers).get_json()["work_on"]
+        _, _, teammate = invite_teammate(headers)
+        seen = client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=teammate)
+        assert seen.status_code == 200
+        assert seen.get_json() == {"has": [], "work_on": [], "recent": []}
+
+    def test_a_malformed_id_fails_safely(self, client, coach_headers):
+        assert client.get("/api/players/not-a-number/learning", headers=coach_headers).status_code == 404
+        assert client.get("/api/players/987654321/learning", headers=coach_headers).status_code == 404
+        assert client.get("/api/players/1/learning").status_code == 401
+
     def test_another_organizations_player_is_not_found(self, client, register_coach, app):
         coach, _, headers = register_coach()
         _rep_, _first, _second, ids, _code, _ = _built(client, headers, app, coach)
         _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
         assert client.get(f"/api/players/{ids['Bo Brown']}/learning", headers=stranger).status_code == 404
+
+
+class TestRepResultsDoNotGrowQueriesWithPlayers:
+    """STABILIZATION: read lazily, a Rep run by 80 players cost ~600 queries and
+    Home's summary of four Reps ~2,500. The readers load what they touch up
+    front, so the query count is the same for one player as for the team."""
+
+    @staticmethod
+    def _queries(app, rep_id):
+        from sqlalchemy import event
+
+        from app.models import Quiz
+        from app.services.rep_results import rep_results
+
+        with app.app_context():
+            count = {"n": 0}
+
+            def _count(*_a, **_k):
+                count["n"] += 1
+
+            event.listen(db.engine, "before_cursor_execute", _count)
+            try:
+                rep_results(db.session.get(Quiz, rep_id))
+            finally:
+                event.remove(db.engine, "before_cursor_execute", _count)
+            return count["n"]
+
+    def test_one_player_or_four_the_same_number_of_queries(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        stay, inside = _option(first, "Stay boundary"), _option(second, "Inside")
+        names = list(ids)
+        _play(client, code, names[0], ids[names[0]], {first["id"]: stay, second["id"]: inside})
+        one = self._queries(app, rep["id"])
+        for name in names[1:]:
+            _play(client, code, name, ids[name], {first["id"]: stay, second["id"]: inside})
+        team = self._queries(app, rep["id"])
+        assert team == one, (one, team)

@@ -34,6 +34,8 @@ export function MissActions({
   teachLabel = 'Teach',
   retestTargets,
   conceptId,
+  show = 'all',
+  startTeaching = false,
 }: {
   quizId: number;
   /** The questions this miss is about, in quiz order. */
@@ -56,6 +58,12 @@ export function MissActions({
   /** The concept this miss is about: offers 'Pick questions...' - your other
    *  quizzes' and Reps' questions on it, for a short targeted Rep. */
   conceptId?: number | null;
+  /** SIMPLE ON THE SURFACE. 'all': Teach (and Retest) on the row, the rest -
+   *  Make a rep, Pick questions, Open the play - behind "More". A problem card
+   *  splits them: 'teach' beside its Retest, 'more' in its details. */
+  show?: 'all' | 'teach' | 'more';
+  /** Arrived from Home's "Teach it" (?teach=<concept>): Teach opens straight away. */
+  startTeaching?: boolean;
 }) {
   const motionLab = useMayUseMotionLab();
   /** The Motion Lab play a missed question came from - the football source, one tap away. */
@@ -65,10 +73,12 @@ export function MissActions({
   /* PICK QUESTIONS - this miss's questions checked, the rest of what you have
      already written on the concept offered. One panel, no wizard. */
   const [picking, setPicking] = useState(false);
+  /** 'all': the further actions are folded until the coach asks for them. */
+  const [moreOpen, setMoreOpen] = useState(false);
   const [candidates, setCandidates] = useState<ConceptQuestion[] | null>(null);
   const [checked, setChecked] = useState<number[]>([]);
   const navigate = useNavigate();
-  const [teaching, setTeaching] = useState(false);
+  const [teaching, setTeaching] = useState(startTeaching);
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tappable = questions.filter((q) => q.question_type === 'multiple_choice' || q.question_type === 'true_false');
@@ -142,12 +152,17 @@ export function MissActions({
       {retesting ? 'Building…' : retestTargets.length === 1 ? 'Retest the 1' : `Retest the ${retestTargets.length}`}
     </button>
   );
-  return (
-    <span className={styles.actions}>
+  const teachPart = (
+    <>
       <button type="button" className={styles.action} onClick={() => setTeaching(true)}>
         {teachLabel}
       </button>
       {retestButton}
+    </>
+  );
+  const hasMore = !!repButton || (!!conceptId && tappable.length > 0) || (motionLab && sourcePlay !== undefined);
+  const morePart = (
+    <>
       {repButton}
       {conceptId && tappable.length > 0 && (
         <button type="button" className={styles.link} aria-expanded={picking} onClick={openPicker}>
@@ -199,6 +214,23 @@ export function MissActions({
           )}
         </span>
       )}
+    </>
+  );
+  return (
+    <span className={styles.actions}>
+      {show !== 'more' && teachPart}
+      {show === 'more' && morePart}
+      {show === 'all' && hasMore && (
+        <button
+          type="button"
+          className={styles.link}
+          aria-expanded={moreOpen}
+          onClick={() => setMoreOpen((open) => !open)}
+        >
+          {moreOpen ? 'Less' : 'More'}
+        </button>
+      )}
+      {show === 'all' && moreOpen && morePart}
       {error && (
         <span className={styles.error} role="alert">
           {error}

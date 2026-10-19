@@ -53,8 +53,17 @@ export default function MotionLabEditorPage() {
   const intoRep = Number(new URLSearchParams(location.search).get('rep')) || null
   /** The "Make rep" panel is open. One panel at a time. */
   const [repping, setRepping] = useState(intoRep !== null)
-  /** The "Teach" panel is open: this play on the meeting-room screen. */
+  /** The "Teach a moment" panel is open: this play on the meeting-room screen. */
   const [teachingPlay, setTeachingPlay] = useState(false)
+  /** The "Use this play" menu is open. */
+  const [using, setUsing] = useState(false)
+  /** One panel at a time, chosen from the menu. */
+  const openPanel = (kind: 'rep' | 'question' | 'teach') => {
+    setUsing(false)
+    setRepping(kind === 'rep')
+    setAsking(kind === 'question')
+    setTeachingPlay(kind === 'teach')
+  }
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -339,44 +348,47 @@ export default function MotionLabEditorPage() {
         }}
         notice={notice}
         actions={
+          /* USE THIS PLAY: one button for everything that takes the play
+             somewhere else - a Rep, a quiz question, a moment taught on the
+             big screen - so the field keeps the top bar. Each still opens
+             its own one-panel flow, one panel at a time. */
           <div className="ball-menu make-actions">
             <button
-              className={repping ? 'active' : ''}
-              aria-expanded={repping}
-              onClick={() => {
-                setAsking(false)
-                setTeachingPlay(false)
-                setRepping((open) => !open)
-              }}
-              title="Put a player in this play: a Situational Rep"
-            >
-              Make rep
-            </button>
-            <button
-              className={asking ? 'active' : ''}
-              aria-expanded={asking}
-              onClick={() => {
-                setRepping(false)
-                setTeachingPlay(false)
-                setAsking((open) => !open)
-              }}
-              title="Turn this play into a quiz question"
-            >
-              Make question
-            </button>
-            <button
-              className={teachingPlay ? 'active' : ''}
-              aria-expanded={teachingPlay}
+              className={using || repping || asking || teachingPlay ? 'active' : ''}
+              aria-expanded={using}
+              aria-haspopup="menu"
               onClick={() => {
                 setRepping(false)
                 setAsking(false)
-                setTeachingPlay((open) => !open)
+                setTeachingPlay(false)
+                setUsing((open) => !open)
               }}
-              title="Put this play on the big screen: the motion, the moment, your coaching point"
+              title="Make a rep or a quiz question from this play, or teach a moment from it"
             >
-              Teach
+              Use this play <span className="key">▾</span>
             </button>
-            {teachingPlay && currentPlay && <TeachPlay play={currentPlay} onClose={() => setTeachingPlay(false)} />}
+            {using && (
+              <div
+                className="popover use-pop"
+                role="menu"
+                aria-label="Use this play"
+                onKeyDown={(e) => {
+                  // The editor's own keys stay out of a menu; Escape closes it.
+                  e.stopPropagation()
+                  if (e.key === 'Escape') setUsing(false)
+                }}
+              >
+                <button role="menuitem" onClick={() => openPanel('rep')}>
+                  Make a rep <span className="use-why">put a player in it</span>
+                </button>
+                <button role="menuitem" onClick={() => openPanel('question')}>
+                  Make a quiz question
+                </button>
+                <button role="menuitem" onClick={() => openPanel('teach')}>
+                  Teach a moment <span className="use-why">stop it, ring him, say the point</span>
+                </button>
+              </div>
+            )}
             {repping && currentPlay && (
               <MakeRep
                 play={currentPlay}
@@ -392,6 +404,7 @@ export default function MotionLabEditorPage() {
                 onClose={() => setAsking(false)}
               />
             )}
+            {teachingPlay && currentPlay && <TeachPlay play={currentPlay} onClose={() => setTeachingPlay(false)} />}
           </div>
         }
         isUnsaved={(id) => session.isScratch(id)}

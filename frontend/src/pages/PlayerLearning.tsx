@@ -107,9 +107,11 @@ export function PlayerLearning({ playerId, firstName }: { playerId: number; firs
           </ul>
         </div>
       )}
+      {/* HOW IT CHANGED, one level down: what he knows and what he needs is
+          the answer; the trail behind it is there when a coach asks. */}
       {learning.recent.length > 0 && (
-        <div className={styles.group}>
-          <span className={styles.label}>Recent</span>
+        <details className={styles.group}>
+          <summary className={styles.label}>How it changed</summary>
           <ul className={styles.rows}>
             {learning.recent.map((r) => (
               <li key={r.concept_id} className={styles.trail}>
@@ -123,7 +125,7 @@ export function PlayerLearning({ playerId, firstName }: { playerId: number; firs
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
       {error && <p className={styles.error}>{error}</p>}
     </section>

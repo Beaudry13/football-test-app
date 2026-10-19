@@ -33,25 +33,6 @@
   background: var(--peira-text-muted);
 }
 
-.role {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.1;
-}
-.roleLead {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--peira-text-muted);
-}
-.roleName {
-  font-size: 26px;
-  font-weight: 800;
-  color: var(--peira-accent-text);
-}
-
 .watching {
   margin: -4px 0 0;
   font-size: 14px;
@@ -60,15 +41,6 @@
   text-transform: uppercase;
   color: var(--peira-text-muted);
 }
-.tapHint {
-  margin-top: -6px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--peira-accent-text);
-}
-
 .picture {
   width: 100%;
   height: auto;

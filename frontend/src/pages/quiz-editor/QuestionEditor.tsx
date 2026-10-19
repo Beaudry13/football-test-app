@@ -471,63 +471,72 @@ export function QuestionEditor({
     setOptions((prev) => prev.filter((_, i) => i !== index));
   }
 
-  /* "You are this player" - under the picture beside the spots. */
-  const markControls = pictureUrl && !existingImageHasMarks && (
+  /* ON THE PICTURE, ONE ROW: who they are in it and how they answer on it.
+     Each part is offered only when it applies and says its state in a few
+     words; the setup itself (the ring, the spots) opens on tap. Two stacked
+     rows of controls under every picture read as configuration. */
+  const canMark = !!pictureUrl && !existingImageHasMarks;
+  const pictureControls = (canMark || tapsAllowed) && (
     <div className={styles.imageActions}>
-      <span className={styles.imageHint}>
-        {marker ? `Ringed: ${role.trim() ? `you're the ${role.trim()}` : 'the player they are'}.` : 'Who are they in this picture?'}
-      </span>
-      {!hasBeenDelivered ? (
-        <button type="button" className={nb.btnSm} onClick={() => setMarking(true)}>
-          {marker ? 'Move the ring' : 'Mark the player'}
-        </button>
-      ) : (
-        marker && <span className={styles.imageHint}>Players have this question, so the ring stays.</span>
-      )}
-    </div>
-  );
-
-  /* The spot controls, under whichever picture this question has - saved, or
-     just chosen while creating it (no save-and-come-back). */
-  const tapControls = tapsAllowed && (
-    <div className={styles.imageActions}>
-      {tapTargets ? (
-        <>
-          <span className={styles.imageHint}>
-            {spotsToConfirm ? 'Spots placed - check them before you save.' : 'Players tap the picture.'}
-          </span>
-          <button type="button" className={nb.btnSm} onClick={() => openSpots('look')}>
-            See what they tap
-          </button>
-          {!hasBeenDelivered && (
+      {canMark &&
+        (marker ? (
+          <>
+            <span className={styles.imageHint}>
+              ✓ {role.trim() ? `You're the ${role.trim()}` : 'The player is ringed'}
+            </span>
+            {!hasBeenDelivered ? (
+              <button type="button" className={nb.btnSm} onClick={() => setMarking(true)}>
+                Move the ring
+              </button>
+            ) : (
+              <span className={styles.imageHint}>Players have this question, so the ring stays.</span>
+            )}
+          </>
+        ) : (
+          !hasBeenDelivered && (
+            <button type="button" className={nb.btnSm} onClick={() => setMarking(true)}>
+              Mark the player
+            </button>
+          )
+        ))}
+      {tapsAllowed &&
+        (tapTargets ? (
+          <>
+            <span className={styles.imageHint}>
+              {spotsToConfirm ? 'Spots placed - check them before you save.' : '✓ They tap the picture'}
+            </span>
+            <button type="button" className={nb.btnSm} onClick={() => openSpots('look')}>
+              See what they tap
+            </button>
+            {!hasBeenDelivered && (
+              <button
+                type="button"
+                className={nb.btnSm}
+                onClick={() => {
+                  setTapTargets(null);
+                  setSpotsToConfirm(false);
+                }}
+              >
+                Buttons only
+              </button>
+            )}
+          </>
+        ) : (
+          !hasBeenDelivered && (
             <button
               type="button"
               className={nb.btnSm}
+              disabled={options.length < 2}
               onClick={() => {
-                setTapTargets(null);
-                setSpotsToConfirm(false);
+                setTapTargets(spreadTargets(options.length));
+                setSpotsToConfirm(true);
+                setCheckingSpots('look');
               }}
             >
-              Buttons only
+              Players tap the picture
             </button>
-          )}
-        </>
-      ) : (
-        !hasBeenDelivered && (
-          <button
-            type="button"
-            className={nb.btnSm}
-            disabled={options.length < 2}
-            onClick={() => {
-              setTapTargets(spreadTargets(options.length));
-              setSpotsToConfirm(true);
-              setCheckingSpots('look');
-            }}
-          >
-            Players tap the picture
-          </button>
-        )
-      )}
+          )
+        ))}
     </div>
   );
 
@@ -937,8 +946,7 @@ export function QuestionEditor({
               Opens the drawing canvas for this question, with everything you have already
               drawn on it.
             </p>
-            {markControls}
-            {tapControls}
+            {pictureControls}
             {existingImageHasMarks && questionType === 'multiple_choice' && (
               <p className={styles.imageHint}>Tap answers need a picture without your markings.</p>
             )}
@@ -1130,8 +1138,7 @@ export function QuestionEditor({
                   Remove
                 </button>
               </div>
-              {markControls}
-              {tapControls}
+              {pictureControls}
             </div>
           ) : (
             /* A drop target and an explanation, not a bare file input. The

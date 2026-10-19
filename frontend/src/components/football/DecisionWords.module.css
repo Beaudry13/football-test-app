@@ -1,0 +1,29 @@
+/* Who you are: a small label, then the role, big - the first words a player reads. */
+.youAre {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+  margin: 0 0 6px;
+}
+.lead {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.role {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--peira-accent-text, inherit);
+}
+/* How to answer, once, when the answers are in the picture. */
+.tapHint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text, var(--color-text-muted));
+}

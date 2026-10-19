@@ -27,6 +27,7 @@ import {
 import type { Group, Player } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
+import { FootballProblem } from '../../components/football/FootballProblem';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
@@ -207,7 +208,10 @@ export function RepPage() {
               />
             )}
 
-            <SendPanel results={results} onSent={load} />
+            {/* BUILD -> SEND -> SEE WHAT THEY MISSED. Sending leads until
+                someone has run it; once a run has closed, what they missed
+                leads and "Send it again" waits below it. */}
+            {(results.players.length === 0 || results.audience.code) && <SendPanel results={results} onSent={load} />}
             <Waiting results={results} />
 
             {results.retest_of && <DidItStick results={results} />}
@@ -246,6 +250,9 @@ export function RepPage() {
               </section>
             )}
 
+            {results.players.length > 0 && !results.audience.code && (
+              <SendPanel results={results} onSent={load} folded />
+            )}
             <Decisions results={results} quizId={id} onChanged={load} />
             {results.players.length > 0 && <Players results={results} />}
           </>
@@ -263,7 +270,9 @@ export function RepPage() {
   );
 }
 
-function SendPanel({ results, onSent }: { results: RepResults; onSent: () => void }) {
+function SendPanel({ results, onSent, folded = false }: { results: RepResults; onSent: () => void; folded?: boolean }) {
+  /** After a closed run: one quiet button until the coach wants to send again. */
+  const [unfolded, setUnfolded] = useState(false);
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [picked, setPicked] = useState<number[]>([]);
   /* WHO, FROM THE ROSTER: position families ("Safeties - FS, S, SS - 11"),
@@ -291,6 +300,16 @@ function SendPanel({ results, onSent }: { results: RepResults; onSent: () => voi
       .then(setPlayers)
       .catch(() => setPlayers([]));
   }, [code]);
+
+  if (folded && !unfolded && !code) {
+    return (
+      <section className={styles.sendAgain} aria-label="Send it again">
+        <button type="button" className={nb.btnSecondary} onClick={() => setUnfolded(true)}>
+          Send it again
+        </button>
+      </section>
+    );
+  }
 
   if (code) {
     const link = playLink(code);
@@ -407,7 +426,7 @@ function ProblemCard({
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const cardRef = useRef<HTMLElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!asked || problem.retest) return;
     setConfirming(true);
@@ -421,33 +440,48 @@ function ProblemCard({
     decisions
       .filter((d) => problem.question_ids.includes(d.question_id) && targetsOf(d))
       .sort((a, b) => b.missed - a.missed)[0] ?? null;
-  return (
-    <article
-      ref={cardRef}
-      className={fixed ? `${styles.problem} ${styles.problemFixed}` : styles.problem}
-      aria-label={problem.name}
-    >
-      <h2 className={styles.problemName}>
-        {/* The problem's history: is it getting better, who still misses it. */}
-        {problem.concept ? (
-          <Link to={`/reps/concepts/${problem.concept.id}`} className={styles.problemLink}>
-            {problem.name}
-          </Link>
-        ) : (
-          problem.name
-        )}
-      </h2>
-      <p className={styles.problemLine}>
-        <strong>
-          {problem.missed} of {problem.responded}
-        </strong>{' '}
-        {who} missed
-        {problem.most_common_wrong && (
-          <>
-            {' · '}most chose <strong>“{problem.most_common_wrong.text}”</strong>
-          </>
-        )}
-      </p>
+  /* THE NEXT STEP, SAID. Taught -> retest; retested -> how it went. */
+  const status = again ? (
+    <p className={fixed ? `${styles.nextLine} ${styles.nextFixed}` : styles.nextLine}>
+      {again.ran === 0
+        ? `Retest is out to ${again.invited} - nobody has run it yet.`
+        : fixed
+          ? `Fixed on the retest: all ${again.responded} got it.`
+          : `Retest: ${again.missed} of ${again.responded} still missing.`}
+      {again.ran > 0 && toGo > 0 && <span className={styles.toGo}> {toGo} to go</span>}
+    </p>
+  ) : (
+    taught && <p className={styles.nextLine}>{taughtLine(taught)} Now see if it stuck.</p>
+  );
+  /* TEACH AND RETEST - the two things to do about it. Retested already: how
+     it went is one tap away instead. */
+  const actions = again ? (
+    <>
+      <button type="button" className={nb.btnSecondary} onClick={onTeach}>
+        Teach
+      </button>
+      <Link to={`/reps/${again.id}`} className={`${nb.btnPrimary} ${styles.linkButton}`}>
+        Open retest
+      </Link>
+    </>
+  ) : (
+    <>
+      <button type="button" className={taught ? nb.btnSecondary : nb.btnPrimary} onClick={onTeach}>
+        Teach
+      </button>
+      <button
+        type="button"
+        className={taught ? nb.btnPrimary : nb.btnSecondary}
+        onClick={() => setConfirming(true)}
+        disabled={busy}
+      >
+        Retest
+      </button>
+    </>
+  );
+  /* ONE TAP DOWN: who missed it, where they tapped, what each one chose. */
+  const details = (
+    <>
       <div className={styles.chips}>
         {shown.map((p) =>
           p.player_id !== null ? (
@@ -462,78 +496,7 @@ function ProblemCard({
         )}
         {more > 0 && <span className={styles.more}>and {more} more</span>}
       </div>
-      {/* THE NEXT STEP, SAID. Taught -> retest; retested -> how it went. */}
-      {again ? (
-        <p className={fixed ? `${styles.nextLine} ${styles.nextFixed}` : styles.nextLine}>
-          {again.ran === 0
-            ? `Retest is out to ${again.invited} - nobody has run it yet.`
-            : fixed
-              ? `Fixed on the retest: all ${again.responded} got it.`
-              : `Retest: ${again.missed} of ${again.responded} still missing.`}
-          {again.ran > 0 && toGo > 0 && <span className={styles.toGo}> {toGo} to go</span>}
-        </p>
-      ) : (
-        taught && <p className={styles.nextLine}>{taughtLine(taught)} Now see if it stuck.</p>
-      )}
-      <div className={styles.actions}>
-        <button type="button" className={nb.btnSecondary} aria-expanded={viewing} onClick={() => setViewing((v) => !v)}>
-          View players
-        </button>
-        {again ? (
-          <>
-            <button type="button" className={nb.btnSecondary} onClick={onTeach}>
-              Teach
-            </button>
-            <Link to={`/reps/${again.id}`} className={`${nb.btnPrimary} ${styles.linkButton}`}>
-              Open retest
-            </Link>
-          </>
-        ) : (
-          <>
-            <button type="button" className={taught ? nb.btnSecondary : nb.btnPrimary} onClick={onTeach}>
-              Teach
-            </button>
-            <button
-              type="button"
-              className={taught ? nb.btnPrimary : nb.btnSecondary}
-              onClick={() => setConfirming(true)}
-              disabled={busy}
-            >
-              Retest
-            </button>
-          </>
-        )}
-      </div>
-      {confirming && (
-        <div className={styles.confirm} role="group" aria-label="Retest">
-          <span>
-            Send {problem.name} back to the {problem.players_missed.length}{' '}
-            {problem.players_missed.length === 1 ? 'player' : 'players'} who missed it?
-          </span>
-          <button
-            type="button"
-            className={nb.btnPrimary}
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              try {
-                await onRetest();
-              } catch (err) {
-                setError(getErrorMessage(err));
-                setBusy(false);
-              }
-            }}
-          >
-            {busy ? 'Sending…' : 'Send retest'}
-          </button>
-          <button type="button" className={nb.btnSm} onClick={() => setConfirming(false)} disabled={busy}>
-            Cancel
-          </button>
-        </div>
-      )}
-      <ErrorBanner message={error} />
-      {viewing && tapped && (
+      {tapped && (
         /* WHERE THEY TAPPED, in one glance: the right spot green, every spot
            someone missed to in red, how many on each. */
         <TapResult
@@ -546,32 +509,87 @@ function ProblemCard({
           motionKey={`team-${tapped.question_id}`}
         />
       )}
-      {viewing && (
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Answered</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {problem.players_missed.map((p) =>
-              p.answers.map((a, i) => (
-                <tr key={`${p.key}:${a.question_id}`}>
-                  <td>{i === 0 ? p.display_name : ''}</td>
-                  <td>
-                    {problem.question_ids.length > 1 && <span className={styles.qNum}>#{numberOf(a.question_id)} </span>}“
-                    {a.chose.join(', ') || '-'}”
-                  </td>
-                  <td>{a.time_ms ? `${(a.time_ms / 1000).toFixed(1)} s` : '-'}</td>
-                </tr>
-              )),
-            )}
-          </tbody>
-        </table>
-      )}
-    </article>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Answered</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {problem.players_missed.map((p) =>
+            p.answers.map((a, i) => (
+              <tr key={`${p.key}:${a.question_id}`}>
+                <td>{i === 0 ? p.display_name : ''}</td>
+                <td>
+                  {problem.question_ids.length > 1 && <span className={styles.qNum}>#{numberOf(a.question_id)} </span>}“
+                  {a.chose.join(', ') || '-'}”
+                </td>
+                <td>{a.time_ms ? `${(a.time_ms / 1000).toFixed(1)} s` : '-'}</td>
+              </tr>
+            )),
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+  return (
+    <div ref={cardRef}>
+      <FootballProblem
+        name={
+          /* The problem's history: is it getting better, who still misses it. */
+          problem.concept ? (
+            <Link to={`/reps/concepts/${problem.concept.id}`} className={styles.problemLink}>
+              {problem.name}
+            </Link>
+          ) : (
+            problem.name
+          )
+        }
+        label={problem.name}
+        missed={problem.missed}
+        responded={problem.responded}
+        who={who}
+        chose={problem.most_common_wrong ? { text: problem.most_common_wrong.text } : null}
+        status={status}
+        fixed={fixed}
+        actions={actions}
+        details={details}
+        open={viewing}
+        onToggle={setViewing}
+      >
+        {confirming && (
+          <div className={styles.confirm} role="group" aria-label="Retest">
+            <span>
+              Send {problem.name} back to the {problem.players_missed.length}{' '}
+              {problem.players_missed.length === 1 ? 'player' : 'players'} who missed it?
+            </span>
+            <button
+              type="button"
+              className={nb.btnPrimary}
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  await onRetest();
+                } catch (err) {
+                  setError(getErrorMessage(err));
+                  setBusy(false);
+                }
+              }}
+            >
+              {busy ? 'Sending…' : 'Send retest'}
+            </button>
+            <button type="button" className={nb.btnSm} onClick={() => setConfirming(false)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        )}
+        <ErrorBanner message={error} />
+      </FootballProblem>
+    </div>
   );
 }
 
@@ -1248,6 +1266,8 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(false);
+  /** Rearrange: the arrows, the drag grip and Remove - only while asked for. */
+  const [arranging, setArranging] = useState(false);
   const { confirm, dialog } = useConfirmDialog();
   /** Only a decision nobody has received can go - nothing a player has is lost. */
   const remove = (d: RepDecision) =>
@@ -1329,6 +1349,16 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
       {dialog}
       <div className={styles.sectionHead}>
         <h2 className={styles.sectionTitle}>Decisions</h2>
+        {results.decisions.length > 1 && (
+          <button
+            type="button"
+            className={styles.addOpen}
+            aria-pressed={arranging}
+            onClick={() => setArranging((on) => !on)}
+          >
+            {arranging ? 'Done' : 'Rearrange'}
+          </button>
+        )}
         <button type="button" className={styles.addOpen} aria-expanded={adding} onClick={() => setAdding((open) => !open)}>
           + Add decisions
         </button>
@@ -1361,6 +1391,8 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
               className={rowClass}
             >
               <div className={styles.order}>
+                {arranging ? (
+                <>
                 <span
                   className={styles.grip}
                   title="Drag to move it - or use the arrows"
@@ -1382,6 +1414,10 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                 >
                   ▼
                 </button>
+                </>
+                ) : (
+                  <span className={styles.orderNum}>{d.number}</span>
+                )}
               </div>
               {d.image && <img className={styles.thumb} src={resolveMediaUrl(d.image.image_url)} alt="" />}
               <div className={styles.decisionBody}>
@@ -1392,7 +1428,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                       Edit
                     </button>
                   )}
-                  {editing !== d.question_id && !d.delivered && results.decisions.length > 1 && (
+                  {arranging && editing !== d.question_id && !d.delivered && results.decisions.length > 1 && (
                     <button
                       type="button"
                       className={styles.editOpen}

@@ -1,6 +1,7 @@
 import type { PracticeFeedback, Question } from '../../api/types';
 import { PlayPicture } from '../../components/football/PlayPicture';
-import { tapsMen, usableTargets, type TapTarget } from '../../components/football/tapTargets';
+import { TapHint, YouAre } from '../../components/football/DecisionWords';
+import { usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import { missedOf, roleOf } from './decisionRules';
 import styles from './RepRunner.module.css';
 
@@ -36,12 +37,7 @@ export function Decision({
   const targets = tapTargetsOf(question);
   return (
     <>
-      {role && (
-        <div className={styles.role}>
-          <span className={styles.roleLead}>You&rsquo;re the</span>
-          <span className={styles.roleName}>{role}</span>
-        </div>
-      )}
+      {role && <YouAre role={role} />}
       {/* THE PLAY, MOVING to the decision moment (or the still), with the
           answers in it - the one picture every football question uses. */}
       <PlayPicture
@@ -60,9 +56,7 @@ export function Decision({
         motionKey={question.id}
       />
       <h1 className={styles.prompt}>{question.question_text}</h1>
-      {onTap && targets && (
-        <span className={styles.tapHint}>{tapsMen(targets) ? 'Tap the man in the picture' : 'Tap the spot on the field'}</span>
-      )}
+      {onTap && targets && <TapHint targets={targets} />}
     </>
   );
 }

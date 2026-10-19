@@ -15,6 +15,9 @@
   flex-direction: column;
   gap: 0.35em;
 }
+summary.label {
+  cursor: pointer;
+}
 .label {
   font-size: 12px;
   font-weight: 800;

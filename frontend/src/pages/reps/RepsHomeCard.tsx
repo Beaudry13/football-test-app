@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getRepsSummary, type RepSummary } from '../../api/reps';
+import type { RepSummary } from '../../api/reps';
+import { NextUp } from '../home/NextUp';
+import { useRepsSummary } from './useRepsSummary';
 import nb from '../../styles/notebook.module.css';
 import { pluralFor } from './audiences';
-import { ConceptTrends } from './ConceptTrends';
 import styles from './RepsHomeCard.module.css';
 
 /**
@@ -46,27 +46,23 @@ function Signal({ signal }: { signal: NonNullable<RepSummary['signal']> }) {
   );
 }
 
-export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boolean }) {
-  const [reps, setReps] = useState<RepSummary[] | null>(null);
+export function RepsHomeCard({
+  inviteWhenEmpty = true,
+  reps: given,
+  showNextUp = true,
+}: {
+  inviteWhenEmpty?: boolean;
+  /** Home fetches the summary once and shares it with Next up; absent = fetch here. */
+  reps?: RepSummary[] | null;
+  /** Home shows Next up on its own, first; standalone, the card leads with it. */
+  showNextUp?: boolean;
+}) {
+  const own = useRepsSummary(given === undefined);
+  const reps = given === undefined ? own : given;
 
-  useEffect(() => {
-    let cancelled = false;
-    getRepsSummary()
-      .then((list) => !cancelled && setReps(list))
-      // Home does not fail over Reps: no summary, no card.
-      .catch(() => !cancelled && setReps(null));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (reps === null) return null;
+  if (reps === null || reps === undefined) return null;
   if (reps.length === 0 && !inviteWhenEmpty) return null;
 
-  /* NEXT UP: the one football problem to deal with now - a miss nobody has
-     retested yet, else a retest that still has misses. */
-  const fresh = reps.find((r) => r.open_problem);
-  const lingering = fresh ? null : reps.find((r) => r.signal?.kind === 'retest_missing');
 
   return (
     <section className={styles.card} aria-label="Reps">
@@ -76,59 +72,9 @@ export function RepsHomeCard({ inviteWhenEmpty = true }: { inviteWhenEmpty?: boo
           All reps
         </Link>
       </div>
-      {fresh?.open_problem && (
-        <div className={styles.nextUp} aria-label="Next up">
-          <span className={styles.nextLead}>Next up</span>
-          <span className={styles.nextProblem}>
-            <strong className={styles.problemName}>{fresh.open_problem.name}</strong> {fresh.open_problem.missed} of{' '}
-            {fresh.open_problem.responded}{' '}
-            {fresh.audience_label
-              ? fresh.audience_label.toLowerCase()
-              : (pluralFor(fresh.audience_positions ?? []) ?? 'players')}{' '}
-            missed{fresh.open_problem.taught ? ' · taught' : ''}
-          </span>
-          <span className={styles.nextActions}>
-            {/* Taught already (by anyone): the next step is Retest, on the Rep page. */}
-            {fresh.open_problem.taught ? (
-              <Link to={`/reps/${fresh.id}`} className={nb.btnPrimary}>
-                Retest it
-              </Link>
-            ) : (
-              <Link to={`/reps/${fresh.id}?teach=${fresh.open_problem.concept_id ?? 'general'}`} className={nb.btnPrimary}>
-                Teach it
-              </Link>
-            )}
-          </span>
-        </div>
-      )}
-      {lingering?.signal && (
-        /* DID IT STICK, AND WHAT NOW: "3 were retested, 1 still misses it"
-           and the next step - teach it again, or send it back to the one.
-           Retest opens the Rep with its confirm up; nothing sends from Home. */
-        <div className={styles.nextUp} aria-label="Next up">
-          <span className={styles.nextLead}>Next up</span>
-          <span className={styles.nextProblem}>
-            <strong className={styles.problemName}>{lingering.signal.concept}</strong> {lingering.signal.responded}{' '}
-            {lingering.signal.responded === 1 ? 'was' : 'were'} retested, {lingering.signal.missed} still{' '}
-            {lingering.signal.missed === 1 ? 'misses' : 'miss'} it
-          </span>
-          <span className={styles.nextActions}>
-            <Link
-              to={`/reps/${lingering.id}?teach=${lingering.signal.concept_id ?? 'general'}`}
-              className={nb.btnSecondary}
-            >
-              Teach
-            </Link>
-            <Link
-              to={`/reps/${lingering.id}?retest=${lingering.signal.concept_id ?? 'general'}`}
-              className={nb.btnPrimary}
-            >
-              Retest {lingering.signal.missed}
-            </Link>
-          </span>
-        </div>
-      )}
-      {reps.length > 0 && <ConceptTrends limit={3} />}
+      {showNextUp && <NextUp reps={reps} quizzes={null} />}
+      {/* "How the football problems are going" lives on the Reps page, one
+          tap away (All reps): Home answers what needs me now, not trends. */}
       {reps.length === 0 ? (
         <div className={styles.empty}>
           <span>Put a player in a play. See who knows his job.</span>

@@ -79,7 +79,7 @@ describe('Practice Mode player flow', () => {
     renderPractice();
 
     expect(screen.getByText('Practice')).toBeInTheDocument();
-    expect(screen.getByText(/does not count toward your grades/i)).toBeInTheDocument();
+    expect(screen.getByText(/doesn.t count/i)).toBeInTheDocument();
   });
 
   it('offers no Check Answer until the question has been answered', async () => {

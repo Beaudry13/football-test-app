@@ -1,0 +1,66 @@
+/* One football problem: the name, how many missed, what they chose, the next step. */
+.problem {
+  padding: var(--space-5, 20px);
+  margin-bottom: var(--space-4, 16px);
+  border: 1px solid var(--nb-card-border, #d8dadf);
+  border-left: 4px solid var(--peira-danger, #b42318);
+  border-radius: var(--peira-radius-md, 10px);
+  background: var(--peira-surface, transparent);
+}
+.fixed {
+  border-left-color: var(--peira-success, #157f3b);
+}
+.name {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.line {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: var(--nb-text);
+}
+.chose {
+  margin: 0 0 var(--space-3, 12px);
+  font-size: 16px;
+  color: var(--nb-text);
+}
+.thin,
+.quiet {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--nb-text-muted, #6b7280);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-3, 12px);
+}
+/* Quiet: the deeper look, never competing with Teach and Retest. */
+.detailsToggle {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  margin-left: var(--space-2, 8px);
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--nb-text-muted, #6b7280);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.detailsToggle:hover {
+  color: var(--nb-text);
+}
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+  margin-top: var(--space-4, 16px);
+  padding-top: var(--space-3, 12px);
+  border-top: 1px solid var(--nb-card-border, #d8dadf);
+}
