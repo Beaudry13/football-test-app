@@ -113,3 +113,25 @@ describe('the progress kept on this device', () => {
     expect(progressOf('ABC123')?.review).toBeUndefined();
   });
 });
+
+describe('the way back to his other work', () => {
+  it('only when this device holds other work', async () => {
+    const { OtherWorkLink } = await import('./OtherWorkLink');
+    localStorage.clear();
+    rememberPlayer('ONLY01', marcus);
+    const { unmount } = render(
+      <MemoryRouter>
+        <OtherWorkLink code="ONLY01" />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link', { name: /Your other work/ })).toBeNull();
+    unmount();
+    rememberPlayer('NEXT02', marcus);
+    render(
+      <MemoryRouter>
+        <OtherWorkLink code="ONLY01" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: /Your other work/ })).toHaveAttribute('href', '/play');
+  });
+});

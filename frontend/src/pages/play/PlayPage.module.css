@@ -862,3 +862,13 @@
   color: var(--color-text-muted);
   text-align: center;
 }
+
+/* After one is done: the way back to the rest of his work, quietly. */
+.otherWork {
+  display: block;
+  margin-top: 16px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--peira-accent-text, var(--nb-accent));
+  text-decoration: none;
+}

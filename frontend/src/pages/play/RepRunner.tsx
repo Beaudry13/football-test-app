@@ -58,6 +58,7 @@ export function RepRunner({
   onAuthRequired,
   onRunAgain,
   onFinished,
+  afterFinish,
 }: {
   quiz: Quiz;
   deliveredQuestions?: DeliveredPlayerQuestion[];
@@ -72,6 +73,8 @@ export function RepRunner({
   onRunAgain: () => void;
   /** The run is over: the decisions in order, his verdicts and picks (Player Home's review). */
   onFinished?: (order: number[], feedback: PracticeFeedback[], chosen: Record<number, number[]>) => void;
+  /** Under the finish: the way back to his other work (Player Home). */
+  afterFinish?: React.ReactNode;
 }) {
   const decisions = useMemo(
     () => orderQuestions(applyDeliveredContent(quiz.questions ?? [], deliveredQuestions), questionOrder),
@@ -226,14 +229,17 @@ export function RepRunner({
       );
     }
     return (
-      <Summary
-        decisions={decisions}
-        feedback={feedback}
-        taken={taken}
-        progress={progress}
-        onReview={(first) => setReviewing(first)}
-        onRunAgain={onRunAgain}
-      />
+      <>
+        <Summary
+          decisions={decisions}
+          feedback={feedback}
+          taken={taken}
+          progress={progress}
+          onReview={(first) => setReviewing(first)}
+          onRunAgain={onRunAgain}
+        />
+        {afterFinish}
+      </>
     );
   }
 

@@ -30,6 +30,7 @@ import { RepIntro } from './RepIntro';
 import { RepRunner } from './RepRunner';
 import { HomeReview } from './HomeReview';
 import { MyWork } from './MyWork';
+import { OtherWorkLink } from './OtherWorkLink';
 import { progressOf, recordDone, recordStarted, reviewFrom, type StoredReview } from './workProgress';
 import { SubmittedStep } from './SubmittedStep';
 import player from '../../styles/player.module.css';
@@ -438,6 +439,7 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onRunAgain={() => void handleRunRepAgain()}
+          afterFinish={<OtherWorkLink code={step.code} />}
           onFinished={(order, feedback, chosen) => {
             const review = reviewFrom(order, feedback, chosen);
             recordDone(step.code, review.missedIds.length, review);
@@ -484,15 +486,21 @@ export function PlayPage() {
         />
       )}
       {step.name === 'practice-complete' && (
-        <PracticeCompleteStep feedback={step.feedback} review={step.review} onTryAgain={() => void handleTryAgain()} />
+        <>
+          <PracticeCompleteStep feedback={step.feedback} review={step.review} onTryAgain={() => void handleTryAgain()} />
+          <OtherWorkLink code={step.code} />
+        </>
       )}
       {step.name === 'submitted' && (
-        <SubmittedStep
-          code={step.code}
-          playerName={step.player.name}
-          playerId={step.player.playerId ?? undefined}
-          player={step.player}
-        />
+        <>
+          <SubmittedStep
+            code={step.code}
+            playerName={step.player.name}
+            playerId={step.player.playerId ?? undefined}
+            player={step.player}
+          />
+          <OtherWorkLink code={step.code} />
+        </>
       )}
     </div>
   );
