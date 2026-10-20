@@ -1156,3 +1156,31 @@ class TestRepResultsDoNotGrowQueriesWithPlayers:
             _play(client, code, name, ids[name], {first["id"]: stay, second["id"]: inside})
         team = self._queries(app, rep["id"])
         assert team == one, (one, team)
+
+
+class TestARepRevealsTheRightAnswer:
+    """PRODUCT DECISION (2026-10-19): a Rep is teaching. Once a decision is
+    checked - and so locked - the player sees the right answer beside the
+    coach's reason. A practice QUIZ and every graded attempt are unchanged."""
+
+    def test_a_checked_rep_decision_names_the_right_answer(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, _second, ids, code, _ = _built(client, headers, app, coach)
+        feedback = _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: _option(first, "Stay boundary")})
+        assert feedback["is_correct"] is False
+        assert feedback["correct_option_ids"] == [_option(first, "Rotate down")]
+        assert feedback["answer_explanation"] == "He is the new #3 - you rotate down to him."
+
+    def test_a_practice_quiz_still_never_names_it(self, client, coach_headers):
+        quiz = client.post("/api/quizzes", json={"title": "Install"}, headers=coach_headers).get_json()
+        q = _decision(client, coach_headers, quiz["id"], "Q?", ["A", "B"])
+        ids = _players(client, coach_headers, quiz["id"])
+        code = _send(client, coach_headers, quiz["id"], mode="PRACTICE")
+        name = "Bo Brown"
+        client.post("/api/play/start", json={"access_code_id": code["id"], "player_name": name, "player_id": ids[name]})
+        client.post("/api/play/answers", json={"access_code_id": code["id"], "player_name": name, "player_id": ids[name],
+                                               "question_id": q["id"], "selected_option_id": q["options"][1]["id"]})
+        checked = client.post("/api/play/check", json={"access_code_id": code["id"], "player_name": name,
+                                                        "player_id": ids[name], "question_id": q["id"]}).get_json()
+        assert checked["is_correct"] is False
+        assert "correct_option_ids" not in checked

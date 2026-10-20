@@ -39,6 +39,8 @@ export function PracticeCompleteStep({
         at={reviewing}
         onAt={setReviewing}
         onDone={() => setReviewing(null)}
+        onRunAgain={onTryAgain}
+        runAgainLabel="Try again"
       />
     );
   }

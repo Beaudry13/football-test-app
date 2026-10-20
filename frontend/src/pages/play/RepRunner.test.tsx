@@ -164,6 +164,48 @@ describe('A Situational Rep, for the player', () => {
     expect(screen.getByText(/He is the new #3/)).toBeInTheDocument();
   });
 
+  it('a Rep teaches: after a miss it names the right answer, on the buttons and in words', async () => {
+    vi.mocked(playApi.checkAnswer).mockImplementation(async ({ question_id }) => ({
+      question_id,
+      auto_gradable: true,
+      is_correct: false,
+      answer_explanation: 'He is the new #3 - rotate down to him.',
+      correct_option_ids: [100],
+    }));
+    run();
+    fireEvent.click(screen.getByRole('button', { name: 'Stay boundary' }));
+    expect(await screen.findByText(/Right answer:/)).toHaveTextContent('Right answer: Rotate down');
+    const right = screen.getByRole('button', { name: /Rotate down/ });
+    expect(right.className).toMatch(/right/);
+    expect(right).toHaveTextContent('✓ Rotate down');
+    expect(screen.getByRole('button', { name: 'Stay boundary' }).className).toMatch(/wrong/);
+  });
+
+  it('Review missed on a Rep: his tap and the right spot on the picture, the point - then Run it again', async () => {
+    vi.mocked(playApi.checkAnswer).mockImplementation(async ({ question_id }) => ({
+      question_id,
+      auto_gradable: true,
+      is_correct: false,
+      answer_explanation: 'X runs the jet - the ball goes to him.',
+      correct_option_ids: [100],
+    }));
+    const tap = {
+      ...decision(1, 'Who gets the ball?', ['X', 'Z'], 'Ball'),
+      tap_targets: [{ x: 0.1, y: 0.5 }, { x: 0.9, y: 0.5 }],
+    } as unknown as Question;
+    const onRunAgain = run({ quiz: { ...QUIZ, questions: [tap] } as unknown as Quiz });
+    fireEvent.click(screen.getByRole('button', { name: 'Tap Z' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Finish' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Review missed' }));
+    expect(screen.getByRole('button', { name: 'Tap Z' }).className).toMatch(/wrong/);
+    expect(screen.getByRole('button', { name: 'Tap X' }).className).toMatch(/right/);
+    expect(screen.getByText('You chose: Z')).toBeInTheDocument();
+    expect(screen.getByText(/Right answer:/)).toHaveTextContent('Right answer: X');
+    expect(screen.getByText(/X runs the jet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Run it again' }));
+    expect(onRunAgain).toHaveBeenCalled();
+  });
+
   it('a decision about a place is answered by tapping the labelled spot on the field', async () => {
     const tap = {
       ...decision(3, 'What is your gap?', ['A gap', 'B gap'], 'Run fits'),

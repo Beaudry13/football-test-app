@@ -15,7 +15,7 @@ import { orderQuestions } from './questionOrder';
 import { isAuthRefusal } from './playerEntry';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import { Decision, ReviewMissed, Verdict } from './FootballDecision';
-import { missedOf, TAPPABLE } from './decisionRules';
+import { missedOf, rightAnswerOf, TAPPABLE } from './decisionRules';
 import styles from './RepRunner.module.css';
 
 /**
@@ -211,6 +211,7 @@ export function RepRunner({
           at={reviewing}
           onAt={setReviewing}
           onDone={() => setReviewing(null)}
+          onRunAgain={onRunAgain}
         />
       );
     }
@@ -227,6 +228,8 @@ export function RepRunner({
   }
 
   const verdict = feedback[decision.id];
+  /** A Rep teaches: once locked, the right answer (from the server, never before). */
+  const correct = verdict?.correct_option_ids;
   const last = index === decisions.length - 1;
   const tappable = TAPPABLE.has(decision.question_type) && !decision.allows_multiple_answers;
 
@@ -238,6 +241,7 @@ export function RepRunner({
         onTap={tappable && !watching ? (optionId) => void lockIn(decision, { selected_option_id: optionId }) : undefined}
         chosen={taken[decision.id]?.optionIds}
         tone={verdict ? (verdict.is_correct ? 'right' : verdict.is_correct === false ? 'wrong' : null) : null}
+        correctIds={correct}
         disabled={busy || !!verdict}
         still={judged}
         onMotionDone={() => {
@@ -252,7 +256,8 @@ export function RepRunner({
         <div className={styles.choices} role="group" aria-label="Your answer">
           {decision.options.map((option) => {
             const chosen = taken[decision.id]?.optionIds.includes(option.id);
-            const tone = chosen && verdict ? (verdict.is_correct ? styles.right : styles.wrong) : '';
+            const isRight = !!correct?.includes(option.id);
+            const tone = isRight ? styles.right : chosen && verdict ? (verdict.is_correct ? styles.right : styles.wrong) : '';
             return (
               <button
                 key={option.id}
@@ -262,6 +267,7 @@ export function RepRunner({
                 aria-pressed={chosen}
                 onClick={() => void lockIn(decision, { selected_option_id: option.id })}
               >
+                {isRight && !chosen ? '✓ ' : ''}
                 {option.option_text}
               </button>
             );
@@ -294,7 +300,7 @@ export function RepRunner({
 
       {verdict && (
         <div ref={afterRef} className={styles.after} aria-live="polite">
-          <Verdict feedback={verdict} />
+          <Verdict feedback={verdict} right={rightAnswerOf(decision, verdict)} />
           <button
             type="button"
             className={`btn btn-primary ${styles.next}`}

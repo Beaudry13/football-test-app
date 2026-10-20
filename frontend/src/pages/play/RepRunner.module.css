@@ -240,3 +240,13 @@
   color: var(--peira-text-muted);
   text-align: center;
 }
+
+/* A Rep teaches: the right answer, said plainly after a miss. */
+.rightAnswer {
+  margin: 0;
+  font-size: 16px;
+  color: var(--peira-success);
+}
+.rightAnswer strong {
+  color: var(--peira-text);
+}

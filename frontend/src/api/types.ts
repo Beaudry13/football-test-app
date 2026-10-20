@@ -925,6 +925,9 @@ export interface PracticeFeedback {
   auto_gradable: boolean;
   is_correct: boolean | null;
   answer_explanation: string | null;
+  /** SITUATIONAL REP ONLY (a Rep is teaching): the right answer, once this
+   *  decision is checked and locked. Never sent for a quiz, practice or graded. */
+  correct_option_ids?: number[];
 }
 
 /** A delivered question as a PLAYER may see it. Built by a dedicated
