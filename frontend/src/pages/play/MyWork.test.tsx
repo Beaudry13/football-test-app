@@ -135,3 +135,19 @@ describe('the way back to his other work', () => {
     expect(screen.getByRole('link', { name: /Your other work/ })).toHaveAttribute('href', '/play');
   });
 });
+
+describe('a quiz retest is a second look too', () => {
+  it('leads ahead of an ordinary rep', async () => {
+    localStorage.clear();
+    for (const code of ['REP001', 'QRETST']) rememberPlayer(code, marcus);
+    vi.mocked(playApi.validateCode).mockImplementation(async (code) =>
+      code === 'QRETST'
+        ? joined('Coverage ID - Retest', { retest_of: { id: 3 } as never }, 'GRADED')
+        : joined('Trips Jet - Boundary safety', { kind: 'REP' }),
+    );
+    home();
+    const next = within(await screen.findByLabelText('Up next'));
+    expect(next.getByRole('heading', { name: 'Coverage ID - Retest' })).toBeInTheDocument();
+    expect(next.getByText(/Retest - your second look/)).toBeInTheDocument();
+  });
+});

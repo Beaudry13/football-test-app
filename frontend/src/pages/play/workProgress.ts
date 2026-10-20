@@ -125,11 +125,12 @@ export interface WorkItem {
   name: string | null;
 }
 
-/** Retest first (a second look at something he missed), then Reps, then
- *  quizzes - graded and closing soonest first - then review. */
+/** A retest first - Rep or quiz, a second look at something he missed - then
+ *  Reps, then quizzes (graded and closing soonest first), then review. */
 function rank(item: WorkItem): number {
   if (item.action === 'review') return 5;
-  if (item.kind === 'REP') return item.retest ? 0 : 1;
+  if (item.retest) return 0;
+  if (item.kind === 'REP') return 1;
   return item.graded ? 2 : 3;
 }
 
