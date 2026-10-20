@@ -11,7 +11,7 @@ import { tapTargets } from './playRep'
 import { TapCheck } from '../components/football/TapCheck'
 import { MomentPicker } from './MomentPicker'
 import { freezePicture, freezeSpots, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
-import { ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
+import { assignmentDrawing, ballChoices, drawText, isBuiltDrawText, playImageFile, playQuestionInput, QUESTION_TEXT, SHOWS_ROUTES, type PlayQuestionKind as Kind } from './playQuestion'
 
 /**
  * MOTION LAB -> QUIZ: turn the play on the field into a quiz question.
@@ -128,6 +128,9 @@ export function MakeQuestion({
     if (on) setMotion(false)
   }
 
+  /** Draw your assignment: the man's route from the play, as the answer drawing. */
+  const answer = kind === 'draw' ? assignmentDrawing(play, who) : null
+
   const create = async () => {
     setBusy(true)
     setError(null)
@@ -141,6 +144,8 @@ export function MakeQuestion({
           ...(presnap ? { presnap } : {}),
           ...(targets ? { tap_targets: targets } : {}),
           ...(motionPlayId !== null ? { motion_play_id: motionPlayId } : {}),
+          // His route in the play IS the answer: no drawing it twice.
+          ...(answer ? { answer_drawing: answer } : {}),
         },
         image,
       )
@@ -193,6 +198,13 @@ export function MakeQuestion({
             </optgroup>
           </select>
         </label>
+      )}
+      {kind === 'draw' && who && (
+        <span className="make-q-hint" role="note">
+          {answer
+            ? '✓ His route in this play becomes the answer you review against.'
+            : 'He has no route in this play - you can draw the answer on the question.'}
+        </span>
       )}
       {hasMotion && (
         <label className="make-q-check">

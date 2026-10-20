@@ -15,6 +15,10 @@ import { ballTargetOf } from './engine/ball'
 import type { Play } from './engine/play'
 import { playImage } from './playImage'
 import { freezePicture, type PresnapClip } from './presnap'
+import { renderPath } from './engine/geometry'
+import { IMAGE_HEIGHT, IMAGE_WIDTH, px } from './playImageLayout'
+import { createDocument } from '../components/drawing/drawingDocument'
+import type { DrawingDocument } from '../components/drawing/types'
 
 export type PlayQuestionKind = 'draw' | 'ball'
 
@@ -75,4 +79,47 @@ export async function playImageFile(
   const frozen = presnap ? freezePicture(presnap) : null
   const blob = await (frozen ? playImage(frozen.play, frozen.options) : playImage(play, highlight ? { routes, highlight } : { routes }))
   return new File([blob], `${play.name.replace(/[^\w-]+/g, '-').slice(0, 40) || 'play'}.png`, { type: 'image/png' })
+}
+
+/**
+ * DRAW YOUR ASSIGNMENT, ANSWERED BY THE PLAY ITSELF. The coach already drew
+ * the man's assignment in Motion Lab - his route. This turns it into the
+ * question's answer drawing (strokes on the 'coach' layer, in the picture's
+ * own coordinate space, an arrowhead at the end), so he never draws it twice.
+ * Nothing is guessed: no route in the play, no answer drawing.
+ */
+export function assignmentDrawing(play: Play, manId: string | null, now = new Date().toISOString()): DrawingDocument | null {
+  const man = manId ? play.players.find((p) => p.id === manId) : undefined
+  if (!man || man.path.length < 2) return null
+  const doc = createDocument({
+    // The real image id is bound by the server when the question is saved.
+    source: { image_id: 'pending', image_version: null, natural_width: IMAGE_WIDTH, natural_height: IMAGE_HEIGHT },
+    now,
+  })
+  const k = doc.coordinate_width / IMAGE_WIDTH
+  const line = renderPath(man.path).map((pt) => {
+    const q = px(pt)
+    return { x: Math.round(q.x * k * 10) / 10, y: Math.round(q.y * k * 10) / 10 }
+  })
+  const width = Math.max(3, Math.round(6 * k))
+  const stroke = (id: string, pts: { x: number; y: number }[], order: number) => ({
+    id,
+    tool: 'pen' as const,
+    layer: 'coach' as const,
+    points: pts.flatMap((p) => [p.x, p.y]),
+    color: '#22c55e',
+    width,
+    order,
+  })
+  const strokes = [stroke('route', line, 1)]
+  // The arrowhead: two short barbs back from the end, along the last leg.
+  const end = line[line.length - 1]
+  const before = line[line.length - 2]
+  const angle = Math.atan2(end.y - before.y, end.x - before.x)
+  const barb = 14 * k * 2
+  for (const [i, turn] of [[2, 0.5], [3, -0.5]] as const) {
+    const a = angle + Math.PI + turn
+    strokes.push(stroke(`arrow${i}`, [end, { x: end.x + barb * Math.cos(a), y: end.y + barb * Math.sin(a) }], i))
+  }
+  return { ...doc, strokes }
 }

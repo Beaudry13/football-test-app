@@ -90,6 +90,33 @@ describe('Make a quiz question from a play', () => {
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: false })
   })
 
+  it("Draw your assignment: the man's route in the play becomes the answer drawing - never drawn twice", async () => {
+    const play = withMotion()
+    const x = play.players.find((p) => p.label === 'X')!
+    open(play)
+    fireEvent.change(screen.getByRole('combobox', { name: /Whose job/ }), { target: { value: x.id } })
+    expect(screen.getByRole('note')).toHaveTextContent('His route in this play becomes the answer')
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    const answer = (input as { answer_drawing: { strokes: { id: string; layer: string; points: number[] }[] } }).answer_drawing
+    expect(answer.strokes.map((s) => s.id)).toEqual(['route', 'arrow2', 'arrow3'])
+    expect(answer.strokes.every((s) => s.layer === 'coach')).toBe(true)
+    // The route starts on the man, in the picture's coordinate space.
+    expect(answer.strokes[0].points.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('a man with no route in the play gets no answer drawing - nothing is guessed', async () => {
+    const play = withMotion()
+    const h = play.players.find((p) => p.label === 'H')!
+    open(play)
+    fireEvent.change(screen.getByRole('combobox', { name: /Whose job/ }), { target: { value: h.id } })
+    expect(screen.getByRole('note')).toHaveTextContent('He has no route in this play')
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    expect('answer_drawing' in (vi.mocked(questionsApi.createQuestion).mock.calls[0][1] as object)).toBe(false)
+  })
+
   it('"Who gets the ball?" offers the receivers and backs, answers with the play\'s target, and shows the routes', async () => {
     open(passTo('O8'))
     fireEvent.click(screen.getByRole('radio', { name: 'Who gets the ball?' }))
