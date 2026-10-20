@@ -6,7 +6,8 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { LoadingState } from '../../components/ui/LoadingState';
-import { DrawingViewer } from '../../components/drawing/DrawingViewer';
+import { CompareDrawing } from '../../components/drawing/CompareDrawing';
+import type { DrawingDocument as AnswerDrawingDocument } from '../../components/drawing/types';
 import type { DrawingDocument } from '../../components/drawing/types';
 import {
   buildGradingQueue,
@@ -223,6 +224,7 @@ export function GradeResponsesPage() {
             playerLabel={label.text}
             questionType={current.questionType}
             questionText={current.questionText}
+            answerDrawing={quiz?.questions?.find((q) => q.id === current.questionId)?.answer_drawing}
             busy={saving.has(target.answerId)}
             onGrade={(isCorrect) => void grade(target, isCorrect)}
           />
@@ -262,10 +264,13 @@ function GradeRow({
   playerLabel,
   questionType,
   questionText,
+  answerDrawing,
   busy,
   onGrade,
 }: {
   target: GradeTarget;
+  /** The coach's own drawing of the answer, laid over each player's. */
+  answerDrawing?: AnswerDrawingDocument | null;
   /** Display only. The grade is written against `target.answerId`. */
   playerLabel: string;
   questionType: string;
@@ -289,9 +294,10 @@ function GradeRow({
       {isDrawing ? (
         target.drawing && image ? (
           <div className={styles.drawing}>
-            <DrawingViewer
+            <CompareDrawing
               imageUrl={resolveMediaUrl(image.image_url)}
               document={target.drawing.document as DrawingDocument}
+              answer={answerDrawing}
               alt={`Drawing by ${playerLabel} for: ${questionText}`}
             />
           </div>

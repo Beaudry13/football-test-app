@@ -56,6 +56,9 @@ class QuestionCreateSchema(Schema):
     )
     presnap = fields.Dict(required=False, load_default=None, allow_none=True)
     subject_marker = fields.Nested(lambda: MarkerSchema(), required=False, load_default=None, allow_none=True)
+    #: The coach's drawing of the right answer (Draw Response only). Shape is
+    #: validated by services/drawing_documents, like a player's drawing.
+    answer_drawing = fields.Dict(required=False, load_default=None, allow_none=True)
     document_page_id = fields.Int(required=False, load_default=None, allow_none=True)
     region = fields.Nested(lambda: RegionSchema(), required=False, load_default=None, allow_none=True)
     expected_answers = fields.List(
@@ -89,6 +92,7 @@ class QuestionUpdateSchema(Schema):
     tap_targets = fields.List(fields.Nested(lambda: TapTargetSchema()), required=False, allow_none=True)
     presnap = fields.Dict(required=False, allow_none=True)
     subject_marker = fields.Nested(lambda: MarkerSchema(), required=False, allow_none=True)
+    answer_drawing = fields.Dict(required=False, allow_none=True)
 
 
 class MarkerSchema(Schema):

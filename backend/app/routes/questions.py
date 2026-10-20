@@ -103,6 +103,44 @@ def _validated_motion_play_id(quiz, motion_play_id):
     return play.id
 
 
+def _validated_answer_drawing(question_type, document):
+    """The coach's drawing of the right answer, or None.
+
+    Only a Draw Response question has one. The same structural rules as a
+    player's drawing (services/drawing_documents) and the same size cap; every
+    stroke is the coach's, whatever layer the board drew it on.
+    """
+    if document is None:
+        return None
+    import json
+
+    from app.services.drawing_documents import MAX_DOCUMENT_BYTES, validate_document
+
+    if question_type != QuestionType.DRAW_RESPONSE:
+        raise ApiError(
+            "Only a Draw Response question has an answer drawing",
+            status_code=422,
+            reason="answer_drawing_not_allowed",
+        )
+    validate_document(document)
+    if len(json.dumps(document)) > MAX_DOCUMENT_BYTES:
+        raise ApiError("This drawing is too large to save", status_code=413)
+    return {**document, "strokes": [{**stroke, "layer": "coach"} for stroke in document["strokes"]]}
+
+
+def _bind_answer_drawing(question) -> None:
+    """The answer drawing names the picture it was drawn on - a new question's
+    picture has no id until it is stored, so the client cannot know it."""
+    document = question.answer_drawing
+    if not document:
+        return
+    db.session.flush()
+    image = QuestionImage.query.filter_by(question_id=question.id).first()
+    source = document.get("source") or {}
+    if image is not None and str(source.get("image_id")) != str(image.id):
+        question.answer_drawing = {**document, "source": {**source, "image_id": str(image.id)}}
+
+
 def _validated_tap_targets(targets, option_count: int):
     """One target per option, or none at all. A count that does not match the
     options would let a tap land on the wrong answer - refused, not guessed."""
@@ -543,6 +581,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
         motion_play_id=motion_play_id,
         tap_targets=tap_targets,
         presnap=presnap,
+        answer_drawing=_validated_answer_drawing(QuestionType(data["question_type"]), data.get("answer_drawing")),
     )
     db.session.add(question)
     db.session.flush()
@@ -610,6 +649,7 @@ def create_question_from(quiz_id: int, data: dict, uploaded_image=None):
                 )
             )
 
+        _bind_answer_drawing(question)
         db.session.commit()
     except Exception:
         # Both halves undone together. The question never existed and neither
@@ -873,6 +913,16 @@ def update_question(quiz_id: int, question_id: int):
         question.answer_explanation = data["answer_explanation"] or None
     if "question_type" in data:
         question.question_type = QuestionType(data["question_type"])
+    # The answer key for a drawing: teaching material for the coach (and a
+    # Rep's player after he locks his own), never what a player is scored
+    # against automatically - so improving it after delivery is allowed.
+    # After the type, so a request that changes both is judged on the new one.
+    if "answer_drawing" in data:
+        question.answer_drawing = _validated_answer_drawing(question.question_type, data.get("answer_drawing"))
+        _bind_answer_drawing(question)
+    elif question.answer_drawing and question.question_type != QuestionType.DRAW_RESPONSE:
+        # No longer a drawing question: its answer drawing goes with it.
+        question.answer_drawing = None
     if "options" in data:
         if delivered:
             # In place: reword and append only, never delete, never re-key.

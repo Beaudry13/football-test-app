@@ -27,11 +27,15 @@ export function DrawingViewer({
   document,
   maxWidth = 720,
   alt,
+  overlay = null,
 }: {
   imageUrl: string;
   document: DrawingDocument;
   maxWidth?: number;
   alt: string;
+  /** The coach's answer drawing, laid over in one unmistakable style (green,
+   *  dashed) so his strokes and the answer can be told apart at a glance. */
+  overlay?: DrawingDocument | null;
 }) {
   const canvasElRef = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +98,13 @@ export function DrawingViewer({
         // that was merged or re-saved still stacks the way the player drew it.
         const ordered = [...document.strokes].sort((a, b) => a.order - b.order);
         for (const stroke of ordered) canvas.add(toPolyline(stroke));
+        // On top, in the answer's own style - same coordinate space (the
+        // same picture), so the two line up mark for mark.
+        if (overlay && validateDocument(overlay).length === 0) {
+          for (const stroke of [...overlay.strokes].sort((a, b) => a.order - b.order)) {
+            canvas.add(toPolyline({ ...stroke, color: ANSWER_COLOR, opacity: 0.9 }, true));
+          }
+        }
 
         canvas.renderAll();
       } catch {
@@ -107,7 +118,7 @@ export function DrawingViewer({
       cancelled = true;
       void canvas.dispose();
     };
-  }, [imageUrl, document, maxWidth]);
+  }, [imageUrl, document, maxWidth, overlay]);
 
   if (error) return <div className={styles.error}>{error}</div>;
 
@@ -118,7 +129,10 @@ export function DrawingViewer({
   );
 }
 
-function toPolyline(stroke: DrawingStroke): Polyline {
+/** The answer's colour wherever an answer drawing is shown beside a player's. */
+const ANSWER_COLOR = '#22c55e';
+
+function toPolyline(stroke: DrawingStroke, dashed = false): Polyline {
   const points = [];
   for (let i = 0; i < stroke.points.length; i += 2) {
     points.push({ x: stroke.points[i], y: stroke.points[i + 1] });
@@ -132,6 +146,7 @@ function toPolyline(stroke: DrawingStroke): Polyline {
     // stroke's direction changes reading as sharp corners.
     strokeLineCap: 'round',
     strokeLineJoin: 'round',
+    strokeDashArray: dashed ? [stroke.width * 3, stroke.width * 2] : undefined,
     selectable: false,
     evented: false,
     // Fabric scales strokeWidth with the object by default, which would make

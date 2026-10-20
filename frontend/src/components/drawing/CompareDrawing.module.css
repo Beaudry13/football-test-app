@@ -1,0 +1,30 @@
+/* His drawing against the answer: one quiet toggle above the picture. */
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--peira-border, var(--color-border-strong, #c9ccd1));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.swatch {
+  width: 14px;
+  height: 0;
+  border-top: 3px dashed #22c55e;
+}
+.state {
+  font-weight: 400;
+  color: var(--peira-text-muted, var(--color-text-muted, #6b7280));
+}

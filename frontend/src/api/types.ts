@@ -308,6 +308,9 @@ export interface Question {
   presnap?: Record<string, unknown> | null;
   /** The coach's "you are this player" ring on a photo (picture fractions). */
   subject_marker?: { x: number; y: number; r: number } | null;
+  /** DRAW YOUR ASSIGNMENT: the coach's drawing of the right answer (a
+   *  peira.drawing document, 'coach' layer). Coach payload only. */
+  answer_drawing?: import('../components/drawing/types').DrawingDocument | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {
@@ -928,6 +931,8 @@ export interface PracticeFeedback {
   /** SITUATIONAL REP ONLY (a Rep is teaching): the right answer, once this
    *  decision is checked and locked. Never sent for a quiz, practice or graded. */
   correct_option_ids?: number[];
+  /** SITUATIONAL REP ONLY: a drawing decision's answer drawing, once his own is locked. */
+  answer_drawing?: import('../components/drawing/types').DrawingDocument;
 }
 
 /** A delivered question as a PLAYER may see it. Built by a dedicated

@@ -616,6 +616,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
               existingPresnap={question.presnap ?? null}
               existingImageHasMarks={(question.image?.annotations?.length ?? 0) > 0}
               existingMarker={question.subject_marker ?? null}
+              existingAnswerDrawing={question.answer_drawing ?? null}
               initialRole={(question as { subject_role?: string | null }).subject_role ?? null}
               annotateHref={
                 question.image ? `/quizzes/${quiz.id}/questions/${question.id}/annotate` : null

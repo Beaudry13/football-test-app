@@ -14,7 +14,7 @@ import type {
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { Icon } from '../../components/ui/Icon';
-import { DrawingViewer } from '../../components/drawing/DrawingViewer';
+import { CompareDrawing } from '../../components/drawing/CompareDrawing';
 import { resolveMediaUrl } from '../../api/client';
 import type { DrawingDocument } from '../../components/drawing/types';
 import nb from '../../styles/notebook.module.css';
@@ -134,9 +134,10 @@ function AnswerRow({
       </div>
       {isDrawResponse ? (
         answer.drawing && questionImage ? (
-          <DrawingViewer
+          <CompareDrawing
             imageUrl={resolveMediaUrl(questionImage.image_url)}
             document={answer.drawing.document as DrawingDocument}
+            answer={live?.answer_drawing}
             alt={`Drawing submitted for: ${questionText}`}
           />
         ) : (

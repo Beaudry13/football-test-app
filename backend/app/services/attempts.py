@@ -489,8 +489,13 @@ def practice_feedback(attempt, answer) -> dict:
         "is_correct": answer.is_correct if auto_gradable else None,
         "answer_explanation": question.answer_explanation or None,
     }
-    if attempt.quiz.kind == REP_KIND and auto_gradable and answer.checked_at is not None:
-        feedback["correct_option_ids"] = sorted(o.id for o in question.options if o.is_correct_answer)
+    if attempt.quiz.kind == REP_KIND and answer.checked_at is not None:
+        if auto_gradable:
+            feedback["correct_option_ids"] = sorted(o.id for o in question.options if o.is_correct_answer)
+        elif question.answer_drawing:
+            # Draw your assignment: his drawing is locked, so the coach's
+            # answer drawing is his to compare against.
+            feedback["answer_drawing"] = question.answer_drawing
     return feedback
 
 # ---------------------------------------------------------------------------

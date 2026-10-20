@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, submitQuiz } from '../../api/play';
 import { getRepProgress, type RepProgress } from '../../api/reps';
-import { getErrorMessage } from '../../api/client';
+import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type {
   DeliveredPlayerQuestion,
   PracticeFeedback,
@@ -10,6 +10,8 @@ import type {
   ResumedAnswer,
 } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { CompareDrawing } from '../../components/drawing/CompareDrawing';
+import type { DrawingDocument } from '../../components/drawing/types';
 import { applyDeliveredContent } from './deliveredQuestions';
 import { orderQuestions } from './questionOrder';
 import { isAuthRefusal } from './playerEntry';
@@ -300,6 +302,18 @@ export function RepRunner({
             >
               Lock it in
             </button>
+          )}
+          {/* DRAW YOUR ASSIGNMENT, THEN SEE IT: his locked drawing with the
+              coach's answer over it (a Rep teaches - quizzes never show it). */}
+          {verdict?.answer_drawing && drafts[decision.id]?.drawing && decision.image && (
+            <CompareDrawing
+              imageUrl={resolveMediaUrl(decision.image.image_url)}
+              document={drafts[decision.id]!.drawing as DrawingDocument}
+              answer={verdict.answer_drawing}
+              answerLabel="Coach's answer"
+              alt="Your drawing with the coach's answer"
+              maxWidth={520}
+            />
           )}
         </div>
       )}
