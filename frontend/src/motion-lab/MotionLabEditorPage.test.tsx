@@ -133,15 +133,29 @@ describe('Motion Lab editor on the server', () => {
     expect(screen.getByRole('dialog', { name: 'Teach this play' })).toBeTruthy()
   })
 
-  it('always shows where 3D is - and without a configured viewer (every production build) says Soon and explains, opening nothing', async () => {
-    // The handoff is live only where VITE_MOTION_LAB_3D_URL is set (a local
-    // .env file). Without it the button is still there, announced as
-    // unavailable, and pressing it explains instead of pretending.
+  it('a production build with no 3D viewer configured shows no Preview 3D at all', async () => {
+    // Owner decision (20 October 2026): a button that cannot work only
+    // confuses. With VITE_MOTION_LAB_3D_URL unset - every production build
+    // today - the top bar has no 3D control; configuring a viewer brings it.
+    vi.stubEnv('DEV', false)
+    try {
+      seedPlays()
+      await settle()
+      await openEditor(100)
+      expect(screen.queryByRole('button', { name: /Preview 3D/ })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'View in 3D' })).toBeNull()
+      expect(screen.getByRole('button', { name: /Library/ })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Use this play/ })).toBeTruthy()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('in local development the unconfigured Preview 3D is still there to test: says Soon and explains, opening nothing', async () => {
     const opened = vi.spyOn(window, 'open').mockReturnValue(null)
     seedPlays()
     await settle()
     await openEditor(100)
-    expect(screen.queryByRole('button', { name: 'View in 3D' })).toBeNull()
     const preview = screen.getByRole('button', { name: /^Preview 3D/ })
     expect(preview).toHaveAttribute('aria-disabled', 'true')
     expect(preview.textContent).toBe('Preview 3DSoon')
@@ -150,7 +164,6 @@ describe('Motion Lab editor on the server', () => {
     expect(opened).not.toHaveBeenCalled()
     fireEvent.click(within(screen.getByRole('note')).getByRole('button', { name: 'OK' }))
     expect(screen.queryByRole('note')).toBeNull()
-    expect(screen.getByRole('button', { name: /Library/ })).toBeTruthy()
     opened.mockRestore()
   })
 

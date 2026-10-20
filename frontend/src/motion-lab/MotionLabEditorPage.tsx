@@ -227,10 +227,8 @@ export default function MotionLabEditorPage() {
 
   /**
    * PREVIEW 3D: open the saved play in the 3D viewer. Live when
-   * VITE_MOTION_LAB_3D_URL is set (no production build sets it yet - the
-   * button then explains itself instead, see Preview3D); hands over only a
-   * play whose last edit the server has confirmed, because the viewer is
-   * shown the SAVED play.
+   * VITE_MOTION_LAB_3D_URL is set; hands over only a play whose last edit the
+   * server has confirmed, because the viewer is shown the SAVED play.
    */
   const open3D = () => {
     const id = session.repository.currentPlayId()
@@ -354,8 +352,11 @@ export default function MotionLabEditorPage() {
         actions={
           <>
           {/* PREVIEW 3D gets its own button: one of PEIRA's signature views
-              is never a menu item. */}
-          <Preview3D available={!!VIEWER_3D_URL} onOpen={open3D} />
+              is never a menu item. Owner decision (20 October 2026): only
+              where a viewer is configured. Without one, production shows
+              nothing - a button that cannot work only confuses - while local
+              development still shows the explained "Soon" state to test. */}
+          {(VIEWER_3D_URL !== null || import.meta.env.DEV) && <Preview3D available={VIEWER_3D_URL !== null} onOpen={open3D} />}
           {/* USE THIS PLAY: one button for everything that takes the play
               somewhere else - a Rep, a quiz question, a moment taught on the
               big screen - so the field keeps the top bar. Each still opens

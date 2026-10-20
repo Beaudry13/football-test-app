@@ -7,10 +7,11 @@ import { useState } from 'react'
  * 3D viewer - `onOpen` is the page's handoff (viewIn3D.ts), which also says
  * what to do first when the play is not saved yet.
  *
- * WITHOUT ONE - every production build today - it never pretends. The button
- * says "Soon", is announced as unavailable, and pressing it explains instead
- * of doing nothing, so "how do I see this in 3D?" always has an answer on the
- * screen. Turning the viewer on changes nothing here but `available`.
+ * WITHOUT ONE it never pretends: the button says "Soon", is announced as
+ * unavailable, and pressing it explains instead of doing nothing. That state is
+ * for local development only - production renders no Preview 3D at all until a
+ * viewer is configured (owner decision, 20 October 2026; MotionLabEditorPage).
+ * Turning the viewer on changes nothing here but `available`.
  */
 export function Preview3D({ available, onOpen }: { available: boolean; onOpen: () => void }) {
   const [explaining, setExplaining] = useState(false)

@@ -51,8 +51,9 @@ sections below disagree, the amendment wins.
   safety, `positionNames.ts`); a label football has no name for shows his side.
 - **Play (§9).** Larger. With nothing drawn its tooltip says what it waits for;
   the first route drawn on a new device makes it glow until pressed.
-- **Preview 3D.** Always in the top bar; live only where a 3D viewer is
-  configured, otherwise "Soon" and an explanation (see MOTION-LAB-BASELINE.md).
+- **Preview 3D.** Its own top-bar button, shown only where a 3D viewer is
+  configured. Without one, production shows nothing; local development shows
+  an explained "Soon" state for testing (see MOTION-LAB-BASELINE.md).
 
 ---
 
