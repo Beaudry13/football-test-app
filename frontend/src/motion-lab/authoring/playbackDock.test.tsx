@@ -319,7 +319,7 @@ describe('the zones', () => {
 
     const banner = document.querySelector('.bar.context .banner')!
     expect(banner).not.toBeNull()
-    expect(banner.textContent).toContain("Draw Y's assignment")
+    expect(banner.textContent).toContain('Draw where Y goes')
     expect(within(document.querySelector('.bar.context') as HTMLElement).getByRole('button', { name: /Cancel/ })).toBeInTheDocument()
 
     key('Escape')

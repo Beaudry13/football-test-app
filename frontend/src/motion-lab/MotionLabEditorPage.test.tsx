@@ -133,14 +133,25 @@ describe('Motion Lab editor on the server', () => {
     expect(screen.getByRole('dialog', { name: 'Teach this play' })).toBeTruthy()
   })
 
-  it('offers no "View in 3D" unless a 3D viewer is configured - as in every production build', async () => {
-    // V6's handoff exists only where VITE_MOTION_LAB_3D_URL is set (a local
-    // .env file); with it unset the top bar is exactly what it was.
+  it('always shows where 3D is - and without a configured viewer (every production build) says Soon and explains, opening nothing', async () => {
+    // The handoff is live only where VITE_MOTION_LAB_3D_URL is set (a local
+    // .env file). Without it the button is still there, announced as
+    // unavailable, and pressing it explains instead of pretending.
+    const opened = vi.spyOn(window, 'open').mockReturnValue(null)
     seedPlays()
     await settle()
     await openEditor(100)
     expect(screen.queryByRole('button', { name: 'View in 3D' })).toBeNull()
+    const preview = screen.getByRole('button', { name: /^Preview 3D/ })
+    expect(preview).toHaveAttribute('aria-disabled', 'true')
+    expect(preview.textContent).toBe('Preview 3DSoon')
+    fireEvent.click(preview)
+    expect(screen.getByRole('note').textContent).toContain("3D preview isn't switched on yet.")
+    expect(opened).not.toHaveBeenCalled()
+    fireEvent.click(within(screen.getByRole('note')).getByRole('button', { name: 'OK' }))
+    expect(screen.queryByRole('note')).toBeNull()
     expect(screen.getByRole('button', { name: /Library/ })).toBeTruthy()
+    opened.mockRestore()
   })
 
   it('an edit inside the quiet period survives switching plays, and the URL follows', async () => {
@@ -592,11 +603,21 @@ describe('Motion Lab opens on the field', () => {
 
   it('opens straight onto the field, unsaved, and creates nothing', async () => {
     await openAt('/motion-lab')
+    // "New play · Unsaved [Save]" - said once each.
     expect(playName()).toBe('New play')
-    expect(screen.getByText('Not saved')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save play' })).toBeInTheDocument()
+    expect(screen.getByText('Unsaved')).toBeInTheDocument()
+    expect(screen.queryByText('Not saved')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ New play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument()
+    // The play's own menu repeats neither New play nor Save.
+    fireEvent.click(document.querySelector('.motion-lab-root .play-btn')!)
+    const menu = within(document.querySelector('.play-pop') as HTMLElement)
+    for (const repeated of ['New play (this formation)', '+ New play', 'Save play', 'Save']) expect(menu.queryByRole('button', { name: repeated })).toBeNull()
+    fireEvent.click(document.querySelector('.motion-lab-root .play-btn')!)
+    // And an empty field says what to do with it.
+    expect(screen.getByRole('region', { name: 'Create your play' })).toBeInTheDocument()
     expect(lastPath).toBe('/motion-lab')
     expect(writes()).toHaveLength(0)
   })
@@ -621,8 +642,8 @@ describe('Motion Lab opens on the field', () => {
     await openAt('/motion-lab')
     dragPlayer(DEFAULT, 'O8', 0, 3)
     await quiet()
-    fireEvent.click(screen.getByRole('button', { name: 'Save play' }))
-    const name = screen.getByPlaceholderText('Name this play, then Enter')
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const name = screen.getByPlaceholderText('Name your play')
     fireEvent.change(name, { target: { value: 'Jet Dig' } })
     fireEvent.keyDown(name, { key: 'Enter' })
     await act(async () => settle(10))
@@ -632,7 +653,8 @@ describe('Motion Lab opens on the field', () => {
     expect(body.document.players.find((p) => p.id === 'O8')!.y).toBeCloseTo(o8.y + 3, 6)
     await waitFor(() => expect(lastPath).toMatch(/^\/motion-lab\/plays\/\d+$/))
     expect(playName()).toBe('Jet Dig')
-    expect(screen.queryByRole('button', { name: 'Save play' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByText('Unsaved')).toBeNull()
     dragPlayer({ ...DEFAULT, players: DEFAULT.players.map((p) => (p.id === 'O8' ? { ...p, y: p.y + 3 } : p)) }, 'O8', 0, 1)
     await quiet()
     expect(server.current.calls.filter((c) => c.kind === 'save')).toHaveLength(1)
@@ -643,6 +665,24 @@ describe('Motion Lab opens on the field', () => {
     await openAt('/motion-lab')
     expect(playName()).toBe('New play')
     expect(markerAt('O8')).toBe(at(o8))
+  })
+
+  it('the name field carries its own Save: a newcomer never has to know about Enter', async () => {
+    await openAt('/motion-lab')
+    dragPlayer(DEFAULT, 'O8', 0, 3)
+    await quiet()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const name = screen.getByRole('textbox', { name: 'Name your play' })
+    fireEvent.change(name, { target: { value: 'Trips Right Dagger' } })
+    // The field's Save keeps the focus as it is pressed, so the play is saved once.
+    const ok = screen.getByRole('button', { name: 'Save' })
+    fireEvent.mouseDown(ok)
+    fireEvent.click(ok)
+    await act(async () => settle(10))
+    expect(creates()).toHaveLength(1)
+    expect((creates()[0].body as { name: string }).name).toBe('Trips Right Dagger')
+    await waitFor(() => expect(playName()).toBe('Trips Right Dagger'))
+    expect(screen.getByRole('status').textContent).toBe('Saved')
   })
 
   it('+ New play starts a fresh field, and Undo brings back the work it replaced', async () => {
@@ -671,7 +711,7 @@ describe('Motion Lab opens on the field', () => {
     await act(async () => settle(10))
     expect(lastPath).toBe('/motion-lab')
     expect(playName()).toBe('New play')
-    expect(screen.getByText('Not saved')).toBeInTheDocument()
+    expect(screen.getByText('Unsaved')).toBeInTheDocument()
     // Nothing to undo: the field it replaced had no work in it.
     expect(screen.queryByText('New play started.')).toBeNull()
     expect(server.current.calls.slice(before).filter((c) => c.kind === 'create' || c.kind === 'save')).toHaveLength(0)

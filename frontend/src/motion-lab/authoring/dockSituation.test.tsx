@@ -104,7 +104,7 @@ describe('the resting strip, finally', () => {
   it('is Formation and one sentence, and nothing else', () => {
     open(play)
     expect(within(strip()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Formation ▾'])
-    expect(strip().querySelector('.hint')!.textContent).toBe('Drag a player to move him. Click a player to give him a job.')
+    expect(strip().querySelector('.hint')!.textContent).toBe('Click a player to pick him. Drag a player to move him.')
     expect(strip().children).toHaveLength(2)
   })
 })

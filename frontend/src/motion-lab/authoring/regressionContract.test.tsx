@@ -4,6 +4,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, LOOKS_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { paneLooks, panePlays } from '../__characterization__/fixtures'
 import { board, dragPlayer, installPointerStubs, playerMarker } from '../testing/pointerStubs'
+import { chooseView } from '../testing/viewMenu'
 import { fromView, U, Y_MAX, Y_MIN, yardLabel } from '../engine/field'
 import { COACH_CAMERA, project } from '../engine/perspective'
 import type { Look, Play } from '../engine/play'
@@ -114,7 +115,7 @@ const strip = () => document.querySelector('.bar.context') as HTMLElement
 const dock = () => document.querySelector('.bar.bottom') as HTMLElement
 const undoBtn = () => within(topBar()).getByRole('button', { name: '↶' })
 const ctrlZ = () => act(() => void fireEvent.keyDown(window, { key: 'z', ctrlKey: true }))
-const view = (name: 'Overhead' | 'Coach' | 'Player') => fireEvent.click(within(topBar()).getByRole('button', { name }))
+const view = chooseView
 const scrubTo = (t: number) => fireEvent.change(dock().querySelector('.scrub input[type="range"]')!, { target: { value: String(t) } })
 
 beforeEach(() => localStorage.clear())

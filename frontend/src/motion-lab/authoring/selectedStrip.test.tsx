@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MotionLabEditor } from './MotionLabEditor'
+import { positionName } from './positionNames'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, drawFromHandle, installPointerStubs, playerMarker } from '../testing/pointerStubs'
@@ -105,16 +106,26 @@ describe('the identity chip', () => {
     expect(within(strip()).queryByRole('button', { name: /^[A-Z]{1,4} ?▾?$/ })).toBeNull()
   })
 
-  it('says which side he is on', () => {
+  it("spells out his position (FS: Free safety), keeps his side in the tooltip, and shows the side for a label of the coach's own", () => {
     open(play)
-    select(play, withPath(play).id)
-    expect(chip().textContent).toContain('Offense')
+    const man = withPath(play)
+    select(play, man.id)
+    expect(positionName(man.label)).not.toBeNull()
+    expect(chip().textContent).toBe(`${man.label}${positionName(man.label)}`)
+    expect(chip().getAttribute('title')).toContain('Offense')
 
     cleanup()
     open(play)
     const d = freeDefender(play)
     select(play, d.id)
-    expect(chip().textContent).toContain('Defense')
+    expect(chip().getAttribute('title')).toContain('Defense')
+
+    // A label football has no name for: his side, as before.
+    cleanup()
+    const own = { ...play, players: play.players.map((p) => (p.id === man.id ? { ...p, label: 'Q7' } : p)) }
+    open(own)
+    select(own, man.id)
+    expect(chip().textContent).toBe('Q7Offense')
   })
 })
 
@@ -124,7 +135,7 @@ describe('the primary', () => {
     const man = noPath(play)
     select(play, man.id)
 
-    const first = stripBtn(/Draw assignment/)
+    const first = stripBtn('✎ Draw movement')
     expect(first).toHaveClass('primary')
 
     drawFromHandle(play, man.id, [[man.x + 2, man.y + 6]])
@@ -138,7 +149,7 @@ describe('the primary', () => {
     open(play)
     select(play, noPath(play).id)
 
-    fireEvent.click(stripBtn(/Draw assignment/))
+    fireEvent.click(stripBtn('✎ Draw movement'))
 
     expect(board().classList.contains('board-armed')).toBe(true)
   })
@@ -147,7 +158,7 @@ describe('the primary', () => {
     open(play)
     select(play, noPath(play).id)
     const top = document.querySelector('.bar:not(.context):not(.bottom)') as HTMLElement
-    expect(within(top).queryByRole('button', { name: /Draw assignment|Redraw/ })).toBeNull()
+    expect(within(top).queryByRole('button', { name: /Draw movement|Redraw/ })).toBeNull()
   })
 })
 
@@ -306,7 +317,7 @@ describe('resting', () => {
     expect(within(strip()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Formation ▾'])
     // ML-UX-6 moved the situation to the dock; ML-UX-4 had left it here.
     expect(strip().querySelector('.sit-chip')).toBeNull()
-    expect(strip().textContent).toContain('Drag a player to move him. Click a player to give him a job.')
+    expect(strip().textContent).toContain('Click a player to pick him. Drag a player to move him.')
     // Clear All Paths used to sit here permanently.
     expect(maybeBtn(/Clear All Paths/)).toBeNull()
   })

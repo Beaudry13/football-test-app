@@ -119,12 +119,12 @@ describe('the pointer target decides', () => {
 })
 
 describe('arming', () => {
-  it('the Draw assignment button arms drawing, and the next field drag draws', async () => {
+  it('the Draw movement button arms drawing, and the next field drag draws', async () => {
     open(play)
     select(play, Y)
     const p = play.players.find((pl) => pl.id === Y)!
 
-    fireEvent.click(screen.getByRole('button', { name: /Draw assignment|Redraw/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Draw movement|Redraw/ }))
     // Started on empty grass, nowhere near the man - and it still draws HIS route.
     stroke(board(), [
       [p.x + 6, p.y + 2],

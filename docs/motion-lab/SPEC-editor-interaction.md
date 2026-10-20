@@ -16,6 +16,46 @@ asked; implement it slice by slice (§15), never as "the redesign".
 
 ---
 
+## Amendment, 20 October 2026: the first-30-seconds pass
+
+Owner brief: someone with no football and no Motion Lab experience must be
+able to tell, from the screen alone, how to start (pick a player), make him
+move (draw his movement), watch it (Play), keep it (Save), start over (+ New
+play), get out (Home) and find 3D (Preview 3D). Where this amendment and the
+sections below disagree, the amendment wins.
+
+- **Top bar (§2).** Left to right: `PEIRA Motion Lab` · Home · Library (quiet,
+  together) · `+ New play` · the play (name ▾, then `· Unsaved` + gold-line
+  `Save`, or `· Saved` / `Saving…` / `Not saved`) · undo/redo · … · Preview 3D ·
+  Use this play ▾ · Present. The play menu no longer repeats New play or Save.
+  Save opens a name field that carries its own Save button (Enter still works).
+- **Gold (§1.4).** Present is a plain peer of the play's other actions now;
+  the top bar's one gold outline is Save, while the play is unsaved. Exit
+  Present keeps its gold outline. Set the ball is gold-line only once the play
+  has a route - on an empty field the steps to follow are the card's.
+- **View (§2, §11.1, §14).** Overhead / Coach / Player left the top bar for the
+  dock, beside Play: one `View Overhead ▾` button whose menu says what each
+  view is. The 1300 px VIEW-label rule no longer applies.
+- **Empty field.** The resting strip is Formation ▾ and "Click a player to
+  pick him. Drag a player to move him." - the permanent "Start from" row of
+  sets is gone (the same sets are in the Formation menu). An empty play shows a
+  small CREATE YOUR PLAY card on the field (1 Pick a player, 2 Draw where they
+  should go, 3 Press ▶ Play; what the colours mean; Choose a formation). Not a
+  modal. It goes when a player is picked, never shows in another view, in
+  Present or on a play with a route, and never again on a device that has
+  built and watched a play (`peira.motionLab.learned.v1`).
+- **Selected-player strip (§4).** A man with one line gets `✎ Draw movement`
+  (was Draw assignment); the drawing banner reads "Draw where X goes". Once an
+  offensive man has a route, `+ Add motion` (the same first motion stroke as
+  More's) sits after Adjust. The chip spells his position out (FS → Free
+  safety, `positionNames.ts`); a label football has no name for shows his side.
+- **Play (§9).** Larger. With nothing drawn its tooltip says what it waits for;
+  the first route drawn on a new device makes it glow until pressed.
+- **Preview 3D.** Always in the top bar; live only where a 3D viewer is
+  configured, otherwise "Soon" and an explanation (see MOTION-LAB-BASELINE.md).
+
+---
+
 ## 1. Approved design principles
 
 1. **Simple by default, powerful when you ask for it.** A coach builds an

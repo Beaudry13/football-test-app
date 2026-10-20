@@ -4,6 +4,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, installPointerStubs, playerMarker } from '../testing/pointerStubs'
+import { chooseView, currentView } from '../testing/viewMenu'
 import { U, Y_MAX } from '../engine/field'
 import type { Play } from '../engine/play'
 
@@ -49,7 +50,6 @@ const strip = () => document.querySelector('.bar.context') as HTMLElement | null
 const dock = () => document.querySelector('.bar.bottom') as HTMLElement
 const btn = (name: string | RegExp) => screen.getByRole('button', { name })
 const maybeBtn = (name: string | RegExp) => screen.queryByRole('button', { name })
-const viewBtn = (name: 'Overhead' | 'Coach' | 'Player') => within(topBar()).getByRole('button', { name })
 const overhead = () => document.querySelector('svg.board:not(.field-view)')
 const fieldView = () => document.querySelector('svg.field-view')
 const presenting = () => app().classList.contains('present')
@@ -70,7 +70,7 @@ afterEach(cleanup)
 describe('Coach view', () => {
   it('says where he is watching from, in exactly the SPEC\'s words, and offers no authoring', () => {
     open(play)
-    fireEvent.click(viewBtn('Coach'))
+    chooseView('Coach')
 
     expect(fieldView()).not.toBeNull()
     expect(strip()!.textContent).toBe('Watching from the sideline. Switch to Overhead to edit.')
@@ -79,7 +79,7 @@ describe('Coach view', () => {
 
   it('keeps the dock, and the ball menu works - by click and by B', () => {
     open(play)
-    fireEvent.click(viewBtn('Coach'))
+    chooseView('Coach')
     expect(dock().querySelector('.ball-btn')).not.toBeNull()
     expect(playToggle()).not.toBeNull()
 
@@ -96,7 +96,7 @@ describe('Coach view', () => {
 
   it('a pick reached through B still takes him back to Overhead (§6.8)', () => {
     open({ ...play, ball: null, ballThen: null })
-    fireEvent.click(viewBtn('Coach'))
+    chooseView('Coach')
     key('b')
     fireEvent.click(within(ballMenu() as HTMLElement).getByRole('button', { name: 'Handoff to…' }))
 
@@ -108,7 +108,7 @@ describe('Coach view', () => {
 describe('Player view, nobody chosen yet', () => {
   it('keeps the overhead and asks, in the shared banner', () => {
     open(play)
-    fireEvent.click(viewBtn('Player'))
+    chooseView('Player')
 
     expect(overhead()).not.toBeNull()
     expect(fieldView()).toBeNull()
@@ -120,25 +120,25 @@ describe('Player view, nobody chosen yet', () => {
 
   it('Cancel goes back to Overhead', () => {
     open(play)
-    fireEvent.click(viewBtn('Player'))
+    chooseView('Player')
     fireEvent.click(within(strip()!).getByRole('button', { name: /^Cancel/ }))
 
-    expect(viewBtn('Overhead')).toHaveClass('active')
+    expect(currentView()).toBe('Overhead')
     expect(strip()!.querySelector('.banner')).toBeNull()
   })
 
   it('so does Escape', () => {
     open(play)
-    fireEvent.click(viewBtn('Player'))
+    chooseView('Player')
     key('Escape')
 
-    expect(viewBtn('Overhead')).toHaveClass('active')
+    expect(currentView()).toBe('Overhead')
     expect(strip()!.querySelector('.banner')).toBeNull()
   })
 
   it('clicking a man watches from him', () => {
     open(play)
-    fireEvent.click(viewBtn('Player'))
+    chooseView('Player')
     const fs = play.players.find((p) => p.label === 'FS')!
     select(play, fs.id)
 
@@ -150,7 +150,7 @@ describe('Player view, nobody chosen yet', () => {
 describe('Player view, watching from a man', () => {
   function watchFrom(label: string) {
     open(play)
-    fireEvent.click(viewBtn('Player'))
+    chooseView('Player')
     select(play, play.players.find((p) => p.label === label)!.id)
   }
 
@@ -181,12 +181,16 @@ describe('Player view, watching from a man', () => {
 })
 
 describe('the top bar', () => {
-  it('while authoring: the VIEW label, and Present outlined rather than solid', () => {
+  it("while authoring: Present is a peer of the play's other actions, and VIEW is in the dock beside Play", () => {
     open(play)
-    expect(topBar().querySelector('.lbl.view-label')!.textContent).toBe('View')
-    expect(btn('Present')).toHaveClass('gold-line')
+    // How you watch is the dock's, beside Play - not the top bar's.
+    expect(topBar().querySelector('.view-btn')).toBeNull()
+    expect(dock().querySelector('.view-btn .view-word')!.textContent).toBe('View')
+    expect(currentView()).toBe('Overhead')
+    // The top bar's one gold outline is Save, while a play is unsaved: Present is plain.
+    expect(btn('Present')).not.toHaveClass('gold-line')
     expect(btn('Present')).not.toHaveClass('primary')
-    expect(btn('Present')).toHaveAttribute('title', 'Hide the tools and teach')
+    expect(btn('Present')).toHaveAttribute('title', 'Full screen for the meeting room: hide the tools and teach')
     // Play is the one solid-gold control.
     expect(playToggle()).toHaveClass('primary')
   })
@@ -198,7 +202,8 @@ describe('the top bar', () => {
     expect(maybeBtn('← Library')).toBeNull()
     expect(topBar().querySelector('.present-name')!.textContent).toBe(play.name)
     expect(topBar().querySelector('.play-btn')).toBeNull()
-    expect(topBar().querySelector('.lbl.view-label')).not.toBeNull()
+    // VIEW is still there in Present - in the dock, which Present keeps.
+    expect(dock().querySelector('.view-btn')).not.toBeNull()
     expect(btn('✎ Draw')).toBeInTheDocument()
     expect(btn('Exit Present')).toHaveClass('gold-line')
     expect(btn('Exit Present')).not.toHaveClass('primary')
@@ -363,7 +368,7 @@ describe('choosing whom to watch while presenting (owner decision)', () => {
   it('Player view with nobody chosen: a click chooses him - no banner, no strip', () => {
     open(play)
     fireEvent.click(btn('Present'))
-    fireEvent.click(viewBtn('Player'))
+    chooseView('Player')
     expect(fieldView()).toBeNull()
     expect(strip()).toBeNull()
 
@@ -383,7 +388,7 @@ describe('choosing whom to watch while presenting (owner decision)', () => {
     select(play, fs.id)
 
     expect(ringOn(fs.id)).not.toBeNull()
-    expect(viewBtn('Overhead')).toHaveClass('active')
+    expect(currentView()).toBe('Overhead')
     expect(fieldView()).toBeNull()
   })
 })
@@ -471,17 +476,17 @@ describe('Exit Present', () => {
     expect(btn('↶')).toBeInTheDocument()
     expect(dock().querySelector('.ball-btn')).not.toBeNull()
     expect(dock().querySelectorAll('.dock-divider')).toHaveLength(2)
-    expect(btn('Present')).toHaveClass('gold-line')
+    expect(btn('Present')).toHaveClass('present-btn')
   })
 
   it('and switching views works going in and coming out', () => {
     open(play)
-    fireEvent.click(viewBtn('Coach'))
+    chooseView('Coach')
     fireEvent.click(btn('Present'))
     expect(fieldView()).not.toBeNull()
-    fireEvent.click(viewBtn('Overhead'))
+    chooseView('Overhead')
     expect(overhead()).not.toBeNull()
-    fireEvent.click(viewBtn('Coach'))
+    chooseView('Coach')
     fireEvent.click(btn('Exit Present'))
 
     expect(fieldView()).not.toBeNull()
