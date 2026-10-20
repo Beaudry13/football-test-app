@@ -27,6 +27,8 @@ import {
 import { QuestionEditor } from './QuestionEditor';
 import { Icon } from '../../components/ui/Icon';
 import { MenuButton, MenuItem } from '../../components/ui/MenuButton';
+import { TeachView } from '../../components/teach/TeachView';
+import { quizTeachSlides, teachable } from './quizTeach';
 import nb from '../../styles/notebook.module.css';
 import styles from './QuestionsTab.module.css';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -134,6 +136,8 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
   const [makingRep, setMakingRep] = useState(false);
   /* ONE QUESTION -> A REP: the question being added to an existing Rep, and
      the Reps to choose from. */
+  /** The question on the meeting-room screen (Teach this). */
+  const [teachingQuestion, setTeachingQuestion] = useState<Question | null>(null);
   const [addingToRep, setAddingToRep] = useState<Question | null>(null);
   const [repChoices, setRepChoices] = useState<Quiz[] | null>(null);
   /** A question a Rep can judge on the spot: one tap, one right answer. */
@@ -526,6 +530,13 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         </div>
       )}
 
+      {teachingQuestion && (
+        <TeachView
+          title={teachingQuestion.question_text}
+          slides={quizTeachSlides([teachingQuestion])}
+          onClose={() => setTeachingQuestion(null)}
+        />
+      )}
       {addingToRep && (
         <Modal onDismiss={() => setAddingToRep(null)} ariaLabel="Add to a rep" showCloseButton>
           <div className={styles.repPick}>
@@ -883,6 +894,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                         this question" - which changes scoring for players who
                         ALREADY answered - deliberately does not live here; it
                         is on Results, next to the players it affects. */}
+                    {/* TEACH IT - BEFORE OR AFTER THE TEST. The same meeting-room
+                        view Results and Reps teach with, for any question with
+                        football to show. */}
+                    {teachable(question) && (
+                      <MenuItem onSelect={() => setTeachingQuestion(question)}>Teach this</MenuItem>
+                    )}
                     {/* QUIZ -> REP, one question at a time. */}
                     {repReady(question) && (
                       <MenuItem onSelect={() => void questionToNewRep(question)}>Make a rep from this</MenuItem>

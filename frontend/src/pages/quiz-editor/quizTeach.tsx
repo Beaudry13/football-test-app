@@ -3,6 +3,7 @@ import type { Question, QuestionBreakdown } from '../../api/types';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { usableTargets } from '../../components/football/tapTargets';
 import type { TeachSlide } from '../../components/teach/TeachView';
+import { DrawingViewer } from '../../components/drawing/DrawingViewer';
 
 // TEACH FROM A QUIZ MISS - the same meeting-room view a Rep teaches with, made
 // from quiz questions: the football picture (the play moving to the decision
@@ -33,7 +34,16 @@ export function quizTeachSlides(questions: Question[], breakdown: QuestionBreakd
       wrong: mostChosenWrong(row),
       motionPlayId: q.motion_play_id ?? null,
       picture:
-        q.presnap || targets || q.subject_marker ? (
+        /* DRAW YOUR ASSIGNMENT, TAUGHT: the coach's answer drawing on the
+           picture - the assignment itself, big, for the room. */
+        q.question_type === 'draw_response' && q.answer_drawing && q.image ? (
+          <DrawingViewer
+            imageUrl={resolveMediaUrl(q.image.image_url)}
+            document={q.answer_drawing}
+            maxWidth={1400}
+            alt="The assignment, drawn"
+          />
+        ) : q.presnap || targets || q.subject_marker ? (
           <PlayPicture
             image={q.image}
             presnap={q.presnap}
