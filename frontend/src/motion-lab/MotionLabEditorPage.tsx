@@ -327,6 +327,13 @@ export default function MotionLabEditorPage() {
         repository={session.repository}
         exit={
           <>
+            {/* HOME, WITHOUT THE BROWSER'S BACK BUTTON. Leaving is safe the
+                same way Library is: a pending edit is flushed to the server on
+                the way out, and an unsaved scratch play stays on this device
+                (Home's Motion Lab card offers "Continue"). */}
+            <button className="home-btn" onClick={() => navigate('/dashboard')} title="PEIRA Home">
+              Home
+            </button>
             <button onClick={() => navigate(folderId !== null ? `/motion-lab/folders/${folderId}` : '/motion-lab/library')} title="Your saved plays">
               Library
             </button>

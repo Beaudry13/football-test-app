@@ -62,6 +62,7 @@ async function openAt(path: string) {
         <Route path="/motion-lab" element={<MotionLabEditorPage />} />
         <Route path="/motion-lab/library" element={<div>library</div>} />
         <Route path="/motion-lab/folders/:folderId" element={<div>library folder</div>} />
+        <Route path="/dashboard" element={<div>home</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -176,6 +177,20 @@ describe('Motion Lab editor on the server', () => {
     const x = board().querySelector('[data-player="O8"]')!.getAttribute('transform')
     const o8 = a.players.find((p) => p.id === 'O8')!
     expect(x).toBe(`translate(${o8.x * 20} ${(17 - (o8.y + 3)) * 20})`)
+  })
+
+  it('Home leaves for PEIRA Home without the browser back button - and the edit survives', async () => {
+    const { a } = seedPlays()
+    await settle()
+    await openEditor(100)
+    await waitFor(() => expect(playName()).toBe(a.name))
+    dragPlayer(a, 'O8', 0, 3)
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }))
+    await act(async () => settle(10))
+    expect(lastPath).toBe('/dashboard')
+    // The edit made just before leaving reached the server.
+    const o8 = (server.current.plays.get(100)!.document.players as { id: string; y: number }[]).find((p) => p.id === 'O8')!
+    expect(o8.y).toBeCloseTo(a.players.find((p) => p.id === 'O8')!.y + 3, 6)
   })
 
   it('a conflict stops and asks; "Load the latest version" reopens the server version', async () => {
