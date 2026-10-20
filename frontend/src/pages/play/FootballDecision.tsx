@@ -68,7 +68,8 @@ export function Decision({
         motionKey={question.id}
       />
       <h1 className={styles.prompt}>{question.question_text}</h1>
-      {onTap && targets && <TapHint targets={targets} />}
+      {/* How to answer - only while there is still something to answer. */}
+      {onTap && targets && !disabled && <TapHint targets={targets} />}
     </>
   );
 }

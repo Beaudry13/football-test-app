@@ -3,6 +3,12 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
+  /* The player wrapper centres its children; without a width this column
+     would size itself to its longest line and run off a phone. */
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  min-width: 0;
 }
 .checking {
   text-align: center;
@@ -82,7 +88,9 @@
   text-decoration: none;
 }
 .rowTitle {
+  min-width: 0;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 .rowMeta {
   font-weight: 400;
