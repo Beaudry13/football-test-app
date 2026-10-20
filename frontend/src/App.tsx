@@ -83,8 +83,10 @@ function App() {
               not linked from anywhere while public registration is still open -
               see pages/RequestAccessPage.tsx. */}
           <Route path="/request-access" element={<RequestAccessPage />} />
-          <Route path="/play" element={<PlayPage />} />
-          <Route path="/play/:code" element={<PlayPage />} />
+          {/* Keyed apart: going from Player Home to a code (or back) starts
+              the player page fresh, never on the other route's step. */}
+          <Route path="/play" element={<PlayPage key="home" />} />
+          <Route path="/play/:code" element={<PlayPage key="code" />} />
           <Route path="/results" element={<ResultsCheckPage />} />
           {/* Competition: public player routes. No auth - the join code is the
               address and the per-seat token is the credential. */}

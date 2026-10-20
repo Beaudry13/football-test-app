@@ -1184,3 +1184,39 @@ class TestARepRevealsTheRightAnswer:
                                                         "player_id": ids[name], "question_id": q["id"]}).get_json()
         assert checked["is_correct"] is False
         assert "correct_option_ids" not in checked
+
+
+class TestWhatIsOutForOnePlayer:
+    """GROUNDWORK for a player home (no route yet): the live work one player
+    may use, by the same rule the name picker uses - and his status on each."""
+
+    @staticmethod
+    def _open(app, player_id):
+        from app.models import Player
+        from app.services.player_assignments import open_assignments
+
+        with app.app_context():
+            return open_assignments(db.session.get(Player, player_id))
+
+    def test_the_rep_sent_to_him_with_how_far_he_got(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, _second, ids, code, _ = _built(client, headers, app, coach)
+        before = self._open(app, ids["Bo Brown"])
+        assert [(a["code"], a["kind"], a["status"]) for a in before] == [(code["code"], "REP", "not_started")]
+        _play(client, code, "Bo Brown", ids["Bo Brown"], {first["id"]: _option(first, "Stay boundary")})
+        after = self._open(app, ids["Bo Brown"])
+        assert after[0]["status"] == "submitted"
+        # Someone else's progress is not his.
+        assert self._open(app, ids["Cam Cole"])[0]["status"] == "not_started"
+
+    def test_not_a_player_it_was_not_sent_to_nor_a_closed_code(self, client, register_coach, app):
+        from app.models import AccessCode
+
+        coach, _, headers = register_coach()
+        rep, _first, _second, ids, code, _ = _built(client, headers, app, coach)
+        loner = client.post("/api/players", json={"first_name": "Lone", "last_name": "Wolf"}, headers=headers).get_json()
+        assert self._open(app, loner["id"]) == []
+        with app.app_context():
+            db.session.get(AccessCode, code["id"]).is_active = False
+            db.session.commit()
+        assert self._open(app, ids["Bo Brown"]) == []

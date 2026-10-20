@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getQuizTitleByCode, validateCode } from '../../api/play';
 import type {
   AssessmentMode,
@@ -28,6 +28,9 @@ import type { PlayerAnswer } from './QuestionInput';
 import { QuizStep, type PracticeReview } from './QuizStep';
 import { RepIntro } from './RepIntro';
 import { RepRunner } from './RepRunner';
+import { HomeReview } from './HomeReview';
+import { MyWork } from './MyWork';
+import { progressOf, recordDone, recordStarted, reviewFrom, type StoredReview } from './workProgress';
 import { SubmittedStep } from './SubmittedStep';
 import player from '../../styles/player.module.css';
 import styles from './PlayPage.module.css';
@@ -42,6 +45,10 @@ interface CarriedWork {
 
 type Step =
   | { name: 'loading' }
+  /** Player Home: what to do next, from the work on this device (/play). */
+  | { name: 'home' }
+  /** His last run's misses, reviewed from Player Home without a new run. */
+  | { name: 'review'; code: string; joined: ValidateCodeResponse; review: StoredReview }
   | { name: 'join' }
   | { name: 'name'; code: string; joined: ValidateCodeResponse; remembered: RememberedPlayer | null }
   | {
@@ -100,9 +107,32 @@ function playerFromRoster(joined: ValidateCodeResponse, playerId: number, fallba
 
 export function PlayPage() {
   const { code: urlCode } = useParams<{ code?: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  /** ?review=1 from Player Home, and this device holds that run's misses. */
+  const reviewAsked =
+    !!urlCode && new URLSearchParams(location.search).get('review') === '1' && !!progressOf(urlCode)?.review;
   const [step, setStep] = useState<Step>(() =>
-    urlCode && rememberedPlayer(urlCode) ? { name: 'loading' } : { name: 'join' },
+    !urlCode ? { name: 'home' } : reviewAsked || rememberedPlayer(urlCode) ? { name: 'loading' } : { name: 'join' },
   );
+
+  /* REVIEW FROM PLAYER HOME: the code's questions, his stored misses. */
+  useEffect(() => {
+    if (!urlCode || !reviewAsked) return;
+    const review = progressOf(urlCode)?.review;
+    if (!review) return;
+    let cancelled = false;
+    validateCode(urlCode)
+      .then((joined) => {
+        if (!cancelled) setStep({ name: 'review', code: urlCode, joined, review });
+      })
+      .catch(() => {
+        if (!cancelled) setStep({ name: 'join' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlCode, reviewAsked]);
   // Fetched once, up front from the URL's code - before the player has
   // picked a name, `step` itself carries no quiz data yet to set a title
   // from. Once JoinStep's own validateCode resolves (step advances past
@@ -156,7 +186,7 @@ export function PlayPage() {
   // StrictMode does), and a flag would let the cancelled first run win and the
   // second never start - leaving the player on "Loading…".
   useEffect(() => {
-    if (!urlCode) return;
+    if (!urlCode || reviewAsked) return;
     const remembered = rememberedPlayer(urlCode);
     if (!remembered) return;
     let cancelled = false;
@@ -234,6 +264,7 @@ export function PlayPage() {
       return;
     }
     if (outcome.kind === 'submitted') {
+      recordDone(code, 0);
       setStep({ name: 'submitted', code, player: who });
       return;
     }
@@ -241,6 +272,8 @@ export function PlayPage() {
     // Only the SAME attempt gets the unsaved work back - never a new practice
     // run that happens to follow it.
     const carryOverAnswers = carried && carried.attemptId === attempt.attempt_id ? carried.answers : undefined;
+    // Player Home: this is in progress now (a new run replaces a finished one).
+    recordStarted(code);
     setStep({
       name: 'quiz',
       code,
@@ -332,6 +365,20 @@ export function PlayPage() {
         <PeiraLogo variant="light" markOnly size={28} />
       </div>
       {step.name === 'loading' && <LoadingState label="Loading…" />}
+      {step.name === 'home' && <MyWork joinSlot={<JoinStep initialCode="" onJoined={handleJoined} />} />}
+      {step.name === 'review' && (
+        <HomeReview
+          questions={step.joined.quiz.questions ?? []}
+          review={step.review}
+          isRep={step.joined.quiz.kind === 'REP'}
+          onDone={() => navigate('/play')}
+          onRunAgain={() => {
+            // Off ?review, onto the ordinary way in: "Continue as", then a fresh run.
+            window.history.replaceState(window.history.state, '', `/play/${encodeURIComponent(step.code)}`);
+            setStep({ name: 'name', code: step.code, joined: step.joined, remembered: rememberedPlayer(step.code) });
+          }}
+        />
+      )}
       {step.name === 'join' && <JoinStep initialCode={urlCode ?? ''} onJoined={handleJoined} />}
       {/* SITUATIONAL REP: the assignment first, big - then tap your name and go. */}
       {step.name === 'name' && step.joined.quiz.kind === 'REP' && <RepIntro quiz={step.joined.quiz} />}
@@ -391,6 +438,10 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onRunAgain={() => void handleRunRepAgain()}
+          onFinished={(order, feedback, chosen) => {
+            const review = reviewFrom(order, feedback, chosen);
+            recordDone(step.code, review.missedIds.length, review);
+          }}
         />
       )}
       {step.name === 'quiz' && step.joined.quiz.kind !== 'REP' && (
@@ -410,11 +461,16 @@ export function PlayPage() {
             step.player.playerId === null ? null : readAttemptToken(step.code, step.player.playerId)
           }
           onAuthRequired={handleAuthRequired}
-          onSubmitted={() => setStep({ name: 'submitted', code: step.code, player: step.player })}
+          onSubmitted={() => {
+            recordDone(step.code, 0);
+            setStep({ name: 'submitted', code: step.code, player: step.player });
+          }}
           onPracticeComplete={(feedback, review) => {
             if (review) {
               savePracticeReview(step.code, step.player, feedback, review.questions.map((q) => q.id), review.chosen);
             }
+            const stored = review ? reviewFrom(review.questions.map((q) => q.id), feedback, review.chosen) : undefined;
+            recordDone(step.code, feedback.filter((f) => f.is_correct === false).length, stored);
             setStep({
               name: 'practice-complete',
               code: step.code,

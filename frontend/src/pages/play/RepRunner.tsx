@@ -55,6 +55,7 @@ export function RepRunner({
   attemptToken,
   onAuthRequired,
   onRunAgain,
+  onFinished,
 }: {
   quiz: Quiz;
   deliveredQuestions?: DeliveredPlayerQuestion[];
@@ -67,6 +68,8 @@ export function RepRunner({
   attemptToken?: () => string | null;
   onAuthRequired?: (reason: string | undefined, answers: Record<number, PlayerAnswer>) => void;
   onRunAgain: () => void;
+  /** The run is over: the decisions in order, his verdicts and picks (Player Home's review). */
+  onFinished?: (order: number[], feedback: PracticeFeedback[], chosen: Record<number, number[]>) => void;
 }) {
   const decisions = useMemo(
     () => orderQuestions(applyDeliveredContent(quiz.questions ?? [], deliveredQuestions), questionOrder),
@@ -194,6 +197,11 @@ export function RepRunner({
     } finally {
       setBusy(false);
       setFinished(true);
+      onFinished?.(
+        decisions.map((q) => q.id),
+        Object.values(feedback),
+        Object.fromEntries(Object.entries(taken).map(([id, t]) => [id, t.optionIds])),
+      );
     }
     // Where he stands against last time - a bonus, never a blocker.
     getRepProgress({ access_code_id: accessCodeId, player_name: playerName, player_id: playerId }, ...tokenArgs())
