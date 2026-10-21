@@ -151,3 +151,36 @@ describe('a quiz retest is a second look too', () => {
     expect(next.getByText(/Retest - your second look/)).toBeInTheDocument();
   });
 });
+
+describe('a graded quiz he missed some of', () => {
+  it('comes back as Review missed, opening his results - and drops off when he missed nothing', async () => {
+    localStorage.clear();
+    for (const code of ['GRADE1', 'CLEAN2']) rememberPlayer(code, marcus);
+    recordDone('GRADE1', 2, undefined, { graded: true });
+    recordDone('CLEAN2', 0, undefined, { graded: true });
+    vi.mocked(playApi.validateCode).mockImplementation(async (code) => joined(`Quiz ${code}`, {}, 'GRADED'));
+    home();
+    const next = within(await screen.findByLabelText('Up next'));
+    expect(next.getByRole('heading', { name: 'Quiz GRADE1' })).toBeInTheDocument();
+    expect(next.getByText(/Your results/)).toBeInTheDocument();
+    expect(next.getByRole('link', { name: 'Review missed (2)' })).toHaveAttribute(
+      'href',
+      '/results/GRADE1/Marcus%20Hill?player_id=21',
+    );
+    expect(screen.queryByText(/Quiz CLEAN2/)).toBeNull();
+  });
+
+  it('open work still leads; his results wait behind it', async () => {
+    localStorage.clear();
+    for (const code of ['GRADE1', 'REP001']) rememberPlayer(code, marcus);
+    recordDone('GRADE1', 1, undefined, { graded: true });
+    vi.mocked(playApi.validateCode).mockImplementation(async (code) =>
+      code === 'REP001' ? joined('Trips Jet - Boundary safety', { kind: 'REP' }) : joined('Week 7 coverage', {}, 'GRADED'),
+    );
+    home();
+    const next = within(await screen.findByLabelText('Up next'));
+    expect(next.getByRole('heading', { name: 'Trips Jet - Boundary safety' })).toBeInTheDocument();
+    const also = within(screen.getByLabelText('Also waiting'));
+    expect(also.getByRole('link', { name: /Week 7 coverage/ })).toHaveAttribute('href', '/results/GRADE1/Marcus%20Hill?player_id=21');
+  });
+});

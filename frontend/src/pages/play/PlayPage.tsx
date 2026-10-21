@@ -265,7 +265,7 @@ export function PlayPage() {
       return;
     }
     if (outcome.kind === 'submitted') {
-      recordDone(code, 0);
+      recordDone(code, 0, undefined, { graded: true });
       setStep({ name: 'submitted', code, player: who });
       return;
     }
@@ -464,7 +464,7 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onSubmitted={() => {
-            recordDone(step.code, 0);
+            recordDone(step.code, 0, undefined, { graded: true });
             setStep({ name: 'submitted', code: step.code, player: step.player });
           }}
           onPracticeComplete={(feedback, review) => {

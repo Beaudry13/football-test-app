@@ -66,7 +66,8 @@ describe('ResultsCheckPage', () => {
       expect(playApi.getPlayerResults).toHaveBeenCalledWith('ABC123', 'Jordan Smith', undefined),
     );
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
-    expect(screen.getByText('Incorrect')).toBeInTheDocument();
+    // A miss leads, under What you missed, with the correct answer.
+    expect(screen.getByRole('region', { name: 'What you missed' })).toBeInTheDocument();
     expect(screen.getByText('Correct answer: True', { exact: false })).toBeInTheDocument();
   });
 

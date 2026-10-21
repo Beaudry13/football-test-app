@@ -10,6 +10,7 @@ import { PinStep } from './PinStep';
 import { isAuthRefusal, pinNoticeFor } from './playerEntry';
 import { rememberPlayer, type RememberedPlayer } from './playerSession';
 import { ResultsView } from './ResultsView';
+import { recordDone } from './workProgress';
 import styles from './PlayPage.module.css';
 
 // How long the "Quiz Complete" celebration stays up before fading away to
@@ -50,6 +51,9 @@ export function SubmittedStep({
       // The results payload itself, without the credential riding beside it.
       const { player_auth: _auth, ...shown } = found;
       setResults(shown);
+      // Player Home: what he missed, so his home can send him back to it.
+      const missed = shown.answers.filter((a) => !a.is_excluded && a.is_correct === false).length;
+      recordDone(code, missed, undefined, { graded: true });
     },
     [code, playerId],
   );

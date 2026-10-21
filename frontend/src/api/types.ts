@@ -591,6 +591,14 @@ export interface PlayerResultAnswer {
   is_excluded: boolean;
   coach_feedback: string | null;
   graded_at: string | null;
+  /** THE FOOTBALL PICTURE the question was asked on - the DELIVERED one, so a
+   *  miss is reviewed on the play he answered. Null for a question with none.
+   *  Optional: results cached before it existed simply have no picture. */
+  image?: { id: number | null; image_url: string } | null;
+  /** Who he was in the decision ("Boundary safety"), when the coach said. */
+  subject_role?: string | null;
+  /** The coach's ring on the picture, only while it is still the delivered one. */
+  subject_marker?: { x: number; y: number; r: number } | null;
 }
 
 export interface PlayerResultsResponse {

@@ -5,7 +5,7 @@ import { itemFor, progressOf, rememberedCodes, sortWork, type WorkItem } from '.
 import styles from './MyWork.module.css';
 
 function actionLabel(item: WorkItem): string {
-  if (item.action === 'review') return `Review missed (${item.missed})`;
+  if (item.action === 'review' || item.action === 'results') return `Review missed (${item.missed})`;
   if (item.action === 'continue') return 'Continue';
   return item.kind === 'REP' ? 'Start your rep' : 'Start';
 }
@@ -21,7 +21,15 @@ function closes(iso: string): string {
   return `Open until ${when.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`;
 }
 
-const linkFor = (item: WorkItem) => `/play/${encodeURIComponent(item.code)}${item.action === 'review' ? '?review=1' : ''}`;
+function linkFor(item: WorkItem): string {
+  // A graded quiz's misses are on his results page - the one the finish screen bookmarks.
+  if (item.action === 'results' && item.name) {
+    return `/results/${encodeURIComponent(item.code)}/${encodeURIComponent(item.name)}${
+      item.playerId !== null ? `?player_id=${item.playerId}` : ''
+    }`;
+  }
+  return `/play/${encodeURIComponent(item.code)}${item.action === 'review' ? '?review=1' : ''}`;
+}
 
 /**
  * PLAYER HOME: "what do I need to do next?" - one thing leads, big; anything
@@ -66,7 +74,8 @@ export function MyWork({ joinSlot }: { joinSlot: ReactNode }) {
         <span className={styles.kicker}>Up next</span>
         <h1 className={styles.title}>{next.title}</h1>
         <span className={styles.meta}>
-          {kindLabel(next)} · {next.action === 'review' ? 'Your last run' : closes(next.expiresAt)}
+          {kindLabel(next)} ·{' '}
+          {next.action === 'review' ? 'Your last run' : next.action === 'results' ? 'Your results' : closes(next.expiresAt)}
           {names.length > 1 && next.name ? ` · ${next.name}` : ''}
         </span>
         <Link to={linkFor(next)} className={`btn btn-primary ${styles.go}`}>

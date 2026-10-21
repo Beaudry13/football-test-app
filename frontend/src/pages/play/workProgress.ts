@@ -30,6 +30,8 @@ export interface WorkProgress {
   missed: number;
   at: string;
   review?: StoredReview;
+  /** A graded quiz he submitted: its misses are reviewed on his results page. */
+  graded?: boolean;
 }
 
 function key(prefix: string, code: string): string {
@@ -61,6 +63,7 @@ export function progressOf(code: string): WorkProgress | null {
       missed: typeof value.missed === 'number' ? value.missed : 0,
       at: typeof value.at === 'string' ? value.at : '',
       review: value.review && Array.isArray(value.review.missedIds) ? value.review : undefined,
+      graded: value.graded === true ? true : undefined,
     };
   } catch {
     return null;
@@ -80,13 +83,15 @@ export function recordStarted(code: string): void {
   write(code, { state: 'started', missed: 0, at: new Date().toISOString() });
 }
 
-/** He finished a run: how many he missed, and what to review. */
-export function recordDone(code: string, missed: number, review?: StoredReview): void {
+/** He finished a run: how many he missed, and what to review. A graded quiz
+ *  says so: its misses are reviewed on his results page, not from a record here. */
+export function recordDone(code: string, missed: number, review?: StoredReview, { graded = false } = {}): void {
   write(code, {
     state: 'done',
     missed,
     at: new Date().toISOString(),
     review: review && review.missedIds.length > 0 ? review : undefined,
+    ...(graded ? { graded: true } : {}),
   });
 }
 
@@ -120,15 +125,17 @@ export interface WorkItem {
   retest: boolean;
   graded: boolean;
   expiresAt: string;
-  action: 'start' | 'continue' | 'review';
+  /** review: his last practice run's misses here; results: a graded quiz's, on his results page. */
+  action: 'start' | 'continue' | 'review' | 'results';
   missed: number;
   name: string | null;
+  playerId: number | null;
 }
 
 /** A retest first - Rep or quiz, a second look at something he missed - then
  *  Reps, then quizzes (graded and closing soonest first), then review. */
 function rank(item: WorkItem): number {
-  if (item.action === 'review') return 5;
+  if (item.action === 'review' || item.action === 'results') return 5;
   if (item.retest) return 0;
   if (item.kind === 'REP') return 1;
   return item.graded ? 2 : 3;
@@ -144,10 +151,13 @@ export function itemFor(code: string, joined: ValidateCodeResponse, progress: Wo
     expiresAt: joined.expires_at,
     missed: progress?.missed ?? 0,
     name: rememberedPlayer(code)?.name ?? null,
+    playerId: rememberedPlayer(code)?.playerId ?? null,
   };
   if (!progress) return { ...base, action: 'start' };
   if (progress.state === 'started') return { ...base, action: 'continue' };
-  // Finished: worth coming back to only when there is something to review.
+  // Finished: worth coming back to only when there is something to review -
+  // a graded quiz's misses on his results page (it needs his name to open).
+  if (progress.graded) return progress.missed > 0 && base.name ? { ...base, action: 'results' } : null;
   return progress.review && progress.missed > 0 ? { ...base, action: 'review' } : null;
 }
 

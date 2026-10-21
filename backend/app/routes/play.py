@@ -1640,11 +1640,52 @@ def _results_response(access_code: AccessCode, attempt: PlayerAttempt, *, issued
     return _no_store(jsonify(body))
 
 
+def _review_fields(question, live: Question | None) -> dict:
+    """The football picture a player reviews a question on (Review what you
+    missed): the DELIVERED picture, and who he was in it.
+
+    THE ANSWER-REVEAL POLICY DOES NOT MOVE. This page already shows the correct
+    answer as a whole, in words, after submission; it never carries the answer
+    key's structure (which options were right, which of his were) or the
+    coach's question explanation, and this adds neither. The picture was his
+    to look at while answering, and the ring only says who he was in it.
+
+    The ring and the role come from the live question - the delivery did not
+    record them - and the ring only while the live question still has the
+    delivered picture: a replaced picture repoints the delivery at a preserved
+    copy, its URL stops matching, and a ring placed for another picture would
+    circle the wrong man.
+    """
+    same_picture = (
+        live is not None
+        and question.image is not None
+        and live.image is not None
+        and live.image.image_url == question.image.image_url
+        and (question.image.image_id is None or live.image.id == question.image.image_id)
+    )
+    return {
+        "image": (
+            {"id": question.image.image_id, "image_url": question.image.image_url}
+            if question.image is not None
+            else None
+        ),
+        "subject_role": live.subject_role if live is not None else None,
+        "subject_marker": live.subject_marker if same_picture else None,
+    }
+
+
 def _results_payload(access_code: AccessCode, attempt: PlayerAttempt) -> dict:
     """What a player is shown about one submitted attempt. Unchanged content."""
     quiz = access_code.quiz
     answers_by_question = {a.question_id: a for a in attempt.answers}
     exclusions = load_for_quizzes([quiz.id])
+    # The live questions, for what the delivery did not record (see
+    # _review_fields). Loaded with their pictures at once: this is the page a
+    # whole squad opens the moment they finish.
+    live_by_id = {
+        q.id: q
+        for q in Question.query.options(selectinload(Question.image)).filter(Question.quiz_id == quiz.id).all()
+    }
 
     # WHAT THIS PLAYER RECEIVED, not what the quiz says today. A coach fixing
     # the quiz for future players must not rewrite the page this player is
@@ -1703,6 +1744,7 @@ def _results_payload(access_code: AccessCode, attempt: PlayerAttempt) -> dict:
                     and question.image is not None
                     else None
                 ),
+                **_review_fields(question, live_by_id.get(question.question_id)),
             }
         )
 
