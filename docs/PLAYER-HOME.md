@@ -17,7 +17,7 @@ A player should be able to open PEIRA and see *what do I need to do next?* witho
 
 1. **Player Home on `/play` (device-scoped).**
    - Built from the codes this device has played. Each one is re-checked with the public `/validate-code`, so a closed or unknown code is never offered.
-   - Ranked: a retest Rep first, then Reps, then quizzes (graded and closing soonest first), then Review missed.
+   - Ranked (as built in build-first-2): a retest Rep first, then Reps, then quizzes, then Review missed. Superseded by build-first-3's order below.
    - One item leads ("Up next"); the rest sit under "Also waiting"; a new code is always one box away.
    - With nothing on the device, `/play` is exactly the code screen it always was.
    - Code: `pages/play/MyWork.tsx`, `pages/play/workProgress.ts`.
@@ -33,6 +33,9 @@ A player should be able to open PEIRA and see *what do I need to do next?* witho
 3. **"Work on: …"** on Up next when it is a review: the concepts of the missed questions, in the coach's words (read from what `/validate-code` already returns).
 4. **"You're all caught up."** when every code on the device is done with nothing to review.
 5. **The code box is second once the device has played** ("Got a new code?", no autofocus - on a phone the focus popped the keyboard over Up next). A never-used device still opens on the code box, titled "Enter your code".
+
+6. **Try the misses again** (Reps and practice quizzes only). Review Missed ends on it; the finish screen offers it after "Review missed", with the whole run again kept as a quiet link. It is a new PRACTICE attempt through the same `/start` / `/claim` path (`retry_of_attempt_id`, migration `b6e2d8f41a07`): the server reads the misses from HIS finished practice run on that code, delivers exactly those, and leaves the retry out of every run-level Rep reading. The original run is never touched. A graded attempt is never retried from the player's side - assessment stays assessment; reteaching goes through Teach / Rep / Retest.
+7. **Order on Home** (owner's hierarchy): a retest, then his own misses (Review missed, or a retry in progress - "Your misses, again"), then an assigned Rep, then an assigned quiz (graded before practice).
 
 **Limits of the device-scoped home:**
 - It only knows codes played **on this device**. A new phone starts empty, and work sent but never opened on this device isn't listed.
