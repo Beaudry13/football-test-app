@@ -32,6 +32,9 @@ export interface WorkProgress {
   review?: StoredReview;
   /** A graded quiz he submitted: its misses are reviewed on his results page. */
   graded?: boolean;
+  /** A graded quiz's missed questions (a practice run's are in `review`), so
+   *  his home can name what they were about. */
+  missedIds?: number[];
 }
 
 function key(prefix: string, code: string): string {
@@ -64,6 +67,7 @@ export function progressOf(code: string): WorkProgress | null {
       at: typeof value.at === 'string' ? value.at : '',
       review: value.review && Array.isArray(value.review.missedIds) ? value.review : undefined,
       graded: value.graded === true ? true : undefined,
+      missedIds: Array.isArray(value.missedIds) ? value.missedIds.filter((id) => typeof id === 'number') : undefined,
     };
   } catch {
     return null;
@@ -85,13 +89,19 @@ export function recordStarted(code: string): void {
 
 /** He finished a run: how many he missed, and what to review. A graded quiz
  *  says so: its misses are reviewed on his results page, not from a record here. */
-export function recordDone(code: string, missed: number, review?: StoredReview, { graded = false } = {}): void {
+export function recordDone(
+  code: string,
+  missed: number,
+  review?: StoredReview,
+  { graded = false, missedIds }: { graded?: boolean; missedIds?: number[] } = {},
+): void {
   write(code, {
     state: 'done',
     missed,
     at: new Date().toISOString(),
     review: review && review.missedIds.length > 0 ? review : undefined,
     ...(graded ? { graded: true } : {}),
+    ...(missedIds && missedIds.length > 0 ? { missedIds } : {}),
   });
 }
 
@@ -130,6 +140,8 @@ export interface WorkItem {
   missed: number;
   name: string | null;
   playerId: number | null;
+  /** WHAT TO LEARN: the concepts of the questions he missed, as the coach named them. */
+  workOn: string[];
 }
 
 /** A retest first - Rep or quiz, a second look at something he missed - then
@@ -152,6 +164,7 @@ export function itemFor(code: string, joined: ValidateCodeResponse, progress: Wo
     missed: progress?.missed ?? 0,
     name: rememberedPlayer(code)?.name ?? null,
     playerId: rememberedPlayer(code)?.playerId ?? null,
+    workOn: conceptsOf(joined, progress?.review?.missedIds ?? progress?.missedIds ?? []),
   };
   if (!progress) return { ...base, action: 'start' };
   if (progress.state === 'started') return { ...base, action: 'continue' };
@@ -159,6 +172,15 @@ export function itemFor(code: string, joined: ValidateCodeResponse, progress: Wo
   // a graded quiz's misses on his results page (it needs his name to open).
   if (progress.graded) return progress.missed > 0 && base.name ? { ...base, action: 'results' } : null;
   return progress.review && progress.missed > 0 ? { ...base, action: 'review' } : null;
+}
+
+/** The concepts behind these questions, once each, in the order he met them. */
+function conceptsOf(joined: ValidateCodeResponse, ids: number[]): string[] {
+  const questions = joined.quiz.questions ?? [];
+  const names = ids
+    .map((id) => questions.find((q) => q.id === id)?.concept?.name)
+    .filter((name): name is string => !!name);
+  return [...new Set(names)];
 }
 
 export function sortWork(items: WorkItem[]): WorkItem[] {

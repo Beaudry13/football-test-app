@@ -52,8 +52,11 @@ export function SubmittedStep({
       const { player_auth: _auth, ...shown } = found;
       setResults(shown);
       // Player Home: what he missed, so his home can send him back to it.
-      const missed = shown.answers.filter((a) => !a.is_excluded && a.is_correct === false).length;
-      recordDone(code, missed, undefined, { graded: true });
+      const missed = shown.answers.filter((a) => !a.is_excluded && a.is_correct === false);
+      recordDone(code, missed.length, undefined, {
+        graded: true,
+        missedIds: missed.map((a) => a.question_id).filter((id): id is number => id !== null),
+      });
     },
     [code, playerId],
   );

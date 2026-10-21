@@ -26,7 +26,7 @@ const marcus = { playerId: 21, name: 'Marcus Hill', jerseyNumber: '24', position
 function home() {
   render(
     <MemoryRouter>
-      <MyWork joinSlot={<input placeholder="CODE" aria-label="Code" />} />
+      <MyWork joinSlot={(secondary) => <input placeholder="CODE" aria-label="Code" data-secondary={secondary} />} />
     </MemoryRouter>,
   );
 }
@@ -182,5 +182,76 @@ describe('a graded quiz he missed some of', () => {
     expect(next.getByRole('heading', { name: 'Trips Jet - Boundary safety' })).toBeInTheDocument();
     const also = within(screen.getByLabelText('Also waiting'));
     expect(also.getByRole('link', { name: /Week 7 coverage/ })).toHaveAttribute('href', '/results/GRADE1/Marcus%20Hill?player_id=21');
+  });
+});
+
+describe('what to learn, and when there is nothing to do', () => {
+  const withConcepts = (title: string, kind: 'REP' | 'QUIZ' = 'REP', mode = 'PRACTICE') =>
+    joined(
+      title,
+      {
+        kind,
+        questions: [
+          { id: 1, concept: { id: 3, name: 'Motion adjustment', is_archived: false } },
+          { id: 2, concept: { id: 4, name: 'Coverage ID', is_archived: false } },
+          { id: 5, concept: { id: 3, name: 'Motion adjustment', is_archived: false } },
+        ] as never,
+      },
+      mode,
+    );
+
+  it('a review names the concepts he missed, once each, in the coach’s words', async () => {
+    localStorage.clear();
+    rememberPlayer('MISSED', marcus);
+    recordDone('MISSED', 2, reviewFrom([1, 5], [
+      { question_id: 1, auto_gradable: true, is_correct: false, answer_explanation: null },
+      { question_id: 5, auto_gradable: true, is_correct: false, answer_explanation: null },
+    ], { 1: [10], 5: [50] }));
+    vi.mocked(playApi.validateCode).mockResolvedValue(withConcepts('Trips Jet'));
+    home();
+    const next = within(await screen.findByLabelText('Up next'));
+    expect(next.getByText('Work on: Motion adjustment')).toBeInTheDocument();
+  });
+
+  it("a graded quiz's misses name theirs too", async () => {
+    localStorage.clear();
+    rememberPlayer('GRADE1', marcus);
+    recordDone('GRADE1', 2, undefined, { graded: true, missedIds: [1, 2] });
+    vi.mocked(playApi.validateCode).mockResolvedValue(withConcepts('Week 7 coverage', 'QUIZ', 'GRADED'));
+    home();
+    const next = within(await screen.findByLabelText('Up next'));
+    expect(next.getByText('Work on: Motion adjustment, Coverage ID')).toBeInTheDocument();
+  });
+
+  it('with everything done and nothing missed, says so - above the code box', async () => {
+    localStorage.clear();
+    rememberPlayer('CLEAN1', marcus);
+    recordDone('CLEAN1', 0);
+    vi.mocked(playApi.validateCode).mockResolvedValue(withConcepts('Trips Jet'));
+    home();
+    expect(await screen.findByText('You’re all caught up.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toBeInTheDocument();
+  });
+
+  it('a device with nothing played is just the code box - no caught-up line', () => {
+    localStorage.clear();
+    home();
+    expect(screen.queryByText(/all caught up/)).toBeNull();
+  });
+});
+
+describe('the code box is the second thing once he has played here', () => {
+  it('secondary as soon as this device has played - before any check comes back', () => {
+    localStorage.clear();
+    rememberPlayer('REP001', marcus);
+    vi.mocked(playApi.validateCode).mockReturnValue(new Promise(() => undefined));
+    home();
+    expect(screen.getByLabelText('Code')).toHaveAttribute('data-secondary', 'true');
+  });
+
+  it('first and focused on a device that has never played', () => {
+    localStorage.clear();
+    home();
+    expect(screen.getByLabelText('Code')).toHaveAttribute('data-secondary', 'false');
   });
 });

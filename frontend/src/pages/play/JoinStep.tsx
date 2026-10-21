@@ -8,9 +8,14 @@ import styles from './PlayPage.module.css';
 export function JoinStep({
   initialCode,
   onJoined,
+  secondary = false,
 }: {
   initialCode: string;
   onJoined: (code: string, result: ValidateCodeResponse) => void;
+  /** PLAYER HOME WITH WORK ON IT: the code box is the second thing, not the
+   *  first - a smaller heading, and no autofocus, which on a phone would pop
+   *  the keyboard up over what he came to do. */
+  secondary?: boolean;
 }) {
   const [code, setCode] = useState(initialCode);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +51,9 @@ export function JoinStep({
 
   return (
     <form className={`card ${styles.panel}`} onSubmit={handleSubmit}>
-      <h1>Join a Quiz</h1>
-      <p>Enter the code your coach shared with you.</p>
+      {/* "Code", not "Quiz": a code can be a Rep too. */}
+      {secondary ? <h2>Got a new code?</h2> : <h1>Enter your code</h1>}
+      {!secondary && <p>Enter the code your coach shared with you.</p>}
       <ErrorBanner message={error} />
       {expiredCode && (
         <p>
@@ -61,7 +67,8 @@ export function JoinStep({
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           maxLength={16}
           placeholder="CODE"
-          autoFocus
+          aria-label="Code"
+          autoFocus={!secondary}
         />
       </div>
       <button type="submit" className="btn btn-primary" disabled={isSubmitting || !code.trim()} style={{ width: '100%' }}>

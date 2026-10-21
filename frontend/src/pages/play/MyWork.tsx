@@ -39,7 +39,7 @@ function linkFor(item: WorkItem): string {
  * the server so nothing closed or unknown is ever offered. With nothing on
  * this device it is exactly the code screen it always was.
  */
-export function MyWork({ joinSlot }: { joinSlot: ReactNode }) {
+export function MyWork({ joinSlot }: { joinSlot: (secondary: boolean) => ReactNode }) {
   const [codes] = useState(rememberedCodes);
   const [items, setItems] = useState<WorkItem[] | null>(codes.length ? null : []);
 
@@ -68,6 +68,10 @@ export function MyWork({ joinSlot }: { joinSlot: ReactNode }) {
   return (
     <div className={styles.home}>
       {items === null && <p className={styles.checking}>Finding your work…</p>}
+      {/* NOTHING TO DO IS AN ANSWER TOO - said, not left as an empty screen. */}
+      {items !== null && items.length === 0 && codes.length > 0 && (
+        <p className={styles.caughtUp}>You&rsquo;re all caught up.</p>
+      )}
       {first && <p className={styles.hello}>Hi, {first}</p>}
       {next && (
       <section className={styles.next} aria-label="Up next">
@@ -78,6 +82,10 @@ export function MyWork({ joinSlot }: { joinSlot: ReactNode }) {
           {next.action === 'review' ? 'Your last run' : next.action === 'results' ? 'Your results' : closes(next.expiresAt)}
           {names.length > 1 && next.name ? ` · ${next.name}` : ''}
         </span>
+        {/* WHAT TO LEARN, in the coach's own words for it. */}
+        {(next.action === 'review' || next.action === 'results') && next.workOn.length > 0 && (
+          <span className={styles.workOn}>Work on: {next.workOn.join(', ')}</span>
+        )}
         <Link to={linkFor(next)} className={`btn btn-primary ${styles.go}`}>
           {actionLabel(next)}
         </Link>
@@ -105,8 +113,11 @@ export function MyWork({ joinSlot }: { joinSlot: ReactNode }) {
           </ul>
         </section>
       )}
+      {/* Secondary whenever this device has played before - known at once,
+          before the check, so the box never autofocuses over work that is
+          about to appear. */}
       <section className={next ? styles.newCode : undefined} aria-label="Got a new code?">
-        {joinSlot}
+        {joinSlot(codes.length > 0)}
       </section>
     </div>
   );

@@ -366,7 +366,9 @@ export function PlayPage() {
         <PeiraLogo variant="light" markOnly size={28} />
       </div>
       {step.name === 'loading' && <LoadingState label="Loading…" />}
-      {step.name === 'home' && <MyWork joinSlot={<JoinStep initialCode="" onJoined={handleJoined} />} />}
+      {step.name === 'home' && (
+        <MyWork joinSlot={(secondary) => <JoinStep initialCode="" onJoined={handleJoined} secondary={secondary} />} />
+      )}
       {step.name === 'review' && (
         <HomeReview
           questions={step.joined.quiz.questions ?? []}

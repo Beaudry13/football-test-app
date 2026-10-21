@@ -46,6 +46,17 @@
   font-size: 14px;
   color: var(--peira-text-muted, var(--color-text-muted));
 }
+.workOn {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--peira-accent-text, var(--nb-accent));
+}
+.caughtUp {
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+}
 .go {
   margin-top: 8px;
   min-height: 52px;
