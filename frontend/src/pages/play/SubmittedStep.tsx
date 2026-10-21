@@ -121,9 +121,18 @@ export function SubmittedStep({
       ) : (
         <div>
           <ResultsView results={results} />
+          {/* The link outlives the code. It only talks about grading when
+              something is actually still waiting on the coach. */}
           <p className={styles.bookmarkNote}>
-            Written answers may still be waiting on your coach's review. Bookmark{' '}
-            <a href={resultsUrl}>this link</a> to check back later once they're graded.
+            {results.answers.some((a) => !a.is_excluded && a.is_correct === null) ? (
+              <>
+                Bookmark <a href={resultsUrl}>this link</a> to see the rest once your coach grades them.
+              </>
+            ) : (
+              <>
+                Bookmark <a href={resultsUrl}>this link</a> to see your results again later.
+              </>
+            )}
           </p>
         </div>
       )}

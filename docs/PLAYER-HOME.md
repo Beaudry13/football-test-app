@@ -26,6 +26,14 @@ A player should be able to open PEIRA and see *what do I need to do next?* witho
    - Lists the live codes a player may use now, by the **same rule the name picker uses** (`selectable_players_for_code`), with his own status on each.
    - Read-only and tested; **no route serves it**.
 
+## What build-first-3 adds (still reversible, no auth change)
+
+1. **A graded quiz's misses stay on Home.** After submitting, his results page reports how many he missed; the progress record says the quiz was graded, and Home offers **Review missed (N)**, opening his results page (`/results/CODE/NAME?player_id=…`, the link the finish screen bookmarks). Nothing missed: it drops off, as before.
+2. **Results lead with "What you missed"** on the football picture each question was asked on (the delivered one), with his answer and the correct one in words. The answer-reveal policy is unchanged: graded results still carry no per-option correctness and no question explanation.
+3. **"Work on: …"** on Up next when it is a review: the concepts of the missed questions, in the coach's words (read from what `/validate-code` already returns).
+4. **"You're all caught up."** when every code on the device is done with nothing to review.
+5. **The code box is second once the device has played** ("Got a new code?", no autofocus - on a phone the focus popped the keyboard over Up next). A never-used device still opens on the code box, titled "Enter your code".
+
 **Limits of the device-scoped home:**
 - It only knows codes played **on this device**. A new phone starts empty, and work sent but never opened on this device isn't listed.
 - Removing it is deleting the two localStorage prefixes and the UI; no server state depends on it.
