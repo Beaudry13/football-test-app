@@ -4,6 +4,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 vi.mock('../api/quizzes', () => ({ listQuizzes: vi.fn(), createQuiz: vi.fn() }))
 vi.mock('../api/questions', () => ({ createQuestion: vi.fn() }))
+vi.mock('../api/concepts', () => ({
+  listConcepts: vi.fn(async () => [{ id: 7, name: 'Quick game', is_archived: false }]),
+  createConcept: vi.fn(async (name: string) => ({ id: 99, name, is_archived: false })),
+}))
 // jsdom cannot draw; the picture itself is playImage's business, not this panel's.
 vi.mock('./playImage', () => ({
   IMAGE_WIDTH: 1376,
@@ -13,6 +17,7 @@ vi.mock('./playImage', () => ({
 }))
 import * as quizzesApi from '../api/quizzes'
 import * as questionsApi from '../api/questions'
+import * as conceptsApi from '../api/concepts'
 import * as image from './playImage'
 import { MakeQuestion } from './MakeQuestion'
 import { newPlay, type Play } from './engine/play'
@@ -71,6 +76,37 @@ beforeEach(() => {
   vi.mocked(questionsApi.createQuestion).mockResolvedValue({ id: 500 } as never)
 })
 
+describe('create once, teach everywhere', () => {
+  it("carries the concept he already named for this play's Rep decisions, and his point", async () => {
+    const play = newPlay('Trips Right Smash')
+    localStorage.setItem(
+      'peira.makeRep.v1',
+      JSON.stringify({ playId: play.id, who: null, role: '', concept: 'Quick game', repId: null, recentConcepts: ['Quick game'] }),
+    )
+    open(play)
+    expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Quick game')
+    fireEvent.change(screen.getByRole('textbox', { name: /Why/ }), { target: { value: 'Beat the corner inside.' } })
+    await waitFor(() => expect(conceptsApi.listConcepts).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
+    // The team's concept, matched by name - no duplicate made.
+    expect(input).toMatchObject({ concept_id: 7, answer_explanation: 'Beat the corner inside.' })
+    expect(conceptsApi.createConcept).not.toHaveBeenCalled()
+    localStorage.removeItem('peira.makeRep.v1')
+  })
+
+  it("names the man a Draw question tests, so Teach and a Rep made from it ring him", async () => {
+    const play = withMotion()
+    const x = play.players.find((p) => p.label === 'X')!
+    open(play)
+    fireEvent.change(screen.getByRole('combobox', { name: /Whose job/ }), { target: { value: x.id } })
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
+    expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).toMatchObject({ subject_man: x.id })
+  })
+})
+
 describe('Make a quiz question from a play', () => {
   it('makes a Draw question on a picture of the formation, in a new quiz named after the play, and opens it', async () => {
     open(newPlay('Trips Right Smash'))
@@ -84,7 +120,13 @@ describe('Make a quiz question from a play', () => {
     expect(quizzesApi.createQuiz).toHaveBeenCalledWith({ title: 'Trips Right Smash' })
     const [quizId, input, file] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(quizId).toBe(31)
-    expect(input).toEqual({ question_text: 'Draw your assignment on this play.', question_type: 'draw_response', options: [] })
+    expect(input).toEqual({
+      question_text: 'Draw your assignment on this play.',
+      question_type: 'draw_response',
+      options: [],
+      concept_id: null,
+      answer_explanation: null,
+    })
     expect((file as File).type).toBe('image/png')
     expect((file as File).name).toBe('Trips-Right-Smash.png')
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: false })

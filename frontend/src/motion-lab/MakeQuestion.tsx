@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
+import { createConcept, listConcepts, type Concept } from '../api/concepts'
+import { ConceptPicker } from '../components/concepts/ConceptPicker'
+import { resolveConcept } from '../components/concepts/conceptMatch'
 import { createQuestion } from '../api/questions'
 import { createQuiz, listQuizzes } from '../api/quizzes'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
 import { playerAt, px } from './playImageLayout'
-import { tapTargets } from './playRep'
+import { readRepMemory, tapTargets } from './playRep'
 import { TapCheck } from '../components/football/TapCheck'
 import { MomentPicker } from './MomentPicker'
 import { freezePicture, freezeSpots, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
@@ -26,6 +29,11 @@ import { assignmentDrawing, ballChoices, drawText, isBuiltDrawText, playImageFil
  *                           choices and the play's own target is the answer.
  * The question lands in a quiz the coach picks (or a new one named after the
  * play) and opens in the quiz editor, where everything about it can be changed.
+ *
+ * CREATE ONCE, TEACH EVERYWHERE. It carries what Make rep carries: the concept
+ * (what the coach will see missed - started from the one he already named for
+ * this play's Rep decisions) and his point, shown after a practice answer, in
+ * Review missed and when the question is taught - so nothing is typed twice.
  *
  * A play with pre-snap motion PLAYS IT for the player - the same moving
  * picture a Rep uses - and freezes at the decision moment the coach picks;
@@ -55,6 +63,11 @@ export function MakeQuestion({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
+  /* What Make rep already knows about this play: the concept he named for it. */
+  const [memory] = useState(() => readRepMemory())
+  const [concept, setConcept] = useState(() => (memory?.playId === play.id ? memory.concept : '') ?? '')
+  const [concepts, setConcepts] = useState<Concept[]>([])
+  const [why, setWhy] = useState('')
   const preview = useRef<HTMLCanvasElement>(null)
   const hasMotion = useMemo(() => hasPresnapMotion(play), [play])
   const [motion, setMotion] = useState(hasMotion)
@@ -81,6 +94,9 @@ export function MakeQuestion({
     listQuizzes()
       .then((list) => setQuizzes([...list].sort((a, b) => b.updated_at.localeCompare(a.updated_at))))
       .catch(() => setQuizzes([]))
+    listConcepts()
+      .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
+      .catch(() => setConcepts([]))
   }, [])
 
   // The picture the player will see, small.
@@ -136,6 +152,9 @@ export function MakeQuestion({
     setError(null)
     try {
       const image = await playImageFile(play, routes, kind === 'draw' ? who : null, presnap)
+      const conceptName = concept.trim()
+      // The concept the team already has, however it was typed; a new one only when it is new.
+      const conceptId = conceptName ? (resolveConcept(conceptName, concepts) ?? (await createConcept(conceptName))).id : null
       const target = quizId === 'new' ? (await createQuiz({ title: play.name })).id : quizId
       await createQuestion(
         target,
@@ -144,6 +163,10 @@ export function MakeQuestion({
           ...(presnap ? { presnap } : {}),
           ...(targets ? { tap_targets: targets } : {}),
           ...(motionPlayId !== null ? { motion_play_id: motionPlayId } : {}),
+          concept_id: conceptId,
+          answer_explanation: why.trim() || null,
+          // Which man the question tests, so Teach and a Rep made from it ring him.
+          ...(kind === 'draw' && who ? { subject_man: who } : {}),
           // His route in the play IS the answer: no drawing it twice.
           ...(answer ? { answer_drawing: answer } : {}),
         },
@@ -240,6 +263,18 @@ export function MakeQuestion({
       <label className="make-q-field">
         <span>Question</span>
         <textarea value={text} rows={2} onChange={(e) => setText(e.target.value)} />
+      </label>
+      <ConceptPicker
+        label="Concept - what you'll see missed"
+        value={concept}
+        onChange={setConcept}
+        concepts={concepts}
+        recent={memory?.recentConcepts ?? []}
+        classes={{ field: 'make-q-field make-rep-concept', chips: 'make-rep-sets', chip: '', strong: 'make-rep-mean', note: 'make-q-note' }}
+      />
+      <label className="make-q-field">
+        <span>Why (optional) - he sees it after a practice answer, and when you teach it</span>
+        <textarea value={why} rows={2} onChange={(e) => setWhy(e.target.value)} placeholder="The corner bails, so X is open on the slant." />
       </label>
       <label className="make-q-field">
         <span>Put it in</span>
