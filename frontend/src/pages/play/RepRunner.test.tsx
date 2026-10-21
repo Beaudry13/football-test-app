@@ -199,6 +199,9 @@ describe('A Situational Rep, for the player', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Review missed' }));
     expect(screen.getByRole('button', { name: 'Tap Z' }).className).toMatch(/wrong/);
     expect(screen.getByRole('button', { name: 'Tap X' }).className).toMatch(/right/);
+    // Said in words on the picture too, so nobody has to decode the colours.
+    expect(screen.getByRole('button', { name: 'Tap Z' })).toHaveTextContent('You');
+    expect(screen.getByRole('button', { name: 'Tap X' })).toHaveTextContent('Right');
     expect(screen.getByText('You chose: Z')).toBeInTheDocument();
     expect(screen.getByText(/Right answer:/)).toHaveTextContent('Right answer: X');
     expect(screen.getByText(/X runs the jet/)).toBeInTheDocument();

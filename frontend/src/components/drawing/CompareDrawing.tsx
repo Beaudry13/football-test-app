@@ -8,6 +8,9 @@ import styles from './CompareDrawing.module.css';
  * coach's answer drawing over them in green, and one toggle to see either
  * alone. Coach review ("Your answer") and a Rep player's self-review
  * ("Coach's answer") use the same picture.
+ *
+ * `shown` hands the toggle to the caller - the grading screen's one switch
+ * for every drawing on a question - and this picture then has none of its own.
  */
 export function CompareDrawing({
   imageUrl,
@@ -16,6 +19,7 @@ export function CompareDrawing({
   alt,
   answerLabel = 'Your answer',
   maxWidth,
+  shown: controlled,
 }: {
   imageUrl: string;
   document: DrawingDocument;
@@ -23,11 +27,13 @@ export function CompareDrawing({
   alt: string;
   answerLabel?: string;
   maxWidth?: number;
+  shown?: boolean;
 }) {
-  const [shown, setShown] = useState(true);
+  const [own, setShown] = useState(true);
+  const shown = controlled ?? own;
   return (
     <div className={styles.compare}>
-      {answer && (
+      {answer && controlled === undefined && (
         <button type="button" className={styles.toggle} aria-pressed={shown} onClick={() => setShown((s) => !s)}>
           <span className={styles.swatch} aria-hidden="true" />
           {answerLabel}

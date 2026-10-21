@@ -324,3 +324,88 @@
     padding-top: var(--space-4);
   }
 }
+
+/* --- Drawings ------------------------------------------------------------ */
+
+/* A DRAWING QUESTION'S STANDARD IS A DRAWING: the coach's answer, small, beside
+   the question it answers, with the one switch that lays it over every
+   player's drawing. Beside rather than under, so the sticky plane stays short
+   enough to leave the drawings room. */
+/* The plane holds the floated key, so the answers start below both. */
+.header {
+  display: flow-root;
+}
+
+.answerKey {
+  float: right;
+  width: 220px;
+  margin: 0 0 var(--space-2) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .answerKey {
+    float: none;
+    margin: 0 0 var(--space-3);
+  }
+}
+
+.keyToggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--nb-border);
+  background: transparent;
+  color: var(--nb-text);
+  font: inherit;
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.keySwatch {
+  width: 14px;
+  height: 0;
+  border-top: 3px dashed #22c55e;
+}
+
+/* Drawings are judged by eye, so they sit side by side: a grid of tiles, each
+   the player, his drawing and the call. */
+.drawingGrid {
+  display: grid;
+  /* Never wider than the screen: one column on a phone. */
+  grid-template-columns: repeat(auto-fill, minmax(min(388px, 100%), 1fr));
+  gap: var(--space-4);
+}
+
+.drawingGrid .row {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  margin-left: 0;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.drawingGrid .row:last-child {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.drawingGrid .rowCorrect {
+  border-left: 3px solid var(--peira-success);
+}
+
+.drawingGrid .rowIncorrect {
+  border-left: 3px solid var(--peira-danger);
+}
+
+.drawingGrid .drawing {
+  max-width: none;
+  max-height: none;
+}

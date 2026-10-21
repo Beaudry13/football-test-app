@@ -46,6 +46,15 @@ export function Decision({
         ...correctIds.map((id) => [id, 'right' as const]),
       ])
     : undefined;
+  /* AND SAID IN WORDS ON THE PICTURE, so the colours never have to be decoded:
+     "You" on his pick when it was not it, "Right" on the answer - "You ✓"
+     when he picked it. */
+  const badges = correctIds
+    ? Object.fromEntries([
+        ...(chosen ?? []).filter((id) => !correctIds.includes(id)).map((id) => [id, 'You']),
+        ...correctIds.map((id) => [id, (chosen ?? []).includes(id) ? 'You ✓' : 'Right']),
+      ])
+    : undefined;
   return (
     <>
       {role && <YouAre role={role} />}
@@ -60,6 +69,7 @@ export function Decision({
         chosen={chosen}
         tone={tone}
         marks={marks}
+        badges={badges}
         disabled={disabled}
         still={still}
         onMotionDone={onMotionDone}
