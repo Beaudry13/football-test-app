@@ -601,6 +601,10 @@ def delivery_question_ids(attempt, quiz) -> list[int]:
 
     live_set = set(live)
     kept = [qid for qid in stored if qid in live_set]
+    # TRY THE MISSES AGAIN: a retry is given exactly the misses it was frozen
+    # with (still deliverable) - never the rest of the quiz.
+    if getattr(attempt, "retry_of_attempt_id", None) is not None:
+        return kept
     seen = set(kept)
     appended = [qid for qid in live if qid not in seen]
     return kept + appended

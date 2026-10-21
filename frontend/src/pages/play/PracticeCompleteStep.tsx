@@ -19,11 +19,17 @@ export function PracticeCompleteStep({
   feedback,
   review,
   onTryAgain,
+  onRetryMisses,
+  isRetry = false,
 }: {
   feedback: PracticeFeedback[];
   /** The questions and his picks, for Review Missed - the same review a Rep ends with. */
   review?: PracticeReview;
   onTryAgain: () => void;
+  /** TRY THE MISSES AGAIN: a new practice run holding only what this one missed. */
+  onRetryMisses?: () => void;
+  /** This run was his misses again. */
+  isRetry?: boolean;
 }) {
   const summary = summarisePractice(feedback);
   const byQuestion = Object.fromEntries(feedback.map((f) => [f.question_id, f]));
@@ -39,8 +45,8 @@ export function PracticeCompleteStep({
         at={reviewing}
         onAt={setReviewing}
         onDone={() => setReviewing(null)}
-        onRunAgain={onTryAgain}
-        runAgainLabel="Try again"
+        onRunAgain={onRetryMisses ?? onTryAgain}
+        runAgainLabel={onRetryMisses ? 'Try the misses again' : 'Try again'}
       />
     );
   }
@@ -50,7 +56,7 @@ export function PracticeCompleteStep({
       <div className={styles.celebrationBadge}>
         <Icon name="check" size={30} strokeWidth={3} />
       </div>
-      <h1>Practice complete</h1>
+      <h1>{isRetry ? 'Your misses, again' : 'Practice complete'}</h1>
 
       {summary.percent !== null ? (
         <p className={styles.practiceScore}>
@@ -77,18 +83,31 @@ export function PracticeCompleteStep({
         This was practice &mdash; none of it counts toward your grades.
       </p>
 
+      {/* SEE WHAT I MISSED -> TRY IT AGAIN: review first, then just the misses;
+          the whole quiz again stays, quietly. Nothing missed: try it again. */}
       {missed.length > 0 && (
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-primary"
           onClick={() => setReviewing(review!.questions.indexOf(missed[0]))}
         >
           Review missed
         </button>
       )}
-      <button type="button" className="btn btn-primary" onClick={onTryAgain}>
-        Try again
-      </button>
+      {missed.length > 0 && onRetryMisses ? (
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onRetryMisses}>
+            Try the misses again
+          </button>
+          <button type="button" className={styles.quietAction} onClick={onTryAgain}>
+            Start the whole quiz over
+          </button>
+        </>
+      ) : (
+        <button type="button" className={missed.length > 0 ? 'btn btn-secondary' : 'btn btn-primary'} onClick={onTryAgain}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }

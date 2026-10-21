@@ -15,6 +15,7 @@ export function HomeReview({
   isRep,
   onDone,
   onRunAgain,
+  onRetryMisses,
 }: {
   /** The quiz's questions as the code delivers them now. */
   questions: Question[];
@@ -22,6 +23,8 @@ export function HomeReview({
   isRep: boolean;
   onDone: () => void;
   onRunAgain: () => void;
+  /** TRY THE MISSES AGAIN - offered when this device knows the run they came from. */
+  onRetryMisses?: () => void;
 }) {
   const missed = review.missedIds
     .map((id) => questions.find((q) => q.id === id))
@@ -36,8 +39,8 @@ export function HomeReview({
       at={at}
       onAt={setAt}
       onDone={onDone}
-      onRunAgain={onRunAgain}
-      runAgainLabel={isRep ? 'Run it again' : 'Try again'}
+      onRunAgain={onRetryMisses ?? onRunAgain}
+      runAgainLabel={onRetryMisses ? 'Try the misses again' : isRep ? 'Run it again' : 'Try again'}
     />
   );
 }

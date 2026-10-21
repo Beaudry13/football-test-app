@@ -30,7 +30,9 @@ export interface ClaimAttemptResponse {
  *  the token this device holds for this code. The PIN travels in the body of
  *  this one request and is stored nowhere. */
 export function claimAttempt(
-  input: { access_code_id: number; player_id: number; pin?: string },
+  /** retry_of_attempt_id: TRY THE MISSES AGAIN - one of his finished practice
+   *  runs on this code; the server works out what it missed. */
+  input: { access_code_id: number; player_id: number; pin?: string; retry_of_attempt_id?: number },
   token?: string | null,
 ): Promise<ClaimAttemptResponse> {
   return api.post<ClaimAttemptResponse>('/play/claim', input, {
@@ -67,6 +69,8 @@ export function startAttempt(input: {
    * NameStep. Never trusted blindly server-side; validated against the
    * activation's actual effective roster. */
   player_id?: number;
+  /** TRY THE MISSES AGAIN (see claimAttempt). */
+  retry_of_attempt_id?: number;
 }): Promise<AttemptState> {
   return api.post<AttemptState>('/play/start', input, { auth: false });
 }

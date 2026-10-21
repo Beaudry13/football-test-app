@@ -67,6 +67,7 @@ from app.services.access_codes import (
 )
 from app.services.attempts import (
     DrawingConflict,
+    deliverable_question_ids,
     deliverable_questions,
     find_attempt,
     frozen_question_order,
@@ -346,6 +347,9 @@ def _attempt_state(attempt: PlayerAttempt) -> dict:
     return {
         "attempt_id": attempt.id,
         "status": attempt.status.value,
+        # TRY THE MISSES AGAIN: this run holds only an earlier run's misses, so
+        # a refresh still knows to say so (and not to compare it with a run).
+        "is_retry": attempt.retry_of_attempt_id is not None,
         # The attempt's own frozen mode, not the code's current one - if a
         # coach edits the code mid-session the work already done keeps the
         # rules it was started under.
@@ -490,7 +494,11 @@ def start_attempt():
     # name - or a bare player_id - may not reach or begin a protected canonical
     # attempt. /claim, which has already authenticated the player, does not fence.
     attempt, created = _start_or_resume(
-        access_code, data["player_name"], data.get("player_id"), fenced=True
+        access_code,
+        data["player_name"],
+        data.get("player_id"),
+        fenced=True,
+        retry_of_attempt_id=data.get("retry_of_attempt_id"),
     )
     if created:
         return jsonify(_attempt_state(attempt)), 201
@@ -504,6 +512,7 @@ def _start_or_resume(
     *,
     commit: bool = True,
     fenced: bool = False,
+    retry_of_attempt_id: int | None = None,
 ) -> tuple[PlayerAttempt, bool]:
     """Resume this player's attempt under this code, or begin one.
 
@@ -529,6 +538,11 @@ def _start_or_resume(
         pin_required / pick_player, and no player_id IS NULL attempt is ever
         created in its place.
     With enforcement off, or fenced=False, this is exactly Phase 3a.
+
+    `retry_of_attempt_id` (TRY THE MISSES AGAIN) changes only WHAT a NEW
+    attempt holds - the misses of that finished practice run of his - and only
+    once every rule above has let him begin. An attempt underway is handed back
+    as always, retry or not. See _retry_of.
     """
     # AN ATTEMPT ALREADY UNDERWAY IS ITS OWN AUTHORITY.
     #
@@ -655,6 +669,17 @@ def _start_or_resume(
             reason="no_deliverable_questions",
         )
 
+    # TRY THE MISSES AGAIN. Decided here, after every rule a start obeys, with
+    # the identity settled: the misses of HIS finished practice run, in the
+    # order he met them - worked out from that run, never taken from the client.
+    retry_of = None
+    question_order = frozen_question_order(
+        access_code.quiz,
+        randomize=access_code.is_practice and access_code.randomize_questions,
+    )
+    if retry_of_attempt_id is not None:
+        retry_of, question_order = _retry_of(access_code, retry_of_attempt_id, player_name, player_id)
+
     attempt = PlayerAttempt(
         quiz_id=access_code.quiz_id,
         access_code_id=access_code.id,
@@ -673,11 +698,10 @@ def _start_or_resume(
         mode=access_code.mode,
         # Shuffled ONCE, here, and never again. Graded attempts always get
         # None, so graded ordering is unchanged by construction rather than by
-        # a filter somebody could forget to apply.
-        question_order=frozen_question_order(
-            access_code.quiz,
-            randomize=access_code.is_practice and access_code.randomize_questions,
-        ),
+        # a filter somebody could forget to apply. A retry's order is its
+        # misses, as he met them.
+        question_order=question_order,
+        retry_of_attempt_id=retry_of.id if retry_of is not None else None,
     )
     try:
         # Flushed, not committed, so the snapshot rows below join the SAME
@@ -732,6 +756,49 @@ def _start_or_resume(
         ) from exc
 
     return attempt, True
+
+
+def _retry_of(
+    access_code: AccessCode, attempt_id: int, player_name: str, player_id: int | None
+) -> tuple[PlayerAttempt, list[int]]:
+    """TRY THE MISSES AGAIN: the finished practice run a retry tries, and the
+    questions it missed - in the order he met them, still deliverable.
+
+    Practice only. A graded attempt is an assessment: it is never tried again
+    from the player's side (a coach sends a Retest), so its misses can never
+    reach practice feedback this way. The run must be HIS (by player_id when
+    canonical, else his exact legacy name) and on THIS code. Nothing about the
+    run changes: its answers, verdicts and token are left exactly as they are.
+
+    A coach-graded drawing he got wrong is a miss like any other; one nobody
+    has judged is not, and is not retried.
+    """
+    unavailable = ApiError(
+        "There is nothing to try again here.", status_code=422, reason="retry_not_available"
+    )
+    if not access_code.is_practice:
+        raise unavailable
+    source = db.session.get(PlayerAttempt, attempt_id)
+    if (
+        source is None
+        or source.access_code_id != access_code.id
+        or source.status != AttemptStatus.SUBMITTED
+    ):
+        raise unavailable
+    if player_id is not None:
+        his = source.player_id == player_id
+    else:
+        his = source.player_id is None and source.player_name.strip().casefold() == player_name.strip().casefold()
+    if not his:
+        raise unavailable
+    missed = {answer.question_id for answer in source.answers if answer.is_correct is False}
+    deliverable = set(deliverable_question_ids(access_code.quiz))
+    order = [
+        qid for qid in presented_question_ids(source, access_code.quiz) if qid in missed and qid in deliverable
+    ]
+    if not order:
+        raise ApiError("Nothing was missed on that run.", status_code=422, reason="nothing_to_retry")
+    return source, order
 
 
 def _fenced_existing(
@@ -924,15 +991,16 @@ def claim_attempt():
     # stronger proof, and a player re-entering it - typically right after
     # token_revoked - must never be refused because of the stale token their
     # device is still attaching. A wrong PIN is a wrong PIN, token or not.
+    retry_of_attempt_id = data.get("retry_of_attempt_id")
     if data["pin"] is not None:
-        return _claim_with_pin(access_code, player, data["pin"])
+        return _claim_with_pin(access_code, player, data["pin"], retry_of_attempt_id)
     raw_token = attempt_tokens.token_from_request()
     if raw_token is not None:
-        return _claim_with_token(access_code, player, raw_token)
+        return _claim_with_token(access_code, player, raw_token, retry_of_attempt_id)
     raise player_enforcement.auth_error(player_enforcement.PIN_REQUIRED)
 
 
-def _claim_with_pin(access_code: AccessCode, player: Player, pin: str):
+def _claim_with_pin(access_code: AccessCode, player: Player, pin: str, retry_of_attempt_id: int | None = None):
     """ONE TRANSACTION from PIN to token.
 
     1. lock the credential row and apply the throttle (verify_player_pin);
@@ -963,7 +1031,9 @@ def _claim_with_pin(access_code: AccessCode, player: Player, pin: str):
             db.session.commit()
             return _claimed(player, existing, token, created=False, include_state=False)
 
-        attempt, created = _start_or_resume(access_code, player.full_name, player.id, commit=False)
+        attempt, created = _start_or_resume(
+            access_code, player.full_name, player.id, commit=False, retry_of_attempt_id=retry_of_attempt_id
+        )
         if attempt.player_id is None:
             # _start_or_resume's lookup can fall back to a legacy attempt
             # started under this player's name before they were linked. Tokens
@@ -980,7 +1050,9 @@ def _claim_with_pin(access_code: AccessCode, player: Player, pin: str):
     return _claimed(player, attempt, token, created=created, include_state=True)
 
 
-def _claim_with_token(access_code: AccessCode, player: Player, raw_token: str):
+def _claim_with_token(
+    access_code: AccessCode, player: Player, raw_token: str, retry_of_attempt_id: int | None = None
+):
     """Continue with the token this device already holds. Never rotates it.
 
     Checked against the player's newest attempt under THIS code, locked, so a
@@ -1003,7 +1075,9 @@ def _claim_with_token(access_code: AccessCode, player: Player, raw_token: str):
 
         # A finished practice run: the retake is a NEW attempt with its own
         # token. The finished attempt keeps its token, which reads only it.
-        retake, created = _start_or_resume(access_code, player.full_name, player.id, commit=False)
+        retake, created = _start_or_resume(
+            access_code, player.full_name, player.id, commit=False, retry_of_attempt_id=retry_of_attempt_id
+        )
         if retake.player_id is None:
             raise ApiError(_LEGACY_ATTEMPT_MESSAGE, status_code=409, reason="legacy_attempt")
         if not created:

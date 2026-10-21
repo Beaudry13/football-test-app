@@ -272,3 +272,38 @@ describe('A Situational Rep, for the player', () => {
     expect(screen.queryByText(/Not quite/)).toBeNull();
   });
 });
+
+describe('try the misses again', () => {
+  async function finishWithAMiss(overrides: Partial<Parameters<typeof RepRunner>[0]> = {}) {
+    const onRunAgain = run(overrides);
+    fireEvent.click(screen.getByRole('button', { name: 'Stay boundary' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Me' }));
+    expect(await screen.findByText(/Correct/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+    await screen.findByText('1 of 2');
+    return onRunAgain;
+  }
+
+  it('after the review, the one thing to do next is the misses - the whole rep again stays, quietly', async () => {
+    const onRetryMisses = vi.fn();
+    const onRunAgain = await finishWithAMiss({ onRetryMisses });
+    expect(screen.getByRole('button', { name: 'Try the misses again' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review missed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try the misses again' }));
+    expect(onRetryMisses).toHaveBeenCalledTimes(1);
+    expect(onRunAgain).not.toHaveBeenCalled();
+  });
+
+  it('the whole rep again is one quiet click away', async () => {
+    const onRunAgain = await finishWithAMiss({ onRetryMisses: vi.fn() });
+    fireEvent.click(screen.getByRole('button', { name: 'Run the whole rep again' }));
+    expect(onRunAgain).toHaveBeenCalled();
+  });
+
+  it('a run that is his misses again says so, and is not measured against a run', async () => {
+    await finishWithAMiss({ isRetry: true, onRetryMisses: vi.fn() });
+    expect(screen.getByText('Your misses, again')).toBeInTheDocument();
+    expect(repsApi.getRepProgress).not.toHaveBeenCalled();
+  });
+});

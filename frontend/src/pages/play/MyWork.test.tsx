@@ -77,11 +77,12 @@ describe('Player home', () => {
     recordDone('CLEAN1', 0);
     vi.mocked(playApi.validateCode).mockImplementation(async (code) => joined(`Rep ${code}`, { kind: 'REP' }));
     home();
+    // His own misses come before an assigned Rep (the owner's order).
     const next = within(await screen.findByLabelText('Up next'));
-    expect(next.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '/play/GOING1');
+    expect(next.getByRole('link', { name: 'Review missed (2)' })).toHaveAttribute('href', '/play/MISSED?review=1');
     const also = within(screen.getByLabelText('Also waiting'));
-    expect(also.getByRole('link', { name: /Rep MISSED/ })).toHaveAttribute('href', '/play/MISSED?review=1');
-    expect(also.getByText('Review missed (2)')).toBeInTheDocument();
+    expect(also.getByRole('link', { name: /Rep GOING1/ })).toHaveAttribute('href', '/play/GOING1');
+    expect(also.getByText('Continue')).toBeInTheDocument();
     expect(screen.queryByText(/Rep CLEAN1/)).toBeNull();
   });
 
@@ -170,7 +171,7 @@ describe('a graded quiz he missed some of', () => {
     expect(screen.queryByText(/Quiz CLEAN2/)).toBeNull();
   });
 
-  it('open work still leads; his results wait behind it', async () => {
+  it('his graded misses come before an assigned Rep', async () => {
     localStorage.clear();
     for (const code of ['GRADE1', 'REP001']) rememberPlayer(code, marcus);
     recordDone('GRADE1', 1, undefined, { graded: true });
@@ -179,9 +180,10 @@ describe('a graded quiz he missed some of', () => {
     );
     home();
     const next = within(await screen.findByLabelText('Up next'));
-    expect(next.getByRole('heading', { name: 'Trips Jet - Boundary safety' })).toBeInTheDocument();
+    expect(next.getByRole('heading', { name: 'Week 7 coverage' })).toBeInTheDocument();
+    expect(next.getByRole('link', { name: 'Review missed (1)' })).toHaveAttribute('href', '/results/GRADE1/Marcus%20Hill?player_id=21');
     const also = within(screen.getByLabelText('Also waiting'));
-    expect(also.getByRole('link', { name: /Week 7 coverage/ })).toHaveAttribute('href', '/results/GRADE1/Marcus%20Hill?player_id=21');
+    expect(also.getByRole('link', { name: /Trips Jet/ })).toHaveAttribute('href', '/play/REP001');
   });
 });
 
@@ -253,5 +255,30 @@ describe('the code box is the second thing once he has played here', () => {
     localStorage.clear();
     home();
     expect(screen.getByLabelText('Code')).toHaveAttribute('data-secondary', 'false');
+  });
+});
+
+describe('the order a player should do things in', () => {
+  it('a retest, then his misses (reviewing or retrying), then a Rep, then a graded quiz, then practice', async () => {
+    localStorage.clear();
+    for (const code of ['PRAC01', 'QUIZ01', 'REP001', 'RETRY1', 'RETEST']) rememberPlayer(code, marcus);
+    recordStarted('RETRY1', { retry: true });
+    vi.mocked(playApi.validateCode).mockImplementation(async (code) => {
+      if (code === 'RETEST') return joined('Retest', { kind: 'REP', retest_of: { id: 9 } as never });
+      if (code === 'RETRY1') return joined('Trips Jet misses', { kind: 'REP' });
+      if (code === 'REP001') return joined('Bunch Rt', { kind: 'REP' });
+      if (code === 'QUIZ01') return joined('Week 7 coverage', {}, 'GRADED');
+      return joined('Practice install', {});
+    });
+    home();
+    const next = within(await screen.findByLabelText('Up next'));
+    expect(next.getByRole('heading', { name: 'Retest' })).toBeInTheDocument();
+    const rows = within(screen.getByLabelText('Also waiting')).getAllByRole('link').map((a) => a.textContent);
+    expect(rows[0]).toMatch(/Trips Jet misses/);
+    expect(rows[0]).toMatch(/Your misses, again/);
+    expect(rows[0]).toMatch(/Continue/);
+    expect(rows[1]).toMatch(/Bunch Rt/);
+    expect(rows[2]).toMatch(/Week 7 coverage/);
+    expect(rows[3]).toMatch(/Practice install/);
   });
 });

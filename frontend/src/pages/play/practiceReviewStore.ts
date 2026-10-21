@@ -18,6 +18,8 @@ interface Stored {
   /** The question ids in the order he met them. */
   order: number[];
   chosen: Record<number, number[]>;
+  /** The finished run - what "Try the misses again" retries. */
+  attemptId?: number;
 }
 
 const keyFor = (code: string) => `${PREFIX}:${code.trim().toUpperCase()}`;
@@ -29,9 +31,10 @@ export function savePracticeReview(
   feedback: PracticeFeedback[],
   order: number[],
   chosen: Record<number, number[]>,
+  attemptId?: number,
 ): void {
   try {
-    const value: Stored = { who: whoOf(player), feedback, order, chosen };
+    const value: Stored = { who: whoOf(player), feedback, order, chosen, ...(attemptId !== undefined ? { attemptId } : {}) };
     window.sessionStorage.setItem(keyFor(code), JSON.stringify(value));
   } catch {
     // A private window or a full store: the review simply does not survive a refresh.
@@ -45,7 +48,12 @@ export function readPracticeReview(code: string, player: RememberedPlayer): Omit
     if (!raw) return null;
     const value = JSON.parse(raw) as Stored;
     if (value.who !== whoOf(player) || !Array.isArray(value.feedback) || !Array.isArray(value.order)) return null;
-    return { feedback: value.feedback, order: value.order, chosen: value.chosen ?? {} };
+    return {
+      feedback: value.feedback,
+      order: value.order,
+      chosen: value.chosen ?? {},
+      attemptId: typeof value.attemptId === 'number' ? value.attemptId : undefined,
+    };
   } catch {
     return null;
   }

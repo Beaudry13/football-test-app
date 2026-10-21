@@ -22,6 +22,8 @@ export interface StoredReview {
   chosen: Record<number, number[]>;
   /** The verdicts he was shown (a Rep's carry the right answer). */
   feedback: PracticeFeedback[];
+  /** The run they were missed on - what "Try the misses again" retries. */
+  attemptId?: number;
 }
 
 export interface WorkProgress {
@@ -35,6 +37,8 @@ export interface WorkProgress {
   /** A graded quiz's missed questions (a practice run's are in `review`), so
    *  his home can name what they were about. */
   missedIds?: number[];
+  /** In progress, and it is his misses again: it ranks with reviewing them. */
+  retry?: boolean;
 }
 
 function key(prefix: string, code: string): string {
@@ -68,6 +72,7 @@ export function progressOf(code: string): WorkProgress | null {
       review: value.review && Array.isArray(value.review.missedIds) ? value.review : undefined,
       graded: value.graded === true ? true : undefined,
       missedIds: Array.isArray(value.missedIds) ? value.missedIds.filter((id) => typeof id === 'number') : undefined,
+      retry: value.retry === true ? true : undefined,
     };
   } catch {
     return null;
@@ -83,8 +88,8 @@ function write(code: string, progress: WorkProgress): void {
 }
 
 /** He opened it: it is in progress (a finished run stays finished until a new one starts). */
-export function recordStarted(code: string): void {
-  write(code, { state: 'started', missed: 0, at: new Date().toISOString() });
+export function recordStarted(code: string, { retry = false } = {}): void {
+  write(code, { state: 'started', missed: 0, at: new Date().toISOString(), ...(retry ? { retry: true } : {}) });
 }
 
 /** He finished a run: how many he missed, and what to review. A graded quiz
@@ -118,12 +123,14 @@ export function reviewFrom(
   order: number[],
   feedback: PracticeFeedback[],
   chosen: Record<number, number[]>,
+  attemptId?: number,
 ): StoredReview {
   const wrong = new Set(feedback.filter((f) => f.is_correct === false).map((f) => f.question_id));
   return {
     missedIds: order.filter((id) => wrong.has(id)),
     chosen: Object.fromEntries(Object.entries(chosen).filter(([id]) => wrong.has(Number(id)))),
     feedback: feedback.filter((f) => wrong.has(f.question_id)),
+    ...(attemptId !== undefined ? { attemptId } : {}),
   };
 }
 
@@ -134,6 +141,8 @@ export interface WorkItem {
   kind: 'REP' | 'QUIZ';
   retest: boolean;
   graded: boolean;
+  /** In progress, and it is his misses again. */
+  retry: boolean;
   expiresAt: string;
   /** review: his last practice run's misses here; results: a graded quiz's, on his results page. */
   action: 'start' | 'continue' | 'review' | 'results';
@@ -144,13 +153,15 @@ export interface WorkItem {
   workOn: string[];
 }
 
-/** A retest first - Rep or quiz, a second look at something he missed - then
- *  Reps, then quizzes (graded and closing soonest first), then review. */
+/** THE ORDER A PLAYER SHOULD DO THINGS IN: a retest first (a second look the
+ *  coach sent), then his own misses - reviewing them, or trying them again -
+ *  then an assigned Rep, then an assigned quiz (graded before practice), each
+ *  closing soonest first. */
 function rank(item: WorkItem): number {
-  if (item.action === 'review' || item.action === 'results') return 5;
   if (item.retest) return 0;
-  if (item.kind === 'REP') return 1;
-  return item.graded ? 2 : 3;
+  if (item.action === 'review' || item.action === 'results' || item.retry) return 1;
+  if (item.kind === 'REP') return 2;
+  return item.graded ? 3 : 4;
 }
 
 export function itemFor(code: string, joined: ValidateCodeResponse, progress: WorkProgress | null): WorkItem | null {
@@ -160,6 +171,7 @@ export function itemFor(code: string, joined: ValidateCodeResponse, progress: Wo
     kind: joined.quiz.kind === 'REP' ? ('REP' as const) : ('QUIZ' as const),
     retest: !!joined.quiz.retest_of,
     graded: joined.mode !== 'PRACTICE',
+    retry: progress?.state === 'started' && progress.retry === true,
     expiresAt: joined.expires_at,
     missed: progress?.missed ?? 0,
     name: rememberedPlayer(code)?.name ?? null,

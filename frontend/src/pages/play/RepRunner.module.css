@@ -227,6 +227,19 @@
   flex-direction: column;
   gap: 10px;
 }
+/* The whole run again, after "Try the misses again": there, but quiet. */
+.quietAction {
+  align-self: center;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--peira-text-muted);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
 .summaryActions :global(.btn) {
   min-height: 52px;
   font-size: 17px;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getQuizTitleByCode, validateCode } from '../../api/play';
+import { ApiError } from '../../api/client';
 import type {
   AssessmentMode,
   AttemptState,
@@ -51,7 +52,14 @@ type Step =
   /** His last run's misses, reviewed from Player Home without a new run. */
   | { name: 'review'; code: string; joined: ValidateCodeResponse; review: StoredReview }
   | { name: 'join' }
-  | { name: 'name'; code: string; joined: ValidateCodeResponse; remembered: RememberedPlayer | null }
+  | {
+      name: 'name';
+      code: string;
+      joined: ValidateCodeResponse;
+      remembered: RememberedPlayer | null;
+      /** TRY THE MISSES AGAIN, waiting on him saying who he is. */
+      retryOf?: number;
+    }
   | {
       name: 'pin';
       code: string;
@@ -60,6 +68,8 @@ type Step =
       notice: string | null;
       carried: CarriedWork | null;
       run: number;
+      /** TRY THE MISSES AGAIN, carried through the PIN the server asked for. */
+      retryOf?: number;
     }
   | {
       name: 'quiz';
@@ -80,6 +90,8 @@ type Step =
       deliveredQuestions?: DeliveredPlayerQuestion[];
       initialFeedback: PracticeFeedback[];
       carryOverAnswers?: Record<number, PlayerAnswer>;
+      /** This run holds only an earlier run's misses (the server says so). */
+      isRetry: boolean;
       /** Bumped on Try Again. Remounts QuizStep so its answers, feedback and
        * lock state all reset - the alternative, resetting each piece from
        * outside, is the kind of partial reset that leaves one stale field
@@ -95,6 +107,9 @@ type Step =
       feedback: PracticeFeedback[];
       review?: PracticeReview;
       run: number;
+      /** The finished run - what "Try the misses again" retries. */
+      attemptId?: number;
+      isRetry: boolean;
     };
 
 /** A roster label for a player the server named (a PIN was required for an id
@@ -212,6 +227,8 @@ export function PlayPage() {
                 chosen: finished.chosen,
               },
               run: 0,
+              attemptId: finished.attemptId,
+              isRetry: false,
             });
             return;
           }
@@ -251,6 +268,7 @@ export function PlayPage() {
     outcome: EntryOutcome,
     run: number,
     carried: CarriedWork | null = null,
+    retryOf?: number,
   ) {
     if (outcome.kind === 'pin') {
       setStep({
@@ -261,6 +279,7 @@ export function PlayPage() {
         notice: outcome.notice,
         carried,
         run,
+        retryOf,
       });
       return;
     }
@@ -274,7 +293,7 @@ export function PlayPage() {
     // run that happens to follow it.
     const carryOverAnswers = carried && carried.attemptId === attempt.attempt_id ? carried.answers : undefined;
     // Player Home: this is in progress now (a new run replaces a finished one).
-    recordStarted(code);
+    recordStarted(code, { retry: !!attempt.is_retry });
     setStep({
       name: 'quiz',
       code,
@@ -291,8 +310,31 @@ export function PlayPage() {
       deliveredQuestions: attempt.questions,
       initialFeedback: attempt.feedback,
       carryOverAnswers,
+      isRetry: !!attempt.is_retry,
       run,
     });
+  }
+
+  /** TRY THE MISSES AGAIN: a new practice run holding only what `fromAttempt`
+   *  missed - continuing as the same player, so a device holding his token
+   *  needs no PIN. If the server has nothing left to retry, the whole run. */
+  async function retryMisses(code: string, joined: ValidateCodeResponse, who: RememberedPlayer, fromAttempt: number, run: number) {
+    clearPracticeReview(code);
+    try {
+      const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true, retryOf: fromAttempt });
+      follow(code, joined, who, outcome, run + 1, null, fromAttempt);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 422) {
+        try {
+          const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true });
+          follow(code, joined, who, outcome, run + 1);
+          return;
+        } catch {
+          // Back to "Continue as", below.
+        }
+      }
+      setStep({ name: 'name', code, joined, remembered: who, retryOf: fromAttempt });
+    }
   }
 
   function handleJoined(code: string, joined: ValidateCodeResponse) {
@@ -380,6 +422,17 @@ export function PlayPage() {
             window.history.replaceState(window.history.state, '', `/play/${encodeURIComponent(step.code)}`);
             setStep({ name: 'name', code: step.code, joined: step.joined, remembered: rememberedPlayer(step.code) });
           }}
+          onRetryMisses={
+            step.review.attemptId !== undefined
+              ? () => {
+                  const from = step.review.attemptId!;
+                  window.history.replaceState(window.history.state, '', `/play/${encodeURIComponent(step.code)}`);
+                  const who = rememberedPlayer(step.code);
+                  if (who) void retryMisses(step.code, step.joined, who, from, 0);
+                  else setStep({ name: 'name', code: step.code, joined: step.joined, remembered: null, retryOf: from });
+                }
+              : undefined
+          }
         />
       )}
       {step.name === 'join' && <JoinStep initialCode={urlCode ?? ''} onJoined={handleJoined} />}
@@ -400,8 +453,9 @@ export function PlayPage() {
               accessCodeId: step.joined.access_code_id,
               player: who,
               continuing,
+              retryOf: step.retryOf,
             });
-            follow(step.code, step.joined, who, outcome, 0);
+            follow(step.code, step.joined, who, outcome, 0, null, step.retryOf);
           }}
         />
       )}
@@ -416,8 +470,9 @@ export function PlayPage() {
               accessCodeId: step.joined.access_code_id,
               player: step.player,
               pin,
+              retryOf: step.retryOf,
             });
-            follow(step.code, step.joined, step.player, outcome, step.run, step.carried);
+            follow(step.code, step.joined, step.player, outcome, step.run, step.carried, step.retryOf);
           }}
           onNotYou={() => {
             forgetPlayer(step.code);
@@ -425,6 +480,8 @@ export function PlayPage() {
           }}
         />
       )}
+      {/* His misses again: said once, above the run. */}
+      {step.name === 'quiz' && step.isRetry && <p className={styles.retryNote}>Your misses, again</p>}
       {step.name === 'quiz' && step.joined.quiz.kind === 'REP' && (
         <RepRunner
           key={`${step.run}:${step.attemptId}`}
@@ -441,9 +498,11 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onRunAgain={() => void handleRunRepAgain()}
+          onRetryMisses={() => void retryMisses(step.code, step.joined, step.player, step.attemptId, step.run)}
+          isRetry={step.isRetry}
           afterFinish={<OtherWorkLink code={step.code} />}
           onFinished={(order, feedback, chosen) => {
-            const review = reviewFrom(order, feedback, chosen);
+            const review = reviewFrom(order, feedback, chosen, step.attemptId);
             recordDone(step.code, review.missedIds.length, review);
           }}
         />
@@ -471,9 +530,11 @@ export function PlayPage() {
           }}
           onPracticeComplete={(feedback, review) => {
             if (review) {
-              savePracticeReview(step.code, step.player, feedback, review.questions.map((q) => q.id), review.chosen);
+              savePracticeReview(step.code, step.player, feedback, review.questions.map((q) => q.id), review.chosen, step.attemptId);
             }
-            const stored = review ? reviewFrom(review.questions.map((q) => q.id), feedback, review.chosen) : undefined;
+            const stored = review
+              ? reviewFrom(review.questions.map((q) => q.id), feedback, review.chosen, step.attemptId)
+              : undefined;
             recordDone(step.code, feedback.filter((f) => f.is_correct === false).length, stored);
             setStep({
               name: 'practice-complete',
@@ -483,13 +544,25 @@ export function PlayPage() {
               feedback,
               review,
               run: step.run,
+              attemptId: step.attemptId,
+              isRetry: step.isRetry,
             });
           }}
         />
       )}
       {step.name === 'practice-complete' && (
         <>
-          <PracticeCompleteStep feedback={step.feedback} review={step.review} onTryAgain={() => void handleTryAgain()} />
+          <PracticeCompleteStep
+            feedback={step.feedback}
+            review={step.review}
+            isRetry={step.isRetry}
+            onTryAgain={() => void handleTryAgain()}
+            onRetryMisses={
+              step.attemptId !== undefined
+                ? () => void retryMisses(step.code, step.joined, step.player, step.attemptId!, step.run)
+                : undefined
+            }
+          />
           <OtherWorkLink code={step.code} />
         </>
       )}

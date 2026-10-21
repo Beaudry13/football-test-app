@@ -976,6 +976,8 @@ export interface DeliveredPlayerQuestion {
 export interface AttemptState {
   attempt_id: number;
   status: 'in_progress' | 'submitted';
+  /** TRY THE MISSES AGAIN: this run holds only an earlier run's misses. */
+  is_retry?: boolean;
   /** The attempt's own frozen mode. A coach editing the code mid-session
    *  does not change the rules of work already in progress. */
   mode: AssessmentMode;

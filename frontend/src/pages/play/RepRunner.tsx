@@ -57,6 +57,8 @@ export function RepRunner({
   attemptToken,
   onAuthRequired,
   onRunAgain,
+  onRetryMisses,
+  isRetry = false,
   onFinished,
   afterFinish,
 }: {
@@ -71,6 +73,10 @@ export function RepRunner({
   attemptToken?: () => string | null;
   onAuthRequired?: (reason: string | undefined, answers: Record<number, PlayerAnswer>) => void;
   onRunAgain: () => void;
+  /** TRY THE MISSES AGAIN: a new run holding only what this one missed. */
+  onRetryMisses?: () => void;
+  /** This run IS his misses again: it says so, and is not measured against a run. */
+  isRetry?: boolean;
   /** The run is over: the decisions in order, his verdicts and picks (Player Home's review). */
   onFinished?: (order: number[], feedback: PracticeFeedback[], chosen: Record<number, number[]>) => void;
   /** Under the finish: the way back to his other work (Player Home). */
@@ -208,7 +214,9 @@ export function RepRunner({
         Object.fromEntries(Object.entries(taken).map(([id, t]) => [id, t.optionIds])),
       );
     }
-    // Where he stands against last time - a bonus, never a blocker.
+    // Where he stands against last time - a bonus, never a blocker. Not for
+    // his misses again: two decisions are not a run to compare with one.
+    if (isRetry) return;
     getRepProgress({ access_code_id: accessCodeId, player_name: playerName, player_id: playerId }, ...tokenArgs())
       .then(setProgress)
       .catch(() => undefined);
@@ -224,7 +232,8 @@ export function RepRunner({
           at={reviewing}
           onAt={setReviewing}
           onDone={() => setReviewing(null)}
-          onRunAgain={onRunAgain}
+          onRunAgain={onRetryMisses ?? onRunAgain}
+          runAgainLabel={onRetryMisses ? 'Try the misses again' : 'Run it again'}
         />
       );
     }
@@ -235,8 +244,10 @@ export function RepRunner({
           feedback={feedback}
           taken={taken}
           progress={progress}
+          isRetry={isRetry}
           onReview={(first) => setReviewing(first)}
           onRunAgain={onRunAgain}
+          onRetryMisses={onRetryMisses}
         />
         {afterFinish}
       </>
@@ -371,15 +382,19 @@ function Summary({
   feedback,
   taken,
   progress,
+  isRetry,
   onReview,
   onRunAgain,
+  onRetryMisses,
 }: {
   decisions: Question[];
   feedback: Record<number, PracticeFeedback>;
   taken: Record<number, Taken>;
   progress: RepProgress | null;
+  isRetry: boolean;
   onReview: (first: number) => void;
   onRunAgain: () => void;
+  onRetryMisses?: () => void;
 }) {
   const judged = decisions.filter((q) => typeof feedback[q.id]?.is_correct === 'boolean');
   const right = judged.filter((q) => feedback[q.id]?.is_correct).length;
@@ -400,7 +415,7 @@ function Summary({
   return (
     <div className={styles.rep}>
       <div className={styles.summary}>
-        <span className={styles.summaryLead}>Rep done</span>
+        <span className={styles.summaryLead}>{isRetry ? 'Your misses, again' : 'Rep done'}</span>
         <span className={styles.score}>
           {right} of {judged.length}
         </span>
@@ -455,9 +470,23 @@ function Summary({
             Review missed
           </button>
         )}
-        <button type="button" className={missed.length > 0 ? 'btn' : 'btn btn-primary'} onClick={onRunAgain}>
-          Run it again
-        </button>
+        {/* DO WORK -> SEE WHAT I MISSED -> TRY IT AGAIN: with misses, the next
+            thing after reviewing them is trying just those; the whole rep
+            again is still there, quietly. */}
+        {missed.length > 0 && onRetryMisses ? (
+          <>
+            <button type="button" className="btn" onClick={onRetryMisses}>
+              Try the misses again
+            </button>
+            <button type="button" className={styles.quietAction} onClick={onRunAgain}>
+              Run the whole rep again
+            </button>
+          </>
+        ) : (
+          <button type="button" className={missed.length > 0 ? 'btn' : 'btn btn-primary'} onClick={onRunAgain}>
+            Run it again
+          </button>
+        )}
       </div>
     </div>
   );

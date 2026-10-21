@@ -12,6 +12,7 @@ function actionLabel(item: WorkItem): string {
 
 function kindLabel(item: WorkItem): string {
   if (item.retest) return 'Retest - your second look';
+  if (item.retry) return 'Your misses, again';
   if (item.kind === 'REP') return 'Rep';
   return item.graded ? 'Quiz' : 'Practice';
 }

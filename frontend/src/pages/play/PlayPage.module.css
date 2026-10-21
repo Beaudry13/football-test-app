@@ -518,6 +518,29 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* After "Try the misses again": the whole run again, there but quiet. */
+.quietAction {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--peira-text-muted, var(--color-text-muted));
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Above a run that is his misses again. */
+.retryNote {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text, var(--nb-accent));
+}
+
 .bookmarkNote {
   margin-top: 1em;
   font-size: 0.9em;

@@ -96,6 +96,15 @@ class PlayerAttempt(db.Model):
     #: THIS, never players.position.
     position_at_attempt = db.Column(db.String(10), nullable=True)
 
+    #: TRY THE MISSES AGAIN: the practice run this attempt retries, holding only
+    #: the questions that run missed. A retry is learning, not a run - it never
+    #: counts toward a Rep's run-level scores (services/rep_results.rep_attempts)
+    #: and its delivery never picks up the rest of the quiz
+    #: (services/attempts.delivery_question_ids). NULL for every ordinary attempt.
+    retry_of_attempt_id = db.Column(
+        db.Integer, db.ForeignKey("player_attempts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     #: THE PER-ATTEMPT TOKEN - PHASE 2. Not read or written by anything yet;
     #: added with the credential table so the security work needs one
     #: migration rather than two. `token_hash` is SHA-256 of a random token

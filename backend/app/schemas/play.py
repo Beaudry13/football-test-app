@@ -53,12 +53,19 @@ class ClaimAttemptSchema(Schema):
     pin = fields.Str(
         required=False, allow_none=True, load_default=None, validate=validate.Regexp(r"^\d{6}$")
     )
+    #: TRY THE MISSES AGAIN, for a player who proves himself here - the same
+    #: field, and the same rules, as /start's.
+    retry_of_attempt_id = fields.Int(required=False, allow_none=True, load_default=None)
 
 
 class StartAttemptSchema(Schema):
     access_code_id = fields.Int(required=True)
     player_name = fields.Str(required=True, validate=validate.Length(min=1, max=255))
     player_id = fields.Int(required=False, allow_none=True, load_default=None)
+    #: TRY THE MISSES AGAIN: a finished practice run of this player's on this
+    #: code. The new attempt holds only what that run missed - worked out by the
+    #: server, never sent by the client. Ignored when an attempt is underway.
+    retry_of_attempt_id = fields.Int(required=False, allow_none=True, load_default=None)
 
 
 class SaveAnswerSchema(Schema):
