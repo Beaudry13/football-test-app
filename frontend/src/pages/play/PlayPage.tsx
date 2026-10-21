@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getQuizTitleByCode, validateCode } from '../../api/play';
-import { ApiError } from '../../api/client';
 import type {
   AssessmentMode,
   AttemptState,
@@ -17,7 +16,8 @@ import { clearAttemptToken, readAttemptToken } from './attemptToken';
 import { JoinStep } from './JoinStep';
 import { NameStep } from './NameStep';
 import { PinStep } from './PinStep';
-import { enterAsPlayer, enterWithPin, pinNoticeFor, type EntryOutcome } from './playerEntry';
+import { enterAsPlayer, enterWithPin, pinNoticeFor, retryEndReason, type EntryOutcome } from './playerEntry';
+import { RetryDone } from './RetryDone';
 import {
   forgetPlayer,
   rememberedPlayer,
@@ -99,6 +99,16 @@ type Step =
       run: number;
     }
   | { name: 'submitted'; code: string; player: RememberedPlayer }
+  /** He asked for his misses and there were none left (or none it may retry):
+   *  said plainly, with the full practice his to choose. */
+  | {
+      name: 'retry-done';
+      code: string;
+      joined: ValidateCodeResponse;
+      player: RememberedPlayer;
+      run: number;
+      reason: 'fixed' | 'unavailable';
+    }
   | {
       name: 'practice-complete';
       code: string;
@@ -317,23 +327,30 @@ export function PlayPage() {
 
   /** TRY THE MISSES AGAIN: a new practice run holding only what `fromAttempt`
    *  missed - continuing as the same player, so a device holding his token
-   *  needs no PIN. If the server has nothing left to retry, the whole run. */
+   *  needs no PIN. NEVER A DIFFERENT TASK: with nothing left to retry he is
+   *  told so (RetryDone) and the full run is his to choose. */
   async function retryMisses(code: string, joined: ValidateCodeResponse, who: RememberedPlayer, fromAttempt: number, run: number) {
     clearPracticeReview(code);
     try {
       const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true, retryOf: fromAttempt });
       follow(code, joined, who, outcome, run + 1, null, fromAttempt);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 422) {
-        try {
-          const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true });
-          follow(code, joined, who, outcome, run + 1);
-          return;
-        } catch {
-          // Back to "Continue as", below.
-        }
+      const ended = retryEndReason(error);
+      if (ended) {
+        setStep({ name: 'retry-done', code, joined, player: who, run, reason: ended });
+        return;
       }
       setStep({ name: 'name', code, joined, remembered: who, retryOf: fromAttempt });
+    }
+  }
+
+  /** The full practice, because he chose it (from RetryDone). */
+  async function runFull(code: string, joined: ValidateCodeResponse, who: RememberedPlayer, run: number) {
+    try {
+      const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true });
+      follow(code, joined, who, outcome, run + 1);
+    } catch {
+      setStep({ name: 'name', code, joined, remembered: who });
     }
   }
 
@@ -448,13 +465,21 @@ export function PlayPage() {
             setStep({ ...step, remembered: null });
           }}
           onChoose={async (who, continuing) => {
-            const outcome = await enterAsPlayer({
-              code: step.code,
-              accessCodeId: step.joined.access_code_id,
-              player: who,
-              continuing,
-              retryOf: step.retryOf,
-            });
+            let outcome: EntryOutcome;
+            try {
+              outcome = await enterAsPlayer({
+                code: step.code,
+                accessCodeId: step.joined.access_code_id,
+                player: who,
+                continuing,
+                retryOf: step.retryOf,
+              });
+            } catch (error) {
+              const ended = step.retryOf !== undefined ? retryEndReason(error) : null;
+              if (!ended) throw error;
+              setStep({ name: 'retry-done', code: step.code, joined: step.joined, player: who, run: 0, reason: ended });
+              return;
+            }
             follow(step.code, step.joined, who, outcome, 0, null, step.retryOf);
           }}
         />
@@ -465,13 +490,21 @@ export function PlayPage() {
           player={step.player}
           notice={step.notice}
           onSubmitPin={async (pin) => {
-            const outcome = await enterWithPin({
-              code: step.code,
-              accessCodeId: step.joined.access_code_id,
-              player: step.player,
-              pin,
-              retryOf: step.retryOf,
-            });
+            let outcome: EntryOutcome;
+            try {
+              outcome = await enterWithPin({
+                code: step.code,
+                accessCodeId: step.joined.access_code_id,
+                player: step.player,
+                pin,
+                retryOf: step.retryOf,
+              });
+            } catch (error) {
+              const ended = step.retryOf !== undefined ? retryEndReason(error) : null;
+              if (!ended) throw error;
+              setStep({ name: 'retry-done', code: step.code, joined: step.joined, player: step.player, run: step.run, reason: ended });
+              return;
+            }
             follow(step.code, step.joined, step.player, outcome, step.run, step.carried, step.retryOf);
           }}
           onNotYou={() => {
@@ -562,6 +595,15 @@ export function PlayPage() {
                 ? () => void retryMisses(step.code, step.joined, step.player, step.attemptId!, step.run)
                 : undefined
             }
+          />
+          <OtherWorkLink code={step.code} />
+        </>
+      )}
+      {step.name === 'retry-done' && (
+        <>
+          <RetryDone
+            reason={step.reason}
+            onRunFull={() => void runFull(step.code, step.joined, step.player, step.run)}
           />
           <OtherWorkLink code={step.code} />
         </>

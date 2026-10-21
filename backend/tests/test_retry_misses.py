@@ -285,3 +285,135 @@ class TestThroughClaim:
         # Missed one, left one blank: only the miss is retried.
         assert again["attempt"]["question_order"] == [qs[0]["id"]]
         assert again["attempt_token"] and again["attempt_token"] != token
+
+
+# ---------------------------------------------------------------------------
+# RELEASE-CANDIDATE SECURITY CHECK of the retry-start path, enforcement ON.
+# ---------------------------------------------------------------------------
+
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
+from app.models import AccessCode  # noqa: E402
+from app.services import player_enforcement  # noqa: E402
+from app.services.attempt_tokens import TOKEN_HEADER  # noqa: E402
+
+_NOW = datetime.now(timezone.utc)
+
+
+@pytest.fixture
+def secured(app, monkeypatch):
+    """PIN enforcement on, every organization opted in, codes from now secured -
+    the same two switches test_player_enforcement turns on."""
+    monkeypatch.setitem(app.config, "PLAYER_PIN_ENFORCEMENT", True)
+    monkeypatch.setitem(app.config, "PLAYER_PIN_CUTOVER_AT", (_NOW - timedelta(days=1)).isoformat())
+    monkeypatch.setitem(app.config, "PLAYER_PIN_COMPAT_UNTIL", (_NOW + timedelta(days=5)).isoformat())
+    monkeypatch.setattr(player_enforcement, "organization_enabled", lambda organization_id: True)
+
+
+def _squad(client, headers, n=2):
+    """n canonical players with PINs on one practice code (two T/F questions)."""
+    players = []
+    for i in range(n):
+        p = client.post("/api/players", json={"first_name": f"P{i}", "last_name": "Smith"}, headers=headers).get_json()
+        p["pin"] = client.post(f"/api/players/{p['id']}/pin/reset", headers=headers).get_json()["issued"]["pin"]
+        players.append(p)
+    quiz = client.post("/api/quizzes", json={"title": "Install"}, headers=headers).get_json()
+    qs = [
+        client.post(
+            f"/api/quizzes/{quiz['id']}/questions",
+            json={"question_text": f"Cover {i}?", "question_type": "true_false", "answer_explanation": "Two high.",
+                  "options": [{"option_text": "True", "is_correct_answer": True}, {"option_text": "False", "is_correct_answer": False}]},
+            headers=headers,
+        ).get_json()
+        for i in (2, 3)
+    ]
+    group = client.post("/api/groups", json={"name": "Squad"}, headers=headers).get_json()
+    client.post(f"/api/groups/{group['id']}/members", json={"player_ids": [p["id"] for p in players]}, headers=headers)
+    code = client.post(
+        f"/api/quizzes/{quiz['id']}/access-codes", json={"group_ids": [group["id"]], "mode": "PRACTICE"}, headers=headers
+    ).get_json()
+    return players, qs, code
+
+
+def _claim_and_miss(client, code, player, qs):
+    """He proves himself with his PIN, misses the first question, submits. -> (attempt id, token)."""
+    r = client.post("/api/play/claim", json={"access_code_id": code["id"], "player_id": player["id"], "pin": player["pin"]})
+    assert r.status_code == 201, r.get_json()
+    body = r.get_json()
+    state, token = body["attempt"], body["attempt_token"]
+    wrong = next(o["id"] for q in state["questions"] if q["id"] == qs[0]["id"] for o in q["options"] if o["option_text"] == "False")
+    s = client.post(
+        "/api/play/submit",
+        json={"access_code_id": code["id"], "player_name": body["player"]["name"], "player_id": player["id"],
+              "answers": [{"question_id": qs[0]["id"], "selected_option_id": wrong, "answer_text": None}]},
+        headers={TOKEN_HEADER: token},
+    )
+    assert s.status_code in (200, 201), s.get_json()
+    return state["attempt_id"], token, body["player"]["name"]
+
+
+class TestRetrySecurity:
+    def test_a_retry_start_is_fenced_like_any_start(self, client, coach_headers, secured):
+        (me,), qs, code = _squad(client, coach_headers, n=1)
+        mine, _token, name = _claim_and_miss(client, code, me, qs)
+        # No PIN, no token: by id or by name, the retry is refused like any new start.
+        for who in ({"player_id": me["id"]}, {}):
+            r = client.post(
+                "/api/play/start",
+                json={"access_code_id": code["id"], "player_name": name, "retry_of_attempt_id": mine, **who},
+            )
+            assert r.status_code == 401, r.get_json()
+            assert r.get_json()["reason"] == "pin_required"
+        assert db.session.query(PlayerAttempt).filter_by(access_code_id=code["id"]).count() == 1
+
+    def test_my_token_cannot_retry_another_players_run(self, client, coach_headers, secured):
+        (me, other), qs, code = _squad(client, coach_headers)
+        _mine, my_token, _ = _claim_and_miss(client, code, me, qs)
+        theirs, _their_token, _ = _claim_and_miss(client, code, other, qs)
+        r = client.post(
+            "/api/play/claim",
+            json={"access_code_id": code["id"], "player_id": me["id"], "retry_of_attempt_id": theirs},
+            headers={TOKEN_HEADER: my_token},
+        )
+        assert r.status_code == 422
+        assert r.get_json()["reason"] == "retry_not_available"
+
+    def test_another_players_token_cannot_reach_my_retry(self, client, coach_headers, secured):
+        (me, other), qs, code = _squad(client, coach_headers)
+        mine, _my_token, _ = _claim_and_miss(client, code, me, qs)
+        _theirs, their_token, _ = _claim_and_miss(client, code, other, qs)
+        r = client.post(
+            "/api/play/claim",
+            json={"access_code_id": code["id"], "player_id": me["id"], "retry_of_attempt_id": mine},
+            headers={TOKEN_HEADER: their_token},
+        )
+        assert r.status_code == 401
+        assert r.get_json()["reason"] == "token_invalid"
+
+    def test_with_his_own_token_the_retry_holds_his_misses_and_no_answer_key(self, client, coach_headers, secured):
+        (me,), qs, code = _squad(client, coach_headers, n=1)
+        mine, token, _ = _claim_and_miss(client, code, me, qs)
+        r = client.post(
+            "/api/play/claim",
+            json={"access_code_id": code["id"], "player_id": me["id"], "retry_of_attempt_id": mine},
+            headers={TOKEN_HEADER: token},
+        )
+        assert r.status_code == 201, r.get_json()
+        attempt = r.get_json()["attempt"]
+        assert attempt["is_retry"] is True
+        assert attempt["question_order"] == [qs[0]["id"]]
+        assert attempt["feedback"] == []
+        blob = str(r.get_json())
+        for leak in ("is_correct_answer", "expected_answers", "answer_explanation", "correct_option_ids", "Two high."):
+            assert leak not in blob
+
+    def test_an_unfinished_run_is_never_a_source(self, client, coach_headers):
+        from app.routes.play import _retry_of
+        from app.errors import ApiError
+
+        quiz, qs = _quiz(client, coach_headers)
+        code = _code(client, coach_headers, quiz["id"])
+        underway = _start(client, code).get_json()["attempt_id"]
+        with pytest.raises(ApiError) as refused:
+            _retry_of(db.session.get(AccessCode, code["id"]), underway, PLAYER, None)
+        assert refused.value.status_code == 422
