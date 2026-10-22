@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
 import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
+import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
@@ -63,8 +64,13 @@ export default function MotionLabEditorPage() {
   const editor = useRef<EditorHandle | null>(null)
   /** PREVIEW 3D: the play shown in the 3D viewer over the editor, or null. */
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
+  /** The man selected on the field when a panel was opened: its question is his. */
+  const [panelMan, setPanelMan] = useState<string | null>(null)
+  /** CREATE ONCE: what this coach has already made from the play (under Use this play). */
+  const [made, setMade] = useState<MadeFromPlay[] | null>(null)
   /** One panel at a time, chosen from the menu. */
   const openPanel = (kind: 'rep' | 'question' | 'teach') => {
+    setPanelMan(editor.current?.selectedId() ?? null)
     setUsing(false)
     setRepping(kind === 'rep')
     setAsking(kind === 'question')
@@ -392,6 +398,14 @@ export default function MotionLabEditorPage() {
                 setAsking(false)
                 setTeachingPlay(false)
                 setUsing((open) => !open)
+                // Asked fresh each time: something may have been made since.
+                const serverId = !using && current && !session.isScratch(current) ? session.serverIdOf(current) : null
+                setMade(null)
+                if (serverId !== null) {
+                  getMadeFromPlay(serverId)
+                    .then(({ made: list }) => setMade(list))
+                    .catch(() => setMade(null))
+                }
               }}
               title="Make a rep or a quiz question from this play, or teach a moment from it"
             >
@@ -417,6 +431,22 @@ export default function MotionLabEditorPage() {
                 <button role="menuitem" onClick={() => openPanel('teach')}>
                   Teach a moment <span className="use-why">stop it, ring him, say the point</span>
                 </button>
+                {/* WHAT HAVE I ALREADY MADE FROM THIS PLAY? Only when there is
+                    something; each opens where it lives. */}
+                {made && made.length > 0 && (
+                  <div className="use-made" role="group" aria-label="Made from this play">
+                    <span className="use-made-title">Made from this play</span>
+                    {made.slice(0, MADE_SHOWN).map((m) => (
+                      <Link key={m.id} role="menuitem" className="use-made-row" to={m.kind === 'REP' ? `/reps/${m.id}` : `/quizzes/${m.id}`}>
+                        <span className="use-made-name">
+                          <span className="use-made-kind">{m.kind === 'REP' ? 'Rep' : 'Quiz'}</span> {m.title}
+                        </span>
+                        <span className="use-why">{madeCount(m)}</span>
+                      </Link>
+                    ))}
+                    {made.length > MADE_SHOWN && <span className="use-why use-made-more">and {made.length - MADE_SHOWN} more</span>}
+                  </div>
+                )}
               </div>
             )}
             {repping && currentPlay && (
@@ -425,12 +455,14 @@ export default function MotionLabEditorPage() {
                 motionPlayId={current ? session.serverIdOf(current) : null}
                 onClose={() => setRepping(false)}
                 intoRep={intoRep}
+                selectedMan={panelMan}
               />
             )}
             {asking && currentPlay && (
               <MakeQuestion
                 play={currentPlay}
                 motionPlayId={current ? session.serverIdOf(current) : null}
+                selectedMan={panelMan}
                 onClose={() => setAsking(false)}
               />
             )}
@@ -475,6 +507,13 @@ export default function MotionLabEditorPage() {
  */
 /** How long a replaced scratch play can be brought back. */
 const UNDO_MS = 10000
+
+/** How many of the play's quizzes and Reps the menu lists; the rest are counted. */
+const MADE_SHOWN = 4
+function madeCount(m: MadeFromPlay): string {
+  const word = m.kind === 'REP' ? 'decision' : 'question'
+  return `${m.from_play} ${word}${m.from_play === 1 ? '' : 's'} from this play`
+}
 
 function shownSaveState(session: PlaySaveState, editPending: boolean): PlaySaveState {
   return editPending && session === 'saved' ? 'saving' : session

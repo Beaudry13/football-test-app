@@ -550,6 +550,52 @@ def reps_for_play(play_id: int):
     return jsonify([{"id": r.id, "title": r.title, "question_count": len(r.questions)} for r in reps])
 
 
+@reps_bp.get("/made-from-play/<int:play_id>")
+@jwt_required()
+def made_from_play(play_id: int):
+    """WHAT HAVE I ALREADY MADE FROM THIS PLAY? This coach's quizzes and Reps
+    holding a live question made from it, most recently made first, each with
+    how many - and what he said the last time he made something from it (the
+    concept, the man), so the next one starts there instead of from nothing.
+
+    Own-only, like every quiz list (utils/auth.get_visible_quiz). Provenance
+    only: a question's picture, answer and delivered snapshots are its own, so
+    nothing here reads or changes the play, and nothing changes a question.
+    """
+    from app.models import Question
+
+    coach = current_coach()
+    rows = (
+        db.session.query(Question, Quiz)
+        .join(Quiz, Question.quiz_id == Quiz.id)
+        .filter(
+            Question.motion_play_id == play_id,
+            Question.retired_at.is_(None),
+            Quiz.organization_id == coach.organization_id,
+            Quiz.coach_id == coach.id,
+        )
+        .order_by(Question.created_at.desc(), Question.id.desc())
+        .all()
+    )
+    made: dict[int, dict] = {}
+    for question, quiz in rows:
+        entry = made.setdefault(
+            quiz.id,
+            {"id": quiz.id, "title": quiz.title, "kind": quiz.kind, "from_play": 0, "question_count": len(quiz.questions)},
+        )
+        entry["from_play"] += 1
+    last = None
+    if rows:
+        question = rows[0][0]
+        concept = question.concept if question.concept is not None and not question.concept.is_archived else None
+        last = {
+            "concept": {"id": concept.id, "name": concept.name} if concept else None,
+            "subject_man": question.subject_man,
+            "subject_role": question.subject_role,
+        }
+    return jsonify({"made": list(made.values()), "last": last})
+
+
 #: How many recent Reps a concept trend reads. Enough for a season's arc,
 #: small enough to stay a glance.
 TREND_REPS = 20

@@ -900,6 +900,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                     {teachable(question) && (
                       <MenuItem onSelect={() => setTeachingQuestion(question)}>Teach this</MenuItem>
                     )}
+                    {/* WHERE IT CAME FROM: the Motion Lab play it was made
+                        from, for a coach who has Motion Lab. Changing the play
+                        never changes this question - its picture is its own. */}
+                    {motionLab && question.motion_play_id != null && (
+                      <MenuItem onSelect={() => navigate(`/motion-lab/plays/${question.motion_play_id}`)}>Open the play</MenuItem>
+                    )}
                     {/* QUIZ -> REP, one question at a time. */}
                     {repReady(question) && (
                       <MenuItem onSelect={() => void questionToNewRep(question)}>Make a rep from this</MenuItem>

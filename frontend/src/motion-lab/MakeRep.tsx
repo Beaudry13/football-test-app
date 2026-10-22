@@ -6,7 +6,7 @@ import { ConceptPicker } from '../components/concepts/ConceptPicker'
 import { resolveConcept } from '../components/concepts/conceptMatch'
 import { createQuestion } from '../api/questions'
 import { createQuiz, listQuizzes } from '../api/quizzes'
-import { getRepsForPlay } from '../api/reps'
+import { getMadeFromPlay } from '../api/reps'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH, playImage } from './playImage'
@@ -43,6 +43,11 @@ import {
  * The picture is the play with its motion and without its routes, the man he
  * is ringed. "Make rep" adds the decision to a new Rep named after the play, or
  * to one he already has - so a 3-5 decision Rep is the same panel, again.
+ *
+ * WHO HE IS starts from what PEIRA knows, in this order: the man selected on
+ * the field; the man of the last decision (or question) made from this play on
+ * this device; the last one made from it anywhere (the server's "last time").
+ * The concept follows the same memory. All of it is a starting value.
  */
 
 interface Answer {
@@ -63,22 +68,34 @@ export function MakeRep({
   motionPlayId,
   onClose,
   intoRep = null,
+  selectedMan = null,
 }: {
   play: Play
   motionPlayId: number | null
   onClose: () => void
   /** Opened from a Rep's "Add decisions": the decision goes there. */
   intoRep?: number | null
+  /** The man selected on the field when the coach asked: the decision is his. */
+  selectedMan?: string | null
 }) {
   const navigate = useNavigate()
   /* PICK UP WHERE THE COACH LEFT OFF on this play: the man, his role, the
      concept and the Rep from the last decision made from it. */
   const [memory] = useState(() => readRepMemory())
   const same = memory?.playId === play.id ? memory : null
-  const [who, setWho] = useState<string | null>(() =>
-    same?.who && play.players.some((p) => p.id === same.who) ? same.who : null,
-  )
-  const [role, setRole] = useState(same?.role ?? '')
+  const inPlay = (id: string | null | undefined): id is string => !!id && play.players.some((p) => p.id === id)
+  const [start] = useState(() => {
+    if (inPlay(selectedMan)) return { who: selectedMan, role: roleName(play.players.find((p) => p.id === selectedMan)!) }
+    if (inPlay(same?.who)) return { who: same.who, role: same.role || roleName(play.players.find((p) => p.id === same.who)!) }
+    return { who: null, role: same?.role ?? '' }
+  })
+  const [who, setWho] = useState<string | null>(start.who)
+  const [role, setRole] = useState(start.role)
+  /** The coach has said who he is (or what the concept is) himself: no fallback overrides him. */
+  const touched = useRef({ who: start.who !== null, concept: !!same?.concept })
+  /** The play's men, for "last time" arriving after the panel opened. */
+  const players = useRef(play.players)
+  players.current = play.players
   const [prompt, setPrompt] = useState('')
   const [answers, setAnswers] = useState<Answer[]>(blankAnswers)
   const [concept, setConcept] = useState(same?.concept ?? '')
@@ -108,10 +125,18 @@ export function MakeRep({
     // Without that memory (another device, a cleared browser), the newest Rep
     // already made from this play is the likely home for the next decision.
     if (motionPlayId !== null) {
-      getRepsForPlay(motionPlayId)
-        .then((list) => {
-          setFromThisPlay(list.map((r) => r.id))
-          if (rememberedRep === null && list.length > 0) setRepId(list[0].id)
+      getMadeFromPlay(motionPlayId)
+        .then(({ made: list, last }) => {
+          const fromPlay = list.filter((m) => m.kind === 'REP')
+          setFromThisPlay(fromPlay.map((r) => r.id))
+          if (rememberedRep === null && fromPlay.length > 0) setRepId(fromPlay[0].id)
+          // "Last time" from the server: another device, or a cleared browser.
+          const man = last?.subject_man ? players.current.find((p) => p.id === last.subject_man) : undefined
+          if (last && man && !touched.current.who) {
+            setWho(man.id)
+            setRole(last.subject_role || roleName(man))
+          }
+          if (last?.concept && !touched.current.concept) setConcept((now) => now || last.concept!.name)
         })
         .catch(() => undefined)
     }
@@ -190,6 +215,7 @@ export function MakeRep({
     if (!box.width || !box.height) return
     const id = playerAt(play, { x: ((e.clientX - box.left) / box.width) * IMAGE_WIDTH, y: ((e.clientY - box.top) / box.height) * IMAGE_HEIGHT })
     if (!id) return
+    touched.current.who = true
     const man = play.players.find((p) => p.id === id)!
     if (id === who) {
       setWho(null)
@@ -325,7 +351,10 @@ export function MakeRep({
       <MomentPicker moments={motion ? moments : []} value={moment} onChange={setMoment} clip={presnap} />
       <label className="make-q-field">
         <span>You&rsquo;re the… (tap him in the picture)</span>
-        <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Boundary safety" maxLength={60} />
+        <input value={role} onChange={(e) => {
+          touched.current.who = true
+          setRole(e.target.value)
+        }} placeholder="Boundary safety" maxLength={60} />
       </label>
       <label className="make-q-field">
         <span>The situation</span>
@@ -445,7 +474,10 @@ export function MakeRep({
       <ConceptPicker
         label="Concept - what you'll see missed"
         value={concept}
-        onChange={setConcept}
+        onChange={(next) => {
+          touched.current.concept = true
+          setConcept(next)
+        }}
         concepts={concepts}
         recent={memory?.recentConcepts ?? []}
         classes={{ field: 'make-q-field make-rep-concept', chips: 'make-rep-sets', chip: '', strong: 'make-rep-mean', note: 'make-q-note' }}

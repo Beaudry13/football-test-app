@@ -6,11 +6,12 @@ import { ConceptPicker } from '../components/concepts/ConceptPicker'
 import { resolveConcept } from '../components/concepts/conceptMatch'
 import { createQuestion } from '../api/questions'
 import { createQuiz, listQuizzes } from '../api/quizzes'
+import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
 import type { Quiz } from '../api/types'
 import type { Play } from './engine/play'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
 import { playerAt, px } from './playImageLayout'
-import { readRepMemory, tapTargets } from './playRep'
+import { readRepMemory, tapTargets, writeRepMemory } from './playRep'
 import { TapCheck } from '../components/football/TapCheck'
 import { MomentPicker } from './MomentPicker'
 import { freezePicture, freezeSpots, hasPresnapMotion, momentsFor, presnapOf, type DecisionMoment } from './presnap'
@@ -39,27 +40,63 @@ import { assignmentDrawing, ballChoices, drawText, isBuiltDrawText, playImageFil
  * picture a Rep uses - and freezes at the decision moment the coach picks;
  * the answers wait for the freeze. Routes never play, so the picture is the
  * play moving or a still with its routes: one or the other.
+ *
+ * DON'T ASK FOR WHAT PEIRA KNOWS (connected-system cycle):
+ *   - the man selected on the field is the man the Draw question is about;
+ *   - the concept is the one he last named for this play - here or in Make
+ *     rep, on this device or (from the server) any other;
+ *   - "Put it in" is the quiz he last put a question in, else the quiz that
+ *     already holds this play's questions;
+ *   - making it keeps him in Motion Lab: "Make another" or "Open quiz".
+ * Every one of these is a starting value he can see and change.
  */
+
+const LAST_QUIZ_KEY = 'peira.makeQuestion.quiz.v1'
+function readLastQuiz(): number | null {
+  try {
+    return Number(window.localStorage.getItem(LAST_QUIZ_KEY)) || null
+  } catch {
+    return null
+  }
+}
+function writeLastQuiz(id: number) {
+  try {
+    window.localStorage.setItem(LAST_QUIZ_KEY, String(id))
+  } catch {
+    // A private window: next time starts from the play's own quiz.
+  }
+}
 
 export function MakeQuestion({
   play,
   motionPlayId = null,
+  selectedMan = null,
   onClose,
 }: {
   play: Play
   /** The saved Motion Lab play, so the question keeps its source. */
   motionPlayId?: number | null
+  /** The man selected on the field when the coach asked: the Draw question is his. */
+  selectedMan?: string | null
   onClose: () => void
 }) {
   const navigate = useNavigate()
   const ball = useMemo(() => ballChoices(play), [play])
   const [kind, setKind] = useState<Kind>('draw')
-  const [text, setText] = useState(QUESTION_TEXT.draw)
+  const [startMan] = useState(() => (selectedMan && play.players.some((p) => p.id === selectedMan) ? selectedMan : null))
+  const [text, setText] = useState(() => drawText(play.players.find((p) => p.id === startMan)?.label))
   const [routes, setRoutes] = useState(false)
   /** The man a Draw question is about, if the coach names one. */
-  const [who, setWho] = useState<string | null>(null)
+  const [who, setWho] = useState<string | null>(startMan)
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null)
   const [quizId, setQuizId] = useState<number | 'new'>('new')
+  /** The coach chose where it goes himself - no default overrides him. */
+  const quizChosen = useRef(false)
+  const conceptTyped = useRef(false)
+  /** This play's quizzes, from the server (where its questions already live). */
+  const [fromPlay, setFromPlay] = useState<MadeFromPlay[]>([])
+  /** The question just made: "Make another" or "Open quiz". */
+  const [made, setMade] = useState<{ id: number; title: string; count: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [checking, setChecking] = useState(false)
@@ -92,12 +129,30 @@ export function MakeQuestion({
 
   useEffect(() => {
     listQuizzes()
-      .then((list) => setQuizzes([...list].sort((a, b) => b.updated_at.localeCompare(a.updated_at))))
+      // A quiz question goes in a quiz; Reps are made with Make rep.
+      .then((list) => setQuizzes([...list].filter((q) => q.kind !== 'REP').sort((a, b) => b.updated_at.localeCompare(a.updated_at))))
       .catch(() => setQuizzes([]))
     listConcepts()
       .then((list) => setConcepts(list.filter((c) => !c.is_archived)))
       .catch(() => setConcepts([]))
-  }, [])
+    if (motionPlayId !== null) {
+      getMadeFromPlay(motionPlayId)
+        .then(({ made: list, last }) => {
+          setFromPlay(list.filter((m) => m.kind === 'QUIZ'))
+          // His concept for this play from any device, when this one has none.
+          if (last?.concept && !conceptTyped.current) setConcept((now) => now || last.concept!.name)
+        })
+        .catch(() => undefined)
+    }
+  }, [motionPlayId])
+
+  // WHERE IT GOES, unless he has chosen: the quiz he last used, else the quiz
+  // already holding this play's questions, else a new one named after the play.
+  useEffect(() => {
+    if (quizChosen.current || quizzes === null) return
+    const offered = [readLastQuiz(), fromPlay[0]?.id ?? null].find((id) => id !== null && quizzes.some((q) => q.id === id))
+    setQuizId(offered ?? 'new')
+  }, [quizzes, fromPlay])
 
   // The picture the player will see, small.
   useEffect(() => {
@@ -155,7 +210,8 @@ export function MakeQuestion({
       const conceptName = concept.trim()
       // The concept the team already has, however it was typed; a new one only when it is new.
       const conceptId = conceptName ? (resolveConcept(conceptName, concepts) ?? (await createConcept(conceptName))).id : null
-      const target = quizId === 'new' ? (await createQuiz({ title: play.name })).id : quizId
+      const existing = quizId === 'new' ? null : (quizzes ?? []).find((q) => q.id === quizId) ?? null
+      const target = existing ? existing.id : (await createQuiz({ title: play.name })).id
       await createQuestion(
         target,
         {
@@ -172,11 +228,61 @@ export function MakeQuestion({
         },
         image,
       )
-      navigate(`/quizzes/${target}`)
+      // STAY IN THE PLAY: the next question goes to the same quiz.
+      const count = (existing?.question_count ?? 0) + 1
+      const title = existing?.title ?? play.name
+      setMade({ id: target, title, count })
+      setQuizzes((list) => [{ ...(existing ?? ({ id: target, title } as Quiz)), question_count: count }, ...(list ?? []).filter((q) => q.id !== target)])
+      setQuizId(target)
+      quizChosen.current = true
+      writeLastQuiz(target)
+      if (conceptId !== null && !concepts.some((c) => c.id === conceptId)) {
+        setConcepts((list) => [...list, { id: conceptId, name: conceptName, is_archived: false }])
+      }
+      // Make rep starts from what he just said about this play, too.
+      const usedConcept = concepts.find((c) => c.id === conceptId)?.name ?? conceptName
+      const before = readRepMemory()
+      const same = before?.playId === play.id ? before : null
+      writeRepMemory({
+        playId: play.id,
+        who: (kind === 'draw' ? who : null) ?? same?.who ?? null,
+        role: same?.role ?? '',
+        concept: usedConcept || same?.concept || '',
+        repId: same?.repId ?? null,
+        recentConcepts: [usedConcept, ...(before?.recentConcepts ?? []).filter((c) => c !== usedConcept)].filter(Boolean).slice(0, 5),
+      })
     } catch (err) {
       setError(getErrorMessage(err))
+    } finally {
       setBusy(false)
     }
+  }
+
+  /** Another question from the same play, into the same quiz, about the same idea. */
+  const another = () => {
+    setMade(null)
+    setWho(null)
+    setText(QUESTION_TEXT[kind])
+    setWhy('')
+  }
+
+  if (made) {
+    return (
+      <div className="popover make-q-pop" role="dialog" aria-label="Question made" onKeyDown={(e) => e.stopPropagation()}>
+        <div className="make-rep-done">
+          <span className="make-rep-check">✓</span>
+          <span>
+            Question {made.count} added to <strong>{made.title}</strong>
+          </span>
+        </div>
+        <div className="make-q-actions">
+          <button onClick={another}>Make another</button>
+          <button className="primary" onClick={() => navigate(`/quizzes/${made.id}`)}>
+            Open quiz
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -267,7 +373,10 @@ export function MakeQuestion({
       <ConceptPicker
         label="Concept - what you'll see missed"
         value={concept}
-        onChange={setConcept}
+        onChange={(next) => {
+          conceptTyped.current = true
+          setConcept(next)
+        }}
         concepts={concepts}
         recent={memory?.recentConcepts ?? []}
         classes={{ field: 'make-q-field make-rep-concept', chips: 'make-rep-sets', chip: '', strong: 'make-rep-mean', note: 'make-q-note' }}
@@ -278,11 +387,18 @@ export function MakeQuestion({
       </label>
       <label className="make-q-field">
         <span>Put it in</span>
-        <select value={quizId} onChange={(e) => setQuizId(e.target.value === 'new' ? 'new' : Number(e.target.value))} disabled={quizzes === null}>
+        <select
+          value={quizId}
+          onChange={(e) => {
+            quizChosen.current = true
+            setQuizId(e.target.value === 'new' ? 'new' : Number(e.target.value))
+          }}
+          disabled={quizzes === null}
+        >
           <option value="new">A new quiz: “{play.name}”</option>
           {(quizzes ?? []).map((q) => (
             <option key={q.id} value={q.id}>
-              {q.title} ({q.question_count})
+              {q.title} ({q.question_count}){fromPlay.some((m) => m.id === q.id) ? ' · has this play' : ''}
             </option>
           ))}
         </select>
