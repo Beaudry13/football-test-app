@@ -1,16 +1,23 @@
 import { Link } from 'react-router-dom';
 import { Icon } from '../components/ui/Icon';
 import type { ActiveQuizStatus, Quiz } from '../api/types';
+import type { ToGrade } from '../api/grading';
 import { MAX_RESULTS, outstandingPlayers, readyToSend, recentActivity } from './dashboardRailData';
 import { responseSummary } from '../utils/responseSummary';
 import styles from './DashboardRail.module.css';
 
+/** How many quizzes' grading the rail names before counting the rest. */
+const TO_GRADE_SHOWN = 2;
+
 export function DashboardRail({
   entries,
   quizzes,
+  toGrade = [],
 }: {
   entries: ActiveQuizStatus[] | null;
   quizzes: Quiz[] | null;
+  /** Answers only the coach can decide, still waiting (GET /quizzes/to-grade). */
+  toGrade?: ToGrade[];
 }) {
   const live = entries ?? [];
   const activity = recentActivity(live);
@@ -60,6 +67,7 @@ export function DashboardRail({
   const hasAnything =
     activity.length > 0 ||
     outstanding > 0 ||
+    toGrade.length > 0 ||
     scored.length > 0 ||
     closing.length > 0 ||
     unsent.length > 0;
@@ -67,9 +75,32 @@ export function DashboardRail({
 
   return (
     <aside className={styles.rail} aria-label="At a glance">
-      {outstanding > 0 && (
+      {(outstanding > 0 || toGrade.length > 0) && (
         <section className={styles.panel}>
           <h2 className={styles.panelTitle}>Needs attention</h2>
+          {/* GRADE IT: written and drawn answers only a coach can decide -
+              each quiz one tap from its grading screen. */}
+          {toGrade.length > 0 && (
+            <div className={styles.attention}>
+              <Icon name="info" size={18} />
+              <ul className={styles.toGrade}>
+                {toGrade.slice(0, TO_GRADE_SHOWN).map((q) => (
+                  <li key={q.quiz_id}>
+                    <Link to={`/quizzes/${q.quiz_id}/grade`} className={styles.attentionLine}>
+                      {q.count} to grade
+                    </Link>
+                    <div className={styles.attentionMeta}>{q.title}</div>
+                  </li>
+                ))}
+                {toGrade.length > TO_GRADE_SHOWN && (
+                  <li className={styles.attentionMeta}>
+                    and {toGrade.length - TO_GRADE_SHOWN} more {toGrade.length - TO_GRADE_SHOWN === 1 ? 'quiz' : 'quizzes'}
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
+          {outstanding > 0 && (
           <div className={styles.attention}>
             <Icon name="info" size={18} />
             <div>
@@ -84,6 +115,7 @@ export function DashboardRail({
               </div>
             </div>
           </div>
+          )}
         </section>
       )}
 

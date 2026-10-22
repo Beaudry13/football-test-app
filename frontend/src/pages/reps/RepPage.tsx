@@ -30,6 +30,7 @@ import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { FootballProblem } from '../../components/football/FootballProblem';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useRememberWork } from '../home/lastWork';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
@@ -112,6 +113,8 @@ export function RepPage() {
     }
   };
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
+  // Home's "Pick up where you left off".
+  useRememberWork(results ? { kind: 'rep', id, title: results.title } : null);
 
   /* A VARIATION: the same Rep copied - every decision with its man, play,
      motion, concept and reason - and opened as a new Rep to change what is

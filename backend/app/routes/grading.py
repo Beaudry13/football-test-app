@@ -125,6 +125,56 @@ def list_responses(quiz_id: int):
     return jsonify([_with_delivered(r, quiz) for r in responses])
 
 
+@grading_bp.get("/quizzes/to-grade")
+@jwt_required()
+def to_grade():
+    """WHAT IS WAITING ON THE COACH'S EYES: his own quizzes holding answers
+    only a coach can decide (written and drawn), how many, the quiz with the
+    most recent such submission first - so Home can say "7 to grade" and open
+    the grading screen on it.
+
+    THE GRADING SCREEN'S OWN RULES, so the number offered is the work given:
+    submitted, official (graded-mode) attempts; manually graded question types
+    only; questions the coach excluded ("don't count") are out
+    (frontend gradingQueue.ts). Own-only, like every quiz list.
+    """
+    from sqlalchemy import func
+
+    from app.models.question import MANUALLY_GRADED_TYPES
+
+    coach = current_coach()
+    rows = (
+        db.session.query(Quiz.id, Quiz.title, Answer.question_id, func.count(Answer.id), func.max(PlayerAttempt.submitted_at))
+        .join(PlayerAttempt, PlayerAttempt.quiz_id == Quiz.id)
+        .join(Answer, Answer.attempt_id == PlayerAttempt.id)
+        .join(Question, Question.id == Answer.question_id)
+        .filter(
+            Quiz.organization_id == coach.organization_id,
+            Quiz.coach_id == coach.id,
+            PlayerAttempt.status == AttemptStatus.SUBMITTED,
+            official_filter(),
+            Answer.is_correct.is_(None),
+            Question.question_type.in_(list(MANUALLY_GRADED_TYPES)),
+        )
+        .group_by(Quiz.id, Quiz.title, Answer.question_id)
+        .all()
+    )
+    by_quiz: dict[int, dict] = {}
+    for quiz_id, title, question_id, count, latest in rows:
+        entry = by_quiz.setdefault(quiz_id, {"quiz_id": quiz_id, "title": title, "count": 0, "_latest": latest, "_q": {}})
+        entry["_q"][question_id] = count
+        if latest and (entry["_latest"] is None or latest > entry["_latest"]):
+            entry["_latest"] = latest
+    out = []
+    for entry in by_quiz.values():
+        excluded = {row.question_id for row in active_exclusions_for_quiz(entry["quiz_id"])}
+        entry["count"] = sum(n for qid, n in entry.pop("_q").items() if qid not in excluded)
+        if entry["count"] > 0:
+            out.append(entry)
+    out.sort(key=lambda e: e["_latest"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    return jsonify([{k: v for k, v in e.items() if not k.startswith("_")} for e in out])
+
+
 @grading_bp.get("/quizzes/<int:quiz_id>/responses/<int:response_id>")
 @jwt_required()
 def get_response(quiz_id: int, response_id: int):
