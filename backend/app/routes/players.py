@@ -138,6 +138,34 @@ def get_player_history(player_id: int):
     return jsonify(payload)
 
 
+#: A position room, not the whole program: enough for any unit, small enough to read.
+MAX_GROUP_NEEDS_PLAYERS = 60
+
+
+@players_bp.get("/needs")
+@jwt_required()
+def get_group_needs():
+    """WHAT THESE PLAYERS NEED (?ids=1,2,3) - the position coach's "show me
+    what my safeties are missing": the concepts they are still working on,
+    who, and where each last missed it. The profile's own rules and scope
+    (services/player_learning); players outside the coach's organization are
+    ignored, never reported."""
+    from app.services.player_learning import group_needs
+
+    coach = current_coach()
+    raw = request.args.get("ids", "")
+    try:
+        ids = sorted({int(part) for part in raw.split(",") if part.strip()})
+    except ValueError as exc:
+        raise ApiError("ids must be player ids", status_code=422, reason="bad_ids") from exc
+    if not ids:
+        return jsonify({"players": 0, "concepts": []})
+    if len(ids) > MAX_GROUP_NEEDS_PLAYERS:
+        raise ApiError("Too many players at once", status_code=422, reason="too_many_players")
+    players = Player.query.filter(Player.organization_id == coach.organization_id, Player.id.in_(ids)).all()
+    return jsonify(group_needs(coach, players))
+
+
 @players_bp.get("/<int:player_id>/learning")
 @jwt_required()
 def get_player_learning(player_id: int):

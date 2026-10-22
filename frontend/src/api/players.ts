@@ -66,6 +66,25 @@ export interface PlayerLearning {
   recent: { concept_id: number; name: string; trail: LearningEvent[] }[];
 }
 
+/** One concept a group is still working on: who, and where each last missed it. */
+export interface GroupNeed {
+  concept_id: number;
+  name: string;
+  missing: { player_id: number; name: string; last: LearningEvent }[];
+  /** How many of the group have it. */
+  got: number;
+}
+
+export interface GroupNeeds {
+  players: number;
+  concepts: GroupNeed[];
+}
+
+/** What these players need - a position group's "what are they missing?". */
+export function getGroupNeeds(playerIds: number[]): Promise<GroupNeeds> {
+  return api.get<GroupNeeds>(`/players/needs?ids=${playerIds.join(',')}`);
+}
+
 export function getPlayerLearning(playerId: number): Promise<PlayerLearning> {
   return api.get<PlayerLearning>(`/players/${playerId}/learning`);
 }

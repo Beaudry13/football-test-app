@@ -24,6 +24,8 @@ import { downloadBlob } from '../utils/download';
 import nb from '../styles/notebook.module.css';
 import styles from './MasterRosterPage.module.css';
 import { LoadingState } from '../components/ui/LoadingState';
+import { audiencesFrom, familyOf } from './reps/audiences';
+import { PositionNeeds } from './PositionNeeds';
 import { EmptyState } from '../components/ui/EmptyState';
 
 const EMPTY_FORM: PlayerInput = { first_name: '', last_name: '', jersey_number: '', position: '' };
@@ -193,8 +195,18 @@ export function MasterRosterPage() {
     }
   }
 
+  /* BY POSITION GROUP, the way a position coach thinks: "Safeties" is
+     everyone listed S, FS, SS or SAF (reps/audiences - the families a Rep is
+     sent with); a position no family maps stays its own choice. */
+  const groupKey = (position: string | null | undefined) => {
+    if (!position?.trim()) return null;
+    const family = familyOf(position);
+    return family ? `family:${family.name}` : `position:${position.trim().toUpperCase()}`;
+  };
+  const audiences = audiencesFrom(players ?? []);
+  const chosenAudience = audiences.find((a) => a.key === positionFilter) ?? null;
   const filtered = (players ?? []).filter((p) => {
-    if (positionFilter && p.position !== positionFilter) return false;
+    if (positionFilter && groupKey(p.position) !== positionFilter) return false;
     if (search.trim()) {
       const needle = search.trim().toLowerCase();
       if (!p.full_name.toLowerCase().includes(needle)) return false;
@@ -223,7 +235,6 @@ export function MasterRosterPage() {
     });
   }
 
-  const positions = Array.from(new Set((players ?? []).map((p) => p.position).filter(Boolean))) as string[];
 
   // Active players only: an inactive player cannot start a quiz, and gets
   // picked up here again if they are reactivated.
@@ -277,7 +288,7 @@ export function MasterRosterPage() {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search players"
           />
-          {positions.length > 0 && (
+          {audiences.length > 0 && (
             <select
               className={nb.input}
               value={positionFilter}
@@ -285,9 +296,10 @@ export function MasterRosterPage() {
               aria-label="Filter by position"
             >
               <option value="">All positions</option>
-              {positions.map((pos) => (
-                <option key={pos} value={pos}>
-                  {pos}
+              {audiences.map((a) => (
+                <option key={a.key} value={a.key}>
+                  {a.name}
+                  {a.family ? ` (${a.positions.join(', ')})` : ''} · {a.playerIds.length}
                 </option>
               ))}
             </select>
@@ -304,6 +316,15 @@ export function MasterRosterPage() {
             {showImport ? 'Close import' : 'Import roster'}
           </button>
         </div>
+
+        {/* THE POSITION COACH'S QUESTION, answered under the filter. */}
+        {chosenAudience && (
+          <PositionNeeds
+            label={chosenAudience.name}
+            plural={chosenAudience.family?.plural ?? chosenAudience.name}
+            playerIds={chosenAudience.playerIds}
+          />
+        )}
 
         {showImport && (
           <RosterImportPanel
