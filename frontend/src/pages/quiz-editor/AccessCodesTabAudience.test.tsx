@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccessCodesTab } from './AccessCodesTab';
@@ -41,6 +41,7 @@ const live = { id: 3, code: 'ABC234', mode: 'GRADED', groups: [{ id: 7, name: 'D
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  localStorage.clear();
   vi.spyOn(groupsApi, 'listGroups').mockResolvedValue([defense]);
   vi.spyOn(playersApi, 'listPlayers').mockResolvedValue([]);
   vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
@@ -90,5 +91,36 @@ describe('Activate says who gets it', () => {
     expect(screen.getByText('Goes to the same players: Defense.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Create new code' }));
     await waitFor(() => expect(activate).toHaveBeenCalledWith(1, [7], 'GRADED', false, expect.any(Date)));
+  });
+});
+
+describe('Same as last time', () => {
+  it('the next quiz with nobody yet offers the last audience back - one tap, said by name, never applied silently', async () => {
+    vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster([]));
+    const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(live);
+    const user = userEvent.setup();
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Nobody yet/);
+    expect(screen.queryByRole('button', { name: /Same as last time/ })).toBeNull();
+    await user.click(screen.getByRole('checkbox', { name: /Defense/ }));
+    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await waitFor(() => expect(activate).toHaveBeenCalledWith(1, [7], 'GRADED', false, expect.any(Date)));
+    cleanup();
+
+    render(<AccessCodesTab quiz={{ ...quiz, id: 2, title: 'Week 7 install' } as Quiz} />);
+    const offer = await screen.findByRole('button', { name: 'Same as last time: Defense' });
+    expect(screen.getByRole('checkbox', { name: /Defense/ })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Activate Quiz' })).toBeDisabled();
+    await user.click(offer);
+    expect(screen.getByRole('checkbox', { name: /Defense/ })).toBeChecked();
+    expect(screen.getByText('Goes to the 2 players in Defense.')).toBeInTheDocument();
+  });
+
+  it('not offered when the quiz already has its players (a retest, say)', async () => {
+    localStorage.setItem('peira.activate.lastAudience.v1', JSON.stringify({ positions: [], groupIds: [7] }));
+    vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster(['Ty Adams']));
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Goes to Ty Adams/);
+    expect(screen.queryByRole('button', { name: /Same as last time/ })).toBeNull();
   });
 });

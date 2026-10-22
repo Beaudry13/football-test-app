@@ -116,6 +116,29 @@ function someNames(names: string[], shown = 4): string {
   return `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`;
 }
 
+/** WHO THE COACH LAST SENT A QUIZ TO, on this device: the position chips and
+ *  saved groups he picked - offered back as one tap, never applied silently. */
+const LAST_AUDIENCE_KEY = 'peira.activate.lastAudience.v1';
+interface LastAudience {
+  positions: string[];
+  groupIds: number[];
+}
+function readLastAudience(): LastAudience | null {
+  try {
+    const raw = localStorage.getItem(LAST_AUDIENCE_KEY);
+    return raw ? (JSON.parse(raw) as LastAudience) : null;
+  } catch {
+    return null;
+  }
+}
+function writeLastAudience(audience: LastAudience) {
+  try {
+    localStorage.setItem(LAST_AUDIENCE_KEY, JSON.stringify(audience));
+  } catch {
+    // A private window: nothing is offered next time.
+  }
+}
+
 /** A player an activation was refused for: no PIN yet, with PINs enforced. */
 interface PlayerNeedingPin {
   player_id: number;
@@ -172,6 +195,18 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const chosenGroups = groups.filter((g) => selectedGroupIds.includes(g.id));
   const groupReach = new Set(chosenGroups.flatMap((g) => g.players.map((p) => p.player?.id ?? `name:${p.player_name}`))).size;
   const rosterNames = (roster?.players ?? []).map((p) => p.player?.full_name ?? p.player_name);
+  /* SAME AS LAST TIME, when this quiz has nobody yet: the chips and groups
+     he picked for the last quiz he sent, still on the roster - one tap to
+     pick them again, said by name, applied only when he taps it. */
+  const [lastAudience] = useState(readLastAudience);
+  const lastPositions = (lastAudience?.positions ?? []).filter((key) => audiences.some((a) => a.key === key));
+  const lastGroups = groups.filter((g) => (lastAudience?.groupIds ?? []).includes(g.id));
+  const lastNames = [
+    ...lastPositions.map((key) => audiences.find((a) => a.key === key)!.name),
+    ...lastGroups.map((g) => g.name),
+  ];
+  const offerLast =
+    roster !== null && rosterCount === 0 && positions.length === 0 && selectedGroupIds.length === 0 && lastNames.length > 0;
   /** Known to reach nobody: the server would refuse it, so the button says so first. */
   const reachesNobody = roster !== null && fromPositions.length === 0 && (chosenGroups.length > 0 ? groupReach === 0 : rosterCount === 0);
   const audience =
@@ -249,6 +284,10 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
         await activateQuiz(quiz.id, [], mode, randomizeQuestions, availableUntil);
       } else {
         await activateQuiz(quiz.id, selectedGroupIds, mode, randomizeQuestions, availableUntil);
+      }
+      // Sent: offered back ("Same as last time") on the next quiz with nobody yet.
+      if (!activeCode && (positions.length > 0 || selectedGroupIds.length > 0)) {
+        writeLastAudience({ positions, groupIds: selectedGroupIds });
       }
       await load();
       setMode('GRADED');
@@ -539,6 +578,18 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               )}
             </>
 
+            {offerLast && (
+              <button
+                type="button"
+                className={styles.sameAsLast}
+                onClick={() => {
+                  setPositions(lastPositions);
+                  setSelectedGroupIds(lastGroups.map((g) => g.id));
+                }}
+              >
+                Same as last time: {lastNames.join(' and ')}
+              </button>
+            )}
             {audience && (
               <p className={styles.reach} role="status">
                 {audience}

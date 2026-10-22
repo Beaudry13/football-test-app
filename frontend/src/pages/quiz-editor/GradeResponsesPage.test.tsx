@@ -17,6 +17,7 @@ vi.mock('../../api/grading', () => ({
   listResponses: vi.fn(),
   getQuizDashboard: vi.fn(),
   gradeAnswer: vi.fn().mockResolvedValue({}),
+  listToGrade: vi.fn().mockResolvedValue([]),
 }));
 // The drawing engine renders to canvas, which jsdom cannot. Stubbed to
 // something identifiable so the tests can assert the drawing IS presented and
@@ -30,7 +31,7 @@ vi.mock('../../components/drawing/DrawingViewer', () => ({
 }));
 
 import { getQuiz } from '../../api/quizzes';
-import { getQuizDashboard, gradeAnswer, listResponses } from '../../api/grading';
+import { getQuizDashboard, gradeAnswer, listResponses, listToGrade } from '../../api/grading';
 
 const WRITTEN_Q = 11;
 const DRAW_Q = 12;
@@ -144,6 +145,7 @@ beforeEach(() => {
   vi.mocked(listResponses).mockResolvedValue(responses());
   vi.mocked(getQuizDashboard).mockResolvedValue(dashboard());
   vi.mocked(gradeAnswer).mockResolvedValue({} as never);
+  vi.mocked(listToGrade).mockResolvedValue([]);
 });
 
 describe('the question anchors the screen', () => {
@@ -519,5 +521,33 @@ describe('grading fast', () => {
     renderPage();
     await screen.findByText('Mike Beaudry');
     expect(screen.queryByRole('link', { name: 'Open the play' })).toBeNull();
+  });
+});
+
+describe('all caught up, then the next one', () => {
+  const allGraded = () => {
+    const r = responses();
+    r.forEach((resp) => resp.answers!.forEach((a) => (a.is_correct = a.is_correct ?? true)));
+    return r;
+  };
+
+  it('offers the next quiz still waiting, one tap from its grading', async () => {
+    vi.mocked(listResponses).mockResolvedValue(allGraded());
+    vi.mocked(listToGrade).mockResolvedValue([
+      { quiz_id: 1, title: 'Install Week 2', count: 0 },
+      { quiz_id: 5, title: 'Red zone', count: 2 },
+    ]);
+    renderPage();
+    expect(await screen.findByText('All caught up')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /Next: Red zone · 2 to grade/ })).toHaveAttribute('href', '/quizzes/5/grade');
+  });
+
+  it('nothing waiting anywhere: back to results is the one step', async () => {
+    vi.mocked(listResponses).mockResolvedValue(allGraded());
+    renderPage();
+    expect(await screen.findByText('All caught up')).toBeInTheDocument();
+    await waitFor(() => expect(listToGrade).toHaveBeenCalled());
+    expect(screen.queryByRole('link', { name: /Next:/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Back to results' })).toBeInTheDocument();
   });
 });

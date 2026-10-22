@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getQuiz } from '../../api/quizzes';
-import { getQuizDashboard, gradeAnswer, listResponses } from '../../api/grading';
+import { getQuizDashboard, gradeAnswer, listResponses, listToGrade, type ToGrade } from '../../api/grading';
 import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -79,6 +79,8 @@ export function GradeResponsesPage() {
   const nextButton = useRef<HTMLButtonElement>(null);
   /** The cursor moved by key: bring it into view (a click is already in view). */
   const scrollToCursor = useRef(false);
+  /** ALL CAUGHT UP HERE: the next quiz still waiting on the coach, if any. */
+  const [nextQuiz, setNextQuiz] = useState<ToGrade | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -260,6 +262,26 @@ export function GradeResponsesPage() {
     return () => window.removeEventListener('keydown', listen);
   }, []);
 
+  /* Another quiz's grading opens in this same screen: start it at its top. */
+  useEffect(() => {
+    setIndex(0);
+    setNextQuiz(null);
+  }, [id]);
+  /* Nothing left here: is anything waiting elsewhere? Asked once, when done. */
+  const done = !loading && quiz !== null && remaining === 0;
+  useEffect(() => {
+    if (!done) return;
+    let live = true;
+    listToGrade()
+      .then((list) => {
+        if (live) setNextQuiz(list.find((q) => q.quiz_id !== id) ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [done, id]);
+
   if (loading) return <LoadingState label="Loading responses" />;
 
   if (error && quiz === null) {
@@ -294,7 +316,13 @@ export function GradeResponsesPage() {
               ? 'Nothing on this quiz needs grading by hand.'
               : 'Every response has a decision.'}
           </p>
-          <Link to={`/quizzes/${id}`} className={nb.btnPrimary}>
+          {/* ON TO THE NEXT ONE without going back to Home to find it. */}
+          {nextQuiz && (
+            <Link to={`/quizzes/${nextQuiz.quiz_id}/grade`} className={nb.btnPrimary}>
+              Next: {nextQuiz.title} · {nextQuiz.count} to grade &rarr;
+            </Link>
+          )}
+          <Link to={`/quizzes/${id}`} className={nextQuiz ? nb.btnSecondary : nb.btnPrimary}>
             Back to results
           </Link>
         </div>
