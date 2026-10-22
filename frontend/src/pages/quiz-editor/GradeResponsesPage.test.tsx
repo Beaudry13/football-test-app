@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GradeResponsesPage } from './GradeResponsesPage';
+import * as authModule from '../../auth/AuthContext';
 import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 
 vi.mock('../../api/quizzes', () => ({ getQuiz: vi.fn() }));
@@ -170,7 +171,7 @@ describe('the question anchors the screen', () => {
 
     // Question 2 of the QUIZ - the auto-graded one is first - not "1 of 2".
     expect(await screen.findByText(/Question 2/)).toBeInTheDocument();
-    expect(screen.getByText(/2 left/)).toBeInTheDocument();
+    expect(screen.getByText(/0 of 2 graded/)).toBeInTheDocument();
     expect(screen.getByText(/3 left on this quiz/)).toBeInTheDocument();
   });
 
@@ -387,5 +388,136 @@ describe('finishing', () => {
     renderPage();
 
     expect(await screen.findByText(/Nothing on this quiz needs grading by hand/)).toBeInTheDocument();
+  });
+});
+
+/** GRADE FAST: the keys, the cursor, a decision shown at once, and only what
+ *  is still waiting - with no way to decide answers nobody looked at. */
+describe('grading fast', () => {
+  const rowOf = (text: string) => screen.getByText(text).closest('li')!;
+  const pressed = (row: HTMLElement, name: RegExp) => within(row).getByRole('button', { name }).getAttribute('aria-pressed');
+
+  it('C marks the current answer correct and moves on to the next one waiting; X marks it incorrect', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    // The first answer waiting is current.
+    expect(rowOf('Hook to curl, eyes on #3')).toHaveAttribute('aria-current', 'true');
+
+    await user.keyboard('c');
+    expect(gradeAnswer).toHaveBeenCalledWith(100, { is_correct: true, coach_feedback: null });
+    // Shown at once - and the cursor is on the next answer waiting.
+    expect(pressed(rowOf('Hook to curl, eyes on #3'), /Correct/)).toBe('true');
+    expect(rowOf('Flat')).toHaveAttribute('aria-current', 'true');
+    expect(await screen.findByText(/1 of 2 graded/)).toBeInTheDocument();
+
+    await user.keyboard('x');
+    expect(gradeAnswer).toHaveBeenLastCalledWith(104, { is_correct: false, coach_feedback: null });
+    expect(pressed(rowOf('Flat'), /Incorrect/)).toBe('true');
+    // Nothing left here: the next step is the next question.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Next question/ })).toHaveFocus());
+    // Each decision is one write; nothing is reloaded after it.
+    expect(listResponses).toHaveBeenCalledTimes(1);
+  });
+
+  it('the arrows move the cursor, and a click picks an answer', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    await user.keyboard('{ArrowRight}');
+    expect(rowOf('Flat')).toHaveAttribute('aria-current', 'true');
+    await user.keyboard('{ArrowLeft}');
+    expect(rowOf('Hook to curl, eyes on #3')).toHaveAttribute('aria-current', 'true');
+    await user.click(screen.getByText('Flat'));
+    expect(rowOf('Flat')).toHaveAttribute('aria-current', 'true');
+  });
+
+  it('a decision the server refuses is undone, and said', async () => {
+    vi.mocked(gradeAnswer).mockRejectedValue(new Error('Could not save that grade.'));
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    await user.keyboard('c');
+    expect(await screen.findByText('Could not save that grade.')).toBeInTheDocument();
+    expect(pressed(rowOf('Hook to curl, eyes on #3'), /Correct/)).toBe('false');
+    expect(screen.getByText(/0 of 2 graded/)).toBeInTheDocument();
+  });
+
+  it('"Ungraded only" shows what is still waiting - one decided now stays, marked, until he moves on', async () => {
+    const graded = responses();
+    graded[0].answers![0].is_correct = true;
+    vi.mocked(listResponses).mockResolvedValue(graded);
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    expect(screen.getByText(/1 of 2 graded/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Ungraded only/ }));
+    expect(screen.queryByText('Hook to curl, eyes on #3')).toBeNull();
+    expect(rowOf('Flat')).toHaveAttribute('aria-current', 'true');
+    await user.click(within(rowOf('Flat')).getByRole('button', { name: /Correct/ }));
+    // Still there, marked: a misclick stays visible.
+    expect(pressed(rowOf('Flat'), /Correct/)).toBe('true');
+
+    await user.keyboard('u');
+    expect(screen.getByText('Hook to curl, eyes on #3')).toBeInTheDocument();
+  });
+
+  it('"Ungraded only" is not offered before anything is decided', async () => {
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    expect(screen.queryByRole('button', { name: /Ungraded only/ })).toBeNull();
+  });
+
+  it('N goes to the next question, and A lays the answer over the drawings or takes it off', async () => {
+    const q = quiz();
+    Object.assign(q.questions!.find((x) => x.id === DRAW_Q)!, {
+      answer_drawing: { format: 'peira.drawing', version: 1, coordinate_width: 1200, coordinate_height: 800, strokes: [] },
+      image: { image_url: '/uploads/live-drop.jpg' },
+    });
+    vi.mocked(getQuiz).mockResolvedValue(q);
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    await user.keyboard('n');
+    await screen.findByRole('heading', { name: 'Draw your drop.' });
+    const tile = () => screen.getByText(/Drawing by .* for: Draw your drop\./);
+    expect(tile().getAttribute('data-overlay')).toBe('on');
+    await user.keyboard('a');
+    expect(tile().getAttribute('data-overlay')).toBe('off');
+    await user.keyboard('c');
+    expect(gradeAnswer).toHaveBeenCalledWith(101, { is_correct: true, coach_feedback: null });
+  });
+
+  it('there is no way to mark everything at once', async () => {
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    expect(screen.queryByRole('button', { name: /all correct|mark all|grade all/i })).toBeNull();
+  });
+
+  it('beside the question: the concept, who he is, and - for a Motion Lab coach - the play it came from', async () => {
+    const q = quiz();
+    Object.assign(q.questions!.find((x) => x.id === WRITTEN_Q)!, {
+      concept: { id: 3, name: 'Cover 3 rules', is_archived: false },
+      subject_role: 'Boundary safety',
+      motion_play_id: 14,
+    });
+    vi.mocked(getQuiz).mockResolvedValue(q);
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    expect(screen.getByText('Cover 3 rules')).toBeInTheDocument();
+    expect(screen.getByText('Boundary safety')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
+    vi.restoreAllMocks();
+  });
+
+  it('a coach without Motion Lab is not offered the play', async () => {
+    const q = quiz();
+    Object.assign(q.questions!.find((x) => x.id === WRITTEN_Q)!, { motion_play_id: 14 });
+    vi.mocked(getQuiz).mockResolvedValue(q);
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    expect(screen.queryByRole('link', { name: 'Open the play' })).toBeNull();
   });
 });
