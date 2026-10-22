@@ -336,7 +336,7 @@ describe('Make a quiz question from a play', () => {
     cleanup()
     localStorage.clear()
     vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
-      made: [{ id: 4, title: 'Week 3 install', kind: 'QUIZ', from_play: 2, question_count: 6 }],
+      made: [{ id: 4, title: 'Week 3 install', kind: 'QUIZ', from_play: 2, question_count: 6, concepts: [], roles: [], taught_at: null }],
       last: null,
     })
     open(newPlay('Jet Dig'), 14)

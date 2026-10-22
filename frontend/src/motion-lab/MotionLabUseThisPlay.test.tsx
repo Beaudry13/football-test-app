@@ -77,8 +77,8 @@ describe('Use this play: what was already made from it', () => {
     await settle()
     vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
       made: [
-        { id: 8, title: 'Trips Jet - Boundary safety', kind: 'REP', from_play: 3, question_count: 4 },
-        { id: 4, title: 'Week 6 install', kind: 'QUIZ', from_play: 1, question_count: 12 },
+        { id: 8, title: 'Trips Jet - Boundary safety', kind: 'REP', from_play: 3, question_count: 4, concepts: ['Motion adjustment'], roles: ['Boundary safety'], taught_at: '2026-10-21T15:00:00Z' },
+        { id: 4, title: 'Week 6 install', kind: 'QUIZ', from_play: 1, question_count: 12, concepts: [], roles: [], taught_at: null },
       ],
       last: null,
     })
@@ -87,9 +87,10 @@ describe('Use this play: what was already made from it', () => {
     const made = await screen.findByRole('group', { name: 'Made from this play' })
     expect(repsApi.getMadeFromPlay).toHaveBeenCalledWith(100)
     const rows = within(made).getAllByRole('menuitem')
+    // What, who, and whether it was taught - in the coach's own words.
     expect(rows.map((r) => r.textContent)).toEqual([
-      'Rep Trips Jet - Boundary safety3 decisions from this play',
-      'Quiz Week 6 install1 question from this play',
+      'Rep Trips Jet - Boundary safety3 decisions · Boundary safety · Motion adjustment · taught Oct 21',
+      'Quiz Week 6 install1 question',
     ])
     fireEvent.click(rows[0])
     expect(await screen.findByText('rep page')).toBeInTheDocument()
@@ -133,5 +134,21 @@ describe('Use this play starts from the man on the field', () => {
     fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Make a quiz question/ }))
     expect(screen.getByRole('combobox', { name: /Whose job/ })).toHaveValue('')
+  })
+})
+
+describe('Use this play: have I already taught it?', () => {
+  it('teaching a moment from the play is remembered, and the menu says when', async () => {
+    seed()
+    await settle()
+    await openAt('/motion-lab/plays/100')
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    expect(screen.queryByText(/You taught it/)).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: /Teach a moment/ }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Teach this play' })).getByRole('button', { name: 'Teach it' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    const made = await screen.findByRole('group', { name: 'Made from this play' })
+    expect(made).toHaveTextContent(/You taught it/)
   })
 })

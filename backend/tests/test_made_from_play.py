@@ -54,8 +54,14 @@ class TestMadeFromAPlay:
 
         body = client.get(URL.format(play), headers=headers).get_json()
         assert body["made"] == [
-            {"id": rep["id"], "title": "Trips Jet - Boundary safety", "kind": "REP", "from_play": 1, "question_count": 1},
-            {"id": install["id"], "title": "Week 6 install", "kind": "QUIZ", "from_play": 2, "question_count": 3},
+            {
+                "id": rep["id"], "title": "Trips Jet - Boundary safety", "kind": "REP", "from_play": 1, "question_count": 1,
+                "concepts": ["Motion adjustment"], "roles": ["Boundary safety"], "taught_at": None,
+            },
+            {
+                "id": install["id"], "title": "Week 6 install", "kind": "QUIZ", "from_play": 2, "question_count": 3,
+                "concepts": [], "roles": [], "taught_at": None,
+            },
         ]
         assert body["last"] == {
             "concept": {"id": motion["id"], "name": "Motion adjustment"},
@@ -110,3 +116,14 @@ class TestMadeFromAPlay:
         client.get(URL.format(play), headers=headers)
         after = client.get(f"/api/quizzes/{quiz['id']}", headers=headers).get_json()
         assert after == before
+
+    def test_a_rep_taught_from_its_results_says_when(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        play = _motion_play(app, coach["organization_id"])
+        rep = _rep(client, headers, title="Trips Jet - Boundary safety")
+        motion = _concept(client, headers, "Motion adjustment")
+        _decision(client, headers, rep["id"], "Your check?", ["Rotate", "Stay"], play_id=play, concept=motion)
+        taught = client.post(f"/api/quizzes/{rep['id']}/rep-teach", json={"concept_id": motion["id"]}, headers=headers)
+        assert taught.status_code in (200, 201), taught.get_json()
+        made = client.get(URL.format(play), headers=headers).get_json()["made"][0]
+        assert made["taught_at"] is not None

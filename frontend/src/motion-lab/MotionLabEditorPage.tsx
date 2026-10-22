@@ -9,6 +9,7 @@ import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
 import { MakeQuestion } from './MakeQuestion'
 import { MakeRep } from './MakeRep'
 import { TeachPlay } from './TeachPlay'
+import { readTaught } from './taughtMemory'
 import type { Player } from './engine/formation'
 import { SCHEMA_VERSION, type Play } from './engine/play'
 import { getMotionLabSession, toDocument, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
@@ -433,18 +434,24 @@ export default function MotionLabEditorPage() {
                 </button>
                 {/* WHAT HAVE I ALREADY MADE FROM THIS PLAY? Only when there is
                     something; each opens where it lives. */}
-                {made && made.length > 0 && (
+                {((made && made.length > 0) || (currentPlay && readTaught(currentPlay.id))) && (
                   <div className="use-made" role="group" aria-label="Made from this play">
                     <span className="use-made-title">Made from this play</span>
-                    {made.slice(0, MADE_SHOWN).map((m) => (
+                    {/* TAUGHT FROM HERE (this device): Teach a moment saves nothing else. */}
+                    {currentPlay && readTaught(currentPlay.id) && (
+                      <span className="use-why use-made-taught">You taught it {shortDay(readTaught(currentPlay.id)!)}</span>
+                    )}
+                    {(made ?? []).slice(0, MADE_SHOWN).map((m) => (
                       <Link key={m.id} role="menuitem" className="use-made-row" to={m.kind === 'REP' ? `/reps/${m.id}` : `/quizzes/${m.id}`}>
                         <span className="use-made-name">
                           <span className="use-made-kind">{m.kind === 'REP' ? 'Rep' : 'Quiz'}</span> {m.title}
                         </span>
-                        <span className="use-why">{madeCount(m)}</span>
+                        <span className="use-why" title={madeDetail(m)}>
+                          {madeDetail(m)}
+                        </span>
                       </Link>
                     ))}
-                    {made.length > MADE_SHOWN && <span className="use-why use-made-more">and {made.length - MADE_SHOWN} more</span>}
+                    {(made ?? []).length > MADE_SHOWN && <span className="use-why use-made-more">and {(made ?? []).length - MADE_SHOWN} more</span>}
                   </div>
                 )}
               </div>
@@ -510,9 +517,21 @@ const UNDO_MS = 10000
 
 /** How many of the play's quizzes and Reps the menu lists; the rest are counted. */
 const MADE_SHOWN = 4
-function madeCount(m: MadeFromPlay): string {
+/** "Tue Oct 21" - when, in a coach's words. */
+function shortDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+/** WHAT, WHO AND WHETHER IT WAS TAUGHT: "3 decisions · Boundary safety · Motion adjustment · taught Oct 21". */
+function madeDetail(m: MadeFromPlay): string {
   const word = m.kind === 'REP' ? 'decision' : 'question'
-  return `${m.from_play} ${word}${m.from_play === 1 ? '' : 's'} from this play`
+  return [
+    `${m.from_play} ${word}${m.from_play === 1 ? '' : 's'}`,
+    ...(m.roles ?? []).slice(0, 2),
+    ...(m.concepts ?? []).slice(0, 2),
+    m.taught_at ? `taught ${new Date(m.taught_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 function shownSaveState(session: PlaySaveState, editPending: boolean): PlaySaveState {

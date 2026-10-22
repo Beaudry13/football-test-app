@@ -581,9 +581,35 @@ def made_from_play(play_id: int):
     for question, quiz in rows:
         entry = made.setdefault(
             quiz.id,
-            {"id": quiz.id, "title": quiz.title, "kind": quiz.kind, "from_play": 0, "question_count": len(quiz.questions)},
+            {
+                "id": quiz.id,
+                "title": quiz.title,
+                "kind": quiz.kind,
+                "from_play": 0,
+                "question_count": len(quiz.questions),
+                # WHAT AND WHO, in the coach's own words: the concepts and the
+                # "You're the..." of this play's questions there (newest first).
+                "concepts": [],
+                "roles": [],
+                "taught_at": None,
+            },
         )
         entry["from_play"] += 1
+        concept = question.concept
+        if concept is not None and not concept.is_archived and concept.name not in entry["concepts"]:
+            entry["concepts"].append(concept.name)
+        if question.subject_role and question.subject_role not in entry["roles"]:
+            entry["roles"].append(question.subject_role)
+    # TAUGHT: a Rep problem marked taught (rep-teach) - when it last was.
+    if made:
+        marks = (
+            db.session.query(RepTeachMark.quiz_id, db.func.max(RepTeachMark.taught_at))
+            .filter(RepTeachMark.quiz_id.in_(list(made)))
+            .group_by(RepTeachMark.quiz_id)
+            .all()
+        )
+        for quiz_id, at in marks:
+            made[quiz_id]["taught_at"] = at.isoformat() if at else None
     last = None
     if rows:
         question = rows[0][0]

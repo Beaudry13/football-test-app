@@ -305,8 +305,8 @@ describe('Make a rep from a play', () => {
   it('the Rep already made from this play is offered first, and chosen', async () => {
     vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
       made: [
-        { id: 3, title: 'Week 3 install', kind: 'QUIZ', from_play: 1, question_count: 4 },
-        { id: 8, title: 'Red zone - Mike', kind: 'REP', from_play: 2, question_count: 2 },
+        { id: 3, title: 'Week 3 install', kind: 'QUIZ', from_play: 1, question_count: 4, concepts: [], roles: [], taught_at: null },
+        { id: 8, title: 'Red zone - Mike', kind: 'REP', from_play: 2, question_count: 2, concepts: [], roles: [], taught_at: null },
       ],
       last: null,
     })

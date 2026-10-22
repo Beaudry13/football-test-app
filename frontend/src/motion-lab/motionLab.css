@@ -1641,6 +1641,14 @@
 .motion-lab-root .use-made-row:focus-visible {
   background: rgba(255, 255, 255, 0.06);
 }
+.motion-lab-root .use-made-taught {
+  padding: 0 10px 4px;
+}
+.motion-lab-root .use-made-row .use-why {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .motion-lab-root .use-made-name {
   overflow: hidden;
   text-overflow: ellipsis;

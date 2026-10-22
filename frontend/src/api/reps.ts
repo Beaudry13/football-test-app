@@ -190,6 +190,11 @@ export interface MadeFromPlay {
   /** How many of its live questions came from this play. */
   from_play: number;
   question_count: number;
+  /** The concepts and "You're the..." of those questions, in the coach's words. */
+  concepts: string[];
+  roles: string[];
+  /** A Rep problem marked taught: when it last was. */
+  taught_at: string | null;
 }
 
 /** What the coach said the last time he made something from the play - his words, verbatim. */

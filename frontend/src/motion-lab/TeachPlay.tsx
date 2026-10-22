@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { PlayPicture, type DrawnStill } from '../components/football/PlayPicture'
 import { TeachView, type TeachSlide } from '../components/teach/TeachView'
+import { rememberTaught } from './taughtMemory'
 import type { Play } from './engine/play'
 import { MomentPicker } from './MomentPicker'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
@@ -89,6 +90,7 @@ export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }
 
   const teach = () => {
     writeNotes(play.id, notes)
+    rememberTaught(play.id)
     setTeaching(true)
   }
 
