@@ -876,3 +876,13 @@
 .sendAgain {
   margin: var(--space-4, 16px) 0;
 }
+
+/* A player's profile, quiet beside his name in the Players table. */
+.playerProfile {
+  margin-left: var(--space-2);
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-muted);
+}
+.playerProfile:hover {
+  color: var(--color-accent);
+}

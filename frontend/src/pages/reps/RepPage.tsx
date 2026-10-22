@@ -105,8 +105,11 @@ export function RepPage() {
   /** Retest = a new Rep of this concept for exactly the players who missed it, sent, opened. */
   const retest = async (problem: RepConcept) => {
     const made = await createRepRetest(id, problem.concept?.id ?? null);
-    await activateQuiz(made.id, [], 'PRACTICE');
-    navigate(`/reps/${made.id}`);
+    try {
+      await activateQuiz(made.id, [], 'PRACTICE');
+    } finally {
+      navigate(`/reps/${made.id}`);
+    }
   };
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
 
@@ -1564,6 +1567,13 @@ function Players({ results }: { results: RepResults }) {
                     {open === p.key ? '▾' : '▸'} {p.display_name}
                   </button>
                   {p.position ? <span className={styles.pos}> {p.position}</span> : null}
+                  {/* HIS WHOLE PICTURE - every quiz and Rep, what he still
+                      needs - one tap away, not just this Rep's answers. */}
+                  {p.player_id !== null && (
+                    <Link to={`/roster/${p.player_id}`} className={styles.playerProfile} aria-label={`${p.display_name}'s profile`}>
+                      Profile
+                    </Link>
+                  )}
                 </td>
                 <td className={p.correct < p.answered ? styles.missedCell : ''}>
                   {p.correct} of {p.answered}

@@ -54,7 +54,7 @@ describe('What a player knows', () => {
     expect(screen.getByText('Motion adjustment')).toBeInTheDocument();
     expect(screen.getByText('Missed in Week 6 coverage')).toBeInTheDocument();
     // A quiz miss is taught from the quiz's Results.
-    expect(screen.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/quizzes/7?tab=results');
+    expect(screen.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/quizzes/7?tab=results&teach=1');
     // How each concept changed is one level down, folded.
     expect(screen.getByText('Retest correct').closest('details')).not.toHaveAttribute('open');
     expect(screen.getByText('How it changed')).toBeInTheDocument();

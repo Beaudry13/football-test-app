@@ -52,13 +52,19 @@ export function ConceptHistoryPage() {
     if (!latest) return;
     setBusy(true);
     setError(null);
+    let made: { id: number } | null = null;
     try {
-      const made = await createRepRetest(latest.rep_id, id);
+      made = await createRepRetest(latest.rep_id, id);
       await activateQuiz(made.id, [], 'PRACTICE');
       navigate(`/reps/${made.id}`);
     } catch (err) {
-      setError(getErrorMessage(err));
-      setBusy(false);
+      // Made but not sent: open it (its Send is right there) rather than
+      // leave a button that would build a second retest.
+      if (made) navigate(`/reps/${made.id}`);
+      else {
+        setError(getErrorMessage(err));
+        setBusy(false);
+      }
     }
   };
 

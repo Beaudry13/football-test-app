@@ -86,7 +86,7 @@ export function NextUp({
         <span className={styles.actions}>
           {/* Taught already (by anyone): the next step is Retest, on the Rep page. */}
           {p.taught ? (
-            <Link to={`/reps/${fresh.id}`} className={nb.btnPrimary}>
+            <Link to={`/reps/${fresh.id}?retest=${p.concept_id ?? 'general'}`} className={nb.btnPrimary}>
               Retest it
             </Link>
           ) : (

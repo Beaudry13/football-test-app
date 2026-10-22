@@ -110,6 +110,12 @@ function ModePicker({
   );
 }
 
+/** "Ty Adams, Bo Brown and 3 more" - names a coach can check at a glance. */
+function someNames(names: string[], shown = 4): string {
+  if (names.length <= shown + 1) return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join('');
+  return `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`;
+}
+
 /** A player an activation was refused for: no PIN yet, with PINs enforced. */
 interface PlayerNeedingPin {
   player_id: number;
@@ -158,6 +164,28 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   const joining = [...new Set([...fromPositions, ...groupPlayerIds(groups, selectedGroupIds)])].filter(
     (id) => !onRoster.has(id),
   ).length;
+  /* WHO GETS IT, said before it goes - by the server's own rule
+     (services/access_codes): picked positions join this quiz's roster and the
+     code goes to that roster; a saved group picked on its own REPLACES the
+     roster for this code; otherwise it is the roster - which, on a retest, is
+     exactly the players who missed it. */
+  const chosenGroups = groups.filter((g) => selectedGroupIds.includes(g.id));
+  const groupReach = new Set(chosenGroups.flatMap((g) => g.players.map((p) => p.player?.id ?? `name:${p.player_name}`))).size;
+  const rosterNames = (roster?.players ?? []).map((p) => p.player?.full_name ?? p.player_name);
+  /** Known to reach nobody: the server would refuse it, so the button says so first. */
+  const reachesNobody = roster !== null && fromPositions.length === 0 && (chosenGroups.length > 0 ? groupReach === 0 : rosterCount === 0);
+  const audience =
+    fromPositions.length > 0
+      ? null // said under the chips
+      : chosenGroups.length > 0
+        ? `Goes to the ${groupReach} ${groupReach === 1 ? 'player' : 'players'} in ${chosenGroups.map((g) => g.name).join(' and ')}${
+            rosterCount > 0 ? ` - instead of the ${rosterCount} on this quiz's list` : ''
+          }.`
+        : roster === null
+          ? null
+          : rosterCount > 0
+            ? `Goes to ${rosterCount === 1 ? '' : `these ${rosterCount}: `}${someNames(rosterNames)}.`
+            : 'Nobody yet - pick positions or a group above, or add players on the Roster tab.';
 
   // The API refuses to activate a quiz with no questions (422). That one is
   // unambiguous from data this tab already has, so the button says so rather
@@ -209,7 +237,11 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     setNeedPins(null);
     setIsActivating(true);
     try {
-      if (fromPositions.length > 0) {
+      if (activeCode) {
+        // REACTIVATING: the same audience as the live code - its groups, or
+        // the roster - never whatever happened to be ticked earlier.
+        await activateQuiz(quiz.id, activeCode.groups.map((g) => g.id), mode, randomizeQuestions, availableUntil);
+      } else if (fromPositions.length > 0) {
         // Positions join this quiz's roster - and any picked groups' players
         // with them - and the code goes to that roster.
         const ids = [...new Set([...fromPositions, ...groupPlayerIds(groups, selectedGroupIds)])];
@@ -221,6 +253,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       await load();
       setMode('GRADED');
       setPositions([]);
+      setSelectedGroupIds([]);
       // The new code is live; the panel that made it has nothing left to say.
       setShowReactivate(false);
     } catch (err) {
@@ -385,6 +418,11 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 <p className={styles.reactivateWarning}>
                   This creates a NEW code. The link you already shared stops working.
                 </p>
+                <p className={styles.reach}>
+                  {activeCode.groups.length > 0
+                    ? `Goes to the same players: ${activeCode.groups.map((g) => g.name).join(' and ')}.`
+                    : "Goes to the same players: this quiz's list."}
+                </p>
                 <AvailableUntil value={availableUntil} onChange={setAvailableUntil} />
                 <ModePicker
                   rep={quiz.kind === 'REP'}
@@ -501,18 +539,19 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               )}
             </>
 
+            {audience && (
+              <p className={styles.reach} role="status">
+                {audience}
+              </p>
+            )}
             <button
               className={nb.btnPrimary}
               onClick={handleActivate}
-              disabled={isActivating || hasNoQuestions}
-              title={hasNoQuestions ? 'Add a question first' : undefined}
+              disabled={isActivating || hasNoQuestions || reachesNobody}
+              title={hasNoQuestions ? 'Add a question first' : reachesNobody ? 'Pick who gets it first' : undefined}
             >
               {isActivating ? 'Activating…' : 'Activate Quiz'}
             </button>
-            <p className={styles.activateHint}>
-              Requires at least one question, and either a non-empty roster or a selected group. The
-              code is valid for 24 hours.
-            </p>
           </>
         )}
       </div>

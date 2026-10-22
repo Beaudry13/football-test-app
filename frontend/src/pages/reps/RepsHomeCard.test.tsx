@@ -97,7 +97,7 @@ describe('Reps on Home', () => {
     open();
     const next = within(await screen.findByLabelText('Next up'));
     expect(next.getByText(/missed · taught/)).toBeInTheDocument();
-    expect(next.getByRole('link', { name: 'Retest it' })).toHaveAttribute('href', '/reps/7');
+    expect(next.getByRole('link', { name: 'Retest it' })).toHaveAttribute('href', '/reps/7?retest=5');
     expect(next.queryByRole('link', { name: 'Teach it' })).toBeNull();
   });
 

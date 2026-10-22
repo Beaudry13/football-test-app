@@ -78,3 +78,9 @@
   font-size: 13px;
   color: var(--color-danger, #b42318);
 }
+
+/* Who missed it, one tap down: names that open each player. */
+.missed {
+  flex-basis: 100%;
+  font-size: var(--peira-text-meta);
+}

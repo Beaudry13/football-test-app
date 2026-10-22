@@ -11,6 +11,7 @@ import { quizTeachSlides } from './quizTeach';
 import { RetestAction } from './RetestAction';
 import { playerLabels } from '../../utils/playerDisplayLabel';
 import styles from './WeakestConcepts.module.css';
+import missStyles from './MissActions.module.css';
 
 /** "What should I teach next?", above everything else on Results.
  *
@@ -48,7 +49,7 @@ function teachSlides(concept: ConceptBreakdown, questions: Question[], breakdown
 
 /** TEACH -> RETEST without leaving the teaching screen: the same draft
  *  "Retest these N" builds, for the same players. */
-function TeachRetest({ quizId, concept }: { quizId: number; concept: ConceptBreakdown }) {
+function TeachRetest({ quizId, concept, className }: { quizId: number; concept: ConceptBreakdown; className?: string }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
@@ -57,6 +58,7 @@ function TeachRetest({ quizId, concept }: { quizId: number; concept: ConceptBrea
   return (
     <button
       type="button"
+      className={className}
       disabled={busy}
       title={failed ?? undefined}
       onClick={async () => {
@@ -68,7 +70,7 @@ function TeachRetest({ quizId, concept }: { quizId: number; concept: ConceptBrea
             player_ids: concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null),
             player_names: concept.players_missed.filter((p) => p.player_id === null).map((p) => p.player_name),
           });
-          navigate(`/quizzes/${draft.id}?tab=questions`);
+          navigate(`/quizzes/${draft.id}?tab=activate`);
         } catch (err) {
           setFailed(getErrorMessage(err));
           setBusy(false);
@@ -117,6 +119,7 @@ export function WeakestConcepts({
         playerIds={concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null)}
         conceptId={concept.concept_id}
         extraAction={<TeachRetest quizId={quizId} concept={concept} />}
+        missed={show === 'more' ? [] : concept.players_missed}
         show={show}
         startTeaching={show !== 'more' && teachConceptId !== null && concept.concept_id === teachConceptId}
       />
@@ -309,6 +312,11 @@ export function WeakestConcepts({
                     </span>
                   )}
                   {missActions(concept, 'Teach')}
+                  {/* RETEST ON THE ROW, not only inside Teach: the same
+                      draft the top card builds, for exactly who missed it. */}
+                  {concept.retestable_question_count > 0 && (
+                    <TeachRetest quizId={quizId} concept={concept} className={missStyles.action} />
+                  )}
                 </>
               )}
             </li>
