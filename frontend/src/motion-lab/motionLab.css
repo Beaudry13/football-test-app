@@ -1358,6 +1358,21 @@
   background: #2a2412;
 }
 
+/* A panel's one primary action (Make question, Make rep, Open rep) keeps its
+   gold. Without this the prototype's `.popover button` rule - same
+   specificity, later - left it dark text on the dark panel: the button that finishes the job, barely visible. */
+.motion-lab-root .popover button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  text-align: center;
+}
+.motion-lab-root .popover button.primary:not(:disabled):hover {
+  background: var(--accent-hover);
+}
+.motion-lab-root .popover button.primary:disabled:hover {
+  background: var(--accent);
+}
+
 /* THE PRIMARY. Hover darkens rather than lightening (the prototype's
    #ffd966), and it stays opaque: fading the button would fade its words. */
 .motion-lab-root button.primary:not(:disabled):hover {
