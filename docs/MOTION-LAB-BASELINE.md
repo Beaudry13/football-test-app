@@ -429,6 +429,8 @@ Unset - every production build - nothing is handed off.
 *Since the connected-system cycle (22 October 2026)* the page shows the viewer
 INSIDE Motion Lab rather than in a pop-up: full screen over the editor, with
 "Back to Motion Lab" (and Escape), through the same handoff (`answerViewer`).
+The pop-up path described above (`viewIn3D`, window takeover, closed-window
+watch) was removed in the coach-week cycle; the contract is unchanged.
 A pending edit is flushed and saved before a saved play is handed over, and the
 unsaved scratch play previews as an explicit draft (`play=draft`; id and
 revision null, `draft: true`) - nothing is saved to preview it. See

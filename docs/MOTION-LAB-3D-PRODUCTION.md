@@ -45,10 +45,11 @@ The coach presses **Preview 3D** in Motion Lab's top bar.
     Broadcast), labels and paths toggles, and the dock (restart, step,
     play/pause, timeline with Snap/Whistle marks, speed 0.25×–2×, loop).
   - There is no score bug, no game HUD and no debug UI.
-  - Opened as a tab of its own (the older `viewIn3D` path, not used by the page
-    now), the title block names the play in coach words: "From Motion Lab ·
-    saved 2:14 PM" or "Not saved yet". It also carries **← Back to Motion Lab**,
-    which closes the tab.
+  - If the viewer is ever opened as a tab of its own, its title block names the
+    play in coach words ("From Motion Lab · saved 2:14 PM" or "Not saved yet")
+    and carries **← Back to Motion Lab**, which closes the tab. PEIRA itself no
+    longer opens it that way: the old pop-up path (`viewIn3D`) was removed on
+    22 October 2026 once the overlay replaced it.
 - **Coach-authored truth.**
   - The viewer runs Motion Lab's own engine on the document, untouched. The
     vendored copy is byte-identical (`sync.mjs --check`: all 10 files).

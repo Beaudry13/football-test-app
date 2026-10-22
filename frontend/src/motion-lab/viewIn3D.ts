@@ -1,11 +1,11 @@
-// VIEW IN 3D (V6): hand the SAVED play to the PEIRA 3D play viewer.
+// PREVIEW 3D: hand the play to the PEIRA 3D play viewer, shown inside Motion
+// Lab's own page (Preview3DOverlay - full screen over the editor, which stays
+// mounted, with "Back to Motion Lab").
 //
-// A development bridge, OFF unless VITE_MOTION_LAB_3D_URL is set - it is not in
-// any production build - so Motion Lab ships exactly as before. Motion Lab
-// knows nothing about 3D here: it opens the viewer and hands it the play exactly
-// as the server stores it (the coach intent, stances included). Everything else
-// - reading the play, standing each man in his stance, animating it - is the
-// viewer's.
+// OFF unless VITE_MOTION_LAB_3D_URL is set, which no production build has yet.
+// Motion Lab knows nothing about 3D here: it hands the viewer the play exactly
+// as the coach made it (stances included). Everything else - reading the play,
+// standing each man in his stance, animating it - is the viewer's.
 //
 // THE CONTRACT (version 1) - the viewer checks it strictly at its door
 // (peira-3d-football-poc/src/play/motionLabContract.ts):
@@ -14,30 +14,22 @@
 //     play: { id, revision, name, schemaVersion, updatedAt },
 //     document: <the row's document, untouched> }
 //
-// THE HANDSHAKE. The viewer opens at `?source=peira&play=<id>` and asks the
-// window that opened it - { type: READY, requestId, playId } - until it is
-// answered. Each request (one per page load of the viewer) is answered once, to
-// the viewer's own origin only, with the row fetched from the server AT THAT
-// MOMENT - so a refresh of the viewer shows the latest save, never a copy held
-// here. A newer "View in 3D" takes the viewer window over: the earlier handoff
-// stops answering, so the window can never be handed the previous play. The
-// handoff ends when the viewer window closes.
+// A saved play is answered as the server holds it, once its pending save has
+// landed. The UNSAVED play previews too (`play=draft`): the document on screen,
+// with an identity that says so - id and revision null, draft: true. Nothing is
+// saved to preview it.
 //
-// THE SAVED PLAY, not the screen - which is why the page offers this only once
-// the play is saved.
+// THE HANDSHAKE (`answerViewer`). The viewer opens at
+// `?source=peira&play=<id | draft>&embed=1` and asks the page around it -
+// { type: READY, requestId, playId } - until it is answered. Each request (one
+// per page load of the viewer) is answered once, to the viewer's own origin
+// only, with the play as it is AT THAT MOMENT - so a refresh inside the viewer
+// shows the latest version, never a copy held here.
 //
-// PREVIEW 3D (connected-system cycle). Motion Lab now shows the viewer INSIDE
-// its own page - full screen over the editor, which stays mounted, with "Back
-// to Motion Lab" closing it - through the same handoff (`answerViewer`, the
-// core both share): the viewer asks the page around it, at the viewer's origin
-// only, once per page load. Two additions, both explicit in the contract:
-//   * a saved play is answered once its pending save has landed - the coach
-//     never has to "try again in a moment";
-//   * an UNSAVED play (the scratch play) previews too: `play=draft`, answered
-//     with the document on screen and an identity that says it is a draft
-//     (id and revision null, draft: true). Nothing is saved to preview it.
+// (Until the connected-system cycle the viewer opened in a pop-up window,
+// `viewIn3D`; that path was removed once the overlay replaced it.)
 
-import { getMotionPlay, type MotionPlayDocument, type MotionPlayRow } from '../api/motionLab'
+import type { MotionPlayDocument, MotionPlayRow } from '../api/motionLab'
 
 export const VIEWER_3D_URL = (import.meta.env.VITE_MOTION_LAB_3D_URL as string | undefined) || null
 
@@ -84,6 +76,17 @@ export function viewerUrlFor(viewerUrl: string, target: PreviewTarget, { embed =
   return url.toString()
 }
 
+/** Listening for the viewer's messages (replaceable in tests). */
+interface Deps {
+  addListener: (fn: (e: MessageEvent) => void) => void
+  removeListener: (fn: (e: MessageEvent) => void) => void
+}
+
+const browser: Deps = {
+  addListener: (fn) => window.addEventListener('message', fn),
+  removeListener: (fn) => window.removeEventListener('message', fn),
+}
+
 /**
  * THE HANDOFF'S CORE: answer `viewer`'s requests for `target` with `load()`.
  *
@@ -97,7 +100,7 @@ export function answerViewer(
   viewerOrigin: string,
   target: PreviewTarget,
   load: () => Promise<ViewerPayload | DraftPayload>,
-  deps: Pick<Deps, 'addListener' | 'removeListener'> = browser,
+  deps: Deps = browser,
 ): () => void {
   const answered = new Set<string>()
   const onMessage = (e: MessageEvent) => {
@@ -124,61 +127,4 @@ export function toViewerPayload(row: MotionPlayRow): ViewerPayload {
     play: { id: row.id, revision: row.revision, name: row.name, schemaVersion: row.schema_version, updatedAt: row.updated_at },
     document: row.document,
   }
-}
-
-/** How often the handoff looks to see whether the viewer window has closed. */
-const WATCH_MS = 2000
-
-interface Deps {
-  open: (url: string, target: string) => Window | null
-  fetchRow: (id: number) => Promise<MotionPlayRow>
-  addListener: (fn: (e: MessageEvent) => void) => void
-  removeListener: (fn: (e: MessageEvent) => void) => void
-  every: (ms: number, fn: () => void) => () => void
-}
-
-const browser: Deps = {
-  open: (url, target) => window.open(url, target),
-  fetchRow: getMotionPlay,
-  addListener: (fn) => window.addEventListener('message', fn),
-  removeListener: (fn) => window.removeEventListener('message', fn),
-  every: (ms, fn) => {
-    const id = window.setInterval(fn, ms)
-    return () => window.clearInterval(id)
-  },
-}
-
-/** The handoff the viewer window is listening to; a newer View in 3D replaces it. */
-let active: (() => void) | null = null
-
-/**
- * Open the viewer for saved play `serverId` and answer it whenever it asks.
- * Must be called from the click itself (a popup opened later is blocked).
- * Returns false when the window could not be opened.
- */
-export function viewIn3D(viewerUrl: string, serverId: number, deps: Deps = browser): boolean {
-  const url = new URL(viewerUrl)
-  const viewer = deps.open(viewerUrlFor(viewerUrl, serverId), 'peira-3d-viewer')
-  if (!viewer) return false
-  active?.()
-  const stopAnswering = answerViewer(
-    viewer,
-    url.origin,
-    serverId,
-    () =>
-      deps.fetchRow(serverId).then(toViewerPayload, (err: unknown) => {
-        throw err instanceof Error ? err : new Error('the saved play could not be loaded')
-      }),
-    deps,
-  )
-  const stopWatching = deps.every(WATCH_MS, () => {
-    if (viewer.closed) stop()
-  })
-  const stop = () => {
-    stopWatching()
-    stopAnswering()
-    if (active === stop) active = null
-  }
-  active = stop
-  return true
 }
