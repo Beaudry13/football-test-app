@@ -351,7 +351,18 @@ const fmtWhen = (t: number) => {
  *   `onNewPlay`      "New play" (top bar, play menu, a formation) asks the page
  *                    for a new play instead of writing one to storage itself.
  * Without them the editor behaves exactly as before.
+ *
+ * `handle` (PEIRA): what the page may ask of the editor at any moment - see
+ * EditorHandle. The editor fills it while mounted.
  */
+export interface EditorHandle {
+  /** Hand an edit still inside the quiet period to the repository now - so
+   *  what the page reads next (Preview 3D) is the play as it is on screen. */
+  flush(): void
+  /** The man the coach has selected on the board, if any (his player id). */
+  selectedId(): string | null
+}
+
 export function MotionLabEditor({
   repository,
   exit,
@@ -361,6 +372,7 @@ export function MotionLabEditor({
   onSaveUnsaved,
   onNewPlay,
   actions,
+  handle,
 }: {
   repository: PlayRepository
   exit?: ReactNode
@@ -371,6 +383,7 @@ export function MotionLabEditor({
   onNewPlay?: (fromPlayers: Player[], name?: string) => void
   /** PEIRA's own actions on the play (Make question), at the right of the top bar. */
   actions?: ReactNode
+  handle?: { current: EditorHandle | null }
 }) {
   // ---- the play (coach intent) ----------------------------------------
   const [playId, setPlayId] = useState<string>('')
@@ -677,6 +690,15 @@ export function MotionLabEditor({
     return () => clearTimeout(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playId, playName, basePlayers, ball, ballThen, engagements, situation, filter])
+  const selectedRef = useRef(selectedId)
+  selectedRef.current = selectedId
+  useEffect(() => {
+    if (!handle) return
+    handle.current = { flush: flushSave, selectedId: () => selectedRef.current }
+    return () => {
+      handle.current = null
+    }
+  }, [handle, flushSave])
   useEffect(() => {
     const onHide = () => {
       if (document.visibilityState === 'hidden') flushSave()

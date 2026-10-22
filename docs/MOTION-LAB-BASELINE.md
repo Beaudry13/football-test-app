@@ -425,7 +425,14 @@ untouched (`viewIn3D.ts`). So a refresh of the viewer shows the latest save; a
 newer View in 3D takes the viewer window over (the earlier handoff stops
 answering); the handoff ends when the window closes. The viewer checks the
 payload strictly and refuses a malformed play rather than repairing it.
-Unset - every production build - nothing is handed off. Motion Lab knows nothing
+Unset - every production build - nothing is handed off.
+*Since the connected-system cycle (22 October 2026)* the page shows the viewer
+INSIDE Motion Lab rather than in a pop-up: full screen over the editor, with
+"Back to Motion Lab" (and Escape), through the same handoff (`answerViewer`).
+A pending edit is flushed and saved before a saved play is handed over, and the
+unsaved scratch play previews as an explicit draft (`play=draft`; id and
+revision null, `draft: true`) - nothing is saved to preview it. See
+`docs/MOTION-LAB-3D-PRODUCTION.md`. Motion Lab knows nothing
 about 3D beyond that URL: the viewer runs Motion Lab's own engine on the
 document and hands `presnapStance` to its V5.1 stance resolver, where an
 authored stance always beats the position fallback.
@@ -446,7 +453,8 @@ authored stance always beats the position fallback.
   button that cannot work creates confusion"). The component and the handoff
   stay in place, so enabling the viewer later makes Preview 3D appear.
 
-**What production 3D still needs** (checked 20 October 2026): the PEIRA side
+**What production 3D still needs** - superseded by the step list in
+`docs/MOTION-LAB-3D-PRODUCTION.md` (22 October 2026). As checked 20 October 2026: the PEIRA side
 of the handoff is in master (V6, PR #4/#6) and the viewer's vendored engine is
 byte-identical to Motion Lab's (`sync.mjs --check`, 10/10). Missing: (1) the
 viewer is not deployed anywhere (private repo, no host - an owner decision);

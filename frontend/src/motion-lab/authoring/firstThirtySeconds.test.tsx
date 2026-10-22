@@ -267,7 +267,7 @@ describe('Preview 3D', () => {
     expect(btn).toHaveAttribute('aria-disabled', 'true')
     expect(btn.textContent).toBe('Preview 3DSoon')
     fireEvent.click(btn)
-    expect(screen.getByRole('note').textContent).toContain('When it is, this button opens your saved play in 3D')
+    expect(screen.getByRole('note').textContent).toContain('When it is, this button shows your play in 3D')
     fireEvent.keyDown(screen.getByRole('note'), { key: 'Escape' })
     expect(screen.queryByRole('note')).toBeNull()
     expect(onOpen).not.toHaveBeenCalled()

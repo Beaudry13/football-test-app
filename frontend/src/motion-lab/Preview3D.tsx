@@ -3,9 +3,9 @@ import { useState } from 'react'
 /**
  * PREVIEW 3D: PEIRA's signature view, one button in the top bar.
  *
- * WITH A VIEWER (VITE_MOTION_LAB_3D_URL is set) it opens the saved play in the
- * 3D viewer - `onOpen` is the page's handoff (viewIn3D.ts), which also says
- * what to do first when the play is not saved yet.
+ * WITH A VIEWER (VITE_MOTION_LAB_3D_URL is set) it shows the play on screen in
+ * the 3D viewer, inside Motion Lab - `onOpen` is the page's (Preview3DOverlay),
+ * saved or not.
  *
  * WITHOUT ONE it never pretends: the button says "Soon", is announced as
  * unavailable, and pressing it explains instead of doing nothing. That state is
@@ -19,7 +19,7 @@ export function Preview3D({ available, onOpen }: { available: boolean; onOpen: (
   if (available) {
     return (
       <div className="preview-3d">
-        <button className="preview-3d-btn" onClick={onOpen} title="Open the saved play in 3D">
+        <button className="preview-3d-btn" onClick={onOpen} title="See this play in 3D">
           Preview 3D
         </button>
       </div>
@@ -48,7 +48,7 @@ export function Preview3D({ available, onOpen }: { available: boolean; onOpen: (
           }}
         >
           <b>3D preview isn't switched on yet.</b>
-          <span>When it is, this button opens your saved play in 3D, with every player running what you drew.</span>
+          <span>When it is, this button shows your play in 3D, with every player running what you drew.</span>
           <button onClick={() => setExplaining(false)}>OK</button>
         </div>
       )}

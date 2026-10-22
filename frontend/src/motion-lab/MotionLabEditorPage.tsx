@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
-import { listMotionLooks, listMotionPlays } from '../api/motionLab'
+import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { MotionLabEditor } from './authoring/MotionLabEditor'
+import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
 import { MakeQuestion } from './MakeQuestion'
 import { MakeRep } from './MakeRep'
 import { TeachPlay } from './TeachPlay'
 import type { Player } from './engine/formation'
-import type { Play } from './engine/play'
-import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
+import { SCHEMA_VERSION, type Play } from './engine/play'
+import { getMotionLabSession, toDocument, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
 import { Preview3D } from './Preview3D'
-import { VIEWER_3D_URL, viewIn3D } from './viewIn3D'
+import { Preview3DOverlay } from './Preview3DOverlay'
+import { draftPayload, toViewerPayload, VIEWER_3D_URL, type PreviewTarget } from './viewIn3D'
 import './motionLab.css'
 
 /**
@@ -58,6 +59,10 @@ export default function MotionLabEditorPage() {
   const [teachingPlay, setTeachingPlay] = useState(false)
   /** The "Use this play" menu is open. */
   const [using, setUsing] = useState(false)
+  /** What the page may ask of the editor (flush an edit, the selected man). */
+  const editor = useRef<EditorHandle | null>(null)
+  /** PREVIEW 3D: the play shown in the 3D viewer over the editor, or null. */
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
   /** One panel at a time, chosen from the menu. */
   const openPanel = (kind: 'rep' | 'question' | 'teach') => {
     setUsing(false)
@@ -226,23 +231,39 @@ export default function MotionLabEditorPage() {
   const folderId = current ? session.folderIdOf(current) : null
 
   /**
-   * PREVIEW 3D: open the saved play in the 3D viewer. Live when
-   * VITE_MOTION_LAB_3D_URL is set; hands over only a play whose last edit the
-   * server has confirmed, because the viewer is shown the SAVED play.
+   * PREVIEW 3D: the play in the 3D viewer, over the editor (Preview3DOverlay).
+   * Live when VITE_MOTION_LAB_3D_URL is set. A saved play is shown as saved; the
+   * unsaved scratch play as the draft on screen - nothing is saved to preview it.
    */
   const open3D = () => {
+    // The last touch first: an edit inside the quiet period reaches the play now.
+    editor.current?.flush()
     const id = session.repository.currentPlayId()
-    if (id && session.isScratch(id)) {
-      setNotices((all) => [...all, 'Save the play first - Preview 3D shows the saved play.'])
-      return
+    if (!id || !VIEWER_3D_URL) return
+    const serverId = session.isScratch(id) ? null : session.serverIdOf(id)
+    setPreview(serverId !== null ? serverId : 'draft')
+  }
+
+  /**
+   * What the viewer is handed, when it asks. The coach's last touch reaches the
+   * play first - the editor's quiet period, and for a saved play the write - so
+   * the viewer never shows a step behind and he is never told to try again.
+   */
+  const loadPreview = async (target: PreviewTarget) => {
+    editor.current?.flush()
+    const id = session.repository.currentPlayId()
+    const deadline = Date.now() + 10000
+    while (Date.now() < deadline) {
+      const settled = !editPending.current && (target === 'draft' || (id !== null && session.stateOf(id).state === 'saved'))
+      if (settled) break
+      await new Promise((resolve) => setTimeout(resolve, 150))
     }
-    const serverId = id ? session.serverIdOf(id) : null
-    const saved = id !== null && session.stateOf(id).state === 'saved' && !editPending.current
-    if (!VIEWER_3D_URL || serverId === null || !saved) {
-      setNotices((all) => [...all, 'Saving… Preview 3D shows the saved play - try again in a moment.'])
-      return
+    if (target === 'draft') {
+      const play = id ? session.repository.listPlays().find((p) => p.id === id) : null
+      if (!play) throw new Error('the play is no longer open in Motion Lab')
+      return draftPayload(play.name, toDocument(play), SCHEMA_VERSION)
     }
-    if (!viewIn3D(VIEWER_3D_URL, serverId)) setNotices((all) => [...all, 'The 3D viewer window was blocked - allow pop-ups for this site.'])
+    return toViewerPayload(await getMotionPlay(target))
   }
 
   /** "+ New play": a fresh scratch play from these men. Undo brings the old one back. */
@@ -420,7 +441,17 @@ export default function MotionLabEditorPage() {
         isUnsaved={(id) => session.isScratch(id)}
         onSaveUnsaved={(play) => session.saveScratch(play)}
         onNewPlay={startNewPlay}
+        handle={editor}
       />
+      {preview !== null && VIEWER_3D_URL && (
+        <Preview3DOverlay
+          viewerUrl={VIEWER_3D_URL}
+          target={preview}
+          playName={currentName ?? 'This play'}
+          load={() => loadPreview(preview)}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   )
 }
