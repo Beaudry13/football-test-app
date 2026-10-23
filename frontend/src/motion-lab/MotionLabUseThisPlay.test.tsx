@@ -152,3 +152,50 @@ describe('Use this play: have I already taught it?', () => {
     expect(made).toHaveTextContent(/You taught it/)
   })
 })
+
+describe('Motion Lab -> Teach, from what PEIRA already knows', () => {
+  it('the man selected on the field is the man to watch, and his point and concept come from what was made', async () => {
+    const a = seed()
+    await settle()
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
+      made: [{ id: 8, title: 'Trips Jet - Boundary safety', kind: 'REP', from_play: 2, question_count: 2, concepts: ['Motion adjustment'], roles: [], taught_at: null }],
+      last: { concept: { id: 3, name: 'Motion adjustment' }, subject_man: null, subject_role: null, answer_explanation: 'He is the new #3 - rotate down.' },
+    })
+    await openAt('/motion-lab/plays/100')
+    dragPlayer(a, 'O8', 0, 0)
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Teach a moment/ }))
+    const panel = within(screen.getByRole('dialog', { name: 'Teach this play' }))
+    expect(panel.getByRole('textbox', { name: /You.re the/ })).not.toHaveValue('')
+    expect(await panel.findByDisplayValue('He is the new #3 - rotate down.')).toBeInTheDocument()
+    fireEvent.click(panel.getByRole('button', { name: 'Teach it' }))
+    const teach = within(screen.getByRole('dialog', { name: `Teach ${a.name}` }))
+    expect(teach.getByText('Motion adjustment')).toBeInTheDocument()
+    expect(teach.getByText(/You.re the/)).toBeInTheDocument()
+    expect(teach.getByText('He is the new #3 - rotate down.')).toBeInTheDocument()
+  })
+
+  it('Check them: what is made from the play first, then make the check for the same man', async () => {
+    const a = seed()
+    await settle()
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
+      made: [{ id: 8, title: 'Trips Jet - Boundary safety', kind: 'REP', from_play: 2, question_count: 2, concepts: [], roles: [], taught_at: null }],
+      last: null,
+    })
+    await openAt('/motion-lab/plays/100')
+    dragPlayer(a, 'O8', 0, 0)
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Teach a moment/ }))
+    await waitFor(() => expect(repsApi.getMadeFromPlay).toHaveBeenCalledTimes(2))
+    await act(async () => settle())
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Teach this play' })).getByRole('button', { name: 'Teach it' }))
+    const teach = within(screen.getByRole('dialog', { name: `Teach ${a.name}` }))
+    fireEvent.click(teach.getByRole('button', { name: /Check them/ }))
+    const check = within(teach.getByRole('menu', { name: 'Check them' }))
+    expect(check.getByRole('menuitem', { name: /Trips Jet - Boundary safety/ })).toHaveAttribute('href', '/reps/8')
+    fireEvent.click(check.getByRole('menuitem', { name: /Make a quiz question/ }))
+    // Teach gives way to the panel that makes it - the man already chosen.
+    expect(screen.queryByRole('dialog', { name: `Teach ${a.name}` })).toBeNull()
+    expect(screen.getByRole('combobox', { name: /Whose job/ })).toHaveValue('O8')
+  })
+})

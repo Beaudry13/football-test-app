@@ -473,7 +473,26 @@ export default function MotionLabEditorPage() {
                 onClose={() => setAsking(false)}
               />
             )}
-            {teachingPlay && currentPlay && <TeachPlay play={currentPlay} onClose={() => setTeachingPlay(false)} />}
+            {teachingPlay && currentPlay && (
+              <TeachPlay
+                play={currentPlay}
+                onClose={() => setTeachingPlay(false)}
+                selectedMan={panelMan}
+                motionPlayId={current && !session.isScratch(current) ? session.serverIdOf(current) : null}
+                // TEACH -> CHECK THEM: the panel that makes it, the man already chosen.
+                onCheck={(kind, man) => {
+                  setPanelMan(man)
+                  setTeachingPlay(false)
+                  setRepping(kind === 'rep')
+                  setAsking(kind === 'question')
+                }}
+                preview3d={(() => {
+                  if (!VIEWER_3D_URL || !current) return null
+                  const target: PreviewTarget = session.isScratch(current) ? 'draft' : (session.serverIdOf(current) ?? 'draft')
+                  return { viewerUrl: VIEWER_3D_URL, target, load: () => loadPreview(target) }
+                })()}
+              />
+            )}
           </div>
           </>
         }

@@ -17,12 +17,15 @@ export function Preview3DOverlay({
   playName,
   load,
   onClose,
+  backLabel = 'Back to Motion Lab',
 }: {
   viewerUrl: string
   target: PreviewTarget
   playName: string
   load: () => Promise<ViewerPayload | DraftPayload>
   onClose: () => void
+  /** Where Back goes, in words ("Back to Teach" when opened from Teach). */
+  backLabel?: string
 }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const back = useRef<HTMLButtonElement>(null)
@@ -50,7 +53,7 @@ export function Preview3DOverlay({
     <div className="preview-3d-overlay" role="dialog" aria-label={`${playName} in 3D`}>
       <div className="preview-3d-bar">
         <button ref={back} type="button" className="preview-3d-back" onClick={onClose}>
-          ← Back to Motion Lab
+          ← {backLabel}
         </button>
         <span className="preview-3d-name" title={playName}>
           {playName}

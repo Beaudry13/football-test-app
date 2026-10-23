@@ -202,6 +202,8 @@ export interface LastFromPlay {
   concept: { id: number; name: string } | null;
   subject_man: string | null;
   subject_role: string | null;
+  /** His point on that question, as he wrote it. */
+  answer_explanation?: string | null;
 }
 
 /** CREATE ONCE: this coach's quizzes and Reps made from a play (most recent first), and "last time". */

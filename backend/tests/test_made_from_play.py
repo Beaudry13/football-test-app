@@ -46,7 +46,7 @@ class TestMadeFromAPlay:
         motion = _concept(client, headers, "Motion adjustment")
         latest = _decision(
             client, headers, rep["id"], "#3 motions across - your check?", ["Rotate", "Stay"],
-            play_id=play, concept=motion, role="Boundary safety",
+            play_id=play, concept=motion, role="Boundary safety", why="He is the new #3.",
         )
         _man(app, latest["id"], "D9")
         elsewhere = _quiz(client, headers, "Red zone")
@@ -67,6 +67,7 @@ class TestMadeFromAPlay:
             "concept": {"id": motion["id"], "name": "Motion adjustment"},
             "subject_man": "D9",
             "subject_role": "Boundary safety",
+            "answer_explanation": "He is the new #3.",
         }
 
     def test_nothing_made_yet(self, client, register_coach, app):
@@ -93,7 +94,7 @@ class TestMadeFromAPlay:
             db.session.get(Concept, old["id"]).is_archived = True
             db.session.commit()
         last = client.get(URL.format(play), headers=headers).get_json()["last"]
-        assert last == {"concept": None, "subject_man": None, "subject_role": "X"}
+        assert last == {"concept": None, "subject_man": None, "subject_role": "X", "answer_explanation": None}
 
     def test_own_only_and_nothing_across_organizations(self, client, register_coach, invite_teammate, app):
         coach, _, headers = register_coach()

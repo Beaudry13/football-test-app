@@ -162,3 +162,17 @@ describe('Preview 3D inside Motion Lab', () => {
     expect(post).not.toHaveBeenCalled()
   })
 })
+
+describe('2D | 3D from Teach', () => {
+  it('Teach a moment offers the same play in 3D, and "Back to Teach" returns to the teaching screen', async () => {
+    await openAt('/motion-lab')
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Teach a moment/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Teach it' }))
+    fireEvent.click(screen.getByRole('button', { name: '3D' }))
+    expect(screen.queryByRole('dialog', { name: 'Teach New play' })).toBeNull()
+    expect(new URL(frame()!.src).searchParams.get('play')).toBe('draft')
+    fireEvent.click(screen.getByRole('button', { name: '← Back to Teach' }))
+    expect(screen.getByRole('dialog', { name: 'Teach New play' })).toBeInTheDocument()
+  })
+})

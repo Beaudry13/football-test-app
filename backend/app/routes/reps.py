@@ -618,6 +618,8 @@ def made_from_play(play_id: int):
             "concept": {"id": concept.id, "name": concept.name} if concept else None,
             "subject_man": question.subject_man,
             "subject_role": question.subject_role,
+            # His point, as he wrote it - so Teach starts from it.
+            "answer_explanation": question.answer_explanation,
         }
     return jsonify({"made": list(made.values()), "last": last})
 
