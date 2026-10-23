@@ -21,6 +21,7 @@ from sqlalchemy.orm import contains_eager, selectinload
 
 from app.errors import ApiError
 from app.extensions import db
+from app.services.results_preload import submitted_official_attempts
 from app.services.attempt_scope import official_filter, official_only
 from app.services.delivered_questions import delivered_questions, to_payload
 from app.services.question_exclusions import (
@@ -31,7 +32,18 @@ from app.services.question_exclusions import (
 from app.services.concept_results import concept_breakdown
 from app.services.retest_verification import retests_of, verification_for
 from app.services.scoring import count_answers, pending_grading_count
-from app.models import AccessCode, Answer, AttemptStatus, GradeAuditLog, Group, PlayerAttempt, Question, QuestionType, Quiz
+from app.models import (
+    AccessCode,
+    Answer,
+    AttemptStatus,
+    GradeAuditLog,
+    Group,
+    GroupPlayer,
+    PlayerAttempt,
+    Question,
+    QuestionType,
+    Quiz,
+)
 from app.schemas.grading import GradeAnswerSchema
 from app.services.access_codes import (
     effective_roster_people_for_quiz,
@@ -298,7 +310,7 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
             AccessCode.is_active.is_(True),
             AccessCode.expires_at > datetime.now(timezone.utc),
         )
-        .options(selectinload(AccessCode.groups).selectinload(Group.players))
+        .options(selectinload(AccessCode.groups).selectinload(Group.players).selectinload(GroupPlayer.player))
         .first()
     )
     # PEOPLE, NOT NAMES. This counted a list of display names, which cannot
@@ -473,13 +485,7 @@ def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
 @jwt_required()
 def quiz_dashboard(quiz_id: int):
     quiz = get_visible_quiz(quiz_id)
-    responses = (
-        official_only(PlayerAttempt.query)
-        .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
-        .options(selectinload(PlayerAttempt.answers))
-        .all()
-    )
-    return jsonify(_build_dashboard_data(quiz, responses))
+    return jsonify(_build_dashboard_data(quiz, submitted_official_attempts(quiz)))
 
 
 @grading_bp.get("/quizzes/<int:quiz_id>/export.csv")

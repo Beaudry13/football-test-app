@@ -16,11 +16,15 @@ Retest correct"). Concepts the coach never tagged are not invented.
 """
 from __future__ import annotations
 
-from app.models import AttemptStatus, PlayerAttempt, Quiz
+from collections import defaultdict
+
+from sqlalchemy.orm import selectinload
+
+from app.models import AttemptStatus, PlayerAttempt, Question, Quiz
 from app.models.question import QuestionType
 from app.models.quiz import REP_KIND
 from app.services.attempt_scope import official_only
-from app.services.rep_results import first_tries, rep_attempts
+from app.services.rep_results import first_tries, rep_attempts_for
 
 MISSED = "missed"
 GOT = "got"
@@ -60,9 +64,37 @@ def players_learning(coach, players) -> dict[int, dict]:
     quizzes - the same rules, the same rows - so a position group ("what are
     my safeties missing?") costs one read, not one per player."""
     ids = {p.id for p in players}
-    quizzes = Quiz.query.filter(
-        Quiz.organization_id == coach.organization_id, Quiz.coach_id == coach.id
-    ).all()
+    # THREE READS, HOWEVER MANY QUIZZES: his quizzes with their questions and
+    # concepts; every official graded attempt by these players across them;
+    # every Rep attempt by them. Per quiz this was a query or more, plus one
+    # per attempt for its answers - a cost that grew all season
+    # (tests/test_connected_performance).
+    quizzes = (
+        Quiz.query.filter(Quiz.organization_id == coach.organization_id, Quiz.coach_id == coach.id)
+        .options(selectinload(Quiz.questions).joinedload(Question.concept))
+        .all()
+    )
+    graded: dict[int, list] = defaultdict(list)
+    reps: dict[int, list] = defaultdict(list)
+    graded_ids = [q.id for q in quizzes if q.kind != REP_KIND]
+    rep_ids = [q.id for q in quizzes if q.kind == REP_KIND]
+    if ids and graded_ids:
+        # The official rule, written once (attempt_scope): practice never counts.
+        for attempt in (
+            official_only(PlayerAttempt.query)
+            .filter(
+                PlayerAttempt.quiz_id.in_(graded_ids),
+                PlayerAttempt.player_id.in_(list(ids)),
+                PlayerAttempt.status == AttemptStatus.SUBMITTED,
+            )
+            .options(selectinload(PlayerAttempt.answers))
+            .all()
+        ):
+            graded[attempt.quiz_id].append(attempt)
+    if ids and rep_ids:
+        for attempt in rep_attempts_for(rep_ids, player_ids=ids):
+            reps[attempt.quiz_id].append(attempt)
+
     events_by_player: dict[int, list[dict]] = {pid: [] for pid in ids}
     names: dict[int, str] = {}
     for quiz in quizzes:
@@ -71,15 +103,10 @@ def players_learning(coach, players) -> dict[int, dict]:
             if q.concept is not None:
                 names[q.concept.id] = q.concept.name
         if quiz.kind == REP_KIND:
-            firsts = first_tries(rep_attempts(quiz, player_ids=ids))
+            firsts = first_tries(reps[quiz.id])
             attempts = [attempt for attempt, _made in firsts.values()]
         else:
-            # The official rule, written once (attempt_scope): practice never counts.
-            attempts = official_only(PlayerAttempt.query).filter(
-                PlayerAttempt.quiz_id == quiz.id,
-                PlayerAttempt.player_id.in_(list(ids)),
-                PlayerAttempt.status == AttemptStatus.SUBMITTED,
-            ).all()
+            attempts = graded[quiz.id]
         for attempt in attempts:
             if attempt.player_id not in events_by_player:
                 continue

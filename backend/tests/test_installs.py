@@ -370,3 +370,26 @@ class TestCurrentInstall:
         # Another coach cannot make himself the owner of mine by setting it current.
         assert client.patch(f"{URL}/{mine['id']}", json={"current": True}, headers=teammate).status_code == 404
 
+
+
+class TestEditsDoNotRebuildWhatPeiraKnows:
+    def test_moving_renaming_or_taking_out_answers_without_statuses_and_a_read_still_has_them(self, client, register_coach, app):
+        coach, headers = _owner(app, register_coach)
+        rep = _rep(client, headers, title="Trips Jet - Boundary safety")
+        motion = _concept(client, headers, "Motion adjustment")
+        install = _install(client, headers)
+        _add(client, headers, install["id"], "quiz", rep["id"])
+        added = _add(client, headers, install["id"], "concept", motion["id"])
+        # Adding: the new item says what PEIRA knows.
+        assert all(i["status"] is not None for i in added["items"])
+        first, second = (i["id"] for i in added["items"])
+        moved = client.put(f"{URL}/{install['id']}/layout", json={"loose": [second, first], "sections": []}, headers=headers)
+        assert moved.status_code == 200
+        # The football did not change: no status rebuilt, the page keeps its own.
+        assert [i["id"] for i in moved.get_json()["items"]] == [second, first]
+        assert all(i["status"] is None for i in moved.get_json()["items"])
+        renamed = client.patch(f"{URL}/{install['id']}", json={"title": "Week 8", "current": True}, headers=headers).get_json()
+        assert all(i["status"] is None for i in renamed["items"])
+        # A plain read always has them.
+        read = client.get(f"{URL}/{install['id']}", headers=headers).get_json()
+        assert all(i["status"] is not None for i in read["items"])

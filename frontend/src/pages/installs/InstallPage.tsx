@@ -7,6 +7,7 @@ import {
   duplicateInstall,
   getInstall,
   itemsInOrder,
+  keepStatus,
   layoutOf,
   removeFromInstall,
   setInstallLayout,
@@ -138,10 +139,10 @@ export function InstallPage() {
     ] as InstallItem[];
     setInstall({ ...install, sections, items });
     try {
-      setInstall(await setInstallLayout(install.id, next));
+      setInstall(keepStatus(await setInstallLayout(install.id, next), install));
     } catch (err) {
       setError(getErrorMessage(err));
-      setInstall(await getInstall(install.id));
+      getInstall(install.id).then(setInstall, () => undefined);
     }
   };
 
@@ -192,7 +193,7 @@ export function InstallPage() {
   const remove = async (itemId: number) => {
     setError(null);
     try {
-      setInstall(await removeFromInstall(install.id, itemId));
+      setInstall(keepStatus(await removeFromInstall(install.id, itemId), install));
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -201,7 +202,7 @@ export function InstallPage() {
     e.preventDefault();
     if (!title.trim()) return;
     try {
-      setInstall(await updateInstall(install.id, { title: title.trim() }));
+      setInstall(keepStatus(await updateInstall(install.id, { title: title.trim() }), install));
       setRenaming(false);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -209,7 +210,7 @@ export function InstallPage() {
   };
   const setGroup = async (key: string) => {
     try {
-      setInstall(await updateInstall(install.id, { position_group: key || null }));
+      setInstall(keepStatus(await updateInstall(install.id, { position_group: key || null }), install));
       setChoosingGroup(false);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -217,14 +218,14 @@ export function InstallPage() {
   };
   const archive = async (archived: boolean) => {
     try {
-      setInstall(await updateInstall(install.id, { archived }));
+      setInstall(keepStatus(await updateInstall(install.id, { archived }), install));
     } catch (err) {
       setError(getErrorMessage(err));
     }
   };
   const makeCurrent = async () => {
     try {
-      setInstall(await updateInstall(install.id, { current: true }));
+      setInstall(keepStatus(await updateInstall(install.id, { current: true }), install));
     } catch (err) {
       setError(getErrorMessage(err));
     }

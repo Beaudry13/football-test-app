@@ -24,6 +24,7 @@ from app.models import (
     AttemptStatus,
     Concept,
     Group,
+    GroupPlayer,
     Player,
     PlayerAttempt,
     Question,
@@ -81,7 +82,7 @@ def list_quizzes():
         .options(
             selectinload(Quiz.questions),
             selectinload(Quiz.coach),
-            selectinload(Quiz.roster).selectinload(Roster.players),
+            selectinload(Quiz.roster).selectinload(Roster.players).selectinload(RosterPlayer.player),
         )
         .order_by(Quiz.updated_at.desc())
         .all()
@@ -104,7 +105,7 @@ def list_quizzes():
                 AccessCode.is_active.is_(True),
                 AccessCode.expires_at > datetime.now(timezone.utc),
             )
-            .options(selectinload(AccessCode.groups).selectinload(Group.players))
+            .options(selectinload(AccessCode.groups).selectinload(Group.players).selectinload(GroupPlayer.player))
             .all()
         )
         active_codes_by_quiz_id = {code.quiz_id: code for code in active_codes}
@@ -219,8 +220,8 @@ def active_status():
             AccessCode.expires_at > datetime.now(timezone.utc),
         )
         .options(
-            contains_eager(AccessCode.quiz).selectinload(Quiz.roster).selectinload(Roster.players),
-            selectinload(AccessCode.groups).selectinload(Group.players),
+            contains_eager(AccessCode.quiz).selectinload(Quiz.roster).selectinload(Roster.players).selectinload(RosterPlayer.player),
+            selectinload(AccessCode.groups).selectinload(Group.players).selectinload(GroupPlayer.player),
         )
         .all()
     )

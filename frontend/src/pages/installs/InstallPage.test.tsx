@@ -310,3 +310,21 @@ describe("A position coach's install", () => {
     await waitFor(() => expect(installsApi.updateInstall).toHaveBeenCalledWith(1, { position_group: 'family:Corners' }));
   });
 });
+
+describe('Edits keep what PEIRA knows', () => {
+  it('a move answers without statuses - the rows keep theirs', async () => {
+    vi.mocked(installsApi.setInstallLayout).mockImplementation(async (_id: number, layout: InstallLayout) => {
+      const base = INSTALL();
+      const byId = new Map(base.items.map((i) => [i.id, i]));
+      // The server's answer to an edit: the new order, no status rebuilt.
+      return { ...base, items: layout.loose.map((id, position) => ({ ...byId.get(id)!, position, status: null })) } as unknown as Install;
+    });
+    open();
+    await screen.findByRole('heading', { name: 'Week 7 - West Virginia' });
+    fireEvent.click(screen.getByRole('button', { name: 'Move Boundary safety up' }));
+    await waitFor(() => expect(installsApi.setInstallLayout).toHaveBeenCalled());
+    await waitFor(() => expect(rows()).toEqual(['Trips Jet', 'Boundary safety', 'Trips Jet - Boundary safety']));
+    expect(screen.getByText(/3 to grade/)).toBeInTheDocument();
+    expect(screen.getByText(/Motion adjustment: 3 of 4 missed/)).toBeInTheDocument();
+  });
+});

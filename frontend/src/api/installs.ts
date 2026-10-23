@@ -124,3 +124,15 @@ export function itemsInOrder(install: Install): InstallItem[] {
   const byId = new Map(install.items.map((i) => [i.id, i]));
   return [...layout.loose, ...layout.sections.flatMap((s) => s.item_ids)].map((id) => byId.get(id)!).filter(Boolean);
 }
+
+/** An edit that only moves, renames or re-marks an install answers with
+ *  `status: null` - nothing about the football changed, so the server does not
+ *  rebuild it - and the page keeps the statuses it already shows. */
+export function keepStatus(next: Install, before: Install | null): Install {
+  if (!before) return next;
+  const known = new Map(before.items.map((i) => [i.id, i.status] as const));
+  return {
+    ...next,
+    items: next.items.map((i) => (i.status == null && known.has(i.id) ? { ...i, status: known.get(i.id) } : i)) as InstallItem[],
+  };
+}

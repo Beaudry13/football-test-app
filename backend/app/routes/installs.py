@@ -38,13 +38,10 @@ from app.errors import ApiError
 from app.extensions import db
 from app.models import (
     AccessCode,
-    Answer,
-    AttemptStatus,
     Concept,
     Install,
     InstallItem,
     InstallSection,
-    PlayerAttempt,
     Question,
     Quiz,
 )
@@ -57,7 +54,7 @@ from app.schemas.install import (
     InstallLayoutSchema,
     InstallPatchSchema,
 )
-from app.services.attempt_scope import official_only
+from app.services.results_preload import submitted_official_attempts
 from app.services.concept_results import concept_breakdown
 from app.services.question_exclusions import active_exclusions_for_quiz
 from app.services.rep_results import rep_results
@@ -68,7 +65,18 @@ installs_bp = Blueprint("installs", __name__)
 
 
 def _own_install(install_id: int, coach) -> Install:
-    install = db.session.get(Install, install_id)
+    # Its items with what each refers to, and its sections: one query apiece,
+    # not one per item.
+    install = db.session.get(
+        Install,
+        install_id,
+        options=[
+            selectinload(Install.sections),
+            selectinload(Install.items).joinedload(InstallItem.play),
+            selectinload(Install.items).joinedload(InstallItem.quiz),
+            selectinload(Install.items).joinedload(InstallItem.concept),
+        ],
+    )
     if install is None or install.coach_id != coach.id or install.organization_id != coach.organization_id:
         raise ApiError("Install not found", status_code=404)
     return install
@@ -136,12 +144,9 @@ def _live(quiz: Quiz) -> bool:
 
 
 def _quiz_status(quiz: Quiz) -> dict:
-    responses = (
-        official_only(PlayerAttempt.query)
-        .filter_by(quiz_id=quiz.id, status=AttemptStatus.SUBMITTED)
-        .options(selectinload(PlayerAttempt.answers).selectinload(Answer.question))
-        .all()
-    )
+    # The dashboard's own read: answers, players, questions and roster loaded
+    # once (services/results_preload), not per player or per question.
+    responses = submitted_official_attempts(quiz)
     excluded = {row.question_id for row in active_exclusions_for_quiz(quiz.id)}
     to_grade = sum(
         1
@@ -211,28 +216,34 @@ def _concept_status(coach, concept_id: int) -> dict:
     return counts
 
 
-def _item(item: InstallItem, made: dict[int, dict], coach) -> dict:
+def _item(item: InstallItem, made: dict[int, dict], coach, with_status: bool = True) -> dict:
     base = {"id": item.id, "kind": item.kind, "section_id": item.section_id, "position": item.position, "ref_id": item.ref_id}
     if item.kind == "play":
         play = item.play
         base["ref"] = {"id": play.id, "name": play.name, "updated_at": play.updated_at.isoformat()}
-        base["status"] = {"made": made.get(play.id, {"quizzes": 0, "reps": 0})}
+        base["status"] = {"made": made.get(play.id, {"quizzes": 0, "reps": 0})} if with_status else None
     elif item.kind == "quiz":
         quiz = item.quiz
         base["ref"] = {"id": quiz.id, "title": quiz.title, "kind": quiz.kind, "question_count": len(quiz.questions)}
-        base["status"] = _rep_status(quiz) if quiz.kind == REP_KIND else _quiz_status(quiz)
+        base["status"] = (_rep_status(quiz) if quiz.kind == REP_KIND else _quiz_status(quiz)) if with_status else None
     else:
         concept = item.concept
         base["ref"] = {"id": concept.id, "name": concept.name, "is_archived": concept.is_archived}
-        base["status"] = {"in": _concept_status(coach, concept.id)}
+        base["status"] = {"in": _concept_status(coach, concept.id)} if with_status else None
     return base
 
 
-def _detail(install: Install, coach) -> dict:
-    made = _made_from_plays(coach, [i.motion_play_id for i in install.items if i.kind == "play"])
+def _detail(install: Install, coach, with_status: bool = True) -> dict:
+    """The install with each item's reference - and, unless the request only
+    moved, renamed or re-marked it, what PEIRA knows about each item. An edit
+    to the order changes nothing about the football, so it answers with
+    `status: null` and the page keeps the statuses it already shows (each
+    status is a results read; rebuilding them on every arrow tap was the
+    slowest thing an install did)."""
+    made = _made_from_plays(coach, [i.motion_play_id for i in install.items if i.kind == "play"]) if with_status else {}
     data = _summary(install)
     data["sections"] = [{"id": s.id, "title": s.title, "position": s.position} for s in install.sections]
-    data["items"] = [_item(i, made, coach) for i in install.items]
+    data["items"] = [_item(i, made, coach, with_status) for i in install.items]
     return data
 
 
@@ -351,7 +362,7 @@ def patch_install(install_id: int):
         else:
             _make_current(install, coach)
     db.session.commit()
-    return jsonify(_detail(install, coach))
+    return jsonify(_detail(install, coach, with_status=False))
 
 
 @installs_bp.delete("/<int:install_id>")
@@ -418,7 +429,7 @@ def remove_item(install_id: int, item_id: int):
     install.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     db.session.refresh(install)
-    return jsonify(_detail(install, coach))
+    return jsonify(_detail(install, coach, with_status=False))
 
 
 @installs_bp.put("/<int:install_id>/layout")
@@ -459,7 +470,7 @@ def set_layout(install_id: int):
     install.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     db.session.refresh(install)
-    return jsonify(_detail(install, coach))
+    return jsonify(_detail(install, coach, with_status=False))
 
 
 @installs_bp.post("/<int:install_id>/duplicate")
