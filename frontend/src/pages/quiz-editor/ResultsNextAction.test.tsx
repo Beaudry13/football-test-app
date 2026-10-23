@@ -17,7 +17,7 @@ import { RetestAction } from './RetestAction';
 /**
  * RESULTS -> THE NEXT ACTION, with no dead ends: every concept the team
  * missed can be retested from its own row, a retest opens ready to send (the
- * Activate tab, which says who gets it), a Rep made from a missed question
+ * Send tab, which says who gets it), a Rep made from a missed question
  * goes to the players who missed it, and who missed it is one tap down.
  */
 

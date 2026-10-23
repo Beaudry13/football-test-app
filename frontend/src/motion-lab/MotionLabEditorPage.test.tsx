@@ -121,7 +121,7 @@ describe('Motion Lab editor on the server', () => {
     await settle()
     await openEditor(100)
     // The top bar carries one button for taking the play somewhere else.
-    expect(screen.queryByRole('button', { name: 'Make rep' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Make a rep' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Make question' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
     const menu = within(screen.getByRole('menu', { name: 'Use this play' }))

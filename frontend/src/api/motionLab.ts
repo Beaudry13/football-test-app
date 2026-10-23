@@ -44,9 +44,6 @@ export interface MotionLookRow {
   updated_at: string;
 }
 
-/** A 409 carrying this reason means "changed somewhere else since you loaded it". */
-export const REVISION_CONFLICT = 'revision_conflict';
-
 /** Browsers refuse keepalive bodies over ~64KB; stay under it. */
 const KEEPALIVE_LIMIT = 60 * 1024;
 const keepaliveFor = (body: unknown) => JSON.stringify(body).length < KEEPALIVE_LIMIT;

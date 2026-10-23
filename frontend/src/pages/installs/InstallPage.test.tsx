@@ -216,7 +216,7 @@ describe('Adding and taking out - by reference', () => {
     await waitFor(() => expect(finder.getAllByText('✓ Added')).toHaveLength(2));
     // Narrowed by a few letters.
     fireEvent.change(finder.getByRole('searchbox', { name: 'Find football' }), { target: { value: 'zzz' } });
-    expect(finder.getByText('Nothing by that name.')).toBeInTheDocument();
+    expect(finder.getByText('Nothing called "zzz" here - try another filter.')).toBeInTheDocument();
   });
 
   it('Take out of the install leaves the football where it was', async () => {

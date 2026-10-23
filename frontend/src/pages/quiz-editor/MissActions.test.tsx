@@ -107,7 +107,7 @@ describe('from a quiz miss', () => {
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
     // The card leads with Teach and Retest; Make a rep is one tap down.
     expect(screen.queryByRole('button', { name: 'Make a rep for the 2' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     fireEvent.click(screen.getByRole('button', { name: 'Make a rep for the 2' }));
     expect(await screen.findByText('the new rep')).toBeInTheDocument();
     expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(9, [7], 'Force / Contain - Rep');
@@ -121,8 +121,8 @@ describe('from a quiz miss', () => {
     expect(teach.getByText('The corner')).toBeInTheDocument();
     expect(teach.getByText('Corner squeezes, keeps it inside.')).toBeInTheDocument();
     expect(teach.getByText('4 chose “The safety”')).toBeInTheDocument();
-    // Make rep right from the meeting room.
-    fireEvent.click(teach.getByRole('button', { name: 'Make rep' }));
+    // Make a rep right from the meeting room.
+    fireEvent.click(teach.getByRole('button', { name: 'Make a rep' }));
     await waitFor(() => expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(9, [7], 'Week 3 - Q3'));
     expect(rosterApi.addRosterMembers).not.toHaveBeenCalled();
   });
@@ -250,7 +250,7 @@ describe('a targeted rep from a concept - from what is already written', () => {
     ]);
     vi.mocked(repsApi.addDecisions).mockResolvedValue({} as never);
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     fireEvent.click(screen.getByRole('button', { name: 'Pick questions…' }));
     const picker = within(await screen.findByRole('group', { name: 'Questions for the rep' }));
     expect(picker.getByRole('checkbox', { name: /Who has force on toss\?/ })).toBeChecked();
@@ -266,7 +266,7 @@ describe('a targeted rep from a concept - from what is already written', () => {
   it('several missed questions on one concept: one tap makes a rep of all of them', () => {
     const second = { ...question, id: 8, question_text: 'Who spills?' } as Question;
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question, second]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     expect(screen.getByRole('button', { name: 'Make a rep of all 2 for the 2' })).toBeInTheDocument();
   });
 
@@ -275,7 +275,7 @@ describe('a targeted rep from a concept - from what is already written', () => {
     vi.mocked(installsApi.addToInstall).mockResolvedValue({} as never);
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} />);
     expect(screen.queryByRole('button', { name: 'Add to install' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add to install' }));
     const panel = within(screen.getByRole('dialog', { name: 'Add to install' }));
     fireEvent.click(await panel.findByRole('button', { name: 'Add' }));

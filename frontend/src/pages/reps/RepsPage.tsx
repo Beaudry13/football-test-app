@@ -105,7 +105,9 @@ export function RepsPage() {
             />
           )}
           {quizzes.length === 0 ? (
-            <p className={styles.pickerHint}>No quizzes with questions yet.</p>
+            <p className={styles.pickerHint}>
+              No quizzes with questions yet. <Link to="/dashboard">Write one first.</Link>
+            </p>
           ) : pickable.length === 0 ? (
             <p className={styles.pickerHint}>No quiz by that name.</p>
           ) : (
@@ -123,7 +125,7 @@ export function RepsPage() {
                     onClick={() => void make(quiz)}
                     aria-label={`Make a rep from ${quiz.title}`}
                   >
-                    {making === quiz.id ? 'Making…' : 'Make rep'}
+                    {making === quiz.id ? 'Making…' : 'Make a rep'}
                   </button>
                   {rowError?.id === quiz.id && <span className={styles.rowError} role="alert">{rowError.message}</span>}
                 </li>
@@ -168,8 +170,7 @@ export function RepsPage() {
       {scope === 'all' && allReps?.length === 0 && <p className={styles.empty}>Nobody in your program has made a rep yet.</p>}
       {scope === 'mine' && allReps?.length === 0 && !picking && (
         <p className={styles.empty}>
-          No reps yet. Tap <strong>Make a rep from a quiz</strong> - its tap-an-answer questions become decisions your
-          players run one at a time{motionLab ? ', or put a player in a Motion Lab play' : ''}.
+          No reps yet. Make one from a quiz{motionLab ? ', or from a Motion Lab play' : ''}.
         </p>
       )}
       <ul className={styles.list}>

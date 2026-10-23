@@ -415,7 +415,10 @@ export function InstallPage() {
 
       {install.items.length === 0 && !adding ? (
         <div className={styles.empty}>
-          <p>Add the football you are installing - plays, Reps, quizzes, concepts. It stays where it is; the install just puts it in order.</p>
+          <p>
+            <strong>Nothing in this install yet.</strong> Add the plays, Reps, quizzes and concepts you&rsquo;re putting in - they stay
+            where they are.
+          </p>
           <button type="button" className={nb.btnPrimary} onClick={() => setAdding(true)}>
             Add football
           </button>

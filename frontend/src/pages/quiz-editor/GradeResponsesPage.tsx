@@ -333,7 +333,17 @@ export function GradeResponsesPage() {
     );
   }
 
-  if (!current) return null;
+  // Nothing left in the queue to show (it changed under him): say so, with the way out.
+  if (!current) {
+    return (
+      <div className={styles.page}>
+        <p>Nothing to grade here right now.</p>
+        <Link to={`/quizzes/${id}?tab=results`} className={nb.btnPrimary}>
+          Back to results
+        </Link>
+      </div>
+    );
+  }
 
   const currentQuestion = quiz?.questions?.find((q) => q.id === current.questionId);
   const isDrawingQuestion = current.questionType === 'draw_response';

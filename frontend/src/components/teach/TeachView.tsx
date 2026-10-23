@@ -102,7 +102,10 @@ export function TeachView({
     setAt(clamp(start));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideKeys, start]);
-  const slide = slides[at];
+  // Clamped: for the one render between new slides arriving and the reset
+  // above, `at` can still point past them (slide 2 of the last item, an item
+  // with one) - never show "nothing" for that frame.
+  const slide = slides[clamp(at)];
 
   const screenRef = useRef<HTMLDivElement>(null);
   /* THE SCREEN HAS THE KEYS while it is up: focus moves to it, and a key
@@ -126,7 +129,24 @@ export function TeachView({
     else next?.onGo();
   };
 
-  if (!slide) return null;
+  if (!slide) {
+    return createPortal(
+      <div className={styles.teach} role="dialog" aria-modal="true" aria-label={`Teach ${title}`}>
+        <div className={styles.bar}>
+          <span className={styles.title}>{title}</span>
+          {place && <span className={styles.place}>{place}</span>}
+          <span className={styles.spacer} />
+          <button type="button" className={styles.close} onClick={onClose} aria-label="Close" title="Close (Esc)">
+            ×
+          </button>
+        </div>
+        <p className={styles.nothing}>
+          Nothing to show for this yet. Teach needs a picture, a play or your reason on the question.
+        </p>
+      </div>,
+      document.body,
+    );
+  }
   const holding = asking && shownKey !== slide.key;
   /* A slide with no question - a play taught from Motion Lab - carries the
      coach's point as its words: that point IS the answer, so Ask first holds

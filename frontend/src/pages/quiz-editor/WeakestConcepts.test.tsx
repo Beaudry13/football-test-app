@@ -31,8 +31,8 @@ const concept = (over: Partial<ConceptBreakdown> = {}): ConceptBreakdown => ({
 
 
 /** The panel navigates on success, so every case needs a Router around it. */
-/** Who missed it lives one tap down, under "View details". */
-const openDetails = () => fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+/** Who missed it lives one tap down, under the "Who missed it" toggle. */
+const openDetails = () => fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
 
 /** Where a retest opened: the draft, on its Send tab. */
 let landed = '';

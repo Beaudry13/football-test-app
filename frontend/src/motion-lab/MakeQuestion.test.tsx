@@ -32,7 +32,7 @@ import { px } from './playImageLayout'
  * when the play gives someone the ball - "Who gets the ball?" with the play's
  * own target as the answer. It lands in the chosen quiz (or a new one named
  * after the play) and the coach stays in Motion Lab: "Make another" or
- * "Open quiz".
+ * "Open the quiz".
  */
 
 let lastPath = ''
@@ -128,7 +128,7 @@ describe('Make a quiz question from a play', () => {
     // Made - and he is still in Motion Lab, one click from the quiz.
     expect(await screen.findByRole('dialog', { name: 'Question made' })).toHaveTextContent('Question 1 added to Trips Right Smash')
     expect(lastPath).toBe('/motion-lab')
-    fireEvent.click(screen.getByRole('button', { name: 'Open quiz' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open the quiz' }))
     expect(lastPath).toBe('/quizzes/31')
     expect(quizzesApi.createQuiz).toHaveBeenCalledWith({ title: 'Trips Right Smash' })
     const [quizId, input, file] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
@@ -358,7 +358,7 @@ describe('Make a quiz question from a play', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Quick game'))
   })
 
-  it('what he names here, Make rep starts from', async () => {
+  it('what he names here, Make a rep starts from', async () => {
     const play = newPlay('Jet Dig')
     open(play, null, 'O8')
     fireEvent.change(screen.getByRole('textbox', { name: /Concept/ }), { target: { value: 'Quick game' } })

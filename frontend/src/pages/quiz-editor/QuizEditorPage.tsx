@@ -20,7 +20,9 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 const TABS = [
   { key: 'questions', label: 'Questions' },
   { key: 'roster', label: 'Roster' },
-  { key: 'activate', label: 'Activate' },
+  // SEND, not "Activate": a coach sends work to players (the Rep page says
+  // "Send rep" too). The key stays `activate` - links already point at it.
+  { key: 'activate', label: 'Send' },
   { key: 'results', label: 'Results' },
 ] as const;
 

@@ -93,7 +93,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
     <section className={styles.needs} aria-label={`What your ${plural} need`}>
       <h2 className={styles.title}>What your {plural} need</h2>
       {needs.concepts.length === 0 ? (
-        <p className={styles.none}>Nothing open on what you have tested them on.</p>
+        <p className={styles.none}>No misses on what you&rsquo;ve tested them on. Send them a Rep to check more.</p>
       ) : (
         <ul className={styles.list}>
           {needs.concepts.slice(0, SHOWN).map((need) => {

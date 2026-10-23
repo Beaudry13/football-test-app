@@ -198,7 +198,7 @@ export function WeakestConcepts({
           one tap down; the coach is not asked to read them to know what to do.
 
           PLAYERS, AND IT SAYS SO: the count is people, in the same unit as
-          the names under "View details"; the answer-level figures stay in the
+          the names under "Who missed it"; the answer-level figures stay in the
           question-by-question evidence where the unit cannot be mistaken.
           "Most chose" names the wrong answer the misses picked most, with the
           count beside it - what they picked, never why. */}
@@ -234,7 +234,7 @@ export function WeakestConcepts({
                 may since have been stopped - saying why beats a dead button. */}
             {weakest.retestable_question_count === 0 && (
               <p className={styles.ungradedNote}>
-                Every question they missed here has been stopped, so there is nothing to retest.
+                Every question they missed here has been stopped, so there is nothing to retest - teach it instead.
               </p>
             )}
           </>
@@ -251,7 +251,7 @@ export function WeakestConcepts({
             )}
           </>
         }
-        detailsLabel="View details"
+        detailsLabel="Who missed it"
         details={
           <>
             {weakest.players_missed.length > 0 && (

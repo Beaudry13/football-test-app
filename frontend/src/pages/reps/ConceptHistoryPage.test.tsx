@@ -116,6 +116,6 @@ describe('a football problem over time', () => {
 
   it('a problem none of your reps has tested says so', async () => {
     open({ ...HISTORY, points: [], recent: [], still_missing: [], latest: null });
-    expect(await screen.findByText('None of your reps has tested this yet.')).toBeInTheDocument();
+    expect(await screen.findByText(/No rep has tested this yet/)).toBeInTheDocument();
   });
 });

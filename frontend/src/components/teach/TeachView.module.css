@@ -35,6 +35,15 @@
   min-width: 0;
 }
 /* Back an item in a meeting - the ← key, for a finger. */
+/* Nothing to teach: said, plainly, in the middle of the screen. */
+.nothing {
+  margin: auto;
+  max-width: 40ch;
+  padding: 24px;
+  text-align: center;
+  font-size: clamp(16px, 1.3vw, 26px);
+  color: #c9ccd1;
+}
 .prev {
   flex: none;
   width: 44px;

@@ -143,7 +143,7 @@ export function MissActions({
 
   if (questions.length === 0) return null;
   const repLabel = [
-    tappable.length > 1 ? `Make a rep of all ${tappable.length}` : repPlayers.length > 0 ? 'Make a rep' : 'Make rep',
+    tappable.length > 1 ? `Make a rep of all ${tappable.length}` : 'Make a rep',
     repPlayers.length > 0 ? `for the ${repPlayers.length}` : '',
   ]
     .filter(Boolean)

@@ -70,7 +70,7 @@ describe('Add decisions to a rep', () => {
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
   });
 
-  it('a coach with Motion Lab opens a play with Make rep aimed at this rep', async () => {
+  it('a coach with Motion Lab opens a play with Make a rep aimed at this rep', async () => {
     open(true);
     fireEvent.click(await screen.findByRole('tab', { name: 'From a Motion Lab play' }));
     const plays = within(await screen.findByRole('list', { name: 'Motion Lab plays' }));

@@ -479,15 +479,6 @@ export interface ImportPreviewResponse {
   rows: ImportPreviewRow[];
 }
 
-export interface ImportConfirmRow {
-  first_name: string;
-  last_name: string;
-  jersey_number?: string | null;
-  position?: string | null;
-  action: 'create' | 'update' | 'skip';
-  existing_player_id?: number | null;
-}
-
 export interface ImportConfirmResponse {
   success: boolean;
   created: number;

@@ -47,7 +47,7 @@ import { assignmentDrawing, ballChoices, drawText, isBuiltDrawText, playImageFil
  *     rep, on this device or (from the server) any other;
  *   - "Put it in" is the quiz he last put a question in, else the quiz that
  *     already holds this play's questions;
- *   - making it keeps him in Motion Lab: "Make another" or "Open quiz".
+ *   - making it keeps him in Motion Lab: "Make another" or "Open the quiz".
  * Every one of these is a starting value he can see and change.
  */
 
@@ -95,7 +95,7 @@ export function MakeQuestion({
   const conceptTyped = useRef(false)
   /** This play's quizzes, from the server (where its questions already live). */
   const [fromPlay, setFromPlay] = useState<MadeFromPlay[]>([])
-  /** The question just made: "Make another" or "Open quiz". */
+  /** The question just made: "Make another" or "Open the quiz". */
   const [made, setMade] = useState<{ id: number; title: string; count: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -278,7 +278,7 @@ export function MakeQuestion({
         <div className="make-q-actions">
           <button onClick={another}>Make another</button>
           <button className="primary" onClick={() => navigate(`/quizzes/${made.id}`)}>
-            Open quiz
+            Open the quiz
           </button>
         </div>
       </div>

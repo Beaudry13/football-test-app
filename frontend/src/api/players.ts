@@ -28,14 +28,6 @@ export function createPlayer(input: PlayerInput): Promise<Player> {
   return api.post<Player>('/players', input);
 }
 
-export function bulkCreatePlayers(players: PlayerInput[]): Promise<Player[]> {
-  return api.post<Player[]>('/players/bulk', { players });
-}
-
-export function getPlayer(playerId: number): Promise<Player> {
-  return api.get<Player>(`/players/${playerId}`);
-}
-
 export function getPlayerHistory(playerId: number): Promise<PlayerHistory> {
   return api.get<PlayerHistory>(`/players/${playerId}/history`);
 }
@@ -105,10 +97,6 @@ export function deactivatePlayer(playerId: number): Promise<Player> {
 
 export function reactivatePlayer(playerId: number): Promise<Player> {
   return api.post<Player>(`/players/${playerId}/reactivate`);
-}
-
-export function deletePlayer(playerId: number): Promise<void> {
-  return api.delete<void>(`/players/${playerId}`);
 }
 
 /** A PIN exactly as issued - the ONLY payload that ever carries one. It exists

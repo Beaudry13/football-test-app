@@ -43,25 +43,36 @@ export function AddFootball({
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [loading, setLoading] = useState(true);
+  /** A list that did not load - said, with Try again, never shown as "nothing". */
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [adding, setAdding] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
+    let missed = false;
+    const orNothing = <T,>(p: Promise<T[]>) =>
+      p.catch(() => {
+        missed = true;
+        return [] as T[];
+      });
+    setLoading(true);
     Promise.all([
-      motionLab ? listMotionPlays().catch(() => []) : Promise.resolve([] as MotionPlayRow[]),
-      listQuizzes().catch(() => [] as Quiz[]),
-      listConcepts().catch(() => [] as Concept[]),
+      motionLab ? orNothing(listMotionPlays()) : Promise.resolve([] as MotionPlayRow[]),
+      orNothing<Quiz>(listQuizzes()),
+      orNothing<Concept>(listConcepts()),
     ]).then(([p, q, c]) => {
       if (!live) return;
       setPlays(p);
       setQuizzes(q);
       setConcepts(c.filter((x) => !x.is_archived));
+      setFailed(missed);
       setLoading(false);
     });
     return () => {
       live = false;
     };
-  }, [motionLab]);
+  }, [motionLab, attempt]);
 
   const inInstall = useMemo(() => new Set(install.items.map((i) => `${i.kind}:${i.ref_id}`)), [install.items]);
   const entries = useMemo<Entry[]>(() => {
@@ -77,10 +88,17 @@ export function AddFootball({
       })),
       ...concepts.map((c) => ({ kind: 'concept' as const, refId: c.id, tag: 'Concept', title: c.name, meta: 'Concept', updated: '' })),
     ];
-    const byFilter = out.filter((e) =>
-      filter === 'recent' ? e.kind !== 'concept' : filter === 'plays' ? e.kind === 'play' : filter === 'concepts' ? e.kind === 'concept' : e.tag === (filter === 'reps' ? 'Rep' : 'Quiz'),
-    );
     const needle = search.trim().toLowerCase();
+    // Typing on Recent finds anything by that name - concepts too.
+    const byFilter = out.filter((e) =>
+      filter === 'recent'
+        ? needle !== '' || e.kind !== 'concept'
+        : filter === 'plays'
+          ? e.kind === 'play'
+          : filter === 'concepts'
+            ? e.kind === 'concept'
+            : e.tag === (filter === 'reps' ? 'Rep' : 'Quiz'),
+    );
     const found = needle ? byFilter.filter((e) => e.title.toLowerCase().includes(needle)) : byFilter;
     return filter === 'concepts' ? found.sort((a, b) => a.title.localeCompare(b.title)) : found.sort((a, b) => b.updated.localeCompare(a.updated));
   }, [plays, quizzes, concepts, filter, search]);
@@ -118,8 +136,27 @@ export function AddFootball({
       </div>
       {loading ? (
         <p className={styles.quiet}>Getting your football…</p>
+      ) : failed && entries.length === 0 ? (
+        <p className={styles.quiet} role="alert">
+          Couldn&rsquo;t load your football.{' '}
+          <button type="button" className={styles.linkButton} onClick={() => setAttempt((n) => n + 1)}>
+            Try again
+          </button>
+        </p>
       ) : entries.length === 0 ? (
-        <p className={styles.quiet}>{search ? 'Nothing by that name.' : 'Nothing here yet.'}</p>
+        <p className={styles.quiet}>
+          {search
+            ? `Nothing called "${search.trim()}" here - try another filter.`
+            : filter === 'plays'
+              ? 'No plays yet.'
+              : filter === 'reps'
+                ? 'No Reps yet.'
+                : filter === 'quizzes'
+                  ? 'No quizzes yet.'
+                  : filter === 'concepts'
+                    ? 'No concepts yet.'
+                    : 'Nothing here yet.'}
+        </p>
       ) : (
         <ul className={styles.finderList}>
           {entries.slice(0, SHOWN).map((e) => {

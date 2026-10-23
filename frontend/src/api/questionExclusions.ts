@@ -13,13 +13,6 @@ export function listQuizAssignments(quizId: number): Promise<QuizAssignment[]> {
   return api.get<QuizAssignment[]>(`/quizzes/${quizId}/assignments`);
 }
 
-export function listQuestionExclusions(
-  quizId: number,
-  questionId: number,
-): Promise<QuestionExclusion[]> {
-  return api.get<QuestionExclusion[]>(`/quizzes/${quizId}/questions/${questionId}/exclusions`);
-}
-
 /** `accessCodeId: null` means QUIZ-WIDE - every past and future use of this
  *  quiz. It is passed explicitly rather than omitted so the broader choice can
  *  never be made by forgetting a field. */

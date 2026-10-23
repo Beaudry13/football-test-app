@@ -79,7 +79,17 @@ export function InstallsPage() {
           <p className={styles.meta}>This week&rsquo;s football, in the order you&rsquo;ll teach it.</p>
         </div>
       </header>
-      <ErrorBanner message={error} />
+      <ErrorBanner
+        message={error}
+        onRetry={
+          active === null
+            ? () => {
+                setError(null);
+                load();
+              }
+            : undefined
+        }
+      />
 
       <form className={styles.newInstall} onSubmit={(e) => void create(e)}>
         <input
@@ -106,9 +116,9 @@ export function InstallsPage() {
       </form>
 
       {active === null ? (
-        <LoadingState label="Your installs" />
+        !error && <LoadingState label="Your installs" />
       ) : active.length === 0 ? (
-        <p className={styles.quiet}>No install yet. Name this week&rsquo;s above, then add the football you&rsquo;re putting in.</p>
+        <p className={styles.quiet}>No installs yet. Name this week&rsquo;s above to start one.</p>
       ) : (
         <ul className={styles.installList}>
           {active.map((i) => (

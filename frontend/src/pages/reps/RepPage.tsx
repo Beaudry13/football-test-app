@@ -100,6 +100,8 @@ export function RepPage() {
   const teach = (problem: RepConcept) => {
     setTeaching(problem);
     if (problem.taught) return;
+    // Nothing on the screen is nothing taught: Teach says so; the mark waits.
+    if (problemSlides(problem, results?.decisions ?? []).slides.length === 0) return;
     markRepTaught(id, problem.concept?.id ?? null)
       .then(({ concept_key, taught }) =>
         setResults((r) =>

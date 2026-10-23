@@ -212,7 +212,7 @@ describe('ResultsTab - question exclusions', () => {
 
     const row = (await screen.findByText(/3-tech attack/)).closest('tr')!;
     expect(within(row).getByRole('button', { name: /Don’t count this/ })).toBeInTheDocument();
-    expect(screen.queryByText('Excluded')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not counted')).not.toBeInTheDocument();
   });
 
   it('marks an excluded question and KEEPS its raw counts', async () => {
@@ -222,7 +222,7 @@ describe('ResultsTab - question exclusions', () => {
     renderTab();
 
     const row = (await screen.findByText(/3-tech attack/)).closest('tr')!;
-    expect(within(row).getByText('Excluded')).toBeInTheDocument();
+    expect(within(row).getByText('Not counted')).toBeInTheDocument();
     // THE EVIDENCE SURVIVES - 1 correct, 4 incorrect is usually the very
     // reason the coach excluded the question.
     expect(within(row).getByText('1')).toBeInTheDocument();
@@ -280,7 +280,7 @@ describe('ResultsTab - question exclusions', () => {
     expect(await screen.findByText(/Not counted for one assignment/)).toBeInTheDocument();
     // ...and the rest of the row is intact.
     const row = screen.getByText(/3-tech attack/).closest('tr')!;
-    expect(within(row).getByText('Excluded')).toBeInTheDocument();
+    expect(within(row).getByText('Not counted')).toBeInTheDocument();
     expect(within(row).getByRole('button', { name: 'Restore' })).toBeInTheDocument();
   });
 

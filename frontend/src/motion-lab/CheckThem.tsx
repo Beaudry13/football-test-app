@@ -30,7 +30,7 @@ export function CheckThem({
         <span className={styles.menu} role="menu" aria-label="Check them">
           {made.length > 0 && (
             <>
-              <span className={styles.head}>Already made from this play</span>
+              <span className={styles.head}>Made from this play</span>
               {made.slice(0, 3).map((m) => (
                 <Link key={m.id} role="menuitem" className={styles.item} to={m.kind === 'REP' ? `/reps/${m.id}` : `/quizzes/${m.id}`}>
                   <span className={styles.kind}>{m.kind === 'REP' ? 'Rep' : 'Quiz'}</span> {m.title}

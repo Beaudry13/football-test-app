@@ -69,7 +69,7 @@ export function ConceptHistoryPage() {
           </header>
 
           {points.length === 0 ? (
-            <p className={rep.waiting}>None of your reps has tested this yet.</p>
+            <p className={rep.waiting}>No rep has tested this yet - tag a decision with it and its results land here.</p>
           ) : (
             <>
               <p className={styles.trend} aria-label="First-try trend">

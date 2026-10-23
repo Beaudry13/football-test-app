@@ -220,3 +220,12 @@ describe('In a meeting - where it is, and back an item', () => {
     expect(screen.queryByRole('button', { name: /^Back:/ })).toBeNull();
   });
 });
+
+describe('Nothing to teach', () => {
+  it('says so - it never opens onto an empty screen - and closes', () => {
+    const { onClose } = open({ slides: [] });
+    expect(screen.getByRole('dialog', { name: 'Teach Motion adjustment' })).toHaveTextContent('Nothing to show for this yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+});

@@ -61,10 +61,6 @@
   color: var(--nb-text);
 }
 
-.pending {
-  color: var(--nb-text-muted);
-}
-
 .incomplete {
   margin: var(--space-4) 0 0;
   font-size: var(--peira-text-meta);
@@ -111,18 +107,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-
-.actions > button {
-  flex: 1 1 auto;
-  min-height: 44px;
 }
 
 /* "Last check" over the round it names. Two lines rather than one long

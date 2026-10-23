@@ -39,7 +39,7 @@ import nb from '../../styles/notebook.module.css';
 /**
  * THE COACH'S SIDE OF A REP: not a grade, the football problem -
  * "MOTION ADJUSTMENT - 4 of 11 safeties missed - most chose 'Stay boundary'",
- * with View players, Teach and Retest.
+ * with Who missed it, Teach and Retest.
  */
 
 const person = (key: string, display_name: string) => ({ key, player_id: null, display_name, position: 'S', jersey_number: null });
@@ -141,7 +141,7 @@ describe('A Rep, for the coach', () => {
     expect(card.queryByText('Marcus Hill')).toBeNull();
     expect(card.getByRole('button', { name: 'Teach' })).toBeInTheDocument();
     expect(card.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
-    fireEvent.click(card.getByRole('button', { name: 'View players' }));
+    fireEvent.click(card.getByRole('button', { name: 'Who missed it' }));
     expect(card.getAllByText('Marcus Hill').length).toBeGreaterThan(0);
     // What they know is said too, briefly.
     expect(within(screen.getByRole('list', { name: 'What they know' })).getByText(/Leverage/)).toBeInTheDocument();
@@ -168,10 +168,10 @@ describe('A Rep, for the coach', () => {
     expect((await screen.findByText(/Hasn.t run it:/)).parentElement!.textContent).toMatch(/Kobe Shaw$/);
   });
 
-  it('VIEW PLAYERS shows who missed it and what each one answered', async () => {
+  it('WHO MISSED IT shows those players and what each one answered', async () => {
     open();
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
-    fireEvent.click(card.getByRole('button', { name: 'View players' }));
+    fireEvent.click(card.getByRole('button', { name: 'Who missed it' }));
     const table = within(card.getByRole('table'));
     expect(table.getByText('Caleb Reed')).toBeInTheDocument();
     expect(table.getByText(/Bail deep/)).toBeInTheDocument();
@@ -780,10 +780,10 @@ describe('the right spot, in the results', () => {
     expect(his.getByText(/✕ Marcus tapped Stay boundary/)).toBeInTheDocument();
   });
 
-  it("a problem's View players shows where the team tapped - how many on each spot", async () => {
+  it("a problem's Who missed it shows where the team tapped - how many on each spot", async () => {
     open({ ...RESULTS, decisions: [tapped] } as RepResults);
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
-    fireEvent.click(card.getByRole('button', { name: 'View players' }));
+    fireEvent.click(card.getByRole('button', { name: 'Who missed it' }));
     const stay = card.getByRole('button', { name: 'Tap Stay boundary' });
     expect(stay.className).toMatch(/wrong/);
     expect(stay).toHaveTextContent('3');

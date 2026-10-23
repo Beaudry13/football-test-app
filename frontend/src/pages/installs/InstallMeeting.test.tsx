@@ -212,9 +212,14 @@ describe('Teach install: one screen, item to item', () => {
     expect(next.queryByText('Why 81')).toBeNull();
   });
 
-  it('an install with nothing to show closes instead of hanging', async () => {
+  it('an install with nothing to show says so - it never flashes open and shut, or hangs', async () => {
     const onClose = meet(install([conceptItem(103, 0, 9, 'Leverage')]));
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const teach = await screenOf('Week 7 - West Virginia');
+    expect(teach.getByText(/Nothing to show for this yet/)).toBeInTheDocument();
+    expect(teach.getByText('Nothing to teach yet')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(teach.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalled();
   });
 });
 

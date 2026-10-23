@@ -1,25 +1,4 @@
-.statsRow {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1em;
-  margin-bottom: 1.5em;
-}
 
-.stat {
-  text-align: center;
-}
-
-.statValue {
-  font-family: var(--font-heading);
-  font-size: 2.2em;
-  font-weight: 700;
-  color: var(--peira-text);
-}
-
-.statLabel {
-  font-size: 0.85em;
-  color: var(--nb-text-muted);
-}
 
 /* A missed question's actions, under its text. */
 .rowActions {
@@ -43,20 +22,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 1.5em;
-}
-
-.exportLabel {
-  color: var(--nb-text-muted);
-  font-size: 0.9em;
-  margin-right: 0.25em;
-}
-
-.breakdownCard {
-  margin-bottom: 1.5em;
-}
-
-.missingCard {
   margin-bottom: 1.5em;
 }
 

@@ -68,7 +68,7 @@ export function ExcludeQuestionDialog({
         <p className={styles.questionText}>{question.question_text}</p>
 
         {assignments === null ? (
-          <p className={styles.muted}>Loading assignments&hellip;</p>
+          <p className={styles.muted}>Loading when it was sent&hellip;</p>
         ) : assignments.length === 0 ? (
           <p className={styles.muted}>
             This quiz has never been sent out, so there are no results to change.
@@ -84,13 +84,13 @@ export function ExcludeQuestionDialog({
               value={scope}
               onChange={(e) => setScope(e.target.value)}
             >
-              <option value="">Choose an assignment&hellip;</option>
+              <option value="">Choose which send&hellip;</option>
               {assignments.map((a) => (
                 <option key={a.access_code_id} value={String(a.access_code_id)}>
                   {describeAssignment(a)}
                 </option>
               ))}
-              <option value={QUIZ_WIDE}>All assignments using this quiz</option>
+              <option value={QUIZ_WIDE}>Every time this quiz was sent</option>
             </select>
 
             {/* The broader choice gets a stronger warning, and never arrives by
@@ -143,7 +143,7 @@ export function ExcludeQuestionDialog({
             onClick={handleExclude}
             disabled={saving || !scope || assignments === null || assignments.length === 0}
           >
-            {saving ? 'Excluding…' : 'Exclude from scoring'}
+            {saving ? 'Saving…' : 'Don’t count it'}
           </button>
         </div>
       </div>

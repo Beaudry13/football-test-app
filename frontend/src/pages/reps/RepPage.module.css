@@ -209,15 +209,7 @@
   background: var(--color-accent-bg);
   font-weight: 700;
 }
-.suggested {
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 700;
-  background: var(--nb-accent);
-  color: var(--color-accent-contrast);
-}
+
 .groupCount {
   color: var(--nb-text-muted);
   font-weight: 400;
@@ -365,17 +357,6 @@
   font-weight: 700;
 }
 
-.problem {
-  padding: var(--space-5);
-  margin-bottom: var(--space-4);
-  border: 1px solid var(--nb-card-border);
-  border-left: 4px solid var(--peira-danger);
-  border-radius: var(--peira-radius-md);
-  background: var(--peira-surface);
-}
-.problemFixed {
-  border-left-color: var(--peira-success);
-}
 .nextLine {
   margin: 0 0 var(--space-3);
   font-weight: 700;
@@ -393,18 +374,7 @@
   align-items: center;
   text-decoration: none;
 }
-.problemName {
-  margin: 0 0 6px;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.problemLine {
-  margin: 0 0 var(--space-3);
-  font-size: 17px;
-  color: var(--nb-text);
-}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -437,20 +407,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-.confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-accent-bg);
-}
-.confirm span {
-  flex: 1 1 240px;
-  font-weight: 600;
 }
 
 .table {
@@ -824,9 +780,7 @@
 .decisionPrompt {
   font-weight: 600;
 }
-.decisionRole {
-  color: var(--peira-accent-text);
-}
+
 .bars {
   list-style: none;
   margin: 0;

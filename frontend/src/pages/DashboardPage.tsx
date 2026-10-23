@@ -346,7 +346,17 @@ export function DashboardPage() {
           )}
         </div>
 
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message={error}
+          onRetry={
+            quizzes === null
+              ? () => {
+                  setError(null);
+                  void refresh();
+                }
+              : undefined
+          }
+        />
 
         {/* CREATION IS ONE TAP FROM THE TOP, NOT TWO PERMANENT FORMS.
             Two always-open forms held 175px between the heading and a coach's
@@ -430,7 +440,7 @@ export function DashboardPage() {
         )}
 
         {quizzes === null ? (
-          <LoadingState />
+          !error && <LoadingState />
         ) : quizzes.length === 0 && !hasFolders ? (
           <EmptyState message="No Quizzes yet. Create your first one above." />
         ) : !hasFolders ? (

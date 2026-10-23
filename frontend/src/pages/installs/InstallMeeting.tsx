@@ -51,6 +51,8 @@ export function InstallMeeting({
   /** Items found to have nothing to show: Next and Back skip them. */
   const [empty, setEmpty] = useState<ReadonlySet<number>>(() => new Set());
   const [shown, setShown] = useState<{ index: number; item: TeachItem } | null>(null);
+  /** Every item turned out to have nothing to show. */
+  const [nothing, setNothing] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -65,7 +67,7 @@ export function InstallMeeting({
         const nextAt = at + heading.current;
         if (nextAt >= 0 && nextAt < order.length) setAt(nextAt);
         else if (shown) setAt(shown.index);
-        else onClose();
+        else setNothing(true);
       }
     });
     void load(at + 1);
@@ -80,6 +82,7 @@ export function InstallMeeting({
     setAt(index);
   };
 
+  if (nothing) return <TeachView title={install.title} place="Nothing to teach yet" slides={[]} onClose={onClose} />;
   if (!shown) {
     return (
       <TeachView

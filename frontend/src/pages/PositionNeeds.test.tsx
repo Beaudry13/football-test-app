@@ -220,7 +220,7 @@ describe('what the group needs', () => {
   it('nothing open says so plainly', async () => {
     vi.mocked(playersApi.getGroupNeeds).mockResolvedValue({ players: 3, concepts: [] });
     renderNeeds();
-    expect(await screen.findByText('Nothing open on what you have tested them on.')).toBeInTheDocument();
+    expect(await screen.findByText(/No misses on what you.ve tested them on/)).toBeInTheDocument();
   });
 
   it('a miss with nothing a Rep can re-ask (a written answer) offers Teach, not Retest', async () => {
