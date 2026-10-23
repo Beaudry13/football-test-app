@@ -639,6 +639,8 @@ function Teach({
       motionPlayId: d.motion_play_id ?? problem.motion_play_id,
       // The play moving to the decision moment, exactly as the players saw
       // it - and, when they tapped, the right spot lit.
+      // Ask first: the play without the right spot lit.
+      pictureAsk: targetsOf(d) ? <PlayPicture image={d.image} presnap={d.presnap} marker={d.subject_marker} motionKey={d.question_id} /> : undefined,
       picture: d.presnap || targetsOf(d) || d.subject_marker ? (
         <PlayPicture
           image={d.image}

@@ -135,6 +135,10 @@ export function TeachPlay({
     () => ({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT, draw: (ctx) => drawPlay(ctx, play, { routes, motion, highlight: who }) }),
     [play, routes, motion, who],
   )
+  const drawnAsk = useMemo<DrawnStill>(
+    () => ({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT, draw: (ctx) => drawPlay(ctx, play, { routes: false, motion, highlight: who }) }),
+    [play, motion, who],
+  )
   const slide: TeachSlide = {
     key: `${play.id}-${moment}-${who ?? 'all'}-${routes}`,
     imageUrl: null,
@@ -147,6 +151,8 @@ export function TeachPlay({
     motionPlayId: null,
     concept,
     picture: <PlayPicture presnap={clip} drawn={drawn} motionKey={`${play.id}-${moment}-${who}`} alt={play.name || 'The play'} />,
+    // Ask first: his job, then his route - the authored path shown on reveal.
+    pictureAsk: routes ? <PlayPicture presnap={clip} drawn={drawnAsk} motionKey={`${play.id}-${moment}-${who}-ask`} alt={play.name || 'The play'} /> : undefined,
   }
 
   const teach = () => {

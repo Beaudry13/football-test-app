@@ -244,3 +244,24 @@
     flex-wrap: wrap;
   }
 }
+/* ASK FIRST: the one thing to press when the room has answered. */
+.reveal {
+  align-self: flex-start;
+  font: inherit;
+  font-size: clamp(16px, 1.2vw, 26px);
+  font-weight: 800;
+  min-height: 52px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 10px;
+  background: #6fcf8a;
+  color: #0f1012;
+  cursor: pointer;
+}
+.revealKey {
+  margin-left: 10px;
+  padding: 1px 7px;
+  border: 1px solid rgba(15, 16, 18, 0.45);
+  border-radius: 5px;
+  font-size: 0.75em;
+}

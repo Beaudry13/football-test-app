@@ -131,3 +131,39 @@ describe('Teach in the meeting room', () => {
     expect(screen.getByTestId('picture')).toHaveTextContent('play 7');
   });
 });
+
+describe('Ask first - the room check', () => {
+  const asked = (key: number) =>
+    slide(key, { picture: <Picture label={`answer lit ${key}`} />, pictureAsk: <Picture label={`no answer ${key}`} /> });
+
+  it('holds the answer back - no right answer, no reason, no lit spot - until the coach shows it', () => {
+    const { screenEl } = open({ slides: [asked(1), asked(2)] });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask first' }));
+    expect(screen.queryByText('Rotate down')).toBeNull();
+    expect(screen.queryByText('He is the new #3.')).toBeNull();
+    expect(screen.getByTestId('picture')).toHaveTextContent('no answer 1');
+    expect(screen.getByText('Question 1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Show the answer/ }));
+    expect(screen.getByText('Rotate down')).toBeInTheDocument();
+    expect(screen.getByText('He is the new #3.')).toBeInTheDocument();
+    expect(screen.getByTestId('picture')).toHaveTextContent('answer lit 1');
+
+    // The next slide starts held back again.
+    fireEvent.keyDown(screenEl, { key: 'ArrowRight' });
+    expect(screen.getByTestId('picture')).toHaveTextContent('no answer 2');
+    expect(screen.queryByText('Rotate down')).toBeNull();
+    // A shows it, from the keyboard.
+    fireEvent.keyDown(screenEl, { key: 'a' });
+    expect(screen.getByText('Rotate down')).toBeInTheDocument();
+  });
+
+  it('A turns ask first on, and off again once shown', () => {
+    const { screenEl } = open({ slides: [asked(1)] });
+    fireEvent.keyDown(screenEl, { key: 'a' });
+    expect(screen.getByRole('button', { name: 'Ask first' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.keyDown(screenEl, { key: 'a' });
+    fireEvent.keyDown(screenEl, { key: 'a' });
+    expect(screen.getByRole('button', { name: 'Ask first' })).toHaveAttribute('aria-pressed', 'false');
+  });
+});

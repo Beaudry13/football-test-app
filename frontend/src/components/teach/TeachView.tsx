@@ -22,6 +22,10 @@ export interface TeachSlide {
   picture?: ReactNode;
   /** The concept this is, when the screen's title does not already say it. */
   concept?: string | null;
+  /** ASK FIRST: the picture without the answer in it (no lit spot, no drawn
+   *  assignment) - shown until the coach reveals it. Absent when the picture
+   *  gives nothing away. */
+  pictureAsk?: ReactNode;
 }
 
 /** Who in the room this is about: "3 of 11 missed it" and their names. */
@@ -46,7 +50,13 @@ const NAMES_SHOWN = 6;
  * Operated while talking to a room, so the keys do the work:
  *   ← →  previous / next (past the last slide: the next thing to teach)
  *   Space  watch the play again          N  notes on / off (the football alone)
- *   F  full screen (a projector)         Esc  close
+ *   A  ask first / show the answer       F  full screen (a projector)
+ *   Esc  close
+ *
+ * ASK FIRST is the room check: the play and the question, the answer held
+ * back - no right answer, no reason, no lit spot or drawn assignment - until
+ * the coach shows it. Each slide starts held back while it is on. Nothing is
+ * recorded: the room answers out loud; Retest is the formal check.
  * and the controls that are on screen are few and large.
  *
  * Shared by a Situational Rep's football problems, a quiz's Results, the
@@ -77,6 +87,9 @@ export function TeachView({
   /** Bumped to watch the play again: the picture restarts. */
   const [replay, setReplay] = useState(0);
   const [notes, setNotes] = useState(true);
+  /** Ask first: the answer held back on each slide until it is shown. */
+  const [asking, setAsking] = useState(false);
+  const [shownKey, setShownKey] = useState<string | number | null>(null);
   // The play link only for coaches who can open Motion Lab.
   const motionLab = useMayUseMotionLab();
   /* A NEW THING TO TEACH (Next, or new slides from the caller) starts at its
@@ -111,6 +124,16 @@ export function TeachView({
   };
 
   if (!slide) return null;
+  const holding = asking && shownKey !== slide.key;
+  const hasAnswer = slide.right.length > 0 || !!slide.why || !!slide.pictureAsk;
+  const picture = holding && slide.pictureAsk ? slide.pictureAsk : slide.picture;
+  const askOrShow = () => {
+    if (!asking) {
+      setAsking(true);
+      setShownKey(null);
+    } else if (holding) setShownKey(slide.key);
+    else setAsking(false);
+  };
   const shownNames = room?.names.slice(0, NAMES_SHOWN) ?? [];
   const moreNames = (room?.names.length ?? 0) - shownNames.length;
 
@@ -133,6 +156,7 @@ export function TeachView({
         else if (e.key === ' ' && target.tagName !== 'BUTTON') setReplay((n) => n + 1);
         else if (e.key === 'n' || e.key === 'N') setNotes((on) => !on);
         else if (e.key === 'f' || e.key === 'F') fullScreen();
+        else if (e.key === 'a' || e.key === 'A') askOrShow();
         else if (/^[1-9]$/.test(e.key) && Number(e.key) <= slides.length) setAt(Number(e.key) - 1);
         else return;
         e.preventDefault();
@@ -165,6 +189,18 @@ export function TeachView({
         <button
           type="button"
           className={styles.tool}
+          aria-pressed={asking}
+          onClick={() => {
+            setAsking((on) => !on);
+            setShownKey(null);
+          }}
+          title="Ask the room first - the answer held back until you show it (A)"
+        >
+          Ask first
+        </button>
+        <button
+          type="button"
+          className={styles.tool}
           aria-pressed={!notes}
           onClick={() => setNotes((on) => !on)}
           title="Just the football - notes on or off (N)"
@@ -179,9 +215,9 @@ export function TeachView({
         </button>
       </div>
       <div className={`${styles.body} ${notes ? '' : styles.footballOnly}`}>
-        {slide.picture ? (
-          <div className={styles.pictureSlot} key={`${slide.key}-${replay}`}>
-            {slide.picture}
+        {picture ? (
+          <div className={styles.pictureSlot} key={`${slide.key}-${replay}-${holding ? 'ask' : 'shown'}`}>
+            {picture}
           </div>
         ) : (
           slide.imageUrl && (
@@ -208,13 +244,18 @@ export function TeachView({
             {slide.concept && slide.concept !== title && <span className={styles.concept}>{slide.concept}</span>}
             {slide.role && <span className={styles.role}>You&rsquo;re the {slide.role}</span>}
             <p className={styles.prompt}>{slide.prompt}</p>
-            {slide.right.length > 0 && (
+            {holding && hasAnswer && (
+              <button type="button" className={styles.reveal} onClick={() => setShownKey(slide.key)}>
+                Show the answer <span className={styles.revealKey}>A</span>
+              </button>
+            )}
+            {!holding && slide.right.length > 0 && (
               <p className={styles.right}>
                 <span>Right answer</span> {slide.right.join(', ')}
               </p>
             )}
-            {slide.why && <p className={styles.why}>{slide.why}</p>}
-            {slide.wrong && (
+            {!holding && slide.why && <p className={styles.why}>{slide.why}</p>}
+            {!holding && slide.wrong && (
               <p className={styles.wrong}>
                 {slide.wrong.count} chose “{slide.wrong.text}”
               </p>
