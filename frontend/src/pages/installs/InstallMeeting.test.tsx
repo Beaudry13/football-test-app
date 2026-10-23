@@ -176,7 +176,7 @@ describe('Teach install: one screen, item to item', () => {
     expect(teach.getByText('Who is #3 now?')).toBeInTheDocument();
     fireEvent.click(teach.getByRole('button', { name: /Next: Trips Jet - Boundary safety/ }));
 
-    teach = await screenOf('Trips Jet - Boundary safety · Motion adjustment');
+    teach = await screenOf('Trips Jet - Boundary safety');
     expect(teach.getByText('Week 7 - West Virginia · 2 of 4')).toBeInTheDocument();
     // The concept has no football of his yet: Next goes past it, to Red zone.
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowRight' });
@@ -186,7 +186,7 @@ describe('Teach install: one screen, item to item', () => {
     // Back skips the empty item too.
     expect(teach.getByRole('button', { name: 'Back: Trips Jet - Boundary safety' })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'ArrowLeft' });
-    await screenOf('Trips Jet - Boundary safety · Motion adjustment');
+    await screenOf('Trips Jet - Boundary safety');
   });
 
   it('starts at the item he chose, and Ask first stays on from item to item', async () => {
@@ -211,8 +211,8 @@ describe('Check understanding and retest without leaving the meeting', () => {
     vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 77 } as never);
     vi.mocked(codesApi.activateQuiz).mockResolvedValue({} as never);
     meet(install([repItem(102, 0)]));
-    const teach = await screenOf('Trips Jet - Boundary safety · Motion adjustment');
-    expect(teach.getByText(/2 of 5/)).toBeInTheDocument();
+    const teach = await screenOf('Trips Jet - Boundary safety');
+    expect(teach.getByText(/2 of 5 missed Motion adjustment/)).toBeInTheDocument();
     fireEvent.click(teach.getByRole('button', { name: 'Retest the 2 who missed' }));
     await waitFor(() => expect(landed).toBe('/reps/77'));
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);

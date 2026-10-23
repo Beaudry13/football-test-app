@@ -32,7 +32,7 @@ import { contents, itemDetail, itemHref, kindLabel } from './installDetail';
 import styles from './Installs.module.css';
 
 /**
- * AN INSTALL: "Week 7 - West Virginia" - the football he is installing this
+ * AN INSTALL: "Week 7 - Central" - the football he is installing this
  * week, in the order he will teach it, with what PEIRA already knows about
  * each piece beside it.
  *
@@ -58,6 +58,8 @@ export function InstallPage() {
   const [title, setTitle] = useState('');
   const [newSection, setNewSection] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
+  /** "Who it's for" is open - a rare change, so it waits behind More. */
+  const [choosingGroup, setChoosingGroup] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [needs, setNeeds] = useState<GroupNeeds | null>(null);
   useDocumentTitle(install ? install.title : 'Install');
@@ -206,6 +208,7 @@ export function InstallPage() {
   const setGroup = async (key: string) => {
     try {
       setInstall(await updateInstall(install.id, { position_group: key || null }));
+      setChoosingGroup(false);
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -331,6 +334,7 @@ export function InstallPage() {
           <MenuButton label={`More for ${install.title}`}>
             <MenuItem onSelect={() => setRenaming(true)}>Rename</MenuItem>
             <MenuItem onSelect={() => setNewSection('')}>Add a section</MenuItem>
+            {audiences.length > 0 && <MenuItem onSelect={() => setChoosingGroup(true)}>Who it&rsquo;s for…</MenuItem>}
             <MenuItem onSelect={() => setDuplicating(`${install.title} (copy)`)}>Duplicate for a new week</MenuItem>
             <MenuItem onSelect={() => void archive(!install.archived)}>{install.archived ? 'Restore' : 'Archive'}</MenuItem>
             <MenuItem destructive onSelect={remove_}>
@@ -342,10 +346,17 @@ export function InstallPage() {
 
       <ErrorBanner message={error} />
 
-      {audiences.length > 0 && (
+      {choosingGroup && audiences.length > 0 && (
         <label className={styles.groupPick}>
           <span>For</span>
-          <select className={nb.input} value={install.position_group ?? ''} onChange={(e) => void setGroup(e.target.value)} aria-label="Who this install is for">
+          <select
+            className={nb.input}
+            value={install.position_group ?? ''}
+            onChange={(e) => void setGroup(e.target.value)}
+            onBlur={() => setChoosingGroup(false)}
+            aria-label="Who this install is for"
+            autoFocus
+          >
             <option value="">The whole team</option>
             {audiences.map((a) => (
               <option key={a.key} value={a.key}>

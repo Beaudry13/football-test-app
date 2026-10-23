@@ -14,7 +14,18 @@ import styles from './AddToInstall.module.css';
  * The panel alone, for a screen that opens its own panels (Motion Lab's "Use
  * this play"); it closes on Escape or a tap outside it.
  */
-export function AddToInstallPanel({ kind, refId, onClose }: { kind: InstallItemKind; refId: number; onClose: () => void }) {
+export function AddToInstallPanel({
+  kind,
+  refId,
+  onClose,
+  align = 'right',
+}: {
+  kind: InstallItemKind;
+  refId: number;
+  onClose: () => void;
+  /** Which edge of its trigger it hangs from - left when the trigger is near the screen's left edge. */
+  align?: 'left' | 'right';
+}) {
   const [installs, setInstalls] = useState<{ id: number; title: string; has: boolean }[] | null>(null);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState<number | 'new' | null>(null);
@@ -77,6 +88,7 @@ export function AddToInstallPanel({ kind, refId, onClose }: { kind: InstallItemK
     <div
       ref={panel}
       className={styles.panel}
+      data-align={align}
       role="dialog"
       aria-label="Add to install"
       onKeyDown={(e) => {
@@ -106,7 +118,7 @@ export function AddToInstallPanel({ kind, refId, onClose }: { kind: InstallItemK
           className={styles.input}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder={installs && installs.length > 0 ? 'Or a new install…' : 'Week 7 - West Virginia'}
+          placeholder={installs && installs.length > 0 ? 'Or a new install…' : 'Week 7 - Central'}
           aria-label="New install name"
           maxLength={120}
         />
@@ -136,13 +148,20 @@ export function AddToInstall({
   /** The trigger's class, so it sits in the bar it is part of. */
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<'left' | 'right' | null>(null);
   return (
     <span className={styles.wrap}>
-      <button type="button" className={className} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
+      <button
+        type="button"
+        className={className}
+        aria-expanded={open !== null}
+        aria-haspopup="dialog"
+        // It hangs toward the side with room for it - a phone's narrow width too.
+        onClick={(e) => setOpen((o) => (o ? null : e.currentTarget.getBoundingClientRect().right < 320 ? 'left' : 'right'))}
+      >
         {label}
       </button>
-      {open && <AddToInstallPanel kind={kind} refId={refId} onClose={() => setOpen(false)} />}
+      {open && <AddToInstallPanel kind={kind} refId={refId} align={open} onClose={() => setOpen(null)} />}
     </span>
   );
 }

@@ -217,8 +217,9 @@
 /* THE KIND, at a glance: one quiet label, a colour per kind. */
 .tag {
   flex: none;
-  min-width: 64px;
-  padding: 3px 8px;
+  box-sizing: border-box;
+  width: 84px;
+  padding: 3px 6px;
   border: 1px solid var(--nb-border);
   border-radius: var(--radius-pill, 999px);
   color: var(--nb-text-muted);
@@ -408,7 +409,7 @@
   }
   .item .itemMain {
     order: 1;
-    flex-basis: calc(100% - 80px);
+    flex-basis: calc(100% - 100px);
   }
   .item .itemActions {
     order: 2;
@@ -418,7 +419,20 @@
   .finderMeta {
     display: none;
   }
+  /* Teach install and Add football share the line; More stays beside them. */
   .headActions {
     width: 100%;
+    flex-wrap: nowrap;
+  }
+  .headActions > button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  /* A long name wraps rather than losing its end. */
+  .item .itemTitle,
+  .installTitle {
+    white-space: normal;
   }
 }

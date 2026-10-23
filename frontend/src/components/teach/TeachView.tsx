@@ -85,7 +85,7 @@ export function TeachView({
   next?: { label: string; onGo: () => void } | null;
   /** The thing taught before this one: ← before the first slide goes back to it. */
   prev?: { label: string; onGo: () => void } | null;
-  /** Where this is in a meeting ("Week 7 - West Virginia · 2 of 6"). */
+  /** Where this is in a meeting ("Week 7 - Central · 2 of 6"). */
   place?: string;
 }) {
   const clamp = (i: number) => Math.min(Math.max(0, i), Math.max(0, slides.length - 1));
@@ -131,7 +131,11 @@ export function TeachView({
 
   if (!slide) return null;
   const holding = asking && shownKey !== slide.key;
-  const hasAnswer = slide.right.length > 0 || !!slide.why || !!slide.pictureAsk;
+  /* A slide with no question - a play taught from Motion Lab - carries the
+     coach's point as its words: that point IS the answer, so Ask first holds
+     it back with the routes. */
+  const pointOnly = slide.right.length === 0 && !slide.why && !!slide.prompt;
+  const hasAnswer = slide.right.length > 0 || !!slide.why || !!slide.pictureAsk || pointOnly;
   const picture = holding && slide.pictureAsk ? slide.pictureAsk : slide.picture;
   const askOrShow = () => {
     if (!asking) {
@@ -259,7 +263,7 @@ export function TeachView({
             )}
             {slide.concept && slide.concept !== title && <span className={styles.concept}>{slide.concept}</span>}
             {slide.role && <span className={styles.role}>You&rsquo;re the {slide.role}</span>}
-            <p className={styles.prompt}>{slide.prompt}</p>
+            {!(holding && pointOnly) && <p className={styles.prompt}>{slide.prompt}</p>}
             {holding && hasAnswer && (
               <button type="button" className={styles.reveal} onClick={() => setShownKey(slide.key)}>
                 Show the answer <span className={styles.revealKey}>A</span>

@@ -34,7 +34,7 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
-/* Where this is in a meeting: "Week 7 - West Virginia · 2 of 6". */
+/* Back an item in a meeting - the ← key, for a finger. */
 .prev {
   flex: none;
   width: 44px;
@@ -48,7 +48,9 @@
   line-height: 1;
   cursor: pointer;
 }
+/* Where this is in a meeting: "Week 7 - Central · 2 of 6". */
 .place {
+  flex: none;
   font-size: clamp(12px, 0.85vw, 18px);
   font-weight: 600;
   color: #9aa0a6;
@@ -82,6 +84,8 @@
 }
 .action button,
 .action a {
+  flex: none;
+  white-space: nowrap;
   font: inherit;
   font-weight: 700;
   font-size: 15px;
@@ -101,6 +105,11 @@
   cursor: default;
 }
 .next {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 32vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font: inherit;
   font-weight: 700;
   font-size: 15px;
@@ -114,6 +123,8 @@
   white-space: nowrap;
 }
 .tool {
+  flex: none;
+  white-space: nowrap;
   font: inherit;
   font-size: 14px;
   font-weight: 700;
@@ -262,6 +273,17 @@
   }
   .bar {
     flex-wrap: wrap;
+  }
+  /* The name beside Back, where it is on its own line, Next in full. */
+  .title {
+    flex: 1 1 0;
+    white-space: normal;
+  }
+  .place {
+    flex-basis: 100%;
+  }
+  .next {
+    max-width: none;
   }
 }
 /* ASK FIRST: the one thing to press when the room has answered. */

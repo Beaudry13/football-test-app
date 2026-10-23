@@ -168,6 +168,37 @@ describe('Ask first - the room check', () => {
   });
 });
 
+describe('Ask first on a play - the point is the answer', () => {
+  it("holds the coach's point back with the routes, until shown", () => {
+    open({
+      slides: [
+        slide(1, {
+          prompt: 'H is the new #3 - rotate down to him.',
+          right: [],
+          why: null,
+          role: 'boundary safety',
+          pictureAsk: <Picture label="no routes" />,
+        }),
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask first' }));
+    expect(screen.queryByText('H is the new #3 - rotate down to him.')).toBeNull();
+    expect(screen.getByText(/the boundary safety/)).toBeInTheDocument();
+    expect(screen.getByTestId('picture')).toHaveTextContent('no routes');
+    fireEvent.click(screen.getByRole('button', { name: /Show the answer/ }));
+    expect(screen.getByText('H is the new #3 - rotate down to him.')).toBeInTheDocument();
+    expect(screen.getByTestId('picture')).toHaveTextContent('play 1');
+  });
+
+  it('a point with no picture to hold back still waits for Show the answer', () => {
+    open({ slides: [slide(1, { prompt: 'Eyes on the motion man.', right: [], why: null, pictureAsk: undefined })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask first' }));
+    expect(screen.queryByText('Eyes on the motion man.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Show the answer/ }));
+    expect(screen.getByText('Eyes on the motion man.')).toBeInTheDocument();
+  });
+});
+
 describe('In a meeting - where it is, and back an item', () => {
   it('says where the meeting is, and goes back an item: ← before the first slide, or the Back button', () => {
     const prev = vi.fn();

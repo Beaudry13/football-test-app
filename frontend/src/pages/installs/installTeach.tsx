@@ -120,10 +120,11 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
     }
     const { slides, start } = problemSlides(problem, results.decisions);
     return {
-      title: `${title} · ${problem.name}`,
+      title,
       slides,
       start,
-      room: { missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name) },
+      // The football problem in the room line - "3 of 9 missed Motion adjustment".
+      room: { missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name), verb: `missed ${problem.name}` },
       action: problem.retest ? (
         <Link to={`/reps/${problem.retest.id}`}>Open retest</Link>
       ) : problem.players_missed.length > 0 ? (

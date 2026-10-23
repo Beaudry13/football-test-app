@@ -8,6 +8,8 @@ import * as conceptsApi from '../../api/concepts';
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
 vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
 import * as retestsApi from '../../api/retests';
+vi.mock('../../api/installs', () => ({ installsFor: vi.fn(), addToInstall: vi.fn(), createInstall: vi.fn() }));
+import * as installsApi from '../../api/installs';
 import { RetestVerification } from './RetestVerification';
 import type { RetestVerification as Verification } from '../../api/types';
 import * as repsApi from '../../api/reps';
@@ -264,6 +266,18 @@ describe('a targeted rep from a concept - from what is already written', () => {
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question, second]} />);
     fireEvent.click(screen.getByRole('button', { name: 'View details' }));
     expect(screen.getByRole('button', { name: 'Make a rep of all 2 for the 2' })).toBeInTheDocument();
+  });
+
+  it("a missed concept goes into this week's install from its details - by reference", async () => {
+    vi.mocked(installsApi.installsFor).mockResolvedValue([{ id: 3, title: 'Week 7 - Central', has: false }]);
+    vi.mocked(installsApi.addToInstall).mockResolvedValue({} as never);
+    at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} />);
+    expect(screen.queryByRole('button', { name: 'Add to install' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to install' }));
+    const panel = within(screen.getByRole('dialog', { name: 'Add to install' }));
+    fireEvent.click(await panel.findByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(installsApi.addToInstall).toHaveBeenCalledWith(3, 'concept', 1));
   });
 
   it('a miss from Motion Lab opens its play in one tap', () => {

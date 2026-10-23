@@ -86,7 +86,7 @@ export function InstallsPage() {
           className={nb.input}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Week 7 - West Virginia"
+          placeholder="Week 7 - Central"
           aria-label="New install name"
           maxLength={120}
         />

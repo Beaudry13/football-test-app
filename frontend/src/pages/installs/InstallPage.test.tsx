@@ -272,7 +272,12 @@ describe("A position coach's install", () => {
     vi.mocked(playersApi.listPlayers).mockResolvedValue([player(1, 'FS'), player(4, 'CB')]);
     vi.mocked(installsApi.updateInstall).mockResolvedValue(INSTALL({ position_group: 'family:Corners' }));
     open();
-    const pick = await screen.findByRole('combobox', { name: 'Who this install is for' });
+    await screen.findByRole('heading', { name: 'Week 7 - West Virginia' });
+    // A rare change: behind More, not a line on every install.
+    expect(screen.queryByRole('combobox', { name: 'Who this install is for' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'More for Week 7 - West Virginia' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Who it’s for…' }));
+    const pick = screen.getByRole('combobox', { name: 'Who this install is for' });
     fireEvent.change(pick, { target: { value: 'family:Corners' } });
     await waitFor(() => expect(installsApi.updateInstall).toHaveBeenCalledWith(1, { position_group: 'family:Corners' }));
   });
