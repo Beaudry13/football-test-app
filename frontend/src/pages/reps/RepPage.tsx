@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { deleteQuestion, reorderQuestions, updateQuestion, uploadQuestionImage } from '../../api/questions';
 import { duplicateQuiz, updateQuiz } from '../../api/quizzes';
@@ -52,6 +52,8 @@ import styles from './RepPage.module.css';
 import { AddToInstall } from '../installs/AddToInstall';
 import { buildRepRetest, retestLabel } from '../../components/teach/retest';
 import { StepButton } from '../../components/ui/StepButton';
+import { SourcePlayLink } from '../../components/football/SourcePlayLink';
+import { keepFrom, useBackTo, useGoFromHere } from '../../navigation/backTo';
 
 
 /** A decision's tap targets when usable (one per choice, a picture to tap). */
@@ -84,6 +86,9 @@ export function RepPage() {
   const { quizId } = useParams<{ quizId: string }>();
   const id = Number(quizId);
   const navigate = useNavigate();
+  const location = useLocation();
+  const back = useBackTo({ to: '/reps', label: 'Reps' });
+  const go = useGoFromHere();
   const [results, setResults] = useState<RepResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [teaching, setTeaching] = useState<RepConcept | null>(null);
@@ -107,7 +112,7 @@ export function RepPage() {
   };
   /** Retest = a new Rep of this concept for exactly the players who missed
    *  it, opened ready to send - Send rep there, where it says who gets it. */
-  const retest = async (problem: RepConcept) => navigate(await buildRepRetest(id, problem.concept?.id ?? null));
+  const retest = async (problem: RepConcept) => go(await buildRepRetest(id, problem.concept?.id ?? null));
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
   // Home's "Pick up where you left off".
   useRememberWork(results ? { kind: 'rep', id, title: results.title } : null);
@@ -151,7 +156,7 @@ export function RepPage() {
     if (!results || !teachAsk) return;
     const asked = results.concepts.find((c) => conceptKey(c) === teachAsk && c.missed > 0);
     if (asked) teach(asked);
-    setParams({}, { replace: true });
+    setParams({}, { replace: true, state: keepFrom(location.state) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, teachAsk]);
 
@@ -167,8 +172,8 @@ export function RepPage() {
   return (
     <div>
       <div>
-        <Link to="/reps" className={styles.back}>
-          ← Reps
+        <Link to={back.to} className={styles.back}>
+          ← {back.label}
         </Link>
         <ErrorBanner message={error} />
         {!results && !error && <LoadingState />}
@@ -198,7 +203,7 @@ export function RepPage() {
                 quizId={id}
                 fromId={variationOf}
                 onRenamed={load}
-                onDone={() => setParams({}, { replace: true })}
+                onDone={() => setParams({}, { replace: true, state: keepFrom(location.state) })}
                 canOpenPlay={motionLab}
               />
             )}
@@ -1409,9 +1414,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                   {motionLab && d.motion_play_id !== null && (
                     <>
                       {d.median_ms !== null && ' · '}
-                      <Link to={`/motion-lab/plays/${d.motion_play_id}`} className={styles.edit}>
-                        Open the play
-                      </Link>
+                      <SourcePlayLink playId={d.motion_play_id} className={styles.edit} />
                     </>
                   )}
                 </span>

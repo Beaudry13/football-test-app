@@ -328,3 +328,10 @@ describe('Edits keep what PEIRA knows', () => {
     expect(screen.getByText(/Motion adjustment: 3 of 4 missed/)).toBeInTheDocument();
   });
 });
+
+describe('Back into the meeting', () => {
+  it('?teach=1&at=2 - the way back from a retest or Check them - reopens the meeting on that item', async () => {
+    open(INSTALL(), '/installs/1?teach=1&at=2');
+    expect(await screen.findByRole('dialog', { name: 'Meeting' })).toHaveTextContent('from 2');
+  });
+});

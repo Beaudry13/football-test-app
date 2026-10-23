@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
-import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import styles from './TeachView.module.css';
+import { SourcePlayLink } from '../football/SourcePlayLink';
 
 /** One thing to put on the screen in the meeting room. */
 export interface TeachSlide {
@@ -96,8 +95,6 @@ export function TeachView({
   /** Ask first: the answer held back on each slide until it is shown. */
   const [asking, setAsking] = useState(false);
   const [shownKey, setShownKey] = useState<string | number | null>(null);
-  // The play link only for coaches who can open Motion Lab.
-  const motionLab = useMayUseMotionLab();
   /* A NEW THING TO TEACH (Next, or new slides from the caller) starts at its
      own first slide. */
   const slideKeys = slides.map((s) => s.key).join('|');
@@ -280,11 +277,7 @@ export function TeachView({
                 {slide.wrong.count} chose “{slide.wrong.text}”
               </p>
             )}
-            {motionLab && slide.motionPlayId !== null && (
-              <Link to={`/motion-lab/plays/${slide.motionPlayId}`} className={styles.play}>
-                Open the play in Motion Lab
-              </Link>
-            )}
+            <SourcePlayLink playId={slide.motionPlayId} className={styles.play} />
           </div>
         )}
       </div>

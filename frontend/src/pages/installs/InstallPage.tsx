@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import {
   addToInstall,
@@ -31,6 +31,7 @@ import { AddFootball } from './AddFootball';
 import { InstallMeeting } from './InstallMeeting';
 import { contents, itemDetail, itemHref, kindLabel } from './installDetail';
 import styles from './Installs.module.css';
+import { fromHere, useGoFromHere } from '../../navigation/backTo';
 
 /**
  * AN INSTALL: "Week 7 - Central" - the football he is installing this
@@ -48,6 +49,8 @@ export function InstallPage() {
   const { installId } = useParams<{ installId: string }>();
   const id = Number(installId);
   const navigate = useNavigate();
+  const location = useLocation();
+  const go = useGoFromHere();
   const [params, setParams] = useSearchParams();
   const motionLab = useMayUseMotionLab();
   const { confirm, dialog } = useConfirmDialog();
@@ -107,7 +110,7 @@ export function InstallPage() {
   // Home's "Teach" arrives with ?teach=1: the meeting opens at the first item.
   useEffect(() => {
     if (install && params.get('teach') && install.items.length > 0) {
-      setTeachingAt(0);
+      setTeachingAt(Number(params.get('at')) || 0);
       setParams({}, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,7 +266,7 @@ export function InstallPage() {
           {kindLabel(item)}
         </span>
         <div className={styles.itemMain}>
-          <Link to={itemHref(item)} className={styles.itemTitle}>
+          <Link to={itemHref(item)} state={fromHere(location, install.title)} className={styles.itemTitle}>
             {title}
           </Link>
           <span className={styles.itemDetail}>
@@ -284,11 +287,11 @@ export function InstallPage() {
             ↓
           </button>
           <MenuButton label={`More for ${title}`}>
-            <MenuItem onSelect={() => navigate(itemHref(item))}>
+            <MenuItem onSelect={() => go(itemHref(item))}>
               {item.kind === 'play' ? 'Open the play' : item.kind === 'concept' ? 'Open the concept' : item.ref.kind === 'REP' ? 'Open the Rep' : 'Open the quiz'}
             </MenuItem>
             {item.kind === 'quiz' && item.ref.kind !== 'REP' && (
-              <MenuItem onSelect={() => navigate(`/quizzes/${item.ref_id}?tab=results`)}>Results</MenuItem>
+              <MenuItem onSelect={() => go(`/quizzes/${item.ref_id}?tab=results`)}>Results</MenuItem>
             )}
             {item.section_id !== null && <MenuItem onSelect={() => moveTo(item.id, null)}>Move out of the section</MenuItem>}
             {install.sections

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { getErrorMessage } from '../api/client';
 import { getGroupNeeds, type GroupNeed, type GroupNeeds } from '../api/players';
 import { TeachView, type TeachSlide } from '../components/teach/TeachView';
 import { groupNeedSlides, groupRetestable, retestGroup } from '../components/teach/groupTeach';
 import styles from './PositionNeeds.module.css';
 import { retestLabel } from '../components/teach/retest';
+import { useGoFromHere } from '../navigation/backTo';
 
 /** How many concepts the panel names before counting the rest. */
 const SHOWN = 4;
@@ -25,7 +26,7 @@ const SHOWN = 4;
  * Not a report and not a ranking; nothing here when nothing is open.
  */
 export function PositionNeeds({ label, plural, playerIds }: { label: string; plural: string; playerIds: number[] }) {
-  const navigate = useNavigate();
+  const go = useGoFromHere();
   const [needs, setNeeds] = useState<GroupNeeds | null>(null);
   const [making, setMaking] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
     setError(null);
     try {
       const repId = await retestGroup(need, label);
-      navigate(`/reps/${repId}`);
+      go(`/reps/${repId}`);
     } catch (err) {
       setError(getErrorMessage(err));
       setMaking(null);
@@ -71,7 +72,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
     setError(null);
     try {
       const slides = await slidesFor(need);
-      if (slides.length === 0) navigate(teachHref(need));
+      if (slides.length === 0) go(teachHref(need));
       else setTeaching({ need, slides });
     } catch (err) {
       setError(getErrorMessage(err));

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { listMotionPlays, type MotionPlayRow } from '../../api/motionLab';
 import { getQuiz, listQuizzes } from '../../api/quizzes';
@@ -9,6 +9,7 @@ import { ErrorBanner } from '../../components/ErrorBanner';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
+import { fromHere } from '../../navigation/backTo';
 
 /** One tap, one right answer: what a Rep can judge on the spot. */
 const tappable = (q: Question) =>
@@ -21,6 +22,7 @@ const tappable = (q: Question) =>
  */
 export function AddDecisions({ repId, onAdded }: { repId: number; onAdded: () => void }) {
   const motionLab = useMayUseMotionLab();
+  const location = useLocation();
   const [from, setFrom] = useState<'quiz' | 'play'>('quiz');
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -140,7 +142,7 @@ export function AddDecisions({ repId, onAdded }: { repId: number; onAdded: () =>
           {(plays ?? []).slice(0, 12).map((p) => (
             <li key={p.id}>
               {/* Make rep, already pointed at this Rep. */}
-              <Link to={`/motion-lab/plays/${p.id}?rep=${repId}`} className={styles.adderRow}>
+              <Link to={`/motion-lab/plays/${p.id}?rep=${repId}`} state={fromHere(location)} className={styles.adderRow}>
                 <span>{p.name}</span>
                 <span className={styles.adderMeta}>Make a decision from it →</span>
               </Link>

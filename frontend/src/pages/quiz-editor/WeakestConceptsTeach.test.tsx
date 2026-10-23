@@ -68,7 +68,7 @@ describe('Teach, on Results', () => {
     expect(teach.getByText('Corner squeezes, keeps it inside.')).toBeInTheDocument();
     expect(teach.getByText('4 chose “Spill”')).toBeInTheDocument();
     expect(teach.getByRole('img', { name: 'The play' })).toHaveAttribute('src', expect.stringContaining('/uploads/toss.png'));
-    expect(teach.getByRole('link', { name: 'Open the play in Motion Lab' })).toHaveAttribute('href', '/motion-lab/plays/14');
+    expect(teach.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
   });
 
   it("arrives straight in Teach from Home's Next up (?teach=<concept>)", () => {

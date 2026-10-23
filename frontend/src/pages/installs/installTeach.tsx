@@ -20,6 +20,7 @@ import { quizTeachSlides, teachable } from '../quiz-editor/quizTeach';
 import { StepButton } from '../../components/ui/StepButton';
 import { buildQuizRetest, buildRepRetest, retestLabel } from '../../components/teach/retest';
 import { problemSlides, repDecisionSlides } from '../reps/repTeach';
+import type { From } from '../../navigation/backTo';
 
 /**
  * TEACH THE INSTALL: the install decides what football comes next; the Teach
@@ -48,7 +49,10 @@ export interface TeachItem {
 }
 
 export interface TeachContext {
+  /** Leave the meeting for `to`; its back link returns to this item of it. */
   navigate: (to: string) => void;
+  /** The way back to this item of the meeting, for a link that leaves it. */
+  back: () => { from: From };
   quizOf: (id: number) => Promise<Quiz>;
   /** A position group's needs, once - null for a whole-team install. */
   groupNeeds: () => Promise<GroupNeeds | null>;
@@ -125,7 +129,9 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
       // The football problem in the room line - "3 of 9 missed Motion adjustment".
       room: { missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name), verb: `missed ${problem.name}` },
       action: problem.retest ? (
-        <Link to={`/reps/${problem.retest.id}`}>Open retest</Link>
+        <Link to={`/reps/${problem.retest.id}`} state={ctx.back()}>
+          Open retest
+        </Link>
       ) : problem.players_missed.length > 0 ? (
         <StepButton
           label={retestLabel(problem.players_missed.map((p) => p.display_name))}

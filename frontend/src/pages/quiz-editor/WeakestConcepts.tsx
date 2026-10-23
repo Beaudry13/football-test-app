@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { TeachView } from '../../components/teach/TeachView';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import type { ConceptBreakdown, Question, QuestionBreakdown, RetestSummary } from '../../api/types';
 import type { TeachSlide } from '../../components/teach/TeachView';
 import { FootballProblem } from '../../components/football/FootballProblem';
@@ -13,6 +13,7 @@ import styles from './WeakestConcepts.module.css';
 import missStyles from './MissActions.module.css';
 import { buildQuizRetest, retestLabel } from '../../components/teach/retest';
 import { StepButton } from '../../components/ui/StepButton';
+import { useGoFromHere } from '../../navigation/backTo';
 
 /** "What should I teach next?", above everything else on Results.
  *
@@ -51,13 +52,13 @@ function teachSlides(concept: ConceptBreakdown, questions: Question[], breakdown
 /** TEACH -> RETEST without leaving the teaching screen: the same draft
  *  "Retest the 3" builds, for the same players. */
 function TeachRetest({ quizId, concept, className }: { quizId: number; concept: ConceptBreakdown; className?: string }) {
-  const navigate = useNavigate();
+  const go = useGoFromHere();
   if (concept.players_missed.length === 0 || concept.retestable_question_count === 0 || concept.concept_id === null) return null;
   return (
     <StepButton
       className={className}
       label={retestLabel(concept.players_missed.map((p) => p.display_name ?? p.player_name))}
-      run={async () => navigate(await buildQuizRetest(quizId, { concept_id: concept.concept_id }, concept.players_missed))}
+      run={async () => go(await buildQuizRetest(quizId, { concept_id: concept.concept_id }, concept.players_missed))}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { getConceptHistory, type ConceptHistory } from '../../api/reps';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -11,6 +11,7 @@ import nb from '../../styles/notebook.module.css';
 import { taughtLine } from './taught';
 import rep from './RepPage.module.css';
 import styles from './ConceptHistoryPage.module.css';
+import { useBackTo, useGoFromHere } from '../../navigation/backTo';
 
 /** How many points the trend line shows - the arc, not the archive. */
 const TREND_POINTS = 6;
@@ -26,7 +27,8 @@ const day = (at: string | null) =>
 export function ConceptHistoryPage() {
   const { conceptId } = useParams<{ conceptId: string }>();
   const id = Number(conceptId);
-  const navigate = useNavigate();
+  const back = useBackTo({ to: '/reps', label: 'Reps' });
+  const go = useGoFromHere();
   const [history, setHistory] = useState<ConceptHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
   useDocumentTitle(history ? `${history.concept.name} - Football problem` : 'Football problem');
@@ -49,13 +51,13 @@ export function ConceptHistoryPage() {
   /** Retest = a new Rep of this problem for exactly the players who missed it
    *  on the latest Rep, opened ready to send - Send rep there. */
   const retest = async () => {
-    if (latest) navigate(await buildRepRetest(latest.rep_id, id));
+    if (latest) go(await buildRepRetest(latest.rep_id, id));
   };
 
   return (
     <div>
-      <Link to="/reps" className={rep.back}>
-        ← Reps
+      <Link to={back.to} className={rep.back}>
+        ← {back.label}
       </Link>
       <ErrorBanner message={error} />
       {!history && !error && <LoadingState />}

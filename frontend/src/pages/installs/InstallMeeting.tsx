@@ -28,7 +28,16 @@ export function InstallMeeting({
   const motionLab = useMayUseMotionLab();
   // Plays only for a coach who can open Motion Lab (its API refuses anyone else).
   const order = useMemo(() => itemsInOrder(install).filter((i) => motionLab || i.kind !== 'play'), [install, motionLab]);
-  const ctx = useRef<TeachContext>({ navigate, quizOf: quizCache(), groupNeeds, groupLabel });
+  /** Which item is up - so leaving the meeting can come back to it. */
+  const here = useRef(0);
+  const back = () => ({ from: { to: `/installs/${install.id}?teach=1&at=${here.current}`, label: install.title } });
+  const ctx = useRef<TeachContext>({
+    navigate: (to: string) => navigate(to, { state: back() }),
+    back,
+    quizOf: quizCache(),
+    groupNeeds,
+    groupLabel,
+  });
   const cache = useRef(new Map<number, Promise<TeachItem | null>>());
   const load = (index: number) => {
     const item = order[index];
@@ -47,7 +56,10 @@ export function InstallMeeting({
     let live = true;
     void load(at).then((item) => {
       if (!live) return;
-      if (item) setShown({ index: at, item });
+      if (item) {
+        here.current = at;
+        setShown({ index: at, item });
+      }
       else {
         setEmpty((s) => new Set(s).add(at));
         const nextAt = at + heading.current;

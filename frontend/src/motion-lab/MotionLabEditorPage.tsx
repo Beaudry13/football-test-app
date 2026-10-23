@@ -4,6 +4,7 @@ import { getErrorMessage } from '../api/client'
 import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
 import { AddToInstallPanel } from '../pages/installs/AddToInstall'
+import { readFrom } from '../navigation/backTo'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
@@ -48,6 +49,12 @@ export default function MotionLabEditorPage() {
   const location = useLocation()
   /** At /motion-lab: the coach's scratch play, not a saved one. */
   const scratchRoute = playId === undefined
+  /** WHERE HE CAME FROM - a quiz, a Rep, grading, Teach, an install - so the
+   *  top bar can take him back there, not just Home or Library. Read once:
+   *  this page rewrites its own URL as plays are saved and switched, and each
+   *  rewrite carries it forward (navigation/backTo). */
+  const cameFrom = useRef(readFrom(location.state))
+  const keepBack = () => (cameFrom.current ? { from: cameFrom.current } : null)
   /** The Library's "New play" (optionally from a saved formation). */
   const fresh = (location.state as { fresh?: boolean; players?: Player[]; name?: string; folderId?: number | null } | null) ?? null
   /** A replaced scratch play the coach can still get back. */
@@ -123,7 +130,7 @@ export default function MotionLabEditorPage() {
             setUndoScratch(started.previous)
           }
           // A refresh must not start yet another play.
-          if (fresh) navigate(location.pathname, { replace: true, state: null })
+          if (fresh) navigate(location.pathname, { replace: true, state: keepBack() })
         } else {
           clientId = loaded.clientIdOf(requested)
         }
@@ -156,10 +163,10 @@ export default function MotionLabEditorPage() {
       const serverId = current ? session.serverIdOf(current) : null
       if (serverId !== null && serverId !== urlPlayId.current) {
         urlPlayId.current = serverId
-        navigate(`/motion-lab/plays/${serverId}`, { replace: true })
+        navigate(`/motion-lab/plays/${serverId}`, { replace: true, state: keepBack() })
       } else if (current && session.isScratch(current) && urlPlayId.current !== null) {
         urlPlayId.current = null
-        navigate('/motion-lab', { replace: true })
+        navigate('/motion-lab', { replace: true, state: keepBack() })
       }
       const fresh = session.takeNotices()
       if (fresh.length) setNotices((current) => [...current, ...fresh])
@@ -370,6 +377,11 @@ export default function MotionLabEditorPage() {
                 same way Library is: a pending edit is flushed to the server on
                 the way out, and an unsaved scratch play stays on this device
                 (Home's Motion Lab card offers "Continue"). */}
+            {cameFrom.current && (
+              <button className="back-to" onClick={() => navigate(cameFrom.current!.to)} title={`Back to ${cameFrom.current.label}`}>
+                &larr; {cameFrom.current.label}
+              </button>
+            )}
             <button className="home-btn" onClick={() => navigate('/dashboard')} title="PEIRA Home">
               Home
             </button>

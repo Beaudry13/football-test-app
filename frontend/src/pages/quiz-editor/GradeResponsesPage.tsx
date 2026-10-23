@@ -20,6 +20,7 @@ import { playerLabels } from '../../utils/playerDisplayLabel';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import nb from '../../styles/notebook.module.css';
 import styles from './GradeResponsesPage.module.css';
+import { SourcePlayLink } from '../../components/football/SourcePlayLink';
 
 /** ONE QUESTION, EVERY ANSWER TO IT, ONE STANDARD IN THE COACH'S HEAD.
  *
@@ -288,7 +289,7 @@ export function GradeResponsesPage() {
     return (
       <div>
         <ErrorBanner message={error} />
-        <Link to={`/quizzes/${id}`} className={nb.btnSecondary}>
+        <Link to={`/quizzes/${id}?tab=results`} className={nb.btnSecondary}>
           Back to the quiz
         </Link>
       </div>
@@ -296,7 +297,7 @@ export function GradeResponsesPage() {
   }
 
   const backToResults = (
-    <Link to={`/quizzes/${id}`} className={styles.back}>
+    <Link to={`/quizzes/${id}?tab=results`} className={styles.back}>
       &larr; {quiz?.title ?? 'Back to results'}
     </Link>
   );
@@ -322,7 +323,7 @@ export function GradeResponsesPage() {
               Next: {nextQuiz.title} · {nextQuiz.count} to grade &rarr;
             </Link>
           )}
-          <Link to={`/quizzes/${id}`} className={nextQuiz ? nb.btnSecondary : nb.btnPrimary}>
+          <Link to={`/quizzes/${id}?tab=results`} className={nextQuiz ? nb.btnSecondary : nb.btnPrimary}>
             Back to results
           </Link>
         </div>
@@ -404,11 +405,7 @@ export function GradeResponsesPage() {
                 {role}
               </span>
             )}
-            {sourcePlay !== null && (
-              <Link to={`/motion-lab/plays/${sourcePlay}`} className={styles.contextLink}>
-                Open the play
-              </Link>
-            )}
+            <SourcePlayLink playId={sourcePlay} className={styles.contextLink} />
           </p>
         )}
         {current.expectedAnswers.length > 0 && (
@@ -487,7 +484,7 @@ export function GradeResponsesPage() {
             Next question &rarr;
           </button>
         ) : (
-          <Link to={`/quizzes/${id}`} className={nb.btnPrimary}>
+          <Link to={`/quizzes/${id}?tab=results`} className={nb.btnPrimary}>
             Back to results
           </Link>
         )}

@@ -2151,3 +2151,12 @@
   border: 0;
   display: block;
 }
+
+/* Back to where the coach came from (a quiz, a Rep, an install) - beside
+   Home and Library, its label cut short rather than pushing the bar. */
+.motion-lab-root .back-to {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -27,6 +27,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { audiencesFrom, familyOf } from './reps/audiences';
 import { PositionNeeds } from './PositionNeeds';
 import { EmptyState } from '../components/ui/EmptyState';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const EMPTY_FORM: PlayerInput = { first_name: '', last_name: '', jersey_number: '', position: '' };
 
@@ -34,11 +35,25 @@ export function MasterRosterPage() {
   const [players, setPlayers] = useState<Player[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [positionFilter, setPositionFilter] = useState('');
   const [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState<PlayerInput>(EMPTY_FORM);
   const [isCreating, setIsCreating] = useState(false);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  useDocumentTitle('Team');
+  /* THE POSITION ROOM IS IN THE URL (?position=family:Safeties), replaced in
+     place: back from a room's retest or Teach - or a reload - finds the same
+     room, "What your safeties need" and all, instead of the whole roster. */
+  const positionFilter = searchParams.get('position') ?? '';
+  const setPositionFilter = (key: string) =>
+    setSearchParams(
+      (now) => {
+        const next = new URLSearchParams(now);
+        if (key) next.set('position', key);
+        else next.delete('position');
+        return next;
+      },
+      { replace: true },
+    );
   // `?import=1` arrives from the setup checklist's "Upload a roster" button.
   // Read once as the initial value rather than watched: the coach can close
   // the panel afterwards, and a live binding would fight them for it while

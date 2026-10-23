@@ -1,9 +1,9 @@
-import { useNavigate } from 'react-router-dom';
 import type { RetestTarget } from '../../api/types';
 import { buildQuizRetest, retestLabel } from '../../components/teach/retest';
 import { StepButton } from '../../components/ui/StepButton';
 import nb from '../../styles/notebook.module.css';
 import styles from './WeakestConcepts.module.css';
+import { useGoFromHere } from '../../navigation/backTo';
 
 /** "Retest the 3" on a quiz concept: the weakness panel on an ordinary quiz,
  *  and the verification card on a retest that still has players missing.
@@ -15,14 +15,14 @@ import styles from './WeakestConcepts.module.css';
  * same build every other Retest uses (components/teach/retest.ts).
  */
 export function RetestAction({ quizId, conceptId, targets }: { quizId: number; conceptId: number; targets: RetestTarget[] }) {
-  const navigate = useNavigate();
+  const go = useGoFromHere();
   if (targets.length === 0) return null;
   return (
     <div className={styles.actions}>
       <StepButton
         className={nb.btnPrimary}
         label={retestLabel(targets.map((p) => p.display_name ?? p.player_name))}
-        run={async () => navigate(await buildQuizRetest(quizId, { concept_id: conceptId }, targets))}
+        run={async () => go(await buildQuizRetest(quizId, { concept_id: conceptId }, targets))}
       />
     </div>
   );

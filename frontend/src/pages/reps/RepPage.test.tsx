@@ -186,7 +186,7 @@ describe('A Rep, for the coach', () => {
     expect(teach.getByText('Rotate down')).toBeInTheDocument();
     expect(teach.getByText('He is the new #3 - rotate down.')).toBeInTheDocument();
     expect(teach.getByText('3 chose “Stay boundary”')).toBeInTheDocument();
-    expect(teach.getByRole('link', { name: 'Open the play in Motion Lab' })).toHaveAttribute('href', '/motion-lab/plays/14');
+    expect(teach.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
     fireEvent.click(teach.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -198,7 +198,7 @@ describe('A Rep, for the coach', () => {
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
     const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
     expect(teach.getByText('Rotate down')).toBeInTheDocument();
-    expect(teach.queryByRole('link', { name: 'Open the play in Motion Lab' })).toBeNull();
+    expect(teach.queryByRole('link', { name: 'Open the play' })).toBeNull();
   });
 
   it('RETEST builds that concept for exactly the players who missed it and opens the new rep, ready to send - nothing sent', async () => {

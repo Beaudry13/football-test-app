@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { getQuizDashboard } from '../../api/grading';
 import type { RepSummary } from '../../api/reps';
 import type { ConceptBreakdown, Quiz } from '../../api/types';
@@ -8,6 +8,7 @@ import { StepButton } from '../../components/ui/StepButton';
 import nb from '../../styles/notebook.module.css';
 import { pluralFor } from '../reps/audiences';
 import styles from './NextUp.module.css';
+import { useGoFromHere } from '../../navigation/backTo';
 
 /** A quiz's football problem worth leading Home with. */
 interface QuizProblem {
@@ -44,7 +45,7 @@ export function NextUp({
   /** The coach's quizzes, for the quiz fallback; null = none to consider. */
   quizzes: Quiz[] | null;
 }) {
-  const navigate = useNavigate();
+  const go = useGoFromHere('Home');
   const fresh = reps?.find((r) => r.open_problem) ?? null;
   const lingering = fresh ? null : (reps?.find((r) => r.signal?.kind === 'retest_missing') ?? null);
   const fromQuiz = !fresh && !lingering && reps !== undefined ? latestScored(quizzes ?? []) : null;
@@ -93,7 +94,7 @@ export function NextUp({
             <StepButton
               className={nb.btnPrimary}
               label={retestLabel(p.missed)}
-              run={async () => navigate(await buildRepRetest(fresh.id, p.concept_id))}
+              run={async () => go(await buildRepRetest(fresh.id, p.concept_id))}
             />
           ) : (
             <Link to={`/reps/${fresh.id}?teach=${p.concept_id ?? 'general'}`} className={nb.btnPrimary}>
@@ -123,7 +124,7 @@ export function NextUp({
           <StepButton
             className={nb.btnPrimary}
             label={retestLabel(s.missed)}
-            run={async () => navigate(await buildRepRetest(lingering.id, s.concept_id ?? null))}
+            run={async () => go(await buildRepRetest(lingering.id, s.concept_id ?? null))}
           />
         </span>
       </section>

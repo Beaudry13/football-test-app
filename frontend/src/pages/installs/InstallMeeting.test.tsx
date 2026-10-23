@@ -130,8 +130,10 @@ const install = (items: InstallItem[], over: Partial<Install> = {}): Install => 
 });
 
 let landed = '';
+let landedState: unknown = null;
 function Where() {
   landed = useLocation().pathname + useLocation().search;
+  landedState = useLocation().state;
   return null;
 }
 
@@ -225,6 +227,8 @@ describe('Check understanding and retest without leaving the meeting', () => {
     fireEvent.click(teach.getByRole('button', { name: 'Retest the 2' }));
     await waitFor(() => expect(landed).toBe('/reps/77'));
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
+    // The way back is this item of this meeting.
+    expect(landedState).toEqual({ from: { to: '/installs/1?teach=1&at=0', label: 'Week 7 - West Virginia' } });
     // Opened ready to send: the coach presses Send rep on the new Rep itself.
     expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });

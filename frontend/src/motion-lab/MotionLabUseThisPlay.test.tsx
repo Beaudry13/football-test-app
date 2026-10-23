@@ -38,10 +38,11 @@ installPointerStubs()
 
 const OWNER = { id: 1, organization_id: 7, is_platform_owner: true }
 
-async function openAt(path: string) {
+async function openAt(path: string, state: unknown = null) {
   vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: OWNER as never } as never)
+  const [pathname, search = ''] = path.split('?')
   render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter initialEntries={[{ pathname, search: search ? `?${search}` : '', state }]}>
       <Routes>
         <Route path="/motion-lab/plays/:playId" element={<MotionLabEditorPage />} />
         <Route path="/motion-lab" element={<MotionLabEditorPage />} />
@@ -251,5 +252,24 @@ describe('Motion Lab -> Teach, from what PEIRA already knows', () => {
     // Teach gives way to the panel that makes it - the man already chosen.
     expect(screen.queryByRole('dialog', { name: `Teach ${a.name}` })).toBeNull()
     expect(screen.getByRole('combobox', { name: /Whose job/ })).toHaveValue('O8')
+  })
+})
+
+describe('Back to where the coach came from', () => {
+  it('opened from a quiz, the top bar offers the way back to it beside Home and Library', async () => {
+    seed()
+    await settle()
+    await openAt('/motion-lab/plays/100', { from: { to: '/quizzes/4?tab=results', label: 'Week 6 install' } })
+    const back = screen.getByRole('button', { name: /Week 6 install/ })
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument()
+    fireEvent.click(back)
+    expect(await screen.findByText('quiz editor')).toBeInTheDocument()
+  })
+
+  it('opened on its own, only Home and Library', async () => {
+    seed()
+    await settle()
+    await openAt('/motion-lab/plays/100')
+    expect(screen.queryByRole('button', { name: /^←/ })).toBeNull()
   })
 })
