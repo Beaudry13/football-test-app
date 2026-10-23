@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { getQuizDashboard } from '../api/grading';
-import { useActiveStatus, ACTIVE_STATUS_POLL_MS } from '../hooks/useActiveStatus';
-import { usePolling } from '../hooks/usePolling';
+import { useActiveStatus } from '../hooks/useActiveStatus';
 import type {
   ActiveAttemptSummary,
   ActiveQuizStatus as ActiveQuizStatusEntry,
@@ -16,7 +15,6 @@ import { LoadingState } from '../components/ui/LoadingState';
 import nb from '../styles/notebook.module.css';
 import styles from './ActiveQuizStatus.module.css';
 
-const POLL_INTERVAL_MS = ACTIVE_STATUS_POLL_MS;
 
 function formatRelativeExpiry(expiresAt: string): string {
   const diffMs = new Date(expiresAt).getTime() - Date.now();
@@ -115,11 +113,13 @@ function ActiveQuizCard({ entry }: { entry: ActiveQuizStatusEntry }) {
     }
   }, [entry.quiz_id]);
 
+  // Read when opened, and again only when another player turns it in - the
+  // section's own poll already watches who has; re-reading the whole quiz
+  // dashboard every 15 seconds on top of it bought nothing.
+  const turnedIn = entry.submitted.length;
   useEffect(() => {
     if (isOpen) fetchBreakdown();
-  }, [isOpen, fetchBreakdown]);
-
-  usePolling(fetchBreakdown, POLL_INTERVAL_MS, isOpen);
+  }, [isOpen, fetchBreakdown, turnedIn]);
 
   return (
     <div className={`${nb.card} ${nb.cardHoverable} ${styles.card}`}>

@@ -50,8 +50,9 @@ const keepaliveFor = (body: unknown) => JSON.stringify(body).length < KEEPALIVE_
 
 // ---- plays -----------------------------------------------------------------
 
-export function listMotionPlays(): Promise<MotionPlayRow[]> {
-  return api.get<MotionPlayRow[]>('/motion-lab/plays');
+/** Every play, newest first - or just the `limit` most recent. */
+export function listMotionPlays(limit?: number): Promise<MotionPlayRow[]> {
+  return api.get<MotionPlayRow[]>(`/motion-lab/plays${limit ? `?limit=${limit}` : ''}`);
 }
 
 export function getMotionPlay(id: number): Promise<MotionPlayRow> {
