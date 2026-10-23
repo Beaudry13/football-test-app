@@ -26,13 +26,13 @@ import {
 } from '../../api/reps';
 import type { Group, Player } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
+import { TeachView } from '../../components/teach/TeachView';
 import { FootballProblem } from '../../components/football/FootballProblem';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useRememberWork } from '../home/lastWork';
+import { problemSlides } from './repTeach';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
-import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import { TapCheck } from '../../components/football/TapCheck';
 import { MarkerEditor } from '../../components/football/MarkerEditor';
@@ -624,44 +624,12 @@ function Teach({
 }) {
   const [sending, setSending] = useState(false);
   const n = problem.players_missed.length;
-  const inProblem = decisions.filter((d) => problem.question_ids.includes(d.question_id));
-  const worst = [...inProblem].sort((a, b) => b.missed - a.missed)[0];
-  const slides: TeachSlide[] = inProblem.map((d) => {
-    const wrong = d.choices.filter((c) => !c.is_correct && c.count > 0).sort((a, b) => b.count - a.count)[0];
-    return {
-      key: d.question_id,
-      imageUrl: d.image ? resolveMediaUrl(d.image.image_url) : null,
-      role: d.subject_role,
-      prompt: d.question_text,
-      right: d.correct_text,
-      why: d.answer_explanation,
-      wrong: wrong ? { text: wrong.text, count: wrong.count } : null,
-      motionPlayId: d.motion_play_id ?? problem.motion_play_id,
-      // The play moving to the decision moment, exactly as the players saw
-      // it - and, when they tapped, the right spot lit.
-      // Ask first: the play without the right spot lit.
-      pictureAsk: targetsOf(d) ? <PlayPicture image={d.image} presnap={d.presnap} marker={d.subject_marker} motionKey={d.question_id} /> : undefined,
-      picture: d.presnap || targetsOf(d) || d.subject_marker ? (
-        <PlayPicture
-          image={d.image}
-          presnap={d.presnap}
-          // HIS JOB: the coach's ring on a photo (a moving play rings him itself).
-          marker={d.subject_marker}
-          targets={targetsOf(d)}
-          options={choicesOf(d)}
-          chosen={d.choices.filter((c) => c.is_correct).map((c) => c.option_id)}
-          tone="right"
-          disabled
-          motionKey={d.question_id}
-        />
-      ) : undefined,
-    };
-  });
+  const { slides, start } = problemSlides(problem, decisions);
   return (
     <TeachView
       title={problem.name}
       slides={slides}
-      start={Math.max(0, inProblem.indexOf(worst))}
+      start={start}
       onClose={onClose}
       // WHO MISSED IT, on the screen the coach is teaching from.
       room={{ missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name) }}

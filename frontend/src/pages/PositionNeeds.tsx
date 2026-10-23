@@ -2,13 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../api/client';
 import { getGroupNeeds, type GroupNeed, type GroupNeeds } from '../api/players';
-import { addRosterMembers } from '../api/roster';
-import { addDecisions, makeRepFromQuiz } from '../api/reps';
-import { getQuiz } from '../api/quizzes';
-import type { Question, Quiz } from '../api/types';
 import { TeachView, type TeachSlide } from '../components/teach/TeachView';
-import { quizTeachSlides, teachable } from './quiz-editor/quizTeach';
-import { distinctFootball } from '../components/teach/sameFootball';
+import { groupNeedSlides, groupRetestable, quizCache, retestGroup } from '../components/teach/groupTeach';
 import styles from './PositionNeeds.module.css';
 
 /** How many concepts the panel names before counting the rest. */
@@ -36,7 +31,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
   /** TEACH, IN PLACE: the concept on the screen and its football. */
   const [teaching, setTeaching] = useState<{ need: GroupNeed; slides: TeachSlide[] } | null>(null);
   const [opening, setOpening] = useState<number | null>(null);
-  const quizzes = useRef(new Map<number, Promise<Quiz>>());
+  const quizOf = useRef(quizCache());
   const ids = [...playerIds].sort((a, b) => a - b).join(',');
 
   useEffect(() => {
@@ -61,47 +56,15 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
     setMaking(need.concept_id);
     setError(null);
     try {
-      const byQuiz = new Map<number, Set<number>>();
-      for (const m of need.missing) {
-        const set = byQuiz.get(m.last.quiz_id) ?? new Set<number>();
-        m.last.question_ids.forEach((id) => set.add(id));
-        byQuiz.set(m.last.quiz_id, set);
-      }
-      const [[firstQuiz, firstIds], ...rest] = [...byQuiz.entries()].filter(([, set]) => set.size > 0);
-      const rep = await makeRepFromQuiz(firstQuiz, [...firstIds], `${need.name} - ${label}`);
-      for (const [quizId, set] of rest) await addDecisions(rep.id, quizId, [...set]);
-      await addRosterMembers(rep.id, need.missing.map((m) => m.player_id));
-      navigate(`/reps/${rep.id}`);
+      const repId = await retestGroup(need, label);
+      navigate(`/reps/${repId}`);
     } catch (err) {
       setError(getErrorMessage(err));
       setMaking(null);
     }
   };
 
-  /** THE FOOTBALL THEY MISSED: the concept's questions where each last missed
-   *  it - newest first, the ones they missed (else the concept's) - from the
-   *  quizzes and Reps themselves, so Teach shows exactly what they saw. */
-  const slidesFor = async (need: GroupNeed): Promise<TeachSlide[]> => {
-    const byQuiz = new Map<number, { ids: Set<number>; at: string }>();
-    for (const m of need.missing) {
-      const entry = byQuiz.get(m.last.quiz_id) ?? { ids: new Set<number>(), at: '' };
-      m.last.question_ids.forEach((id) => entry.ids.add(id));
-      if ((m.last.at ?? '') > entry.at) entry.at = m.last.at ?? '';
-      byQuiz.set(m.last.quiz_id, entry);
-    }
-    const ordered = [...byQuiz.entries()].sort((a, b) => b[1].at.localeCompare(a[1].at));
-    const gathered: { quiz: Quiz; question: Question }[] = [];
-    for (const [quizId, { ids }] of ordered) {
-      if (!quizzes.current.has(quizId)) quizzes.current.set(quizId, getQuiz(quizId));
-      const quiz = await quizzes.current.get(quizId)!;
-      const inConcept = (quiz.questions ?? []).filter((q) => q.concept?.id === need.concept_id && !q.is_retired && teachable(q));
-      const missedHere = inConcept.filter((q) => ids.has(q.id));
-      for (const question of missedHere.length > 0 ? missedHere : inConcept) gathered.push({ quiz, question });
-    }
-    // A retest re-asks the same football as a copy: taught once, by its
-    // source identity - never merged just because two questions share words.
-    return quizTeachSlides(distinctFootball(gathered));
-  };
+  const slidesFor = (need: GroupNeed): Promise<TeachSlide[]> => groupNeedSlides(need, quizOf.current);
 
   const teach = async (need: GroupNeed) => {
     setOpening(need.concept_id);
@@ -133,7 +96,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
       ) : (
         <ul className={styles.list}>
           {needs.concepts.slice(0, SHOWN).map((need) => {
-            const retestable = need.missing.some((m) => m.last.question_ids.length > 0);
+            const retestable = groupRetestable(need);
             return (
               <li key={need.concept_id} className={styles.row}>
                 <div className={styles.what}>
@@ -183,7 +146,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
         const { need } = teaching;
         const index = needs.concepts.findIndex((c) => c.concept_id === need.concept_id);
         const following = needs.concepts[index + 1] ?? null;
-        const retestable = need.missing.some((m) => m.last.question_ids.length > 0);
+        const retestable = groupRetestable(need);
         return (
           <TeachView
             title={need.name}
