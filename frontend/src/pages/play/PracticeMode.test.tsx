@@ -87,13 +87,13 @@ describe('Practice Mode player flow', () => {
     vi.spyOn(playApi, 'checkAnswer').mockResolvedValue(CORRECT);
     renderPractice();
 
-    const buttons = screen.getAllByRole('button', { name: 'Check Answer' });
+    const buttons = screen.getAllByRole('button', { name: 'Check answer' });
     expect(buttons[0]).toBeDisabled();
 
     await user.click(screen.getByRole('radio', { name: 'True' }));
 
     await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: 'Check Answer' })[0]).toBeEnabled(),
+      expect(screen.getAllByRole('button', { name: 'Check answer' })[0]).toBeEnabled(),
     );
   });
 
@@ -106,7 +106,7 @@ describe('Practice Mode player flow', () => {
     renderPractice();
 
     await user.click(screen.getByRole('radio', { name: 'True' }));
-    await user.click(screen.getAllByRole('button', { name: 'Check Answer' })[0]);
+    await user.click(screen.getAllByRole('button', { name: 'Check answer' })[0]);
 
     expect(await screen.findByText('Correct')).toBeInTheDocument();
     expect(screen.getByText('Two deep safeties means Cover 2.')).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe('Practice Mode player flow', () => {
     renderPractice();
 
     await user.type(screen.getByRole('textbox'), 'Set the edge.');
-    await user.click(screen.getAllByRole('button', { name: 'Check Answer' })[1]);
+    await user.click(screen.getAllByRole('button', { name: 'Check answer' })[1]);
 
     // Not "Correct", not "Not quite" - Peira cannot score a written answer
     // and says so rather than guessing.
@@ -138,7 +138,7 @@ describe('Practice Mode player flow', () => {
     renderPractice();
 
     await user.click(screen.getByRole('radio', { name: 'True' }));
-    await user.click(screen.getAllByRole('button', { name: 'Check Answer' })[0]);
+    await user.click(screen.getAllByRole('button', { name: 'Check answer' })[0]);
     await screen.findByText('Correct');
 
     // Both options, not just the unpicked one: the player cannot change their
@@ -171,7 +171,7 @@ describe('Practice Mode player flow', () => {
     renderPractice({ onSubmitted, onPracticeComplete });
 
     await user.click(screen.getByRole('radio', { name: 'True' }));
-    await user.click(screen.getAllByRole('button', { name: 'Check Answer' })[0]);
+    await user.click(screen.getAllByRole('button', { name: 'Check answer' })[0]);
     await screen.findByText('Correct');
     await user.click(screen.getByRole('button', { name: 'Finish practice' }));
 
@@ -218,9 +218,9 @@ describe('graded mode is untouched', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Check Answer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check answer' })).not.toBeInTheDocument();
     expect(screen.queryByText('Practice')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Submit Quiz' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit quiz' })).toBeInTheDocument();
   });
 
   it('never calls the check endpoint', async () => {
@@ -289,7 +289,7 @@ describe('PracticeCompleteStep', () => {
     );
 
     expect(screen.getByText('1 of 2')).toBeInTheDocument();
-    expect(screen.getByText(/none of it counts toward your grades/i)).toBeInTheDocument();
+    expect(screen.getByText(/This was practice. It doesn.t count/i)).toBeInTheDocument();
   });
 
   it('shows no percentage when nothing was auto-gradable', () => {
@@ -421,7 +421,7 @@ describe('require_all_answers under a randomized practice order', () => {
     for (let i = 0; i < 3; i += 1) {
       await user.click(screen.getByRole('button', { name: 'Next' }));
     }
-    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
     expect(
       await screen.findByText('Please answer all questions before submitting.'),
@@ -447,12 +447,12 @@ describe('require_all_answers under a randomized practice order', () => {
     // First presented is authored #4, and Check Answer reports THAT id.
     expect(screen.getByText('Authored 4')).toBeInTheDocument();
     await user.type(screen.getByRole('textbox'), 'first');
-    await user.click(screen.getByRole('button', { name: 'Check Answer' }));
+    await user.click(screen.getByRole('button', { name: 'Check answer' }));
     await waitFor(() =>
       expect(checkSpy).toHaveBeenCalledWith(expect.objectContaining({ question_id: 4 })),
     );
 
-    await user.click(await screen.findByRole('button', { name: 'Continue' }));
+    await user.click(await screen.findByRole('button', { name: 'Next' }));
 
     // Continue advances to the SECOND presented question, not authored #2.
     expect(screen.getByText('Authored 3')).toBeInTheDocument();

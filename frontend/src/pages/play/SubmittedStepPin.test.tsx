@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,7 +27,7 @@ describe('SubmittedStep with player PINs', () => {
     saveAttemptToken('ABC123', 501, 'play-token');
     const spy = vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue(results);
 
-    render(<SubmittedStep code="ABC123" playerName="Jordan Smith" playerId={501} player={JORDAN} />);
+    render(<MemoryRouter><SubmittedStep code="ABC123" playerName="Jordan Smith" playerId={501} player={JORDAN} /></MemoryRouter>);
 
     await waitFor(() => expect(spy).toHaveBeenCalledWith('ABC123', 'Jordan Smith', 501, { token: 'play-token' }));
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
@@ -39,7 +40,7 @@ describe('SubmittedStep with player PINs', () => {
       .mockRejectedValueOnce(new ApiError('Enter your PIN to continue.', 401, undefined, 'pin_required'))
       .mockResolvedValueOnce({ ...results, player_auth: { attempt_token: 'results-token', token_header: 'X-Attempt-Token' } });
 
-    render(<SubmittedStep code="ABC123" playerName="Jordan Smith" playerId={501} player={JORDAN} />);
+    render(<MemoryRouter><SubmittedStep code="ABC123" playerName="Jordan Smith" playerId={501} player={JORDAN} /></MemoryRouter>);
 
     await user.type(await screen.findByLabelText('Enter your PIN'), '482915');
 

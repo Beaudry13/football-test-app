@@ -709,10 +709,10 @@ export function QuizStep({
              and is not available to consult. */
           canRevealClip={isAnswered(question, answers[question.id])}
         />
-        {checked && (
+        {checked && isPractice && (
           <PracticeFeedbackCard
             feedback={checked}
-            continueLabel={isLast ? 'Finish practice' : 'Continue'}
+            continueLabel={isLast ? 'Finish practice' : 'Next'}
             onContinue={() =>
               isLast ? void handleSubmit() : setCurrentIndex((i) => i + 1)
             }
@@ -733,12 +733,12 @@ export function QuizStep({
                 onClick={() => void handleCheck(question.id)}
                 disabled={isChecking || !isAnswered(question, answers[question.id])}
               >
-                {isChecking ? 'Checking…' : 'Check Answer'}
+                {isChecking ? 'Checking…' : 'Check answer'}
               </button>
             )
           ) : isLast ? (
             <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting…' : 'Submit Quiz'}
+              {isSubmitting ? 'Submitting…' : 'Submit quiz'}
             </button>
           ) : (
             <button className="btn btn-primary" onClick={() => setCurrentIndex((i) => i + 1)}>
@@ -787,14 +787,14 @@ export function QuizStep({
                   onClick={() => void handleCheck(question.id)}
                   disabled={isChecking || !isAnswered(question, answers[question.id])}
                 >
-                  {isChecking ? 'Checking…' : 'Check Answer'}
+                  {isChecking ? 'Checking…' : 'Check answer'}
                 </button>
               ))}
           </div>
         );
       })}
       <button className="btn btn-primary" onClick={handleSubmit} disabled={isSubmitting} style={{ width: '100%' }}>
-        {isSubmitting ? 'Submitting…' : isPractice ? 'Finish practice' : 'Submit Quiz'}
+        {isSubmitting ? 'Submitting…' : isPractice ? 'Finish practice' : 'Submit quiz'}
       </button>
     </div>
   );

@@ -280,7 +280,7 @@ export function ResultsCheckPage() {
   return shell(
     <form className={`card ${styles.panel}`} onSubmit={handleCode}>
       <h1>Check your results</h1>
-      <p>Enter the access code for the quiz.</p>
+      <p>Enter the code your coach gave you.</p>
       <ErrorBanner message={error} />
       <div className="field">
         <input

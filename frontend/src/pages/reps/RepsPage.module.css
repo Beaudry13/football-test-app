@@ -119,3 +119,11 @@
   color: var(--peira-danger);
   font-size: 14px;
 }
+
+/* Find one by name: as wide as a title, never the whole page. */
+.find {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 0 12px;
+}

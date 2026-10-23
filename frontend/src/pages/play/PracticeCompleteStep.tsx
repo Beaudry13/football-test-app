@@ -80,7 +80,7 @@ export function PracticeCompleteStep({
       )}
 
       <p className={styles.practiceNote}>
-        This was practice &mdash; none of it counts toward your grades.
+        This was practice. It doesn&rsquo;t count.
       </p>
 
       {/* SEE WHAT I MISSED -> TRY IT AGAIN: review first, then just the misses;

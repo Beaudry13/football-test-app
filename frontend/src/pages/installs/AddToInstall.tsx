@@ -97,7 +97,13 @@ export function AddToInstallPanel({
         if (e.key === 'Escape') onClose();
       }}
     >
-      <span className={styles.head}>Add to install</span>
+      <span className={styles.headRow}>
+        <span className={styles.head}>Add to install</span>
+        {/* Installs have no menu item of their own: this is a way to all of them. */}
+        <Link to="/installs" className={styles.all}>
+          All installs
+        </Link>
+      </span>
       {installs === null && !error && <span className={styles.note}>Finding your installs…</span>}
       {(installs ?? []).map((i) => (
         <span key={i.id} className={styles.row}>

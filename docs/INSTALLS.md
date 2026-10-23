@@ -87,8 +87,8 @@ The position room's "N still missing it" comes from the existing
 
 ## Screens
 
-**Installs (`/installs`).** "This week" first, then the rest in the order
-they were last worked on. Archived installs sit behind "Archived (n)" with
+**Installs (`/installs`).** The current install first, marked "Current", then
+the rest in the order they were last worked on. Archived installs sit behind "Archived (n)" with
 Restore. A new install is a name and, if the roster has positions, who it is
 for. There is no navigation item: the way in is Home's cue and every *Add to
 install*.

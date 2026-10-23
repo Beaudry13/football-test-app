@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getPlayerResults, type PlayerResultsWithAuth } from '../../api/play';
 import { getErrorMessage } from '../../api/client';
 import type { PlayerResultsResponse } from '../../api/types';
-import { ErrorBanner } from '../../components/ErrorBanner';
 import { Icon } from '../../components/ui/Icon';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { clearAttemptToken, readAttemptToken, saveAttemptToken } from './attemptToken';
@@ -82,7 +82,20 @@ export function SubmittedStep({
     return () => clearTimeout(timer);
   }, []);
 
-  if (error) return <ErrorBanner message={error} />;
+  if (error) {
+    return (
+      <div className={styles.practiceComplete}>
+        <h1>Your answers are in.</h1>
+        <p>Your results didn&rsquo;t load. {error}</p>
+        <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+          Try again
+        </button>
+        <Link to="/play" className={styles.quietAction}>
+          Done
+        </Link>
+      </div>
+    );
+  }
 
   if (!results && pinNotice !== undefined && playerId !== undefined) {
     const who = player ?? { playerId, name: playerName, jerseyNumber: null, position: null };
@@ -113,7 +126,7 @@ export function SubmittedStep({
           <div className={styles.celebrationBadge}>
             <Icon name="check" size={30} strokeWidth={3} />
           </div>
-          <span className={styles.celebrationText}>Quiz Complete</span>
+          <span className={styles.celebrationText}>Quiz submitted</span>
         </div>
       )}
       {!results ? (
@@ -134,6 +147,10 @@ export function SubmittedStep({
               </>
             )}
           </p>
+          {/* Done: back to his work - what is next, or "all caught up". */}
+          <Link to="/play" className={`btn btn-primary ${styles.doneButton}`}>
+            Done
+          </Link>
         </div>
       )}
     </div>

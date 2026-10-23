@@ -520,6 +520,10 @@
 
 /* After "Try the misses again": the whole run again, there but quiet. */
 .quietAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 6px 10px;
   border: 0;
   background: transparent;
@@ -554,7 +558,10 @@
 .celebrationOverlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 253, 248, 0.96);
+  /* The player ground, nearly opaque - the text on it is the player's text
+     colour. (Cream here once put near-white text on cream.) */
+  background: rgba(14, 16, 19, 0.96);
+  background: color-mix(in srgb, var(--color-bg) 96%, transparent);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -772,21 +779,22 @@
   margin: 0 0 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #eef4fb;
-  border: 1px solid #cddcec;
-  color: #274156;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   font-size: 0.9rem;
   line-height: 1.4;
 }
 
 .drawingRestoredDismiss {
   flex-shrink: 0;
+  min-height: 44px;
   border: 0;
   background: transparent;
-  color: #1d4f7c;
+  color: var(--color-primary);
   font-weight: 600;
   cursor: pointer;
-  padding: 4px 6px;
+  padding: 4px 10px;
 }
 
 /* The player's own drawing on their results. Sits where the text answer would
@@ -888,10 +896,29 @@
 
 /* After one is done: the way back to the rest of his work, quietly. */
 .otherWork {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   margin-top: 16px;
   text-align: center;
   font-weight: 700;
   color: var(--peira-accent-text, var(--nb-accent));
   text-decoration: none;
+}
+
+/* Done, after the results: back to his work. */
+.doneButton {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+/* Under a long roster, the one button stays in thumb reach (the .navRow rule). */
+.stickyAction {
+  position: sticky;
+  bottom: 0;
+  padding: 0.75em 0 calc(0.75em + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--color-bg) 35%);
+  z-index: 1;
 }

@@ -27,6 +27,22 @@
   right: auto;
   left: 0;
 }
+.panel .headRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.panel .all {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9aa0a6;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.panel .all:hover {
+  color: #f2f2ee;
+}
 .panel .head {
   padding: 0 2px 4px;
   font-size: 11px;

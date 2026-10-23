@@ -168,7 +168,7 @@ describe('QuizStep', () => {
 
       const written = screen.getAllByRole('textbox')[0];
       await user.type(written, 'I set the edge.');
-      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+      await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
       // The debounce timer never gets a chance to fire post-submit.
       await vi.advanceTimersByTimeAsync(800);
@@ -209,7 +209,7 @@ describe('QuizStep', () => {
       );
 
       await user.click(screen.getByLabelText('True'));
-      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+      await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
       expect(await screen.findByText('Please answer all questions before submitting.')).toBeInTheDocument();
       expect(submitSpy).not.toHaveBeenCalled();
@@ -236,7 +236,7 @@ describe('QuizStep', () => {
 
       await user.click(screen.getByLabelText('True'));
       await user.type(screen.getAllByRole('textbox')[0], 'I set the edge.');
-      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+      await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
       await waitFor(() => expect(submitSpy).toHaveBeenCalled());
       expect(onSubmitted).toHaveBeenCalled();
@@ -263,7 +263,7 @@ describe('QuizStep', () => {
       // Now on question 2 (written, blank) - Submit should bounce back to
       // question 1 only if it's the one left blank; here it's question 2
       // itself that's blank, so the wizard just stays put with the message.
-      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+      await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
       expect(await screen.findByText('Please answer all questions before submitting.')).toBeInTheDocument();
       expect(screen.getByText('Question 2 of 2')).toBeInTheDocument();
@@ -285,7 +285,7 @@ describe('QuizStep', () => {
         />,
       );
 
-      await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+      await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
       await waitFor(() => expect(submitSpy).toHaveBeenCalled());
       expect(screen.queryByText('Please answer all questions before submitting.')).not.toBeInTheDocument();
@@ -379,7 +379,7 @@ describe('QuizStep drawing answers', () => {
       />,
     );
 
-    screen.getByRole('button', { name: 'Submit Quiz' }).click();
+    screen.getByRole('button', { name: 'Submit quiz' }).click();
     expect(submit).not.toHaveBeenCalled();
   });
 
@@ -408,7 +408,7 @@ describe('QuizStep drawing answers', () => {
     // The restored draft should present itself as existing work.
     expect(await screen.findByRole('button', { name: /edit your drawing/i })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
     await waitFor(() => expect(submit).toHaveBeenCalled());
     expect(screen.queryByText(/please answer all questions/i)).not.toBeInTheDocument();
@@ -540,7 +540,7 @@ describe('QuizStep drawing autosave', () => {
     await screen.findByRole('button', { name: /edit your drawing/i });
     await vi.advanceTimersByTimeAsync(1500);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
     await waitFor(() => expect(submit).toHaveBeenCalled());
     const payload = submit.mock.calls[0][0];
@@ -621,7 +621,7 @@ describe('require_all_answers with a randomized question order', () => {
     for (let i = 0; i < 3; i += 1) {
       await user.click(screen.getByRole('button', { name: 'Next' }));
     }
-    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
     expect(
       await screen.findByText('Please answer all questions before submitting.'),
@@ -664,7 +664,7 @@ describe('require_all_answers with a randomized question order', () => {
     for (let i = 0; i < 3; i += 1) {
       await user.click(screen.getByRole('button', { name: 'Next' }));
     }
-    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
     expect(
       await screen.findByText('Please answer all questions before submitting.'),
@@ -717,7 +717,7 @@ describe('require_all_answers with a randomized question order', () => {
     // The appended question is last, and it is the one still unanswered.
     expect(screen.getByText('Authored 9')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
     expect(
       await screen.findByText('Please answer all questions before submitting.'),
     ).toBeInTheDocument();

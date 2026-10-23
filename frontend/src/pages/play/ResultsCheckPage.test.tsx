@@ -68,7 +68,7 @@ describe('ResultsCheckPage', () => {
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
     // A miss leads, under What you missed, with the correct answer.
     expect(screen.getByRole('region', { name: 'What you missed' })).toBeInTheDocument();
-    expect(screen.getByText('Correct answer: True', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Right answer: True', { exact: false })).toBeInTheDocument();
   });
 
   it('asks for the code, then "Choose your name" from the roster, then opens results', async () => {

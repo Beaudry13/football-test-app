@@ -56,7 +56,7 @@ describe('Player home', () => {
     home();
     const next = within(await screen.findByLabelText('Up next'));
     expect(next.getByRole('heading', { name: 'Motion adjustment - Retest' })).toBeInTheDocument();
-    expect(next.getByText(/Retest - your second look/)).toBeInTheDocument();
+    expect(next.getByText(/Second look/)).toBeInTheDocument();
     expect(next.getByRole('link', { name: 'Start your rep' })).toHaveAttribute('href', '/play/RETEST');
     const also = within(screen.getByLabelText('Also waiting'));
     const rows = also.getAllByRole('link').map((a) => a.textContent);
@@ -149,7 +149,7 @@ describe('a quiz retest is a second look too', () => {
     home();
     const next = within(await screen.findByLabelText('Up next'));
     expect(next.getByRole('heading', { name: 'Coverage ID - Retest' })).toBeInTheDocument();
-    expect(next.getByText(/Retest - your second look/)).toBeInTheDocument();
+    expect(next.getByText(/Second look/)).toBeInTheDocument();
   });
 });
 

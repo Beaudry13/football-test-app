@@ -603,9 +603,9 @@ export function PlayPage() {
         <>
           <RetryDone
             reason={step.reason}
+            isRep={step.joined.quiz.kind === 'REP'}
             onRunFull={() => void runFull(step.code, step.joined, step.player, step.run)}
           />
-          <OtherWorkLink code={step.code} />
         </>
       )}
       {step.name === 'submitted' && (
@@ -616,7 +616,6 @@ export function PlayPage() {
             playerId={step.player.playerId ?? undefined}
             player={step.player}
           />
-          <OtherWorkLink code={step.code} />
         </>
       )}
     </div>
