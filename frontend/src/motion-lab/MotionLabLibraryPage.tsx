@@ -54,6 +54,8 @@ export function MotionLabLibraryPage() {
 
   const [folders, setFolders] = useState<Folder[] | null>(null)
   const [plays, setPlays] = useState<MotionPlayRow[] | null>(null)
+  /** FIND A PLAY BY NAME, in every folder - a few letters instead of opening folders. */
+  const [find, setFind] = useState('')
   const [looks, setLooks] = useState<MotionLookRow[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -94,6 +96,8 @@ export function MotionLabLibraryPage() {
   }
   const subfolders = folders.filter((f) => f.parent_folder_id === folderId)
   const here = plays.filter((p) => p.folder_id === folderId)
+  const needle = find.trim().toLowerCase()
+  const shownPlays = needle ? plays.filter((p) => p.name.toLowerCase().includes(needle)) : here
   const inTree = (id: number): number => {
     const children = folders.filter((f) => f.parent_folder_id === id)
     return plays.filter((p) => p.folder_id === id).length + children.reduce((sum, child) => sum + inTree(child.id), 0)
@@ -284,7 +288,19 @@ export function MotionLabLibraryPage() {
         </div>
       )}
 
-      {here.length === 0 ? (
+      {plays.length > 8 && (
+        <input
+          className={`${nb.input} ${styles.find}`}
+          type="search"
+          value={find}
+          onChange={(e) => setFind(e.target.value)}
+          placeholder="Find a play…"
+          aria-label="Find a play"
+        />
+      )}
+      {needle && shownPlays.length === 0 ? (
+        <EmptyState message="No play by that name." />
+      ) : shownPlays.length === 0 ? (
         // At the top level, plays filed in folders still count: "No plays yet"
         // under a "3 Plays" badge would contradict itself.
         folder ? (
@@ -294,7 +310,7 @@ export function MotionLabLibraryPage() {
         ) : null
       ) : (
         <div className={dashboardStyles.folderList} aria-label="Plays">
-          {here.map((play) => (
+          {shownPlays.map((play) => (
             <div key={play.id} className={dashboardStyles.folderRow}>
               {renaming?.kind === 'play' && renaming.id === play.id ? (
                 <>
@@ -341,6 +357,12 @@ export function MotionLabLibraryPage() {
                       <Icon name="pen" size={14} />
                     </span>
                     <span className={dashboardStyles.folderName}>{play.name}</span>
+                    {/* Found in another folder: say where it lives. */}
+                    {needle && play.folder_id !== folderId && (
+                      <span className={styles.updated}>
+                        {play.folder_id === null ? 'Library' : (folders.find((f) => f.id === play.folder_id)?.name ?? '')}
+                      </span>
+                    )}
                     <span className={styles.updated}>{new Date(play.updated_at).toLocaleDateString()}</span>
                   </Link>
                   <MenuButton label={`Play options for ${play.name}`}>

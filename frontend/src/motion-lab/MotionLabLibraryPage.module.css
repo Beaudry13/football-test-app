@@ -71,3 +71,11 @@
   font-size: 12px;
   opacity: 0.7;
 }
+
+/* Find a play by name: as wide as a title, never the whole page. */
+.find {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin: 0 0 12px;
+}

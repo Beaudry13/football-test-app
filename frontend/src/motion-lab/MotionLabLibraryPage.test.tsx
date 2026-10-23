@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { acceptConfirm } from '../test/confirmDialog'
@@ -256,5 +256,28 @@ describe('Motion Lab Library', () => {
     vi.mocked(motionApi.listMotionLooks).mockResolvedValue([])
     renderAt('/motion-lab/library')
     expect(await screen.findByText('No plays yet. Start one with New play.')).toBeInTheDocument()
+  })
+})
+
+describe('Find a play', () => {
+  it('a long library finds a play by name in every folder, and says where it lives', async () => {
+    const many = [...PLAYS, ...Array.from({ length: 7 }, (_, i) => play(20 + i, `Install ${i}`))]
+    vi.mocked(motionApi.listMotionPlays).mockResolvedValue(many)
+    renderAt('/motion-lab/library')
+    const find = await screen.findByRole('searchbox', { name: 'Find a play' })
+    fireEvent.change(find, { target: { value: 'cover 3' } })
+    const list = within(screen.getByLabelText('Plays'))
+    // Filed two folders down, found from the top - with its folder named.
+    expect(list.getByText('Cover 3 vs Mesh')).toBeInTheDocument()
+    expect(list.getByText('Cover 3')).toBeInTheDocument()
+    expect(list.queryByText('Inside Zone')).toBeNull()
+    fireEvent.change(find, { target: { value: 'zzz' } })
+    expect(screen.getByText('No play by that name.')).toBeInTheDocument()
+  })
+
+  it('a short library has no find box', async () => {
+    renderAt('/motion-lab/library')
+    await screen.findByText('Inside Zone')
+    expect(screen.queryByRole('searchbox', { name: 'Find a play' })).toBeNull()
   })
 })
