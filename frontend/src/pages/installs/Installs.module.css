@@ -86,6 +86,21 @@
   flex: 0 1 220px;
   min-width: 0;
 }
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  color: var(--nb-text);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--nb-accent);
+}
 .groupPick {
   display: flex;
   align-items: center;

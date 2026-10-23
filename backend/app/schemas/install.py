@@ -24,6 +24,8 @@ class InstallPatchSchema(Schema):
     title = _Title(validate=validate.Length(max=120))
     position_group = fields.Str(allow_none=True, validate=validate.Length(max=40))
     archived = fields.Bool()
+    #: True: this is the current install (any other stops being); false: none is.
+    current = fields.Bool()
 
 
 class InstallItemSchema(Schema):
@@ -50,3 +52,5 @@ class InstallLayoutSchema(Schema):
 
 class InstallDuplicateSchema(Schema):
     title = _Title(required=True, validate=validate.Length(max=120))
+    #: Asked, never assumed: the copy replaces the current install only when he says so.
+    make_current = fields.Bool(load_default=False)

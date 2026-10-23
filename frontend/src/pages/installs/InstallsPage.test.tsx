@@ -22,6 +22,7 @@ const summary = (id: number, title: string, over: Partial<InstallSummary> = {}):
   title,
   position_group: null,
   archived: false,
+  current: false,
   item_count: 3,
   counts: { plays: 1, quizzes: 1, reps: 1, concepts: 0 },
   created_at: '',
@@ -51,16 +52,17 @@ beforeEach(() => {
   landed = '';
   vi.mocked(playersApi.listPlayers).mockResolvedValue([]);
   vi.mocked(installsApi.listInstalls).mockImplementation(async (archived?: boolean) =>
-    archived ? [summary(3, 'Week 6 - Baylor', { archived: true })] : [summary(1, 'Week 7 - West Virginia'), summary(2, 'Spring install 4', { item_count: 0, counts: { plays: 0, quizzes: 0, reps: 0, concepts: 0 } })],
+    archived ? [summary(3, 'Week 6 - Baylor', { archived: true })] : [summary(1, 'Week 7 - West Virginia', { current: true }), summary(2, 'Spring install 4', { item_count: 0, counts: { plays: 0, quizzes: 0, reps: 0, concepts: 0 } })],
   );
 });
 
 describe('Installs', () => {
-  it("this week's first, each one tap from teaching it; an empty one has nothing to teach", async () => {
+  it('the current install first and marked, each one tap from teaching it; an empty one has nothing to teach', async () => {
     open();
     const list = await screen.findAllByRole('listitem');
     expect(within(list[0]).getByRole('link', { name: 'Week 7 - West Virginia' })).toHaveAttribute('href', '/installs/1');
-    expect(within(list[0]).getByText(/This week/)).toBeInTheDocument();
+    expect(within(list[0]).getByText(/Current ·/)).toBeInTheDocument();
+    expect(within(list[1]).queryByText(/Current/)).toBeNull();
     expect(within(list[0]).getByText(/1 play · 1 Rep · 1 quiz/)).toBeInTheDocument();
     expect(within(list[0]).getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/installs/1?teach=1');
     expect(within(list[1]).getByText(/Nothing in it yet/)).toBeInTheDocument();

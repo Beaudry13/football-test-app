@@ -14,6 +14,9 @@ What this file protects:
    in / to grade / weakest concept, the Rep's open problem) - nothing invented.
 5. Own-only, like every quiz list; another organization sees nothing; a play
    needs a Motion Lab coach, as Motion Lab does.
+6. The CURRENT install is the coach's explicit choice: one at a time, set by
+   him, cleared by archiving or deleting it - never by opening, teaching,
+   editing or restoring it.
 """
 
 from app.extensions import db
@@ -277,3 +280,93 @@ class TestOwnOnly:
 
     def test_a_blank_name_is_refused(self, client, coach_headers):
         assert client.post(URL, json={"title": "   "}, headers=coach_headers).status_code == 422
+
+
+def _current_ids(client, headers):
+    """Which of his installs (active or archived) are current."""
+    every = client.get(URL, headers=headers).get_json() + client.get(f"{URL}?archived=1", headers=headers).get_json()
+    return [i["id"] for i in every if i["current"]]
+
+
+class TestCurrentInstall:
+    def test_the_first_install_is_current_and_the_next_one_is_not(self, client, coach_headers):
+        week7 = _install(client, coach_headers, "Week 7")
+        week8 = _install(client, coach_headers, "Week 8")
+        assert week7["current"] is True
+        assert week8["current"] is False
+        # The current one leads the list, even though Week 8 is newer.
+        assert [i["title"] for i in client.get(URL, headers=coach_headers).get_json()] == ["Week 7", "Week 8"]
+
+    def test_set_as_current_moves_it_and_there_is_only_ever_one(self, client, coach_headers, app):
+        week7 = _install(client, coach_headers, "Week 7")
+        week8 = _install(client, coach_headers, "Week 8")
+        body = client.patch(f"{URL}/{week8['id']}", json={"current": True}, headers=coach_headers).get_json()
+        assert body["current"] is True
+        assert _current_ids(client, coach_headers) == [week8["id"]]
+        with app.app_context():
+            assert Install.query.filter_by(is_current=True).count() == 1
+        # Saying so again changes nothing; clearing it leaves none.
+        client.patch(f"{URL}/{week8['id']}", json={"current": True}, headers=coach_headers)
+        assert _current_ids(client, coach_headers) == [week8["id"]]
+        client.patch(f"{URL}/{week8['id']}", json={"current": False}, headers=coach_headers)
+        assert _current_ids(client, coach_headers) == []
+        assert week7["id"]  # still there, simply not current
+
+    def test_opening_teaching_or_editing_never_changes_which_is_current(self, client, register_coach, app):
+        coach, headers = _owner(app, register_coach)
+        week7 = _install(client, headers, "Week 7")
+        old = _install(client, headers, "Spring install 4")
+        motion = _concept(client, headers, "Motion adjustment")
+        # Working on the old package: open it, rename it, add to it, reorder it.
+        client.get(f"{URL}/{old['id']}", headers=headers)
+        client.patch(f"{URL}/{old['id']}", json={"title": "Spring install 4 (v2)", "position_group": "family:Safeties"}, headers=headers)
+        body = _add(client, headers, old["id"], "concept", motion["id"])
+        client.put(f"{URL}/{old['id']}/layout", json={"loose": [body["items"][0]["id"]], "sections": []}, headers=headers)
+        assert _current_ids(client, headers) == [week7["id"]]
+
+    def test_archiving_the_current_install_clears_it_and_restoring_does_not_bring_it_back(self, client, coach_headers):
+        week7 = _install(client, coach_headers, "Week 7")
+        archived = client.patch(f"{URL}/{week7['id']}", json={"archived": True}, headers=coach_headers).get_json()
+        assert archived["current"] is False
+        assert _current_ids(client, coach_headers) == []
+        # An archived install cannot be made current...
+        refused = client.patch(f"{URL}/{week7['id']}", json={"current": True}, headers=coach_headers)
+        assert refused.status_code == 422
+        # ...and restoring it leaves it an ordinary install.
+        restored = client.patch(f"{URL}/{week7['id']}", json={"archived": False}, headers=coach_headers).get_json()
+        assert restored["current"] is False
+        assert _current_ids(client, coach_headers) == []
+
+    def test_deleting_the_current_install_clears_it_and_the_next_new_one_is_current(self, client, coach_headers):
+        week7 = _install(client, coach_headers, "Week 7")
+        spare = _install(client, coach_headers, "Spring install 4")
+        assert client.delete(f"{URL}/{week7['id']}", headers=coach_headers).status_code == 204
+        assert _current_ids(client, coach_headers) == []
+        # With none current, a new install is - the old spare one is not promoted.
+        week8 = _install(client, coach_headers, "Week 8")
+        assert week8["current"] is True
+        assert _current_ids(client, coach_headers) == [week8["id"]]
+        assert spare["current"] is False
+
+    def test_duplicating_for_a_new_week_replaces_current_only_when_asked(self, client, coach_headers):
+        week7 = _install(client, coach_headers, "Week 7")
+        quiet = client.post(f"{URL}/{week7['id']}/duplicate", json={"title": "Week 7 (copy)"}, headers=coach_headers).get_json()
+        assert quiet["current"] is False
+        assert _current_ids(client, coach_headers) == [week7["id"]]
+        week8 = client.post(
+            f"{URL}/{week7['id']}/duplicate", json={"title": "Week 8", "make_current": True}, headers=coach_headers
+        ).get_json()
+        assert week8["current"] is True
+        assert _current_ids(client, coach_headers) == [week8["id"]]
+
+    def test_each_coach_has_his_own_current_install(self, client, register_coach, invite_teammate, app):
+        coach, headers = _owner(app, register_coach)
+        mine = _install(client, headers, "Week 7")
+        _, _, teammate = invite_teammate(headers)
+        his = _install(client, teammate, "Safeties - Week 7")
+        assert his["current"] is True
+        assert _current_ids(client, headers) == [mine["id"]]
+        assert _current_ids(client, teammate) == [his["id"]]
+        # Another coach cannot make himself the owner of mine by setting it current.
+        assert client.patch(f"{URL}/{mine['id']}", json={"current": True}, headers=teammate).status_code == 404
+

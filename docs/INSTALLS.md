@@ -104,8 +104,8 @@ install*.
 - Each row's actions: **Teach** (the meeting starts at that row), **↑ ↓**
   (40px, so a phone can order it) and **More** (open it, Results, move to a
   section, take out).
-- The install's More menu: Rename, Add a section, Who it's for…, Duplicate
-  for a new week, Archive or Restore, Delete. A section's More menu: Rename,
+- The install's More menu: Rename, Add a section, Who it's for…, Set as
+  current install, Duplicate for a new week, Archive or Restore, Delete. A section's More menu: Rename,
   Move up or down, Remove the section (its football stays in the install).
 
 **Add to install, from where the football is.**
@@ -117,10 +117,27 @@ install*.
 The panel lists active installs (✓ where it is already in), adds with one
 tap, and starts a new install on the spot.
 
-**Home.** One quiet line: "This week: Week 7 - Central · 2 plays · 1 Rep ·
-Teach". It shows the install the coach last worked on. Without one, Home
-keeps its "Pick up where you left off" line, so there is never more than one
-continuation cue.
+**Home.** One quiet line: "Current install: Week 7 - Central · 2 plays · 1 Rep ·
+Teach". Without a current install, Home keeps its "Pick up where you left
+off" line, so there is never more than one continuation cue.
+
+## The current install (migration `f2c9d41e7a58`)
+
+Which install is "this week" is the coach's explicit choice, stored on the
+install (`is_current`) with a partial unique index: at most one per coach.
+
+- **Set as current install** (the install's More menu) makes it current; the
+  previous one stops being current.
+- The first install - or any new install while he has none current - is
+  current automatically. Otherwise a new install is not.
+- **Duplicate for a new week** offers "Make it my current install": ticked
+  when duplicating the current install, unticked otherwise.
+- Archiving or deleting the current install leaves him with none. Restoring
+  never makes an install current, and an archived install cannot be made
+  current.
+- Opening, teaching and editing an install never change which is current.
+- The installs list puts the current install first, marked "Current"; the
+  install page's kicker reads "Current install".
 
 ## Teach install
 

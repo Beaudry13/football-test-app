@@ -45,6 +45,8 @@ export interface InstallSummary {
   /** The room it is for ("family:Safeties"), or null for the whole team. */
   position_group: string | null;
   archived: boolean;
+  /** The install he is working on this week - his choice, one at a time. */
+  current: boolean;
   item_count: number;
   counts: { plays: number; quizzes: number; reps: number; concepts: number };
   created_at: string;
@@ -74,7 +76,10 @@ export function getInstall(id: number): Promise<Install> {
   return api.get<Install>(`/installs/${id}`);
 }
 
-export function updateInstall(id: number, input: { title?: string; position_group?: string | null; archived?: boolean }): Promise<Install> {
+export function updateInstall(
+  id: number,
+  input: { title?: string; position_group?: string | null; archived?: boolean; current?: boolean },
+): Promise<Install> {
   return api.patch<Install>(`/installs/${id}`, input);
 }
 
@@ -94,8 +99,8 @@ export function setInstallLayout(id: number, layout: InstallLayout): Promise<Ins
   return api.put<Install>(`/installs/${id}/layout`, layout);
 }
 
-export function duplicateInstall(id: number, title: string): Promise<Install> {
-  return api.post<Install>(`/installs/${id}/duplicate`, { title });
+export function duplicateInstall(id: number, title: string, makeCurrent = false): Promise<Install> {
+  return api.post<Install>(`/installs/${id}/duplicate`, { title, make_current: makeCurrent });
 }
 
 /** His active installs, and which already hold this piece of football. */

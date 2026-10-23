@@ -94,6 +94,7 @@ def _summary(install: Install) -> dict:
         "title": install.title,
         "position_group": install.position_group,
         "archived": install.archived_at is not None,
+        "current": install.is_current,
         "item_count": len(install.items),
         "counts": _counts(install),
         "created_at": install.created_at.isoformat(),
@@ -236,6 +237,25 @@ def _detail(install: Install, coach) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# The current install - his choice, one at a time
+# ---------------------------------------------------------------------------
+
+
+def _current_of(coach) -> Install | None:
+    return Install.query.filter(Install.coach_id == coach.id, Install.is_current.is_(True)).first()
+
+
+def _make_current(install: Install, coach) -> None:
+    """This install is the current one; whichever was stops being - first, so
+    the one-per-coach index never sees two."""
+    Install.query.filter(
+        Install.coach_id == coach.id, Install.is_current.is_(True), Install.id != install.id
+    ).update({Install.is_current: False}, synchronize_session="fetch")
+    db.session.flush()
+    install.is_current = True
+
+
+# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
@@ -247,7 +267,8 @@ def list_installs():
     archived = request.args.get("archived") in ("1", "true")
     query = Install.query.filter(Install.organization_id == coach.organization_id, Install.coach_id == coach.id)
     query = query.filter(Install.archived_at.isnot(None) if archived else Install.archived_at.is_(None))
-    installs = query.order_by(Install.updated_at.desc(), Install.id.desc()).all()
+    # The current install first; then the rest, most recently worked on first.
+    installs = query.order_by(Install.is_current.desc(), Install.updated_at.desc(), Install.id.desc()).all()
     return jsonify([_summary(i) for i in installs])
 
 
@@ -261,6 +282,8 @@ def create_install():
         coach_id=coach.id,
         title=data["title"],
         position_group=data["position_group"],
+        # With no current install, the new one is it: there is nothing to replace.
+        is_current=_current_of(coach) is None,
     )
     db.session.add(install)
     db.session.commit()
@@ -316,6 +339,17 @@ def patch_install(install_id: int):
         install.position_group = data["position_group"]
     if "archived" in data:
         install.archived_at = datetime.now(timezone.utc) if data["archived"] else None
+        # Put away, it is not this week's any more. Restoring brings it back
+        # as an ordinary install - current only when he says so.
+        if data["archived"]:
+            install.is_current = False
+    if "current" in data:
+        if not data["current"]:
+            install.is_current = False
+        elif install.archived_at is not None:
+            raise ApiError("Restore it first - an archived install cannot be current", status_code=422)
+        else:
+            _make_current(install, coach)
     db.session.commit()
     return jsonify(_detail(install, coach))
 
@@ -463,6 +497,8 @@ def duplicate_install(install_id: int):
                 concept_id=item.concept_id,
             )
         )
+    if data["make_current"]:
+        _make_current(copy, coach)
     db.session.commit()
     db.session.refresh(copy)
     return jsonify(_detail(copy, coach)), 201

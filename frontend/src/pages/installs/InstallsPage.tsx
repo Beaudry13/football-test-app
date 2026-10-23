@@ -13,9 +13,9 @@ import { contents } from './installDetail';
 import styles from './Installs.module.css';
 
 /**
- * INSTALLS: what he is installing - this week's first, in the order he last
- * worked on them; old weeks archived out of the way, never deleted with
- * their football. A new one is a name (and, for a position room, who it is
+ * INSTALLS: what he is installing - his current install first, then the rest
+ * in the order he last worked on them; old weeks archived out of the way,
+ * never deleted with their football. A new one is a name (and, for a position room, who it is
  * for); the football is added from the install, or from wherever it is.
  */
 export function InstallsPage() {
@@ -111,14 +111,14 @@ export function InstallsPage() {
         <p className={styles.quiet}>No install yet. Name this week&rsquo;s above, then add the football you&rsquo;re putting in.</p>
       ) : (
         <ul className={styles.installList}>
-          {active.map((i, index) => (
+          {active.map((i) => (
             <li key={i.id} className={styles.installRow}>
               <div className={styles.itemMain}>
                 <Link to={`/installs/${i.id}`} className={styles.installTitle}>
                   {i.title}
                 </Link>
                 <span className={styles.itemDetail}>
-                  {index === 0 && <span className={styles.current}>This week · </span>}
+                  {i.current && <span className={styles.current}>Current · </span>}
                   {groupName(i.position_group) && `${groupName(i.position_group)} · `}
                   {contents(i)}
                 </span>

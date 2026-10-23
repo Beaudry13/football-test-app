@@ -22,6 +22,11 @@ organization (Coach View).
 `position_group` is the room it is for, when it is one ("family:Safeties", the
 same keys the roster's position filter uses) - so a concept in it can say how
 many of THAT room still miss it. Null for a whole-team install.
+
+CURRENT IS A CHOICE. `is_current` marks the install the coach is working on
+this week - Home's one continuation line. He sets it; opening, teaching or
+editing an install never does. At most one per coach (a partial unique
+index); archiving or deleting the current install leaves him with none.
 """
 
 from app.extensions import db
@@ -33,6 +38,10 @@ ITEM_KINDS = ("play", "quiz", "concept")
 
 class Install(TimestampMixin, db.Model):
     __tablename__ = "installs"
+    __table_args__ = (
+        # One current install per coach, held by the database itself.
+        db.Index("uq_installs_current_per_coach", "coach_id", unique=True, postgresql_where=db.text("is_current")),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     organization_id = db.Column(
@@ -45,6 +54,8 @@ class Install(TimestampMixin, db.Model):
     position_group = db.Column(db.String(40), nullable=True)
     #: Archived installs get out of the way without disappearing.
     archived_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    #: The install he is working on this week - set by him, never inferred.
+    is_current = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
 
     sections = db.relationship(
         "InstallSection",

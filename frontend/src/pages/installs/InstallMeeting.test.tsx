@@ -119,6 +119,7 @@ const install = (items: InstallItem[], over: Partial<Install> = {}): Install => 
   title: 'Week 7 - West Virginia',
   position_group: null,
   archived: false,
+  current: false,
   item_count: items.length,
   counts: { plays: 0, quizzes: 0, reps: 0, concepts: 0 },
   created_at: '',

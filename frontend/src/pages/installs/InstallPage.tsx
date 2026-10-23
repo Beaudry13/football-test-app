@@ -58,6 +58,8 @@ export function InstallPage() {
   const [title, setTitle] = useState('');
   const [newSection, setNewSection] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState<string | null>(null);
+  /** The copy becomes the current install - offered, ticked when the source is current. */
+  const [copyCurrent, setCopyCurrent] = useState(false);
   /** "Who it's for" is open - a rare change, so it waits behind More. */
   const [choosingGroup, setChoosingGroup] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -220,11 +222,18 @@ export function InstallPage() {
       setError(getErrorMessage(err));
     }
   };
+  const makeCurrent = async () => {
+    try {
+      setInstall(await updateInstall(install.id, { current: true }));
+    } catch (err) {
+      setError(getErrorMessage(err));
+    }
+  };
   const duplicate = async (e: FormEvent) => {
     e.preventDefault();
     if (!duplicating?.trim()) return;
     try {
-      const copy = await duplicateInstall(install.id, duplicating.trim());
+      const copy = await duplicateInstall(install.id, duplicating.trim(), copyCurrent);
       setDuplicating(null);
       navigate(`/installs/${copy.id}`);
     } catch (err) {
@@ -305,7 +314,7 @@ export function InstallPage() {
       </Link>
       <header className={styles.head}>
         <div className={styles.headMain}>
-          <span className={styles.kicker}>{install.archived ? 'Install · archived' : 'Install'}</span>
+          <span className={styles.kicker}>{install.archived ? 'Install · archived' : install.current ? 'Current install' : 'Install'}</span>
           {renaming ? (
             <form className={styles.renameForm} onSubmit={(e) => void rename(e)}>
               <input className={nb.input} value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Install name" maxLength={120} autoFocus />
@@ -335,7 +344,15 @@ export function InstallPage() {
             <MenuItem onSelect={() => setRenaming(true)}>Rename</MenuItem>
             <MenuItem onSelect={() => setNewSection('')}>Add a section</MenuItem>
             {audiences.length > 0 && <MenuItem onSelect={() => setChoosingGroup(true)}>Who it&rsquo;s for…</MenuItem>}
-            <MenuItem onSelect={() => setDuplicating(`${install.title} (copy)`)}>Duplicate for a new week</MenuItem>
+            {!install.current && !install.archived && <MenuItem onSelect={() => void makeCurrent()}>Set as current install</MenuItem>}
+            <MenuItem
+              onSelect={() => {
+                setDuplicating(`${install.title} (copy)`);
+                setCopyCurrent(install.current);
+              }}
+            >
+              Duplicate for a new week
+            </MenuItem>
             <MenuItem onSelect={() => void archive(!install.archived)}>{install.archived ? 'Restore' : 'Archive'}</MenuItem>
             <MenuItem destructive onSelect={remove_}>
               Delete install
@@ -371,6 +388,10 @@ export function InstallPage() {
         <form className={styles.inlineForm} onSubmit={(e) => void duplicate(e)}>
           <span>Same football, same order - a new name:</span>
           <input className={nb.input} value={duplicating} onChange={(e) => setDuplicating(e.target.value)} aria-label="New install name" maxLength={120} autoFocus />
+          <label className={styles.check}>
+            <input type="checkbox" checked={copyCurrent} onChange={(e) => setCopyCurrent(e.target.checked)} />
+            Make it my current install
+          </label>
           <button type="submit" className={nb.btnPrimary}>
             Duplicate
           </button>

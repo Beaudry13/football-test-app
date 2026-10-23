@@ -72,6 +72,7 @@ const INSTALL = (over: Partial<Install> = {}): Install => ({
   title: 'Week 7 - West Virginia',
   position_group: null,
   archived: false,
+  current: false,
   item_count: 3,
   counts: { plays: 1, quizzes: 1, reps: 1, concepts: 0 },
   created_at: '',
@@ -230,16 +231,43 @@ describe('Adding and taking out - by reference', () => {
 });
 
 describe('Next week, last week', () => {
-  it('Duplicate for a new week copies the order and opens the copy', async () => {
+  it('Duplicate for a new week copies the order and opens the copy - not current unless he ticks it', async () => {
     vi.mocked(installsApi.duplicateInstall).mockResolvedValue(INSTALL({ id: 2, title: 'Week 8 - Baylor' }));
     open();
     await screen.findByRole('heading', { name: 'Week 7 - West Virginia' });
     fireEvent.click(screen.getByRole('button', { name: 'More for Week 7 - West Virginia' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate for a new week' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'New install name' }), { target: { value: 'Week 8 - Baylor' } });
+    // This install is not the current one: the offer is there, unticked.
+    expect(screen.getByRole('checkbox', { name: 'Make it my current install' })).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
-    await waitFor(() => expect(installsApi.duplicateInstall).toHaveBeenCalledWith(1, 'Week 8 - Baylor'));
+    await waitFor(() => expect(installsApi.duplicateInstall).toHaveBeenCalledWith(1, 'Week 8 - Baylor', false));
     await waitFor(() => expect(landed).toBe('/installs/2'));
+  });
+
+  it("duplicating the current install for next week offers to make the copy current - ticked, and he can untick it", async () => {
+    vi.mocked(installsApi.duplicateInstall).mockResolvedValue(INSTALL({ id: 2, title: 'Week 8 - Baylor', current: true }));
+    open(INSTALL({ current: true }));
+    expect(await screen.findByText('Current install')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More for Week 7 - West Virginia' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Duplicate for a new week' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'New install name' }), { target: { value: 'Week 8 - Baylor' } });
+    expect(screen.getByRole('checkbox', { name: 'Make it my current install' })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(installsApi.duplicateInstall).toHaveBeenCalledWith(1, 'Week 8 - Baylor', true));
+  });
+
+  it('Set as current install - offered only when it is not current', async () => {
+    vi.mocked(installsApi.updateInstall).mockResolvedValue(INSTALL({ current: true }));
+    open();
+    await screen.findByRole('heading', { name: 'Week 7 - West Virginia' });
+    expect(screen.getByText('Install')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More for Week 7 - West Virginia' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Set as current install' }));
+    await waitFor(() => expect(installsApi.updateInstall).toHaveBeenCalledWith(1, { current: true }));
+    expect(await screen.findByText('Current install')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More for Week 7 - West Virginia' }));
+    expect(screen.queryByRole('menuitem', { name: 'Set as current install' })).toBeNull();
   });
 
   it('Archive puts it away; Restore brings it back', async () => {
