@@ -357,6 +357,10 @@ class Question(db.Model):
         # is that they cannot see it.
         if include_correct_answers:
             data["motion_play_id"] = self.motion_play_id
+            # PROVENANCE, coach-side: the question this one was copied from (a
+            # retest, a Rep made from a quiz) - so the same football is
+            # recognised as the same, whatever its wording.
+            data["copied_from_question_id"] = self.copied_from_question_id
             data["answer_drawing"] = self.answer_drawing
             data["answer_explanation"] = self.answer_explanation
             data["expected_answers"] = self.expected_answers or []

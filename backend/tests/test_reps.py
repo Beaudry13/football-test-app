@@ -1220,3 +1220,29 @@ class TestWhatIsOutForOnePlayer:
             db.session.get(AccessCode, code["id"]).is_active = False
             db.session.commit()
         assert self._open(app, ids["Bo Brown"]) == []
+
+
+class TestCopiesKnowTheirSource:
+    """A retest copy says, coach-side, which question it was copied from - so
+    Teach recognises the same football whatever its wording - and a player's
+    payload never carries it."""
+
+    def test_a_retest_copy_names_its_source_to_the_coach_only(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {first["id"]: _option(first, "Stay boundary"), second["id"]: _option(second, "Inside")})
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        assert copied["copied_from_question_id"] == first["id"]
+        original = client.get(f"/api/quizzes/{rep['id']}", headers=headers).get_json()["questions"][0]
+        assert original["copied_from_question_id"] is None
+        sent = _send(client, headers, retest["id"])
+        started = client.post(
+            "/api/play/start", json={"access_code_id": sent["id"], "player_name": "Ty Adams", "player_id": ids["Ty Adams"]}
+        ).get_json()
+        delivered = started["questions"]
+        assert delivered
+        assert all("copied_from_question_id" not in q for q in delivered)
+

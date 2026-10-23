@@ -134,7 +134,8 @@ describe('what the group needs', () => {
     is_retired: false,
   });
   const QUIZ_30 = { id: 30, title: 'Boundary safety', questions: [q(70, 5, 'Rotate or stay?'), q(71, 5, 'Who is #3 now?'), q(72, 6, 'Not this concept')] };
-  const QUIZ_31 = { id: 31, title: 'Week 6 install', questions: [q(80, 5, 'Rotate or stay?'), q(81, 6, 'Deep third?')] };
+  // Quiz 31 holds the retest copy of question 70 (copied from it) - the same football.
+  const QUIZ_31 = { id: 31, title: 'Week 6 install', questions: [{ ...q(80, 5, 'Rotate or stay?'), copied_from_question_id: 70 }, q(81, 6, 'Deep third?')] };
 
   it('names who, each opening his profile', async () => {
     renderNeeds();
@@ -154,6 +155,16 @@ describe('what the group needs', () => {
     expect(teach.getAllByRole('button', { name: /^[0-9]$/ }).map((b) => b.textContent)).toEqual(['1', '2']);
     expect(teach.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
     expect(landed).toBe('');
+  });
+
+  it('two different football questions worded alike are both taught - only a copy of the same question is merged', async () => {
+    const distinct = { id: 31, title: 'Week 6 install', questions: [q(80, 5, 'Rotate or stay?'), q(81, 6, 'Deep third?')] };
+    vi.spyOn(quizzesApi, 'getQuiz').mockImplementation(async (id) => (id === 30 ? QUIZ_30 : distinct) as never);
+    renderNeeds();
+    fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
+    const teach = within(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' }));
+    // 70 and 71 from the Rep, and 80 - worded like 70 but its own football.
+    expect(teach.getAllByRole('button', { name: /^[0-9]$/ }).map((b) => b.textContent)).toEqual(['1', '2', '3']);
   });
 
   it("Next teaches the group's next problem in the same screen", async () => {

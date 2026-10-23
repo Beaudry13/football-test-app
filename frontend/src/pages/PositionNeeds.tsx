@@ -8,6 +8,7 @@ import { getQuiz } from '../api/quizzes';
 import type { Question, Quiz } from '../api/types';
 import { TeachView, type TeachSlide } from '../components/teach/TeachView';
 import { quizTeachSlides, teachable } from './quiz-editor/quizTeach';
+import { distinctFootball } from '../components/teach/sameFootball';
 import styles from './PositionNeeds.module.css';
 
 /** How many concepts the panel names before counting the rest. */
@@ -89,23 +90,17 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
       byQuiz.set(m.last.quiz_id, entry);
     }
     const ordered = [...byQuiz.entries()].sort((a, b) => b[1].at.localeCompare(a[1].at));
-    const picked: Question[] = [];
-    const seen = new Set<string>();
+    const gathered: { quiz: Quiz; question: Question }[] = [];
     for (const [quizId, { ids }] of ordered) {
       if (!quizzes.current.has(quizId)) quizzes.current.set(quizId, getQuiz(quizId));
       const quiz = await quizzes.current.get(quizId)!;
       const inConcept = (quiz.questions ?? []).filter((q) => q.concept?.id === need.concept_id && !q.is_retired && teachable(q));
       const missedHere = inConcept.filter((q) => ids.has(q.id));
-      for (const q of missedHere.length > 0 ? missedHere : inConcept) {
-        // A retest re-asks the same football (its picture a copy): teach it
-        // once - the same words on the same concept are the same question.
-        const same = q.question_text.trim().toLowerCase();
-        if (seen.has(same)) continue;
-        seen.add(same);
-        picked.push(q);
-      }
+      for (const question of missedHere.length > 0 ? missedHere : inConcept) gathered.push({ quiz, question });
     }
-    return quizTeachSlides(picked);
+    // A retest re-asks the same football as a copy: taught once, by its
+    // source identity - never merged just because two questions share words.
+    return quizTeachSlides(distinctFootball(gathered));
   };
 
   const teach = async (need: GroupNeed) => {
