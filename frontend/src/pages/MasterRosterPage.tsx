@@ -383,7 +383,7 @@ export function MasterRosterPage() {
           />
           <button
             type="submit"
-            className={nb.btnPrimary}
+            className={nb.btnSecondary}
             disabled={isCreating || (!form.first_name.trim() && !form.last_name.trim())}
           >
             {isCreating ? 'Adding…' : 'Add Player'}
@@ -421,7 +421,7 @@ export function MasterRosterPage() {
             )}
             <button
               type="button"
-              className={nb.btnPrimary}
+              className={nb.btnSecondary}
               onClick={handleGenerateReport}
               disabled={selectedCount === 0 || isGenerating}
             >

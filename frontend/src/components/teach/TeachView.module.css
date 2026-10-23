@@ -100,6 +100,13 @@
   align-items: center;
   text-decoration: none;
 }
+/* ONE GOLD ACTION. A second action beside it (Results' "Make a rep" after
+   "Retest the 3") is outlined, like Next - gold means "probably this". */
+.action > :is(button, a) ~ :is(button, a) {
+  border: 1px solid #d9a441;
+  background: transparent;
+  color: #d9a441;
+}
 .action button:disabled {
   opacity: 0.6;
   cursor: default;

@@ -223,8 +223,9 @@ export function RepPage() {
                 {problems.length === 0 && (
                   <p className={styles.allClear}>Nobody missed a decision. They know this job.</p>
                 )}
-                {problems.map((problem) => (
+                {problems.map((problem, i) => (
                   <ProblemCard
+                    lead={i === 0}
                     key={problem.concept?.id ?? 'general'}
                     problem={problem}
                     who={who}
@@ -334,7 +335,8 @@ function SendPanel({ results, onSent, folded = false }: { results: RepResults; o
           <input className={styles.link} readOnly value={link} aria-label="Rep link" onFocus={(e) => e.target.select()} />
           <button
             type="button"
-            className={nb.btnPrimary}
+            // Before anyone runs it, sharing is the next step; after, the results are.
+            className={done > 0 ? nb.btnSecondary : nb.btnPrimary}
             onClick={() => {
               void navigator.clipboard?.writeText(link).then(() => setCopied(true));
             }}
@@ -413,6 +415,7 @@ function ProblemCard({
   taught,
   onTeach,
   onRetest,
+  lead = true,
 }: {
   problem: RepConcept;
   who: string;
@@ -421,7 +424,10 @@ function ProblemCard({
   taught: RepTaught | null;
   onTeach: () => void;
   onRetest: () => Promise<void>;
+  /** The worst problem - the one whose next step is gold. The rest are quieter. */
+  lead?: boolean;
 }) {
+  const gold = (isNext: boolean) => (lead && isNext ? nb.btnPrimary : nb.btnSecondary);
   const again = problem.retest ?? null;
   const fixed = !!again && again.responded > 0 && again.missed === 0;
   const toGo = again ? again.invited - again.ran : 0;
@@ -454,17 +460,17 @@ function ProblemCard({
       <button type="button" className={nb.btnSecondary} onClick={onTeach}>
         Teach
       </button>
-      <Link to={`/reps/${again.id}`} className={`${nb.btnPrimary} ${styles.linkButton}`}>
+      <Link to={`/reps/${again.id}`} className={`${gold(true)} ${styles.linkButton}`}>
         Open retest
       </Link>
     </>
   ) : (
     <>
-      <button type="button" className={taught ? nb.btnSecondary : nb.btnPrimary} onClick={onTeach}>
+      <button type="button" className={gold(!taught)} onClick={onTeach}>
         Teach
       </button>
       <StepButton
-        className={taught ? nb.btnPrimary : nb.btnSecondary}
+        className={gold(!!taught)}
         label={retestLabel(problem.players_missed.map((p) => p.display_name))}
         run={onRetest}
       />

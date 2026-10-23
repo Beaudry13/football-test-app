@@ -604,7 +604,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               </p>
             )}
             <button
-              className={nb.btnPrimary}
+              className={needPins && needPins.length > 0 ? nb.btnSecondary : nb.btnPrimary}
               onClick={handleActivate}
               disabled={isActivating || hasNoQuestions || reachesNobody}
               title={hasNoQuestions ? 'Add a question first' : reachesNobody ? 'Pick who gets it first' : undefined}

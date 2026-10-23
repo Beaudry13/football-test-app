@@ -34,6 +34,7 @@ import { acceptConfirm } from '../../test/confirmDialog';
 import * as authModule from '../../auth/AuthContext';
 import type { RepResults } from '../../api/reps';
 import { RepPage } from './RepPage';
+import nb from '../../styles/notebook.module.css';
 
 /**
  * THE COACH'S SIDE OF A REP: not a grade, the football problem -
@@ -881,6 +882,15 @@ describe('Teach on a Rep, in the meeting room', () => {
       ],
     };
   };
+
+  it("ONE GOLD: only the worst problem's next step is the primary button", async () => {
+    open(twoProblems());
+    const first = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    const second = within(screen.getByRole('article', { name: 'Leverage' }));
+    expect(first.getByRole('button', { name: 'Teach' })).toHaveClass(nb.btnPrimary);
+    expect(second.getByRole('button', { name: 'Teach' })).toHaveClass(nb.btnSecondary);
+    expect(second.getByRole('button', { name: 'Teach' })).not.toHaveClass(nb.btnPrimary);
+  });
 
   it('says who missed it, and Next teaches the next problem in the same screen', async () => {
     open(twoProblems());

@@ -357,7 +357,7 @@ export function DashboardPage() {
             scroll past to reach the list. */}
         {creating === null ? (
           <div className={styles.createRow}>
-            <button type="button" className={nb.btnPrimary} onClick={() => setCreating('quiz')}>
+            <button type="button" className={nb.btnSecondary} onClick={() => setCreating('quiz')}>
               <Icon name="add" size={14} /> New Quiz
             </button>
             <button

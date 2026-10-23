@@ -338,12 +338,18 @@ export function InstallPage() {
           </span>
         </div>
         <div className={styles.headActions}>
-          <button type="button" className={nb.btnPrimary} disabled={order.length === 0} onClick={() => setTeachingAt(0)}>
-            Teach install
-          </button>
-          <button type="button" className={nb.btnSecondary} aria-expanded={adding} onClick={() => setAdding((a) => !a)}>
-            Add football
-          </button>
+          {/* Empty, the empty state below is the one way forward (Add football);
+              a disabled gold Teach beside it would be a second, dead, gold. */}
+          {order.length > 0 && (
+            <button type="button" className={nb.btnPrimary} onClick={() => setTeachingAt(0)}>
+              Teach install
+            </button>
+          )}
+          {install.items.length > 0 && (
+            <button type="button" className={nb.btnSecondary} aria-expanded={adding} onClick={() => setAdding((a) => !a)}>
+              Add football
+            </button>
+          )}
           <MenuButton label={`More for ${install.title}`}>
             <MenuItem onSelect={() => setRenaming(true)}>Rename</MenuItem>
             <MenuItem onSelect={() => setNewSection('')}>Add a section</MenuItem>

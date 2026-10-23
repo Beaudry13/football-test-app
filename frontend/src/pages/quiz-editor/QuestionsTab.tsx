@@ -968,7 +968,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
              the field - and going through one function is what keeps the two
              entry points from drifting apart again. */
           <div className={styles.addRow}>
-            <button className={nb.btnPrimary} onClick={openAddForm}>
+            <button className={editingId !== null ? nb.btnSecondary : nb.btnPrimary} onClick={openAddForm}>
               + Add question
             </button>
             {motionLab && (

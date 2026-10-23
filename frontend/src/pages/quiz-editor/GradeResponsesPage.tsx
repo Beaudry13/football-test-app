@@ -21,6 +21,7 @@ import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import nb from '../../styles/notebook.module.css';
 import styles from './GradeResponsesPage.module.css';
 import { SourcePlayLink } from '../../components/football/SourcePlayLink';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 /** ONE QUESTION, EVERY ANSWER TO IT, ONE STANDARD IN THE COACH'S HEAD.
  *
@@ -54,6 +55,7 @@ export function GradeResponsesPage() {
   const id = Number(quizId);
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  useDocumentTitle(quiz ? `Grade - ${quiz.title}` : 'Grade');
   const [responses, setResponses] = useState<PlayerResponse[]>([]);
   const [dashboard, setDashboard] = useState<QuizDashboard | null>(null);
   const [loading, setLoading] = useState(true);

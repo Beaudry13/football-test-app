@@ -71,7 +71,12 @@ export function JoinStep({
           autoFocus={!secondary}
         />
       </div>
-      <button type="submit" className="btn btn-primary" disabled={isSubmitting || !code.trim()} style={{ width: '100%' }}>
+      <button
+        type="submit"
+        className={secondary ? 'btn btn-secondary' : 'btn btn-primary'}
+        disabled={isSubmitting || !code.trim()}
+        style={{ width: '100%' }}
+      >
         {isSubmitting ? 'Checking…' : 'Continue'}
       </button>
     </form>

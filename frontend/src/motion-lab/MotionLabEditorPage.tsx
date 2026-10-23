@@ -415,7 +415,7 @@ export default function MotionLabEditorPage() {
           <div className="ball-menu make-actions">
             <button
               className={using || repping || asking || teachingPlay || installing ? 'active' : ''}
-              aria-expanded={using}
+              aria-expanded={using || repping || asking || teachingPlay || installing}
               aria-haspopup="menu"
               onClick={() => {
                 setRepping(false)

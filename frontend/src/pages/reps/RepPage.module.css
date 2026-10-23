@@ -566,7 +566,7 @@
   font-weight: 700;
   padding: 4px 12px;
   border-radius: 999px;
-  border: 1px solid var(--nb-accent);
+  border: 1px solid var(--nb-border);
   background: transparent;
   color: var(--nb-text);
   cursor: pointer;
