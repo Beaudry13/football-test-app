@@ -149,22 +149,27 @@ decides what comes next.
   the man and the point from what was last made from it, plus **Check them**:
   what is made from it already, or make it in Motion Lab with the man chosen
   (`/motion-lab/plays/<id>?make=rep|question&man=<id>`).
-- **A quiz**: its football with what the room chose, and **Retest** the
-  weakest concept for exactly who missed it.
+- **A quiz**: its football with what the room chose, and **Retest the 4**:
+  its weakest concept, for exactly who missed it.
 - **A Rep**: its open football problem ("3 of 9 missed Motion adjustment",
-  with names), and **Retest the 3 who missed** (or *Open retest* when one
-  exists).
+  with names), and **Retest the 3** (or *Open retest* when one exists).
 - **A concept**: in a position room's install, the football that room missed
-  and **Retest the N**. Otherwise, the coach's football on that concept, each
-  piece once, identified by source question rather than wording.
+  and **Retest the 2**. Otherwise, the coach's football on that concept, each
+  piece once, identified by source question rather than wording. Either way
+  it is one request (`/concepts/<id>/questions?detail=teach`), not one quiz
+  at a time.
 
 **Next** goes to the next item (→ past the last slide too), and the item after
 it is fetched while this one is taught. **Back** (‹, or ← before the first
 slide) returns. An item with nothing to show is passed over in either
 direction. The bar says where the meeting is ("Week 7 - Central · 2 of 4").
 Ask first stays on from item to item. Notes, full screen and the keys work as
-everywhere else. Retest leaves the meeting for the retest's send screen, as it
-does everywhere else.
+everywhere else. An install whose items have nothing to show says so.
+
+Retest, Check them and Open retest leave the meeting, as they do everywhere
+else: Retest builds the retest and opens it ready to send (nothing is sent
+until Send). The page they land on offers "← {install}", which reopens the
+meeting **on the same item** (`?teach=1&at=<n>`).
 
 One Teach rule changed for every Teach screen: a slide with no question (a
 play from Motion Lab) carries the coach's point as its words, and **Ask first

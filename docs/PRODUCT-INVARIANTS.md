@@ -53,31 +53,56 @@ the linked docs.
    one Teach screen (`TeachView`) shows existing questions, Rep decisions and
    plays. It records nothing about players. Checking understanding means
    making or sending a real quiz or Rep through the normal flow.
-10. **Ask first holds the answer back.** That covers the right answer, the
+10. **Retest builds; Send sends.** Every Retest (Results, a Rep, Teach, a
+    position room, Home, an install meeting) builds the retest for exactly
+    the players who missed it and opens it ready to send. Nothing reaches a
+    player until the coach presses Send on the retest itself, where it says
+    who gets it. One label everywhere: "Retest the 3" / "Retest Ty".
+11. **Ask first holds the answer back.** That covers the right answer, the
     reason, the lit spot, the drawn assignment, a play's routes, and, on a
     slide with no question, the coach's point. All of it waits until *Show
     the answer*.
 
 ## Organizing
 
-11. **An install refers to football; it never copies it.** Items are
+12. **An install refers to football; it never copies it.** Items are
     references. Removing an item or deleting an install touches no football.
     Deleting football removes its items. *Duplicate for a new week* copies
     the order and the references only. ([INSTALLS](INSTALLS.md))
-12. **The current install is explicit.** It is set by the coach, at most one,
+13. **The current install is explicit.** It is set by the coach, at most one,
     and cleared by archiving or deleting it. It is never inferred from
     editing, opening or teaching.
 
 ## Surfaces
 
-13. **Player screens stay the simplest screens in PEIRA.** There is one next
+- **Back goes back.** A page reached from another hands its back link the
+  way home ("← Week 7 - Central"); Motion Lab's top bar offers it beside
+  Home and Library; leaving an install meeting comes back to the same item.
+  Fixed back links remain the fallback for a pasted URL or a new tab.
+
+14. **Player screens stay the simplest screens in PEIRA.** There is one next
     thing to do, in player words, with no coach terminology (concept,
     retest, assessment) and tap targets of 44px or more.
-14. **Home stays quiet.** It answers three questions: what needs me, what I
+15. **Home stays quiet.** It answers three questions: what needs me, what I
     was working on, and what's next. It has one continuation line (the
     current install, otherwise *Pick up where you left off*). No new cards,
     no dashboard.
-15. **Gold means "probably what you do next".** Each screen has at most one
+16. **Gold means "probably what you do next".** Each screen has at most one
     gold (primary) action at a time. Everything else is quieter, and rare
     actions go behind More.
-16. **Same action, same words.** See [TERMINOLOGY](TERMINOLOGY.md).
+17. **Same action, same words.** See [TERMINOLOGY](TERMINOLOGY.md).
+
+## Implementation notes (so the rules stay cheap to keep)
+
+- **The way back** is `navigation/backTo.ts`: send `fromHere(location)` as
+  router state (or `useGoFromHere()`), read it with `useBackTo(fallback)`,
+  and carry it through same-page URL rewrites with `keepFrom(state)`. In-app
+  paths only; never `navigate(-1)`.
+- **Results reads** load a quiz's questions, roster and answers once
+  (`services/results_preload.py`). The session's identity map is weak: a
+  preload whose result is thrown away does nothing, so the loaded
+  collections are installed on the quiz. Connected screens keep a flat
+  query count, protected by `tests/test_connected_performance.py`.
+- **Install edits** (move, rename, current) answer with `status: null`; the
+  page keeps the statuses it shows (`keepStatus`). Only a read or an add
+  rebuilds what PEIRA knows about each item.
