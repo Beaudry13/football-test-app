@@ -229,7 +229,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
   /** Questions already shown with their own actions in "Where they tapped". */
   const hasTapCard = (questionId: number) => teamTaps.some(({ row }) => row.question_id === questionId);
   const [exportOpen, setExportOpen] = useState(false);
-  /** Home's Next up "Teach it": ?teach=<concept id> opens that concept's Teach. */
+  /** Home's Next up "Teach": ?teach=<concept id> opens that concept's Teach. */
   const [params] = useSearchParams();
   const teachAsk = Number(params.get('teach')) || null;
   const ungradedTotal = (dashboard?.question_breakdown ?? [])

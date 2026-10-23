@@ -1,13 +1,11 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { activateQuiz } from '../../api/accessCodes';
 import { listConceptQuestions } from '../../api/concepts';
 import { getQuizDashboard } from '../../api/grading';
 import type { InstallItem } from '../../api/installs';
 import { getMotionPlay } from '../../api/motionLab';
 import type { GroupNeeds } from '../../api/players';
-import { createRepRetest, getMadeFromPlay, getRepResults } from '../../api/reps';
-import { createRetest } from '../../api/retests';
+import { getMadeFromPlay, getRepResults } from '../../api/reps';
 import type { Question, Quiz } from '../../api/types';
 import { PlayPicture, type DrawnStill } from '../../components/football/PlayPicture';
 import { groupNeedSlides, groupRetestable, retestGroup } from '../../components/teach/groupTeach';
@@ -19,7 +17,8 @@ import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from '../../motion-lab/playImage'
 import { hasPresnapMotion, presnapOf } from '../../motion-lab/presnap';
 import { playFromRow } from '../../motion-lab/storage/apiPlayRepository';
 import { quizTeachSlides, teachable } from '../quiz-editor/quizTeach';
-import { StepButton } from './StepButton';
+import { StepButton } from '../../components/ui/StepButton';
+import { buildQuizRetest, buildRepRetest, retestLabel } from '../../components/teach/retest';
 import { problemSlides, repDecisionSlides } from '../reps/repTeach';
 
 /**
@@ -129,15 +128,8 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
         <Link to={`/reps/${problem.retest.id}`}>Open retest</Link>
       ) : problem.players_missed.length > 0 ? (
         <StepButton
-          label={`Retest the ${problem.players_missed.length} who missed`}
-          run={async () => {
-            const made = await createRepRetest(item.ref_id, problem.concept?.id ?? null);
-            try {
-              await activateQuiz(made.id, [], 'PRACTICE');
-            } finally {
-              ctx.navigate(`/reps/${made.id}`);
-            }
-          }}
+          label={retestLabel(problem.players_missed.map((p) => p.display_name))}
+          run={async () => ctx.navigate(await buildRepRetest(item.ref_id, problem.concept?.id ?? null))}
         />
       ) : undefined,
     };
@@ -163,15 +155,8 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
         : null,
       action: weakest ? (
         <StepButton
-          label={`Retest ${weakest.concept_name ?? 'it'} · ${weakest.players_missed.length}`}
-          run={async () => {
-            const draft = await createRetest(item.ref_id, {
-              concept_id: weakest.concept_id,
-              player_ids: weakest.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null),
-              player_names: weakest.players_missed.filter((p) => p.player_id === null).map((p) => p.player_name),
-            });
-            ctx.navigate(`/quizzes/${draft.id}?tab=activate`);
-          }}
+          label={retestLabel(weakest.players_missed.map((p) => p.display_name ?? p.player_name))}
+          run={async () => ctx.navigate(await buildQuizRetest(item.ref_id, { concept_id: weakest.concept_id }, weakest.players_missed))}
         />
       ) : undefined,
     };
@@ -190,7 +175,7 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
         room: { missed: need.missing.length, of: needs.players, names: need.missing.map((m) => m.name), verb: 'still working on it' },
         action: groupRetestable(need) ? (
           <StepButton
-            label={`Retest the ${need.missing.length}`}
+            label={retestLabel(need.missing.map((m) => m.name))}
             run={async () => ctx.navigate(`/reps/${await retestGroup(need, label)}`)}
           />
         ) : undefined,

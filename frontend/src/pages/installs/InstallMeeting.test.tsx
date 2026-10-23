@@ -208,16 +208,16 @@ describe('Teach install: one screen, item to item', () => {
 });
 
 describe('Check understanding and retest without leaving the meeting', () => {
-  it('a Rep: its open problem, who missed it, and Retest the ones who missed', async () => {
+  it('a Rep: its open problem, who missed it, and Retest the ones who missed - built and opened, not sent', async () => {
     vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 77 } as never);
-    vi.mocked(codesApi.activateQuiz).mockResolvedValue({} as never);
     meet(install([repItem(102, 0)]));
     const teach = await screenOf('Trips Jet - Boundary safety');
     expect(teach.getByText(/2 of 5 missed Motion adjustment/)).toBeInTheDocument();
-    fireEvent.click(teach.getByRole('button', { name: 'Retest the 2 who missed' }));
+    fireEvent.click(teach.getByRole('button', { name: 'Retest the 2' }));
     await waitFor(() => expect(landed).toBe('/reps/77'));
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
-    expect(codesApi.activateQuiz).toHaveBeenCalledWith(77, [], 'PRACTICE');
+    // Opened ready to send: the coach presses Send rep on the new Rep itself.
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
   it('a quiz: Retest its weakest concept for exactly who missed it', async () => {
@@ -242,7 +242,7 @@ describe('Check understanding and retest without leaving the meeting', () => {
     meet(install([quizItem(101, 0, 30, 'Boundary safety')]));
     const teach = await screenOf('Boundary safety');
     expect(teach.getByText(/2 of 4/)).toBeInTheDocument();
-    fireEvent.click(teach.getByRole('button', { name: 'Retest Motion adjustment · 2' }));
+    fireEvent.click(teach.getByRole('button', { name: 'Retest the 2' }));
     await waitFor(() => expect(landed).toBe('/quizzes/88?tab=activate'));
     expect(retestsApi.createRetest).toHaveBeenCalledWith(30, { concept_id: 5, player_ids: [1], player_names: ['walk-on'] });
   });

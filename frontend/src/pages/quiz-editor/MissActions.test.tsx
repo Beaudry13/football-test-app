@@ -232,10 +232,12 @@ describe('retest one question - no concept needed - and did it stick?', () => {
     } as unknown as Verification;
     at(<RetestVerification verification={v} quizId={31} questions={[{ ...question, id: 70, concept: null } as Question]} />);
     expect(screen.getByRole('button', { name: 'Teach' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retest the 1' }));
+    // One player still missing: the button says his name.
+    fireEvent.click(screen.getByRole('button', { name: 'Retest Bo' }));
     await waitFor(() =>
       expect(retestsApi.createRetest).toHaveBeenCalledWith(31, { question_ids: [70], player_ids: [42], player_names: [] }),
     );
+    expect(await screen.findByText('the retest draft')).toBeInTheDocument();
   });
 });
 

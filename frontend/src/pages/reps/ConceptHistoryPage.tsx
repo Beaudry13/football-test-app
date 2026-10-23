@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { activateQuiz } from '../../api/accessCodes';
 import { getErrorMessage } from '../../api/client';
-import { createRepRetest, getConceptHistory, type ConceptHistory } from '../../api/reps';
+import { getConceptHistory, type ConceptHistory } from '../../api/reps';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { buildRepRetest, retestLabel } from '../../components/teach/retest';
+import { StepButton } from '../../components/ui/StepButton';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import nb from '../../styles/notebook.module.css';
@@ -28,8 +29,6 @@ export function ConceptHistoryPage() {
   const navigate = useNavigate();
   const [history, setHistory] = useState<ConceptHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
   useDocumentTitle(history ? `${history.concept.name} - Football problem` : 'Football problem');
 
   const load = useCallback(() => {
@@ -47,25 +46,10 @@ export function ConceptHistoryPage() {
   const points = history?.points ?? [];
   const shown = points.slice(-TREND_POINTS);
 
-  /** Retest = a new Rep of this problem for exactly the players who missed it on the latest Rep, sent, opened. */
+  /** Retest = a new Rep of this problem for exactly the players who missed it
+   *  on the latest Rep, opened ready to send - Send rep there. */
   const retest = async () => {
-    if (!latest) return;
-    setBusy(true);
-    setError(null);
-    let made: { id: number } | null = null;
-    try {
-      made = await createRepRetest(latest.rep_id, id);
-      await activateQuiz(made.id, [], 'PRACTICE');
-      navigate(`/reps/${made.id}`);
-    } catch (err) {
-      // Made but not sent: open it (its Send is right there) rather than
-      // leave a button that would build a second retest.
-      if (made) navigate(`/reps/${made.id}`);
-      else {
-        setError(getErrorMessage(err));
-        setBusy(false);
-      }
-    }
+    if (latest) navigate(await buildRepRetest(latest.rep_id, id));
   };
 
   return (
@@ -129,29 +113,12 @@ export function ConceptHistoryPage() {
                         >
                           Teach
                         </Link>
-                        <button
-                          type="button"
+                        <StepButton
                           className={latest.taught ? nb.btnPrimary : nb.btnSecondary}
-                          onClick={() => setConfirming(true)}
-                          disabled={busy}
-                        >
-                          Retest
-                        </button>
+                          label={retestLabel(latest.missed)}
+                          run={retest}
+                        />
                       </div>
-                      {confirming && (
-                        <div className={rep.confirm} role="group" aria-label="Retest">
-                          <span>
-                            Send {history.concept.name} back to the {latest.missed}{' '}
-                            {latest.missed === 1 ? 'player' : 'players'} who missed it?
-                          </span>
-                          <button type="button" className={nb.btnPrimary} disabled={busy} onClick={() => void retest()}>
-                            {busy ? 'Sending…' : 'Send it'}
-                          </button>
-                          <button type="button" className={nb.btnSm} disabled={busy} onClick={() => setConfirming(false)}>
-                            Not now
-                          </button>
-                        </div>
-                      )}
                     </>
                   )}
                 </section>

@@ -16,7 +16,6 @@ import { audiencesFrom, chosenPlayerIds, familyOf, groupPlayerIds, pluralFor, su
 import { PositionChips } from './PositionChips';
 import { taughtLine } from './taught';
 import {
-  createRepRetest,
   getRepResults,
   markRepTaught,
   type RepConcept,
@@ -51,6 +50,8 @@ import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
 import { AddToInstall } from '../installs/AddToInstall';
+import { buildRepRetest, retestLabel } from '../../components/teach/retest';
+import { StepButton } from '../../components/ui/StepButton';
 
 
 /** A decision's tap targets when usable (one per choice, a picture to tap). */
@@ -86,7 +87,7 @@ export function RepPage() {
   const [results, setResults] = useState<RepResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [teaching, setTeaching] = useState<RepConcept | null>(null);
-  /** ?teach=<concept id | general>: arrive straight in Teach (Home's "Teach it"). */
+  /** ?teach=<concept id | general>: arrive straight in Teach (Home's "Teach"). */
   const [params, setParams] = useSearchParams();
   /* TEACH, REMEMBERED ON THE SERVER: opening Teach marks the problem taught on
      this Rep, so its next step is Retest - on every device, for every coach
@@ -104,15 +105,9 @@ export function RepPage() {
       )
       .catch(() => undefined);
   };
-  /** Retest = a new Rep of this concept for exactly the players who missed it, sent, opened. */
-  const retest = async (problem: RepConcept) => {
-    const made = await createRepRetest(id, problem.concept?.id ?? null);
-    try {
-      await activateQuiz(made.id, [], 'PRACTICE');
-    } finally {
-      navigate(`/reps/${made.id}`);
-    }
-  };
+  /** Retest = a new Rep of this concept for exactly the players who missed
+   *  it, opened ready to send - Send rep there, where it says who gets it. */
+  const retest = async (problem: RepConcept) => navigate(await buildRepRetest(id, problem.concept?.id ?? null));
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
   // Home's "Pick up where you left off".
   useRememberWork(results ? { kind: 'rep', id, title: results.title } : null);
@@ -160,16 +155,6 @@ export function RepPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, teachAsk]);
 
-  /* Home's "Retest K" lands here: that problem's card, its confirm already
-     up ("Send it back to the K who missed it?"). Still the coach's tap to send. */
-  const [retestAsk, setRetestAsk] = useState<string | null>(null);
-  const retestParam = params.get('retest');
-  useEffect(() => {
-    if (!results || !retestParam) return;
-    setRetestAsk(retestParam);
-    setParams({}, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, retestParam]);
 
   const problems = results?.concepts.filter((c) => c.missed > 0) ?? [];
   const solid = results?.concepts.filter((c) => c.missed === 0 && c.responded > 0) ?? [];
@@ -242,7 +227,6 @@ export function RepPage() {
                     taught={problem.taught ?? null}
                     onTeach={() => teach(problem)}
                     onRetest={() => retest(problem)}
-                    asked={retestAsk === conceptKey(problem)}
                   />
                 ))}
                 {solid.length > 0 && (
@@ -424,7 +408,6 @@ function ProblemCard({
   taught,
   onTeach,
   onRetest,
-  asked = false,
 }: {
   problem: RepConcept;
   who: string;
@@ -433,22 +416,11 @@ function ProblemCard({
   taught: RepTaught | null;
   onTeach: () => void;
   onRetest: () => Promise<void>;
-  /** Arrived from Home's "Retest K": the confirm opens, the card comes into view. */
-  asked?: boolean;
 }) {
   const again = problem.retest ?? null;
   const fixed = !!again && again.responded > 0 && again.missed === 0;
   const toGo = again ? again.invited - again.ran : 0;
   const [viewing, setViewing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!asked || problem.retest) return;
-    setConfirming(true);
-    cardRef.current?.scrollIntoView?.({ block: 'center' });
-  }, [asked, problem.retest]);
   const shown = problem.players_missed.slice(0, 8);
   const more = problem.players_missed.length - shown.length;
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
@@ -486,14 +458,11 @@ function ProblemCard({
       <button type="button" className={taught ? nb.btnSecondary : nb.btnPrimary} onClick={onTeach}>
         Teach
       </button>
-      <button
-        type="button"
+      <StepButton
         className={taught ? nb.btnPrimary : nb.btnSecondary}
-        onClick={() => setConfirming(true)}
-        disabled={busy}
-      >
-        Retest
-      </button>
+        label={retestLabel(problem.players_missed.map((p) => p.display_name))}
+        run={onRetest}
+      />
     </>
   );
   /* ONE TAP DOWN: who missed it, where they tapped, what each one chose. */
@@ -552,7 +521,7 @@ function ProblemCard({
     </>
   );
   return (
-    <div ref={cardRef}>
+    <div>
       <FootballProblem
         name={
           /* The problem's history: is it getting better, who still misses it. */
@@ -576,35 +545,6 @@ function ProblemCard({
         open={viewing}
         onToggle={setViewing}
       >
-        {confirming && (
-          <div className={styles.confirm} role="group" aria-label="Retest">
-            <span>
-              Send {problem.name} back to the {problem.players_missed.length}{' '}
-              {problem.players_missed.length === 1 ? 'player' : 'players'} who missed it?
-            </span>
-            <button
-              type="button"
-              className={nb.btnPrimary}
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setError(null);
-                try {
-                  await onRetest();
-                } catch (err) {
-                  setError(getErrorMessage(err));
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy ? 'Sending…' : 'Send retest'}
-            </button>
-            <button type="button" className={nb.btnSm} onClick={() => setConfirming(false)} disabled={busy}>
-              Cancel
-            </button>
-          </div>
-        )}
-        <ErrorBanner message={error} />
       </FootballProblem>
     </div>
   );
@@ -626,7 +566,6 @@ function Teach({
   /** The Rep's next football problem, taught in the same screen. */
   next?: { label: string; onGo: () => void } | null;
 }) {
-  const [sending, setSending] = useState(false);
   const n = problem.players_missed.length;
   const { slides, start } = problemSlides(problem, decisions);
   return (
@@ -635,28 +574,15 @@ function Teach({
       slides={slides}
       start={start}
       onClose={onClose}
-      // WHO MISSED IT, on the screen the coach is teaching from.
-      room={{ missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name) }}
+      // WHO MISSED IT, on the screen the coach is teaching from - the same line an install's meeting shows.
+      room={{ missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name), verb: `missed ${problem.name}` }}
       next={next}
       action={
         problem.retest ? (
           /* Retested already: the retest itself is the next thing to see. */
           <Link to={`/reps/${problem.retest.id}`}>Open retest</Link>
         ) : onRetest && n > 0 ? (
-          <button
-            type="button"
-            disabled={sending}
-            onClick={async () => {
-              setSending(true);
-              try {
-                await onRetest();
-              } catch {
-                setSending(false);
-              }
-            }}
-          >
-            {sending ? 'Sending…' : `Retest the ${n} who missed`}
-          </button>
+          <StepButton label={retestLabel(problem.players_missed.map((p) => p.display_name))} run={onRetest} />
         ) : undefined
       }
     />

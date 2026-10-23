@@ -197,12 +197,7 @@ export function RetestVerification({
             {quizId !== undefined &&
               v.concept_ids.length === 1 &&
               v.concept_names.length === 1 && (
-                <RetestAction
-                  quizId={quizId}
-                  conceptId={v.concept_ids[0]}
-                  conceptName={v.concept_names[0]}
-                  targets={v.still_missing}
-                />
+                <RetestAction quizId={quizId} conceptId={v.concept_ids[0]} targets={v.still_missing} />
               )}
           </div>
         )}

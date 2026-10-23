@@ -204,7 +204,7 @@ export function TeachPlay({
         <div className="make-q-actions">
           <button onClick={onClose}>Cancel</button>
           <button className="primary" onClick={teach}>
-            Teach it
+            Teach
           </button>
         </div>
       </div>

@@ -168,7 +168,7 @@ describe('2D | 3D from Teach', () => {
     await openAt('/motion-lab')
     fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Teach a moment/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Teach it' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Teach' }))
     fireEvent.click(screen.getByRole('button', { name: '3D' }))
     expect(screen.queryByRole('dialog', { name: 'Teach New play' })).toBeNull()
     expect(new URL(frame()!.src).searchParams.get('play')).toBe('draft')

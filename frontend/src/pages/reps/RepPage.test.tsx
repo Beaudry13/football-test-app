@@ -139,7 +139,7 @@ describe('A Rep, for the coach', () => {
     // The problem and the next step on the card; who missed it one tap down.
     expect(card.queryByText('Marcus Hill')).toBeNull();
     expect(card.getByRole('button', { name: 'Teach' })).toBeInTheDocument();
-    expect(card.getByRole('button', { name: 'Retest' })).toBeInTheDocument();
+    expect(card.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
     fireEvent.click(card.getByRole('button', { name: 'View players' }));
     expect(card.getAllByText('Marcus Hill').length).toBeGreaterThan(0);
     // What they know is said too, briefly.
@@ -201,15 +201,27 @@ describe('A Rep, for the coach', () => {
     expect(teach.queryByRole('link', { name: 'Open the play in Motion Lab' })).toBeNull();
   });
 
-  it('RETEST sends that concept straight back to the players who missed it and opens the new rep', async () => {
+  it('RETEST builds that concept for exactly the players who missed it and opens the new rep, ready to send - nothing sent', async () => {
     open();
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
-    fireEvent.click(card.getByRole('button', { name: 'Retest' }));
-    expect(card.getByText(/back to the 2 players who missed it/)).toBeInTheDocument();
-    fireEvent.click(card.getByRole('button', { name: 'Send retest' }));
+    // One tap: no confirm step on the card.
+    fireEvent.click(card.getByRole('button', { name: 'Retest the 2' }));
+    expect(screen.queryByRole('group', { name: 'Retest' })).toBeNull();
     await waitFor(() => expect(screen.getByText("the retest's page")).toBeInTheDocument());
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
-    expect(codesApi.activateQuiz).toHaveBeenCalledWith(6, [], 'PRACTICE');
+    // Built, not sent: the new Rep's own Send rep says who gets it.
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
+  });
+
+  it('RETEST that fails says why on the button, and stays on this Rep', async () => {
+    vi.mocked(repsApi.createRepRetest).mockRejectedValue(new Error('Nobody left to retest'));
+    open();
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    fireEvent.click(card.getByRole('button', { name: 'Retest the 2' }));
+    expect(await card.findByRole('alert')).toHaveTextContent('Nobody left to retest');
+    expect(card.getByRole('button', { name: 'Retest the 2 - try again' })).toHaveAttribute('title', 'Nobody left to retest');
+    expect(screen.queryByText("the retest's page")).toBeNull();
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
   it('a retest answers "did it stick?": how many missed before, how many still miss now', async () => {
@@ -253,13 +265,14 @@ describe('A Rep, for the coach', () => {
     // Marked taught on the server - for every coach, everywhere - so Retest leads, and the card says so.
     expect(repsApi.markRepTaught).toHaveBeenCalledWith(5, 3);
     expect(await card.findByText(/Taught Oct 16 by coach1\. Now see if it stuck\./)).toBeInTheDocument();
-    expect(card.getByRole('button', { name: 'Retest' }).className).toMatch(/btnPrimary/);
-    // And from the teaching screen, one tap sends it.
+    expect(card.getByRole('button', { name: 'Retest the 2' }).className).toMatch(/btnPrimary/);
+    // And from the teaching screen, one tap builds it and opens it, ready to send.
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Retest the 2 who missed' }));
+    const again = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
+    fireEvent.click(again.getByRole('button', { name: 'Retest the 2' }));
     await waitFor(() => expect(screen.getByText("the retest's page")).toBeInTheDocument());
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(5, 3);
-    expect(codesApi.activateQuiz).toHaveBeenCalledWith(6, [], 'PRACTICE');
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
   it('taught on another device, by another coach: Retest already leads, and Teach does not mark it again', async () => {
@@ -267,7 +280,7 @@ describe('A Rep, for the coach', () => {
     open({ ...RESULTS, concepts: [{ ...RESULTS.concepts[0], taught }, RESULTS.concepts[1]] });
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
     expect(card.getByText(/Taught Oct 15 by headcoach/)).toBeInTheDocument();
-    expect(card.getByRole('button', { name: 'Retest' }).className).toMatch(/btnPrimary/);
+    expect(card.getByRole('button', { name: 'Retest the 2' }).className).toMatch(/btnPrimary/);
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
     expect(repsApi.markRepTaught).not.toHaveBeenCalled();
   });
@@ -300,7 +313,7 @@ describe('A Rep, for the coach', () => {
     expect(card.getByText(/Retest: 1 of 3 still missing\./)).toBeInTheDocument();
     expect(card.getByText(/1 to go/)).toBeInTheDocument();
     expect(card.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/reps/6');
-    expect(card.queryByRole('button', { name: 'Retest' })).toBeNull();
+    expect(card.queryByRole('button', { name: /^Retest/ })).toBeNull();
   });
 
   it('a problem the retest fixed says so', async () => {
@@ -310,17 +323,19 @@ describe('A Rep, for the coach', () => {
     expect(card.getByText('Fixed on the retest: all 4 got it.')).toBeInTheDocument();
   });
 
-  it("arrives straight in Teach from Home's \"Teach it\"", async () => {
+  it("arrives straight in Teach from Home's \"Teach\"", async () => {
     open(RESULTS, '/reps/5?teach=3');
     expect(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' })).toBeInTheDocument();
   });
 
-  it("arrives at the retest confirm from Home's \"Retest 1\" - still the coach's tap to send", async () => {
+  it('an old ?retest= link builds nothing and sends nothing - Home builds the retest itself now', async () => {
     open(RESULTS, '/reps/5?retest=3');
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
-    expect(await card.findByRole('group', { name: 'Retest' })).toBeInTheDocument();
-    expect(card.getByRole('button', { name: 'Send retest' })).toBeInTheDocument();
+    // Just the Rep: its Retest waits for the coach's tap, with no confirm up.
+    expect(card.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Retest' })).toBeNull();
     expect(repsApi.createRepRetest).not.toHaveBeenCalled();
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
   it('edits a decision right on the page: situation, answers, the right one, concept, reason', async () => {
@@ -872,7 +887,8 @@ describe('Teach on a Rep, in the meeting room', () => {
     const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
     let teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
-    expect(teach.getByText('4 of 11 missed it')).toBeInTheDocument();
+    // The same room line an install's meeting shows: who, and what they missed.
+    expect(teach.getByText('4 of 11 missed Motion adjustment')).toBeInTheDocument();
     expect(teach.getByText('Marcus Hill, Caleb Reed')).toBeInTheDocument();
     fireEvent.click(teach.getByRole('button', { name: /Next: Leverage · 2 missed/ }));
     teach = within(screen.getByRole('dialog', { name: 'Teach Leverage' }));
@@ -892,6 +908,6 @@ describe('Teach on a Rep, in the meeting room', () => {
     fireEvent.click(card.getByRole('button', { name: 'Teach' }));
     const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
     expect(teach.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/reps/6');
-    expect(teach.queryByRole('button', { name: /Retest the/ })).toBeNull();
+    expect(teach.queryByRole('button', { name: /^Retest/ })).toBeNull();
   });
 });

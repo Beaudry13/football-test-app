@@ -96,7 +96,7 @@ describe('every concept the team missed can be retested from its own row', () =>
       />,
     );
     const row = screen.getByText('Run fit').closest('li')!;
-    fireEvent.click(within(row).getByRole('button', { name: 'Retest these 2' }));
+    fireEvent.click(within(row).getByRole('button', { name: 'Retest the 2' }));
     await waitFor(() =>
       expect(retestsApi.createRetest).toHaveBeenCalledWith(9, { concept_id: 2, player_ids: [3, 4], player_names: [] }),
     );
@@ -116,20 +116,18 @@ describe('every concept the team missed can be retested from its own row', () =>
 });
 
 describe('a retest opens ready to send', () => {
-  it('the top card: Create retest lands on the Activate tab', async () => {
-    renderAt(<RetestAction quizId={9} conceptId={1} conceptName="Force / Contain" targets={missed} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Retest these 2' }));
-    expect(screen.getByRole('dialog', { name: 'Create retest' })).toHaveTextContent('It opens ready to send');
-    fireEvent.click(screen.getByRole('button', { name: 'Create retest' }));
+  it('the top card: one tap builds it and lands on the Send tab - nothing to confirm, nothing sent', async () => {
+    renderAt(<RetestAction quizId={9} conceptId={1} targets={missed} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retest the 2' }));
     await screen.findByText('EDITOR');
     expect(landed).toBe('/quizzes/42?tab=activate');
   });
 
-  it('a question row: Retest the N lands on the Activate tab too', async () => {
+  it('a question row: Retest {name} lands on the Send tab too', async () => {
     renderAt(
       <MissActions quizId={9} questions={[question]} title="Q3" repTitle="Install - Q3" retestTargets={[{ player_id: 3, player_name: 'Ty Adams' }]} />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Retest the 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retest Ty' }));
     await screen.findByText('EDITOR');
     expect(landed).toBe('/quizzes/42?tab=activate');
   });

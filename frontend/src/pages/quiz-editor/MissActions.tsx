@@ -4,13 +4,13 @@ import { getErrorMessage } from '../../api/client';
 import { listConceptQuestions, type ConceptQuestion } from '../../api/concepts';
 import { addDecisions, makeRepFromQuiz } from '../../api/reps';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
-import { createRetest } from '../../api/retests';
 import { addRosterMembers } from '../../api/roster';
 import type { Question, QuestionBreakdown } from '../../api/types';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { quizTeachSlides } from './quizTeach';
 import styles from './MissActions.module.css';
 import { AddToInstall } from '../installs/AddToInstall';
+import { buildQuizRetest, retestLabel } from '../../components/teach/retest';
 
 /**
  * A QUIZ MISS, THEN WHAT? The coaching loop Reps have, on quiz Results:
@@ -57,7 +57,7 @@ export function MissActions({
   teachLabel?: string;
   /** Who missed THESE questions: offers 'Retest' - the exact football problem
    *  back to them, no concept needed. The server re-checks who missed it. */
-  retestTargets?: { player_id: number | null; player_name: string }[];
+  retestTargets?: { player_id: number | null; player_name: string; display_name?: string }[];
   /** The concept this miss is about: offers 'Pick questions...' - your other
    *  quizzes' and Reps' questions on it, for a short targeted Rep. */
   conceptId?: number | null;
@@ -65,7 +65,7 @@ export function MissActions({
    *  Make a rep, Pick questions, Open the play - behind "More". A problem card
    *  splits them: 'teach' beside its Retest, 'more' in its details. */
   show?: 'all' | 'teach' | 'more';
-  /** Arrived from Home's "Teach it" (?teach=<concept>): Teach opens straight away. */
+  /** Arrived from Home's "Teach" (?teach=<concept>): Teach opens straight away. */
   startTeaching?: boolean;
   /** WHO MISSED IT, one tap down (behind More): each name opens his profile. */
   missed?: { player_id: number | null; player_name: string; display_name?: string }[];
@@ -100,12 +100,7 @@ export function MissActions({
     setRetesting(true);
     setError(null);
     try {
-      const draft = await createRetest(quizId, {
-        question_ids: questions.map((q) => q.id),
-        player_ids: retestTargets.map((p) => p.player_id).filter((id): id is number => id !== null),
-        player_names: retestTargets.filter((p) => p.player_id === null).map((p) => p.player_name),
-      });
-      navigate(`/quizzes/${draft.id}?tab=activate`);
+      navigate(await buildQuizRetest(quizId, { question_ids: questions.map((q) => q.id) }, retestTargets));
     } catch (err) {
       setError(getErrorMessage(err));
       setRetesting(false);
@@ -160,7 +155,7 @@ export function MissActions({
   );
   const retestButton = !!retestTargets?.length && (
     <button type="button" className={styles.action} disabled={retesting} onClick={() => void retest()}>
-      {retesting ? 'Building…' : retestTargets.length === 1 ? 'Retest the 1' : `Retest the ${retestTargets.length}`}
+      {retesting ? 'Building…' : retestLabel(retestTargets.map((p) => p.display_name ?? p.player_name))}
     </button>
   );
   const teachPart = (

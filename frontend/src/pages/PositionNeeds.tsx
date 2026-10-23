@@ -5,6 +5,7 @@ import { getGroupNeeds, type GroupNeed, type GroupNeeds } from '../api/players';
 import { TeachView, type TeachSlide } from '../components/teach/TeachView';
 import { groupNeedSlides, groupRetestable, quizCache, retestGroup } from '../components/teach/groupTeach';
 import styles from './PositionNeeds.module.css';
+import { retestLabel } from '../components/teach/retest';
 
 /** How many concepts the panel names before counting the rest. */
 const SHOWN = 4;
@@ -119,11 +120,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
                   </button>
                   {retestable && (
                     <button type="button" className={styles.action} disabled={making !== null} onClick={() => void retest(need)}>
-                      {making === need.concept_id
-                        ? 'Making…'
-                        : need.missing.length === 1
-                          ? `Retest ${need.missing[0].name.split(' ')[0]}`
-                          : `Retest the ${need.missing.length}`}
+                      {making === need.concept_id ? 'Making…' : retestLabel(need.missing.map((m) => m.name))}
                     </button>
                   )}
                 </div>
@@ -156,7 +153,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
             action={
               retestable ? (
                 <button type="button" disabled={making !== null} onClick={() => void retest(need)}>
-                  {making === need.concept_id ? 'Making…' : `Retest the ${need.missing.length}`}
+                  {making === need.concept_id ? 'Making…' : retestLabel(need.missing.map((m) => m.name))}
                 </button>
               ) : undefined
             }
