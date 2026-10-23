@@ -37,6 +37,7 @@ export function MissActions({
   show = 'all',
   startTeaching = false,
   missed = [],
+  onTeach,
 }: {
   quizId: number;
   /** The questions this miss is about, in quiz order. */
@@ -67,6 +68,8 @@ export function MissActions({
   startTeaching?: boolean;
   /** WHO MISSED IT, one tap down (behind More): each name opens his profile. */
   missed?: { player_id: number | null; player_name: string; display_name?: string }[];
+  /** The caller runs Teach itself (one screen that walks problem to problem). */
+  onTeach?: () => void;
 }) {
   const motionLab = useMayUseMotionLab();
   /** The Motion Lab play a missed question came from - the football source, one tap away. */
@@ -161,7 +164,7 @@ export function MissActions({
   );
   const teachPart = (
     <>
-      <button type="button" className={styles.action} onClick={() => setTeaching(true)}>
+      <button type="button" className={styles.action} onClick={() => (onTeach ? onTeach() : setTeaching(true))}>
         {teachLabel}
       </button>
       {retestButton}
@@ -266,6 +269,16 @@ export function MissActions({
           title={title}
           slides={slides ?? quizTeachSlides(questions, breakdown)}
           onClose={() => setTeaching(false)}
+          /* WHO MISSED IT, on the teaching screen - of everyone who answered. */
+          room={
+            missed.length > 0
+              ? {
+                  missed: missed.length,
+                  of: questions.length === 1 ? (breakdown?.find((r) => r.question_id === questions[0].id)?.answered_count ?? null) : null,
+                  names: missed.map((p) => p.display_name ?? p.player_name),
+                }
+              : null
+          }
           action={
             <>
               {extraAction}

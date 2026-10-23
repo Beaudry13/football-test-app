@@ -45,7 +45,7 @@ describe('Teach this, from the quiz editor', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Teach this' }));
-    const teach = within(screen.getByRole('dialog', { name: 'Teach Identify the coverage.' }));
+    const teach = within(screen.getByRole('dialog', { name: 'Teach Week 3' }));
     expect(teach.getByText('Cover 3')).toBeInTheDocument();
     expect(teach.getByText('Single high, corners bail.')).toBeInTheDocument();
   });
@@ -76,5 +76,24 @@ describe('Teach this, from the quiz editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Open the play' }));
     expect(await screen.findByText('the play')).toBeInTheDocument();
+  });
+
+  it('opens on that question and the arrows walk the rest of the quiz', async () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: false } } as never);
+    const second = { ...question, id: 2, question_text: 'Where is the force?', answer_explanation: 'The corner.', options: question.options.map((o) => ({ ...o, question_id: 2 })) };
+    render(
+      <MemoryRouter>
+        <QuestionsTab
+          quiz={{ id: 500, title: 'Week 3', kind: 'QUIZ', questions: [question, second], question_count: 2 } as unknown as Quiz}
+          reload={vi.fn(async () => undefined)}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for question 2' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Teach this' }));
+    const dialog = screen.getByRole('dialog', { name: 'Teach Week 3' });
+    expect(within(dialog).getByText('Where is the force?')).toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    expect(within(dialog).getByText('Identify the coverage.')).toBeInTheDocument();
   });
 });

@@ -32,6 +32,7 @@ export function quizTeachSlides(questions: Question[], breakdown: QuestionBreakd
       right: q.question_type === 'fill_blank' ? (q.expected_answers ?? []) : right.map((o) => o.option_text),
       why: q.answer_explanation ?? null,
       wrong: mostChosenWrong(row),
+      concept: q.concept?.name ?? null,
       motionPlayId: q.motion_play_id ?? null,
       picture:
         /* DRAW YOUR ASSIGNMENT, TAUGHT: the coach's answer drawing on the

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TeachView } from '../../components/teach/TeachView';
 import { Link, useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../../api/client';
 import { createRetest } from '../../api/retests';
@@ -103,6 +104,17 @@ export function WeakestConcepts({
 }) {
   const retestOf = (concept: ConceptBreakdown) => retests.find((t) => t.concept_ids.includes(concept.concept_id));
   const [showAllPlayers, setShowAllPlayers] = useState(false);
+  /* ONE TEACHING SCREEN FOR THE WHOLE RESULT: the concept being taught, who
+     missed it, Retest them - and Next, the next problem, without leaving it.
+     Opened from any concept's Teach, or straight from Home (?teach=). */
+  const teachableConcepts = concepts.filter(
+    (c) => c.player_miss_rate !== null && c.players_missed_count > 0 && teachSlides(c, questions, breakdown).length > 0,
+  );
+  const [teaching, setTeaching] = useState<number | null>(() =>
+    teachConceptId !== null && teachableConcepts.some((c) => c.concept_id === teachConceptId) ? teachConceptId : null,
+  );
+  const taught = teachableConcepts.find((c) => c.concept_id === teaching) ?? null;
+  const following = taught ? teachableConcepts[teachableConcepts.indexOf(taught) + 1] ?? null : null;
   /** Teach it / Make a rep for the ones who missed it - the loop a Rep has. */
   const missActions = (concept: ConceptBreakdown, label: string, show: 'all' | 'teach' | 'more' = 'all') => {
     const slides = teachSlides(concept, questions, breakdown);
@@ -121,7 +133,7 @@ export function WeakestConcepts({
         extraAction={<TeachRetest quizId={quizId} concept={concept} />}
         missed={show === 'more' ? [] : concept.players_missed}
         show={show}
-        startTeaching={show !== 'more' && teachConceptId !== null && concept.concept_id === teachConceptId}
+        onTeach={() => setTeaching(concept.concept_id)}
       />
     );
   };
@@ -170,8 +182,33 @@ export function WeakestConcepts({
     'attempt',
   );
 
+  const teachScreen = taught && (
+    <TeachView
+      title={taught.concept_name ?? 'General'}
+      slides={teachSlides(taught, questions, breakdown)}
+      onClose={() => setTeaching(null)}
+      room={{
+        missed: taught.players_missed_count,
+        of: taught.players_responded_count,
+        names: taught.players_missed.map((p) => p.display_name),
+      }}
+      /* TEACH -> RETEST: the same draft "Retest these N" builds, for exactly
+         who missed it - opened ready to send. */
+      action={<TeachRetest quizId={quizId} concept={taught} />}
+      next={
+        following
+          ? {
+              label: `${following.concept_name ?? 'General'} · ${following.players_missed_count} missed`,
+              onGo: () => setTeaching(following.concept_id),
+            }
+          : null
+      }
+    />
+  );
+
   return (
     <section className={styles.wrap} aria-labelledby="teach-next">
+      {teachScreen}
       <h2 className={styles.eyebrow} id="teach-next">
         Teach next
       </h2>
