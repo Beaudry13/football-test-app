@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as playersApi from '../api/players';
 import * as repsApi from '../api/reps';
 import * as rosterApi from '../api/roster';
+import * as quizzesApi from '../api/quizzes';
 import { MasterRosterPage } from './MasterRosterPage';
 import { PositionNeeds } from './PositionNeeds';
 import type { GroupNeeds, LearningEvent } from '../api/players';
@@ -119,11 +120,65 @@ describe('what the group needs', () => {
       </MemoryRouter>,
     );
 
-  it('names who, each opening his profile, and Teach goes where the latest of them missed it', async () => {
+  const q = (id: number, conceptId: number, text: string) => ({
+    id,
+    question_text: text,
+    question_type: 'multiple_choice',
+    concept: { id: conceptId, name: '', is_archived: false },
+    image: { id, image_url: `/uploads/${id}.png` },
+    options: [
+      { id: id * 10, option_text: 'Rotate down', is_correct_answer: true },
+      { id: id * 10 + 1, option_text: 'Stay', is_correct_answer: false },
+    ],
+    answer_explanation: `Why ${id}`,
+    is_retired: false,
+  });
+  const QUIZ_30 = { id: 30, title: 'Boundary safety', questions: [q(70, 5, 'Rotate or stay?'), q(71, 5, 'Who is #3 now?'), q(72, 6, 'Not this concept')] };
+  const QUIZ_31 = { id: 31, title: 'Week 6 install', questions: [q(80, 5, 'Rotate or stay?'), q(81, 6, 'Deep third?')] };
+
+  it('names who, each opening his profile', async () => {
     renderNeeds();
     const panel = await screen.findByRole('region', { name: 'What your safeties need' });
     expect(within(panel).getByRole('link', { name: 'Bo X' })).toHaveAttribute('href', '/roster/2');
-    expect(within(panel).getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/reps/30?teach=5');
+  });
+
+  it('Teach opens right here: the football they missed, who, Retest them', async () => {
+    vi.spyOn(quizzesApi, 'getQuiz').mockImplementation(async (id) => (id === 30 ? QUIZ_30 : QUIZ_31) as never);
+    renderNeeds();
+    fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
+    const teach = within(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' }));
+    expect(teach.getByText('2 of 3 still working on it')).toBeInTheDocument();
+    expect(teach.getByText('Bo X, Ty X')).toBeInTheDocument();
+    // Newest miss first (quiz 30: 70, 71); quiz 31's copy of the same football is taught once.
+    expect(teach.getByText('Rotate or stay?')).toBeInTheDocument();
+    expect(teach.getAllByRole('button', { name: /^[0-9]$/ }).map((b) => b.textContent)).toEqual(['1', '2']);
+    expect(teach.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
+    expect(landed).toBe('');
+  });
+
+  it("Next teaches the group's next problem in the same screen", async () => {
+    vi.spyOn(quizzesApi, 'getQuiz').mockImplementation(async (id) => (id === 30 ? QUIZ_30 : QUIZ_31) as never);
+    vi.mocked(playersApi.getGroupNeeds).mockResolvedValue({
+      players: 3,
+      concepts: [
+        NEEDS.concepts[0],
+        { concept_id: 6, name: 'Cover 3 rotation', got: 2, missing: [{ player_id: 3, name: 'Cam X', last: event({ concept_id: 6, quiz_id: 31, kind: 'QUIZ', question_ids: [81] }) }] },
+      ],
+    });
+    renderNeeds();
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Teach' }))[0]);
+    const first = within(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' }));
+    fireEvent.click(first.getByRole('button', { name: /Next: Cover 3 rotation · 1 of 3/ }));
+    const second = within(await screen.findByRole('dialog', { name: 'Teach Cover 3 rotation' }));
+    expect(second.getByText('Deep third?')).toBeInTheDocument();
+    expect(second.getByText('1 of 3 still working on it')).toBeInTheDocument();
+  });
+
+  it('with no football to show here, Teach goes where the latest of them missed it', async () => {
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({ id: 30, title: 'x', questions: [] } as never);
+    renderNeeds();
+    fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
+    await waitFor(() => expect(landed).toBe('/reps/30?teach=5'));
   });
 
   it('Retest the 2: each one’s missed decisions as one Rep, for exactly them, opened to send', async () => {
@@ -149,8 +204,13 @@ describe('what the group needs', () => {
       players: 1,
       concepts: [{ ...NEEDS.concepts[0], missing: [{ player_id: 1, name: 'Ty X', last: event({ question_ids: [], kind: 'QUIZ', quiz_id: 31 }) }] }],
     });
+    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(QUIZ_31 as never);
     renderNeeds();
-    expect(await screen.findByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/quizzes/31?tab=results&teach=5');
     expect(screen.queryByRole('button', { name: /Retest/ })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
+    const teach = within(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' }));
+    // Nothing he missed a Rep can re-ask: the concept's football, taught; no Retest.
+    expect(teach.getByText('Rotate or stay?')).toBeInTheDocument();
+    expect(teach.queryByRole('button', { name: /Retest/ })).toBeNull();
   });
 });
