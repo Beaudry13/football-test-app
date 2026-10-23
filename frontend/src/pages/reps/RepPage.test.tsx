@@ -841,3 +841,57 @@ describe('a Rep decision on a photo', () => {
     expect(screen.getByText(/who it tests, when they decide and where they tap are locked/)).toBeInTheDocument();
   });
 });
+
+describe('Teach on a Rep, in the meeting room', () => {
+  const twoProblems = (): RepResults => {
+    const second = {
+      ...RESULTS.decisions[0],
+      question_id: 12,
+      number: 2,
+      question_text: 'Where is your leverage?',
+      concept: { id: 4, name: 'Leverage' },
+      correct_text: ['Inside'],
+      missed: 2,
+      choices: [
+        { option_id: 4, text: 'Inside', is_correct: true, count: 9, players: [] },
+        { option_id: 5, text: 'Outside', is_correct: false, count: 2, players: [] },
+      ],
+    };
+    return {
+      ...RESULTS,
+      decisions: [...RESULTS.decisions, second],
+      concepts: [
+        RESULTS.concepts[0],
+        { ...RESULTS.concepts[1], missed: 2, players_missed: [RESULTS.concepts[0].players_missed[0]], question_ids: [12] },
+      ],
+    };
+  };
+
+  it('says who missed it, and Next teaches the next problem in the same screen', async () => {
+    open(twoProblems());
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    let teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
+    expect(teach.getByText('4 of 11 missed it')).toBeInTheDocument();
+    expect(teach.getByText('Marcus Hill, Caleb Reed')).toBeInTheDocument();
+    fireEvent.click(teach.getByRole('button', { name: /Next: Leverage · 2 missed/ }));
+    teach = within(screen.getByRole('dialog', { name: 'Teach Leverage' }));
+    expect(teach.getByText('Where is your leverage?')).toBeInTheDocument();
+    // Taught, as if opened from its own card.
+    await waitFor(() => expect(repsApi.markRepTaught).toHaveBeenCalledWith(5, 4));
+    expect(teach.queryByRole('button', { name: /Next:/ })).toBeNull();
+  });
+
+  it('once retested, the retest is the next thing to open', async () => {
+    const retested = {
+      ...RESULTS,
+      concepts: [{ ...RESULTS.concepts[0], retest: { id: 6, title: 'Motion adjustment - retest', invited: 2, ran: 0, responded: 0, missed: 0 } }, RESULTS.concepts[1]],
+    };
+    open(retested as RepResults);
+    const card = within(await screen.findByRole('article', { name: 'Motion adjustment' }));
+    fireEvent.click(card.getByRole('button', { name: 'Teach' }));
+    const teach = within(screen.getByRole('dialog', { name: 'Teach Motion adjustment' }));
+    expect(teach.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/reps/6');
+    expect(teach.queryByRole('button', { name: /Retest the/ })).toBeNull();
+  });
+});
