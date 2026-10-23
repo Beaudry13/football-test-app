@@ -163,6 +163,13 @@ export function GradeResponsesPage() {
     [current, ungradedOnly, kept],
   );
 
+  /* THE CURSOR AS SHOWN AND AS THE KEYS READ IT: the coach's - or, until the
+     effect below lands (the first render with answers) or if it is not on
+     this question, the first answer still waiting. Without the fallback the
+     first frame had no current answer, and a C pressed in it graded nothing. */
+  const firstWaiting = current ? ((current.targets.find((t) => t.isCorrect === null) ?? current.targets[0])?.answerId ?? null) : null;
+  const cursorShown = cursor !== null && current?.targets.some((t) => t.answerId === cursor) ? cursor : firstWaiting;
+
   /** A new question: the cursor on its first answer still waiting. */
   const questionId = current?.questionId;
   useEffect(() => {
@@ -240,7 +247,7 @@ export function GradeResponsesPage() {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !current || remaining === 0) return;
     const el = e.target as HTMLElement | null;
     if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
-    const at = visible.findIndex((t) => t.answerId === cursor);
+    const at = visible.findIndex((t) => t.answerId === cursorShown);
     const move = (by: number) => {
       const next = visible[Math.max(0, Math.min(visible.length - 1, (at < 0 ? 0 : at) + by))];
       if (!next) return;
@@ -483,7 +490,7 @@ export function GradeResponsesPage() {
               answerDrawing={answerDrawing}
               answerShown={answerShown}
               busy={saving.has(target.answerId)}
-              current={cursor === target.answerId}
+              current={cursorShown === target.answerId}
               onPick={() => setCursor(target.answerId)}
               onGrade={(isCorrect) => void grade(target, isCorrect)}
             />
