@@ -6,6 +6,7 @@ import * as accessCodesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
 import * as playersApi from '../../api/players';
 import * as rosterApi from '../../api/roster';
+import * as authModule from '../../auth/AuthContext';
 import type { AccessCode, Group, Player, Quiz, Roster } from '../../api/types';
 
 /**
@@ -95,7 +96,10 @@ describe('Activate says who gets it', () => {
 });
 
 describe('Same as last time', () => {
+  const signedIn = (id: number) => vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id } } as never);
+
   it('the next quiz with nobody yet offers the last audience back - one tap, said by name, never applied silently', async () => {
+    signedIn(1);
     vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster([]));
     const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue(live);
     const user = userEvent.setup();
@@ -117,10 +121,39 @@ describe('Same as last time', () => {
   });
 
   it('not offered when the quiz already has its players (a retest, say)', async () => {
-    localStorage.setItem('peira.activate.lastAudience.v1', JSON.stringify({ positions: [], groupIds: [7] }));
+    signedIn(1);
+    localStorage.setItem('peira.activate.lastAudience.v1.1', JSON.stringify({ positions: [], groupIds: [7] }));
     vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster(['Ty Adams']));
     render(<AccessCodesTab quiz={quiz} />);
     await screen.findByText(/Goes to Ty Adams/);
+    expect(screen.queryByRole('button', { name: /Same as last time/ })).toBeNull();
+  });
+});
+
+describe('Same as last time is per coach', () => {
+  it("another coach on the same laptop never sees it - and the old device-wide memory is not read", async () => {
+    localStorage.setItem('peira.activate.lastAudience.v1.1', JSON.stringify({ positions: [], groupIds: [7] }));
+    localStorage.setItem('peira.activate.lastAudience.v1', JSON.stringify({ positions: [], groupIds: [7] }));
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 2 } } as never);
+    vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster([]));
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Nobody yet/);
+    expect(screen.queryByRole('button', { name: /Same as last time/ })).toBeNull();
+  });
+
+  it('his own is offered to him', async () => {
+    localStorage.setItem('peira.activate.lastAudience.v1.1', JSON.stringify({ positions: [], groupIds: [7] }));
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1 } } as never);
+    vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster([]));
+    render(<AccessCodesTab quiz={quiz} />);
+    expect(await screen.findByRole('button', { name: 'Same as last time: Defense' })).toBeInTheDocument();
+  });
+
+  it('with no coach to ask, nothing is remembered or offered', async () => {
+    localStorage.setItem('peira.activate.lastAudience.v1', JSON.stringify({ positions: [], groupIds: [7] }));
+    vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster([]));
+    render(<AccessCodesTab quiz={quiz} />);
+    await screen.findByText(/Nobody yet/);
     expect(screen.queryByRole('button', { name: /Same as last time/ })).toBeNull();
   });
 });

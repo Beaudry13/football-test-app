@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useAuth } from '../../auth/AuthContext';
+import { useCoachId } from '../../auth/useCoachId';
 
 /**
  * WHERE THE COACH LEFT OFF: the quiz or Rep he last opened, on this device.
@@ -37,19 +37,9 @@ export function rememberWork(coachId: number | null | undefined, work: Omit<Last
   }
 }
 
-/** The signed-in coach's id - null when rendered on its own (a test). */
-function useCoachIdOrNull(): number | null {
-  try {
-    const { coach } = useAuth();
-    return coach ? coach.id : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Remember `work` (once it is known) as where the signed-in coach left off. */
 export function useRememberWork(work: Omit<LastWork, 'at'> | null): void {
-  const coachId = useCoachIdOrNull();
+  const coachId = useCoachId();
   const id = work ? `${work.kind}:${work.id}:${work.title}` : '';
   useEffect(() => {
     if (work) rememberWork(coachId, work);

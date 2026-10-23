@@ -11,6 +11,7 @@ import { generateMissingPins, listPlayers, type IssuedPin } from '../../api/play
 import { addRosterMembers, getRoster } from '../../api/roster';
 import { audiencesFrom, chosenPlayerIds, groupPlayerIds } from '../reps/audiences';
 import { PositionChips } from '../reps/PositionChips';
+import { useCoachId } from '../../auth/useCoachId';
 import { PinSheetDialog } from '../../components/pins/PinSheetDialog';
 import type { AccessCode, AssessmentMode, Group, Player, Quiz, Roster } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -116,24 +117,30 @@ function someNames(names: string[], shown = 4): string {
   return `${names.slice(0, shown).join(', ')} and ${names.length - shown} more`;
 }
 
-/** WHO THE COACH LAST SENT A QUIZ TO, on this device: the position chips and
- *  saved groups he picked - offered back as one tap, never applied silently. */
-const LAST_AUDIENCE_KEY = 'peira.activate.lastAudience.v1';
+/** WHO THIS COACH LAST SENT A QUIZ TO, on this device: the position chips and
+ *  saved groups he picked - offered back as one tap, never applied silently.
+ *  Per coach, so two coaches sharing a laptop never see each other's. */
+const lastAudienceKey = (coachId: number) => `peira.activate.lastAudience.v1.${coachId}`;
+/** The first version kept one per device; it is never read, and goes on the next send. */
+const DEVICE_WIDE_KEY = 'peira.activate.lastAudience.v1';
 interface LastAudience {
   positions: string[];
   groupIds: number[];
 }
-function readLastAudience(): LastAudience | null {
+function readLastAudience(coachId: number | null): LastAudience | null {
+  if (coachId === null) return null;
   try {
-    const raw = localStorage.getItem(LAST_AUDIENCE_KEY);
+    const raw = localStorage.getItem(lastAudienceKey(coachId));
     return raw ? (JSON.parse(raw) as LastAudience) : null;
   } catch {
     return null;
   }
 }
-function writeLastAudience(audience: LastAudience) {
+function writeLastAudience(coachId: number | null, audience: LastAudience) {
+  if (coachId === null) return;
   try {
-    localStorage.setItem(LAST_AUDIENCE_KEY, JSON.stringify(audience));
+    localStorage.setItem(lastAudienceKey(coachId), JSON.stringify(audience));
+    localStorage.removeItem(DEVICE_WIDE_KEY);
   } catch {
     // A private window: nothing is offered next time.
   }
@@ -198,7 +205,8 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
   /* SAME AS LAST TIME, when this quiz has nobody yet: the chips and groups
      he picked for the last quiz he sent, still on the roster - one tap to
      pick them again, said by name, applied only when he taps it. */
-  const [lastAudience] = useState(readLastAudience);
+  const coachId = useCoachId();
+  const [lastAudience] = useState(() => readLastAudience(coachId));
   const lastPositions = (lastAudience?.positions ?? []).filter((key) => audiences.some((a) => a.key === key));
   const lastGroups = groups.filter((g) => (lastAudience?.groupIds ?? []).includes(g.id));
   const lastNames = [
@@ -287,7 +295,7 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
       }
       // Sent: offered back ("Same as last time") on the next quiz with nobody yet.
       if (!activeCode && (positions.length > 0 || selectedGroupIds.length > 0)) {
-        writeLastAudience({ positions, groupIds: selectedGroupIds });
+        writeLastAudience(coachId, { positions, groupIds: selectedGroupIds });
       }
       await load();
       setMode('GRADED');
