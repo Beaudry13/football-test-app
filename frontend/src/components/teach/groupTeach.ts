@@ -1,3 +1,4 @@
+import { getConceptFootball } from '../../api/concepts';
 import type { GroupNeed } from '../../api/players';
 import { getQuiz } from '../../api/quizzes';
 import { addDecisions, makeRepFromQuiz } from '../../api/reps';
@@ -24,7 +25,7 @@ export function quizCache(): (id: number) => Promise<Quiz> {
  *  it - newest first, the ones they missed (else the concept's) - from the
  *  quizzes and Reps themselves, so Teach shows exactly what they saw. A
  *  retest's copy is the same football: taught once, by its source identity. */
-export async function groupNeedSlides(need: GroupNeed, quizOf: (id: number) => Promise<Quiz>): Promise<TeachSlide[]> {
+export async function groupNeedSlides(need: GroupNeed): Promise<TeachSlide[]> {
   const byQuiz = new Map<number, { ids: Set<number>; at: string }>();
   for (const m of need.missing) {
     const entry = byQuiz.get(m.last.quiz_id) ?? { ids: new Set<number>(), at: '' };
@@ -33,10 +34,16 @@ export async function groupNeedSlides(need: GroupNeed, quizOf: (id: number) => P
     byQuiz.set(m.last.quiz_id, entry);
   }
   const ordered = [...byQuiz.entries()].sort((a, b) => b[1].at.localeCompare(a[1].at));
-  const gathered: { quiz: Quiz; question: Question }[] = [];
+  if (ordered.length === 0) return [];
+  // ONE READ for every quiz they missed it in - not each quiz whole, in turn.
+  const football = await getConceptFootball(need.concept_id, ordered.map(([id]) => id));
+  const quizzes = new Map(football.quizzes.map((q) => [q.id, q]));
+  const gathered: { quiz: Pick<Quiz, 'id' | 'retest_of'>; question: Question }[] = [];
   for (const [quizId, { ids }] of ordered) {
-    const quiz = await quizOf(quizId);
-    const inConcept = (quiz.questions ?? []).filter((q) => q.concept?.id === need.concept_id && !q.is_retired && teachable(q));
+    const quiz = quizzes.get(quizId);
+    if (!quiz) continue;
+    // The read holds only the concept's live questions; Teach needs football to show.
+    const inConcept = football.questions.filter((q) => q.quiz_id === quizId && teachable(q));
     const missedHere = inConcept.filter((q) => ids.has(q.id));
     for (const question of missedHere.length > 0 ? missedHere : inConcept) gathered.push({ quiz, question });
   }

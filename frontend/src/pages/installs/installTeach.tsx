@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { listConceptQuestions } from '../../api/concepts';
+import { getConceptFootball } from '../../api/concepts';
 import { getQuizDashboard } from '../../api/grading';
 import type { InstallItem } from '../../api/installs';
 import { getMotionPlay } from '../../api/motionLab';
 import type { GroupNeeds } from '../../api/players';
 import { getMadeFromPlay, getRepResults } from '../../api/reps';
-import type { Question, Quiz } from '../../api/types';
+import type { Quiz } from '../../api/types';
 import { PlayPicture, type DrawnStill } from '../../components/football/PlayPicture';
 import { groupNeedSlides, groupRetestable, retestGroup } from '../../components/teach/groupTeach';
 import { distinctFootball } from '../../components/teach/sameFootball';
@@ -166,7 +166,7 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
   const needs = await ctx.groupNeeds();
   const need = needs?.concepts.find((c) => c.concept_id === item.ref_id) ?? null;
   if (need && needs) {
-    const slides = await groupNeedSlides(need, ctx.quizOf);
+    const slides = await groupNeedSlides(need);
     if (slides.length > 0) {
       const label = ctx.groupLabel ?? 'group';
       return {
@@ -183,14 +183,12 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
     }
   }
   // ...otherwise his football on it, each piece once.
-  const listed = await listConceptQuestions(item.ref_id);
-  const quizIds = [...new Set(listed.map((q) => q.quiz_id))].slice(0, 6);
-  const wanted = new Set(listed.map((q) => q.question_id));
-  const gathered: { quiz: Quiz; question: Question }[] = [];
-  for (const id of quizIds) {
-    const quiz = await ctx.quizOf(id);
-    for (const question of (quiz.questions ?? []).filter((q) => wanted.has(q.id) && !q.is_retired && teachable(q))) gathered.push({ quiz, question });
-  }
+  // One read: his newest football on the concept, as his quizzes hold it.
+  const football = await getConceptFootball(item.ref_id);
+  const quizzes = new Map(football.quizzes.map((q) => [q.id, q]));
+  const gathered = football.questions
+    .filter((q) => teachable(q) && quizzes.has(q.quiz_id))
+    .map((question) => ({ quiz: quizzes.get(question.quiz_id)!, question }));
   const slides = quizTeachSlides(distinctFootball(gathered).slice(0, 8));
   return slides.length ? { title, slides } : null;
 }

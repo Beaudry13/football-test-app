@@ -13,7 +13,7 @@ vi.mock('../../api/quizzes', () => ({ getQuiz: vi.fn() }));
 vi.mock('../../api/grading', () => ({ getQuizDashboard: vi.fn() }));
 vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
 vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
-vi.mock('../../api/concepts', () => ({ listConceptQuestions: vi.fn() }));
+vi.mock('../../api/concepts', () => ({ getConceptFootball: vi.fn() }));
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
 vi.mock('../../api/motionLab', () => ({ getMotionPlay: vi.fn() }));
 vi.mock('../../motion-lab/motionLabAccess', () => ({ useMayUseMotionLab: vi.fn(() => false) }));
@@ -163,7 +163,16 @@ beforeEach(() => {
   vi.mocked(quizzesApi.getQuiz).mockImplementation(async (id: number) => QUIZZES[id] as never);
   vi.mocked(gradingApi.getQuizDashboard).mockResolvedValue({ concept_breakdown: [], question_breakdown: [] } as never);
   vi.mocked(repsApi.getRepResults).mockResolvedValue(REP);
-  vi.mocked(conceptsApi.listConceptQuestions).mockResolvedValue([]);
+  // The one teach read: questions on the asked concept, from the asked quizzes (or all).
+  vi.mocked(conceptsApi.getConceptFootball).mockImplementation(async (conceptId: number, ids: number[] = []) => {
+    const asked = Object.values(QUIZZES as Record<number, { id: number; title: string; questions: { concept: { id: number } }[] }>).filter(
+      (z) => ids.length === 0 || ids.includes(z.id),
+    );
+    return {
+      quizzes: asked.map((z) => ({ id: z.id, title: z.title, kind: 'QUIZ', retest_of: null })),
+      questions: asked.flatMap((z) => z.questions.filter((x) => x.concept.id === conceptId).map((x) => ({ ...x, quiz_id: z.id }))),
+    } as never;
+  });
 });
 
 describe('Teach install: one screen, item to item', () => {

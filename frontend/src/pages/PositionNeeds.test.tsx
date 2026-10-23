@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as playersApi from '../api/players';
 import * as repsApi from '../api/reps';
 import * as rosterApi from '../api/roster';
-import * as quizzesApi from '../api/quizzes';
+import * as conceptsApi from '../api/concepts';
 import { MasterRosterPage } from './MasterRosterPage';
 import { PositionNeeds } from './PositionNeeds';
 import type { GroupNeeds, LearningEvent } from '../api/players';
@@ -137,6 +137,16 @@ describe('what the group needs', () => {
   // Quiz 31 holds the retest copy of question 70 (copied from it) - the same football.
   const QUIZ_31 = { id: 31, title: 'Week 6 install', questions: [{ ...q(80, 5, 'Rotate or stay?'), copied_from_question_id: 70 }, q(81, 6, 'Deep third?')] };
 
+  /** What the one teach read answers for these quizzes: the concept's questions, each with its quiz. */
+  const footballFrom = (quizzes: { id: number; title: string; questions: ReturnType<typeof q>[] }[]) =>
+    vi.spyOn(conceptsApi, 'getConceptFootball').mockImplementation(async (conceptId: number, ids: number[] = []) => {
+      const asked = quizzes.filter((z) => ids.length === 0 || ids.includes(z.id));
+      return {
+        quizzes: asked.map((z) => ({ id: z.id, title: z.title, kind: 'QUIZ', retest_of: null })),
+        questions: asked.flatMap((z) => z.questions.filter((x) => x.concept.id === conceptId).map((x) => ({ ...x, quiz_id: z.id }))),
+      } as never;
+    });
+
   it('names who, each opening his profile', async () => {
     renderNeeds();
     const panel = await screen.findByRole('region', { name: 'What your safeties need' });
@@ -144,7 +154,7 @@ describe('what the group needs', () => {
   });
 
   it('Teach opens right here: the football they missed, who, Retest them', async () => {
-    vi.spyOn(quizzesApi, 'getQuiz').mockImplementation(async (id) => (id === 30 ? QUIZ_30 : QUIZ_31) as never);
+    const read = footballFrom([QUIZ_30, QUIZ_31]);
     renderNeeds();
     fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
     const teach = within(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' }));
@@ -155,11 +165,14 @@ describe('what the group needs', () => {
     expect(teach.getAllByRole('button', { name: /^[0-9]$/ }).map((b) => b.textContent)).toEqual(['1', '2']);
     expect(teach.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
     expect(landed).toBe('');
+    // One read for every quiz they missed it in - not one whole quiz per source.
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledWith(5, [30, 31]);
   });
 
   it('two different football questions worded alike are both taught - only a copy of the same question is merged', async () => {
     const distinct = { id: 31, title: 'Week 6 install', questions: [q(80, 5, 'Rotate or stay?'), q(81, 6, 'Deep third?')] };
-    vi.spyOn(quizzesApi, 'getQuiz').mockImplementation(async (id) => (id === 30 ? QUIZ_30 : distinct) as never);
+    footballFrom([QUIZ_30, distinct]);
     renderNeeds();
     fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
     const teach = within(await screen.findByRole('dialog', { name: 'Teach Motion adjustment' }));
@@ -168,7 +181,7 @@ describe('what the group needs', () => {
   });
 
   it("Next teaches the group's next problem in the same screen", async () => {
-    vi.spyOn(quizzesApi, 'getQuiz').mockImplementation(async (id) => (id === 30 ? QUIZ_30 : QUIZ_31) as never);
+    footballFrom([QUIZ_30, QUIZ_31]);
     vi.mocked(playersApi.getGroupNeeds).mockResolvedValue({
       players: 3,
       concepts: [
@@ -186,7 +199,7 @@ describe('what the group needs', () => {
   });
 
   it('with no football to show here, Teach goes where the latest of them missed it', async () => {
-    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue({ id: 30, title: 'x', questions: [] } as never);
+    footballFrom([{ id: 30, title: 'x', questions: [] }]);
     renderNeeds();
     fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));
     await waitFor(() => expect(landed).toBe('/reps/30?teach=5'));
@@ -215,7 +228,7 @@ describe('what the group needs', () => {
       players: 1,
       concepts: [{ ...NEEDS.concepts[0], missing: [{ player_id: 1, name: 'Ty X', last: event({ question_ids: [], kind: 'QUIZ', quiz_id: 31 }) }] }],
     });
-    vi.spyOn(quizzesApi, 'getQuiz').mockResolvedValue(QUIZ_31 as never);
+    footballFrom([QUIZ_31]);
     renderNeeds();
     expect(screen.queryByRole('button', { name: /Retest/ })).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Teach' }));

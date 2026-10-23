@@ -1,4 +1,5 @@
 import { api } from './client';
+import type { Question, Quiz } from './types';
 
 export interface Concept {
   id: number;
@@ -49,6 +50,18 @@ export interface ConceptQuestion {
 /** Your own questions on this concept, across quizzes and Reps (stopped ones left out). */
 export function listConceptQuestions(conceptId: number): Promise<ConceptQuestion[]> {
   return api.get<ConceptQuestion[]>(`/concepts/${conceptId}/questions`);
+}
+
+/** THE CONCEPT'S FOOTBALL, READY TO TEACH, IN ONE READ: his questions on it
+ *  (as his quiz payload has them, right answers included) in these quizzes -
+ *  or his newest - with each quiz's retest parent. Position Teach and an
+ *  install's concept item read this instead of one whole quiz per source. */
+export function getConceptFootball(
+  conceptId: number,
+  quizIds: number[] = [],
+): Promise<{ quizzes: Pick<Quiz, 'id' | 'title' | 'kind' | 'retest_of'>[]; questions: Question[] }> {
+  const only = quizIds.length > 0 ? `&quiz_ids=${quizIds.join(',')}` : '';
+  return api.get(`/concepts/${conceptId}/questions?detail=teach${only}`);
 }
 
 export function getConceptDuplicates(): Promise<ConceptDuplicateGroup[]> {

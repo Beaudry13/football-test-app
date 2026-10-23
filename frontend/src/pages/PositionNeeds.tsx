@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getErrorMessage } from '../api/client';
 import { getGroupNeeds, type GroupNeed, type GroupNeeds } from '../api/players';
 import { TeachView, type TeachSlide } from '../components/teach/TeachView';
-import { groupNeedSlides, groupRetestable, quizCache, retestGroup } from '../components/teach/groupTeach';
+import { groupNeedSlides, groupRetestable, retestGroup } from '../components/teach/groupTeach';
 import styles from './PositionNeeds.module.css';
 import { retestLabel } from '../components/teach/retest';
 
@@ -32,7 +32,6 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
   /** TEACH, IN PLACE: the concept on the screen and its football. */
   const [teaching, setTeaching] = useState<{ need: GroupNeed; slides: TeachSlide[] } | null>(null);
   const [opening, setOpening] = useState<number | null>(null);
-  const quizOf = useRef(quizCache());
   const ids = [...playerIds].sort((a, b) => a - b).join(',');
 
   useEffect(() => {
@@ -65,7 +64,7 @@ export function PositionNeeds({ label, plural, playerIds }: { label: string; plu
     }
   };
 
-  const slidesFor = (need: GroupNeed): Promise<TeachSlide[]> => groupNeedSlides(need, quizOf.current);
+  const slidesFor = (need: GroupNeed): Promise<TeachSlide[]> => groupNeedSlides(need);
 
   const teach = async (need: GroupNeed) => {
     setOpening(need.concept_id);
