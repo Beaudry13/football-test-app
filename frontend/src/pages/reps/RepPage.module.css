@@ -93,9 +93,15 @@
   font-size: 14px;
 }
 /* A VARIATION: copy the Rep, change what is different, send it. */
+/* Make a variation · Add to install: quiet, side by side under the title. */
+.headActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
 .variationOpen {
   align-self: flex-start;
-  margin-top: 4px;
   font: inherit;
   font-size: 13px;
   font-weight: 700;

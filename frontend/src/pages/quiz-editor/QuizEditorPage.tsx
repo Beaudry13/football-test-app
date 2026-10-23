@@ -13,6 +13,7 @@ import styles from './QuizEditorPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { Icon } from '../../components/ui/Icon';
 import { useRememberWork } from '../home/lastWork';
+import { AddToInstall } from '../installs/AddToInstall';
 
 const TABS = [
   { key: 'questions', label: 'Questions' },
@@ -193,6 +194,8 @@ export function QuizEditorPage() {
             >
               Start Competition
             </Link>
+            {/* Into this week's install - the quiz itself, by reference. */}
+            <AddToInstall kind="quiz" refId={quiz.id} className={nb.btnSm} />
           </>
         )}
       </div>

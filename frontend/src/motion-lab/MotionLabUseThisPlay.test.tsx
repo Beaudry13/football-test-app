@@ -22,7 +22,9 @@ vi.mock('../api/motionLab', async (importOriginal) => {
 vi.mock('../api/reps', () => ({ getMadeFromPlay: vi.fn() }))
 vi.mock('../api/quizzes', () => ({ listQuizzes: vi.fn(async () => []), createQuiz: vi.fn() }))
 vi.mock('../api/concepts', () => ({ listConcepts: vi.fn(async () => []), createConcept: vi.fn() }))
+vi.mock('../api/installs', () => ({ installsFor: vi.fn(), addToInstall: vi.fn(), createInstall: vi.fn() }))
 import * as repsApi from '../api/reps'
+import * as installsApi from '../api/installs'
 import MotionLabEditorPage from './MotionLabEditorPage'
 
 /**
@@ -103,7 +105,8 @@ describe('Use this play: what was already made from it', () => {
     fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
     await waitFor(() => expect(repsApi.getMadeFromPlay).toHaveBeenCalledWith(100))
     expect(screen.queryByRole('group', { name: 'Made from this play' })).toBeNull()
-    expect(within(screen.getByRole('menu', { name: 'Use this play' })).getAllByRole('menuitem')).toHaveLength(3)
+    const items = within(screen.getByRole('menu', { name: 'Use this play' })).getAllByRole('menuitem')
+    expect(items.map((i) => i.textContent?.split(' ').slice(0, 3).join(' '))).toEqual(['Make a rep', 'Make a quiz', 'Teach a moment', 'Add to install'])
   })
 
   it('the unsaved scratch play has nothing made from it to ask about', async () => {
@@ -111,6 +114,57 @@ describe('Use this play: what was already made from it', () => {
     fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
     expect(screen.getByRole('menu', { name: 'Use this play' })).toBeInTheDocument()
     expect(repsApi.getMadeFromPlay).not.toHaveBeenCalled()
+    // An install refers to a play in PEIRA - the scratch play is not one yet.
+    expect(screen.queryByRole('menuitem', { name: /Add to install/ })).toBeNull()
+  })
+})
+
+describe("Use this play: into this week's install", () => {
+  it('adds the saved play to an install by reference, and says it is in', async () => {
+    seed()
+    await settle()
+    vi.mocked(installsApi.installsFor).mockResolvedValue([
+      { id: 5, title: 'Week 7 - West Virginia', has: false },
+      { id: 6, title: 'Safeties - Week 7', has: true },
+    ])
+    vi.mocked(installsApi.addToInstall).mockResolvedValue({} as never)
+    await openAt('/motion-lab/plays/100')
+    fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Add to install/ }))
+    const panel = within(screen.getByRole('dialog', { name: 'Add to install' }))
+    expect(installsApi.installsFor).toHaveBeenCalledWith('play', 100)
+    expect(await panel.findByText('Week 7 - West Virginia')).toBeInTheDocument()
+    expect(panel.getByRole('link', { name: '✓ In it' })).toHaveAttribute('href', '/installs/6')
+    fireEvent.click(panel.getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(installsApi.addToInstall).toHaveBeenCalledWith(5, 'play', 100))
+    expect(await panel.findAllByRole('link', { name: '✓ In it' })).toHaveLength(2)
+  })
+})
+
+describe("An install meeting's Check them opens the panel that makes it", () => {
+  it('?make=question&man= opens Make a quiz question about that man', async () => {
+    const a = seed()
+    await settle()
+    await openAt('/motion-lab/plays/100?make=question&man=O8')
+    const label = a.players.find((p) => p.id === 'O8')!.label
+    expect(screen.getByRole('dialog', { name: 'Make a quiz question' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /Whose job/ })).toHaveValue('O8')
+    expect(screen.getByRole('textbox', { name: 'Question' })).toHaveValue(`You're the ${label}. Draw your assignment.`)
+  })
+
+  it('?make=rep opens Make a rep; anything else opens nothing', async () => {
+    seed()
+    await settle()
+    await openAt('/motion-lab/plays/100?make=rep&man=O8')
+    expect(screen.getByRole('dialog', { name: 'Make a rep' })).toBeInTheDocument()
+  })
+
+  it('an unknown ?make= opens no panel', async () => {
+    seed()
+    await settle()
+    await openAt('/motion-lab/plays/100?make=everything')
+    expect(screen.queryByRole('dialog', { name: 'Make a rep' })).toBeNull()
+    expect(screen.queryByRole('dialog', { name: 'Make a quiz question' })).toBeNull()
   })
 })
 

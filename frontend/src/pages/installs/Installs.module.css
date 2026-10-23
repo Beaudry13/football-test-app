@@ -1,0 +1,424 @@
+/* Installs: this week's football in teaching order. Quiet rows, one action
+   each; the arrows and Teach are thumb-sized so a phone can put it in order. */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 920px;
+}
+
+.back {
+  align-self: flex-start;
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+  color: var(--nb-text-muted);
+  text-decoration: none;
+}
+.back:hover {
+  color: var(--nb-text);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+}
+.headMain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.headMain h1 {
+  margin: 0;
+}
+.kicker {
+  font-size: var(--peira-text-meta);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text);
+}
+.meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--nb-text-muted);
+  font-size: 15px;
+}
+.groupChip {
+  padding: 2px 10px;
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--radius-pill, 999px);
+  color: var(--peira-accent-text);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+}
+.headActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.renameForm,
+.inlineForm,
+.newInstall {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.renameForm input,
+.inlineForm input,
+.newInstall input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.inlineForm span {
+  color: var(--nb-text-muted);
+}
+.newInstall select,
+.groupPick select {
+  flex: 0 1 220px;
+  min-width: 0;
+}
+.groupPick {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta);
+  font-weight: 600;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-5, 20px);
+  border: 1px dashed var(--nb-border);
+  border-radius: var(--radius-md);
+  color: var(--nb-text-muted);
+}
+.empty p {
+  margin: 0;
+  max-width: 56ch;
+}
+.quiet {
+  margin: 0;
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta);
+}
+
+/* ROWS: kind, what it is, what PEIRA knows, then the one action. */
+.items,
+.installList,
+.finderList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.item,
+.installRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.item:last-child,
+.installRow:last-child {
+  border-bottom: none;
+}
+.itemMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.itemTitle,
+.installTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nb-text);
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.itemTitle:hover,
+.installTitle:hover {
+  color: var(--nb-accent-bright);
+}
+.itemDetail {
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta);
+}
+.attention {
+  color: var(--peira-accent-text);
+  font-weight: 700;
+}
+.current {
+  color: var(--peira-accent-text);
+  font-weight: 700;
+}
+.itemActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.teachButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--peira-accent-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.teachButton:hover {
+  background: var(--color-accent-bg);
+}
+.arrow {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--nb-text);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.arrow:hover:not(:disabled) {
+  border-color: var(--nb-accent);
+}
+.arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* THE KIND, at a glance: one quiet label, a colour per kind. */
+.tag {
+  flex: none;
+  min-width: 64px;
+  padding: 3px 8px;
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-pill, 999px);
+  color: var(--nb-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.tag[data-kind='play'] {
+  border-color: rgba(111, 168, 255, 0.5);
+  color: #9cc1ff;
+}
+.tag[data-kind='rep'] {
+  border-color: rgba(111, 207, 138, 0.5);
+  color: #8fdca5;
+}
+.tag[data-kind='quiz'] {
+  border-color: var(--nb-accent);
+  color: var(--peira-accent-text);
+}
+.tag[data-kind='concept'] {
+  border-color: rgba(200, 160, 255, 0.45);
+  color: #cdb2ff;
+}
+
+/* SECTIONS: one level, a heading and its rows. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.sectionHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--nb-border);
+}
+.sectionTitle {
+  margin: 0;
+  font-size: var(--peira-text-meta);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.archived {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+}
+.archived .installList {
+  align-self: stretch;
+}
+.linkButton {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--nb-text-muted);
+  font: inherit;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.linkButton:hover {
+  color: var(--nb-text);
+}
+
+/* ADD FOOTBALL: the finder, under the header. */
+.finder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.finderHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.filter {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--nb-border);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--nb-text-muted);
+  font: inherit;
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  cursor: pointer;
+}
+.filter[aria-pressed='true'] {
+  border-color: var(--nb-accent);
+  background: var(--color-accent-bg);
+  color: var(--nb-text);
+}
+.search {
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--nb-input-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-input, transparent);
+  color: var(--nb-text);
+  font: inherit;
+  font-size: 15px;
+}
+.finderList {
+  max-height: 420px;
+  overflow-y: auto;
+}
+.finderRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.finderRow:last-child {
+  border-bottom: none;
+}
+.finderTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.finderMeta {
+  flex: none;
+  color: var(--nb-text-muted);
+  font-size: var(--peira-text-meta);
+}
+.added {
+  flex: none;
+  min-width: 72px;
+  color: var(--nb-success);
+  font-size: var(--peira-text-meta);
+  font-weight: 700;
+  text-align: center;
+}
+.addButton {
+  flex: none;
+  min-width: 72px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--nb-accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--peira-accent-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.addButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .item {
+    flex-wrap: wrap;
+  }
+  .item .tag {
+    order: 0;
+  }
+  .item .itemMain {
+    order: 1;
+    flex-basis: calc(100% - 80px);
+  }
+  .item .itemActions {
+    order: 2;
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+  .finderMeta {
+    display: none;
+  }
+  .headActions {
+    width: 100%;
+  }
+}

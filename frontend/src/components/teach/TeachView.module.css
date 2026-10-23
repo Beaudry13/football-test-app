@@ -34,6 +34,26 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* Where this is in a meeting: "Week 7 - West Virginia · 2 of 6". */
+.prev {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #3a3e44;
+  border-radius: 8px;
+  background: transparent;
+  color: #c9ccd1;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.place {
+  font-size: clamp(12px, 0.85vw, 18px);
+  font-weight: 600;
+  color: #9aa0a6;
+  white-space: nowrap;
+}
 .steps {
   display: flex;
   gap: 6px;

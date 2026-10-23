@@ -50,6 +50,7 @@ const ChooseMan = lazy(() => import('../../motion-lab/ChooseMan'));
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
+import { AddToInstall } from '../installs/AddToInstall';
 
 
 /** A decision's tap targets when usable (one per choice, a picture to tap). */
@@ -196,9 +197,12 @@ export function RepPage() {
                 {results.decisions.length} {results.decisions.length === 1 ? 'decision' : 'decisions'}
               </span>
               {!variationOf && (
-                <button type="button" className={styles.variationOpen} disabled={varying} onClick={() => void makeVariation()}>
-                  {varying ? 'Copying…' : 'Make a variation'}
-                </button>
+                <span className={styles.headActions}>
+                  <button type="button" className={styles.variationOpen} disabled={varying} onClick={() => void makeVariation()}>
+                    {varying ? 'Copying…' : 'Make a variation'}
+                  </button>
+                  <AddToInstall kind="quiz" refId={id} className={styles.variationOpen} />
+                </span>
               )}
             </header>
 

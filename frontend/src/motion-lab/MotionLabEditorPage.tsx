@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
 import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
+import { AddToInstallPanel } from '../pages/installs/AddToInstall'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
@@ -52,11 +53,18 @@ export default function MotionLabEditorPage() {
   /** A replaced scratch play the coach can still get back. */
   const [undoScratch, setUndoScratch] = useState<Play | null>(null)
   /** The "Make question" panel is open. */
-  const [asking, setAsking] = useState(false)
+  const [asking, setAsking] = useState(() => new URLSearchParams(location.search).get('make') === 'question')
   /** A Rep's "Add decisions" sends the coach here with ?rep=<id>: Make rep opens, aimed at it. */
   const intoRep = Number(new URLSearchParams(location.search).get('rep')) || null
+  /** An install meeting's "Check them" sends the coach here with ?make=rep|question
+   *  (and &man=<id>): that panel opens, the man already chosen. Read once. */
+  const [makeAsked] = useState(() => {
+    const q = new URLSearchParams(location.search)
+    const make = q.get('make')
+    return { make: make === 'rep' || make === 'question' ? make : null, man: q.get('man') }
+  })
   /** The "Make rep" panel is open. One panel at a time. */
-  const [repping, setRepping] = useState(intoRep !== null)
+  const [repping, setRepping] = useState(intoRep !== null || makeAsked.make === 'rep')
   /** The "Teach a moment" panel is open: this play on the meeting-room screen. */
   const [teachingPlay, setTeachingPlay] = useState(false)
   /** The "Use this play" menu is open. */
@@ -66,16 +74,19 @@ export default function MotionLabEditorPage() {
   /** PREVIEW 3D: the play shown in the 3D viewer over the editor, or null. */
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
   /** The man selected on the field when a panel was opened: its question is his. */
-  const [panelMan, setPanelMan] = useState<string | null>(null)
+  const [panelMan, setPanelMan] = useState<string | null>(makeAsked.man)
+  /** The "Add to install" panel is open: this saved play into an install. */
+  const [installing, setInstalling] = useState(false)
   /** CREATE ONCE: what this coach has already made from the play (under Use this play). */
   const [made, setMade] = useState<MadeFromPlay[] | null>(null)
   /** One panel at a time, chosen from the menu. */
-  const openPanel = (kind: 'rep' | 'question' | 'teach') => {
+  const openPanel = (kind: 'rep' | 'question' | 'teach' | 'install') => {
     setPanelMan(editor.current?.selectedId() ?? null)
     setUsing(false)
     setRepping(kind === 'rep')
     setAsking(kind === 'question')
     setTeachingPlay(kind === 'teach')
+    setInstalling(kind === 'install')
   }
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
@@ -391,13 +402,14 @@ export default function MotionLabEditorPage() {
               its own one-panel flow, one panel at a time. */}
           <div className="ball-menu make-actions">
             <button
-              className={using || repping || asking || teachingPlay ? 'active' : ''}
+              className={using || repping || asking || teachingPlay || installing ? 'active' : ''}
               aria-expanded={using}
               aria-haspopup="menu"
               onClick={() => {
                 setRepping(false)
                 setAsking(false)
                 setTeachingPlay(false)
+                setInstalling(false)
                 setUsing((open) => !open)
                 // Asked fresh each time: something may have been made since.
                 const serverId = !using && current && !session.isScratch(current) ? session.serverIdOf(current) : null
@@ -432,6 +444,13 @@ export default function MotionLabEditorPage() {
                 <button role="menuitem" onClick={() => openPanel('teach')}>
                   Teach a moment <span className="use-why">stop it, ring him, say the point</span>
                 </button>
+                {/* INTO THIS WEEK'S INSTALL - a saved play only: an install
+                    refers to the play, so there must be one in PEIRA. */}
+                {current && !session.isScratch(current) && session.serverIdOf(current) !== null && (
+                  <button role="menuitem" onClick={() => openPanel('install')}>
+                    Add to install <span className="use-why">this week&rsquo;s football, in order</span>
+                  </button>
+                )}
                 {/* WHAT HAVE I ALREADY MADE FROM THIS PLAY? Only when there is
                     something; each opens where it lives. */}
                 {((made && made.length > 0) || (currentPlay && readTaught(currentPlay.id))) && (
@@ -472,6 +491,9 @@ export default function MotionLabEditorPage() {
                 selectedMan={panelMan}
                 onClose={() => setAsking(false)}
               />
+            )}
+            {installing && current && !session.isScratch(current) && session.serverIdOf(current) !== null && (
+              <AddToInstallPanel kind="play" refId={session.serverIdOf(current)!} onClose={() => setInstalling(false)} />
             )}
             {teachingPlay && currentPlay && (
               <TeachPlay

@@ -70,6 +70,8 @@ export function TeachView({
   action,
   room,
   next,
+  prev,
+  place,
 }: {
   title: string;
   slides: TeachSlide[];
@@ -81,6 +83,10 @@ export function TeachView({
   room?: TeachRoom | null;
   /** The next thing to teach ("Run fit · 3 missed") - without leaving Teach. */
   next?: { label: string; onGo: () => void } | null;
+  /** The thing taught before this one: ← before the first slide goes back to it. */
+  prev?: { label: string; onGo: () => void } | null;
+  /** Where this is in a meeting ("Week 7 - West Virginia · 2 of 6"). */
+  place?: string;
 }) {
   const clamp = (i: number) => Math.min(Math.max(0, i), Math.max(0, slides.length - 1));
   const [at, setAt] = useState(clamp(start));
@@ -152,7 +158,10 @@ export function TeachView({
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
         if (e.key === 'Escape') onClose();
         else if (e.key === 'ArrowRight') forward();
-        else if (e.key === 'ArrowLeft') setAt(clamp(at - 1));
+        else if (e.key === 'ArrowLeft') {
+          if (at > 0) setAt(at - 1);
+          else prev?.onGo();
+        }
         else if (e.key === ' ' && target.tagName !== 'BUTTON') setReplay((n) => n + 1);
         else if (e.key === 'n' || e.key === 'N') setNotes((on) => !on);
         else if (e.key === 'f' || e.key === 'F') fullScreen();
@@ -163,7 +172,14 @@ export function TeachView({
       }}
     >
       <div className={styles.bar}>
+        {/* Back an item - the ← key's twin, for a finger. */}
+        {prev && (
+          <button type="button" className={styles.prev} onClick={prev.onGo} aria-label={`Back: ${prev.label}`} title={`Back: ${prev.label} (← before the first slide)`}>
+            <span aria-hidden="true">‹</span>
+          </button>
+        )}
         <span className={styles.title}>{title}</span>
+        {place && <span className={styles.place}>{place}</span>}
         {slides.length > 1 && (
           <span className={styles.steps} aria-label="Slides">
             {slides.map((s, i) => (

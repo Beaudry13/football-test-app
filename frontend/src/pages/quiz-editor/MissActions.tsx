@@ -10,6 +10,7 @@ import type { Question, QuestionBreakdown } from '../../api/types';
 import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { quizTeachSlides } from './quizTeach';
 import styles from './MissActions.module.css';
+import { AddToInstall } from '../installs/AddToInstall';
 
 /**
  * A QUIZ MISS, THEN WHAT? The coaching loop Reps have, on quiz Results:
@@ -170,8 +171,7 @@ export function MissActions({
       {retestButton}
     </>
   );
-  const hasMore =
-    !!repButton || (!!conceptId && tappable.length > 0) || (motionLab && sourcePlay !== undefined) || missed.length > 0;
+  const hasMore = !!repButton || !!conceptId || (motionLab && sourcePlay !== undefined) || missed.length > 0;
   const morePart = (
     <>
       {missed.length > 0 && (
@@ -202,6 +202,8 @@ export function MissActions({
           Open the play
         </Link>
       )}
+      {/* The concept into this week's install - by reference, nothing copied. */}
+      {conceptId && <AddToInstall kind="concept" refId={conceptId} className={styles.link} />}
       {picking && (
         <span className={styles.picker} role="group" aria-label="Questions for the rep">
           {candidates === null ? (
