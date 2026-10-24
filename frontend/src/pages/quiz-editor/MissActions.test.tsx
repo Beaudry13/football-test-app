@@ -210,6 +210,34 @@ describe('retest one question - no concept needed - and did it stick?', () => {
     expect(screen.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/quizzes/31?tab=results');
   });
 
+  it('a retest built but not sent says so - never "sent to" players who were not given it', () => {
+    at(
+      <WeakestConcepts
+        concepts={[concept]}
+        quizId={9}
+        questions={[question]}
+        retests={[
+          {
+            quiz_id: 31,
+            title: 'Force / Contain - Retest',
+            sent: false,
+            concept_ids: [1],
+            source_question_ids: [7],
+            targeted_total: 2,
+            correct_count: 0,
+            incorrect_count: 0,
+            ungraded_count: 0,
+            not_submitted_count: 2,
+            is_complete: false,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/ready to send to 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/sent to 2/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/quizzes/31?tab=activate');
+  });
+
   it('an untagged retest card offers Teach and Retest again for whoever still misses it', async () => {
     const v = {
       parent_quiz_id: 9,

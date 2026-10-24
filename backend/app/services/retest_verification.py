@@ -259,13 +259,23 @@ def retests_of(quiz) -> list[dict]:
     """How each retest built FROM this quiz went, newest first - what lets the
     original's Results answer "did the reteaching work?". The same verification
     the retest's own Results show, without the player list."""
-    from app.models import Quiz
+    from app import db
+    from app.models import AccessCode, Quiz
 
     children = (
         Quiz.query.filter(Quiz.retest_of_quiz_id == quiz.id, Quiz.kind == quiz.kind)
         .order_by(Quiz.created_at.desc(), Quiz.id.desc())
         .all()
     )
+    # SENT OR NOT: Retest builds the retest and Send sends it, so a retest can
+    # sit here unsent - and "sent to 2, nobody has answered yet" would be a
+    # claim about players who were never given it. One read for every child.
+    sent_ids = {
+        quiz_id
+        for (quiz_id,) in db.session.query(AccessCode.quiz_id)
+        .filter(AccessCode.quiz_id.in_([c.id for c in children]))
+        .distinct()
+    } if children else set()
     out = []
     for child in children:
         v = verification_for(child)
@@ -275,6 +285,7 @@ def retests_of(quiz) -> list[dict]:
             {
                 "quiz_id": child.id,
                 "title": child.title,
+                "sent": child.id in sent_ids,
                 **{k: v[k] for k in (
                     "concept_ids", "source_question_ids", "targeted_total", "correct_count",
                     "incorrect_count", "ungraded_count", "not_submitted_count", "is_complete",

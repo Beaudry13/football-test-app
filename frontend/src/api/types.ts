@@ -752,6 +752,9 @@ export interface QuizDashboard {
 export interface RetestSummary {
   quiz_id: number;
   title: string;
+  /** Whether it has ever been sent. Retest builds and Send sends, so a retest
+   *  can be waiting, unsent, for the coach to press Send. */
+  sent?: boolean;
   concept_ids: number[];
   source_question_ids: number[];
   targeted_total: number;

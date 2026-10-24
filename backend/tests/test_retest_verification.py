@@ -514,3 +514,14 @@ class TestTheOriginalKnowsHowItsConceptRetestWent:
         assert dashboard["retests"][0]["quiz_id"] == retest["id"]
         assert dashboard["retests"][0]["concept_ids"] == [concept["id"]]
         assert dashboard["retests"][0]["not_submitted_count"] == 2
+
+    def test_the_original_knows_whether_its_retest_was_sent(self, client, coach_headers):
+        """Retest builds; Send sends. Until the coach sends it, the original's
+        Results must not say the retest went to anyone."""
+        quiz, _tf, concept, _code = _parent_with_misses(client, coach_headers)
+        retest = _make_retest(client, coach_headers, quiz["id"], concept["id"], ["A", "B"])
+        before = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
+        assert before["retests"][0]["sent"] is False
+        _activate(client, coach_headers, retest["id"])
+        after = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
+        assert after["retests"][0]["sent"] is True
