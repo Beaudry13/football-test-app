@@ -173,3 +173,49 @@ describe('PlayPage', () => {
     expect(screen.getByPlaceholderText('CODE')).toBeInTheDocument();
   });
 });
+
+describe('Player Home and Review missed from it', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('Review missed opens his last run on the exact picture - no new run - then Run it again starts the way in', async () => {
+    const user = userEvent.setup();
+    const { rememberPlayer } = await import('./playerSession');
+    const { recordDone } = await import('./workProgress');
+    rememberPlayer('REP777', { playerId: null, name: 'Jordan Smith', jerseyNumber: null, position: null });
+    recordDone('REP777', 1, {
+      missedIds: [10],
+      chosen: { 10: [101] },
+      feedback: [{ question_id: 10, auto_gradable: true, is_correct: false, answer_explanation: 'Two deep halves.', correct_option_ids: [100] }],
+    });
+    const rep = { ...joinedResponse, mode: 'PRACTICE' as const, quiz: { ...joinedResponse.quiz, kind: 'REP' as const } };
+    vi.spyOn(playApi, 'validateCode').mockResolvedValue(rep);
+    const start = vi.spyOn(playApi, 'startAttempt');
+    renderPlayPage('/play/REP777?review=1');
+
+    expect(await screen.findByText('Missed 1 of 1')).toBeInTheDocument();
+    expect(screen.getByText('You chose: False')).toBeInTheDocument();
+    expect(screen.getByText(/Right answer:/)).toHaveTextContent('Right answer: True');
+    expect(screen.getByText(/Two deep halves/)).toBeInTheDocument();
+    expect(start).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Run it again' }));
+    expect(await screen.findByRole('button', { name: /Continue as Jordan Smith/ })).toBeInTheDocument();
+  });
+
+  it('starting work records it on this device, so Player Home can say Continue', async () => {
+    const user = userEvent.setup();
+    const { progressOf } = await import('./workProgress');
+    vi.spyOn(playApi, 'validateCode').mockResolvedValue(joinedResponse);
+    vi.spyOn(playApi, 'startAttempt').mockResolvedValue(startedAttempt);
+    renderPlayPage('/play');
+    await user.type(screen.getByPlaceholderText('CODE'), 'WEEK01');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(await screen.findByRole('button', { name: 'Jordan Smith' }));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(progressOf('WEEK01')?.state).toBe('started'));
+  });
+});

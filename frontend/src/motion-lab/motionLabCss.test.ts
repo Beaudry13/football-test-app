@@ -95,7 +95,8 @@ describe('motionLab.css scoping', () => {
     // ML-UX-1 added the route handle's first-draw pulse, ML-UX-10 the menus'
     // opening fade. New keyframes are expected to land here deliberately,
     // named motion-lab-*, never silently.
-    expect(names).toEqual(['motion-lab-toast-in', 'motion-lab-catch-pulse', 'motion-lab-handle-pulse', 'motion-lab-popover-in'])
+    // The first-30-seconds pass added Play's first-time glow.
+    expect(names).toEqual(['motion-lab-toast-in', 'motion-lab-catch-pulse', 'motion-lab-handle-pulse', 'motion-lab-popover-in', 'motion-lab-play-nudge'])
     // `animation: none` names no keyframe - it is how the reduced-motion
     // blocks switch the handle's pulse and the menus' fade off.
     const used = [...SCOPED.matchAll(/animation:\s*([\w-]+)/g)].map((m) => m[1]).filter((n) => n !== 'none')

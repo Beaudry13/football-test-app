@@ -1,0 +1,120 @@
+/* Player home: one thing leads, the rest waits quietly, a new code is one box away. */
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  /* The player wrapper centres its children; without a width this column
+     would size itself to its longest line and run off a phone. */
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  min-width: 0;
+}
+.checking {
+  text-align: center;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.hello {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.next {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--peira-accent-text, var(--nb-accent));
+  background: var(--peira-surface-raised, var(--color-surface));
+}
+.kicker {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--peira-accent-text, var(--nb-accent));
+}
+.title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+.meta {
+  font-size: 14px;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.workOn {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--peira-accent-text, var(--nb-accent));
+}
+.caughtUp {
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+}
+.go {
+  margin-top: 8px;
+  min-height: 52px;
+  font-size: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.also {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.alsoTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--peira-border, var(--color-border));
+  color: inherit;
+  text-decoration: none;
+}
+.rowTitle {
+  min-width: 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.rowMeta {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.rowAction {
+  flex: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--peira-accent-text, var(--nb-accent));
+}
+.newCode {
+  padding-top: 8px;
+  border-top: 1px solid var(--peira-border, var(--color-border));
+}

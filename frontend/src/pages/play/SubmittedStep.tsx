@@ -10,6 +10,7 @@ import { PinStep } from './PinStep';
 import { isAuthRefusal, pinNoticeFor } from './playerEntry';
 import { rememberPlayer, type RememberedPlayer } from './playerSession';
 import { ResultsView } from './ResultsView';
+import { recordDone } from './workProgress';
 import styles from './PlayPage.module.css';
 
 // How long the "Quiz Complete" celebration stays up before fading away to
@@ -50,6 +51,12 @@ export function SubmittedStep({
       // The results payload itself, without the credential riding beside it.
       const { player_auth: _auth, ...shown } = found;
       setResults(shown);
+      // Player Home: what he missed, so his home can send him back to it.
+      const missed = shown.answers.filter((a) => !a.is_excluded && a.is_correct === false);
+      recordDone(code, missed.length, undefined, {
+        graded: true,
+        missedIds: missed.map((a) => a.question_id).filter((id): id is number => id !== null),
+      });
     },
     [code, playerId],
   );
@@ -114,9 +121,18 @@ export function SubmittedStep({
       ) : (
         <div>
           <ResultsView results={results} />
+          {/* The link outlives the code. It only talks about grading when
+              something is actually still waiting on the coach. */}
           <p className={styles.bookmarkNote}>
-            Written answers may still be waiting on your coach's review. Bookmark{' '}
-            <a href={resultsUrl}>this link</a> to check back later once they're graded.
+            {results.answers.some((a) => !a.is_excluded && a.is_correct === null) ? (
+              <>
+                Bookmark <a href={resultsUrl}>this link</a> to see the rest once your coach grades them.
+              </>
+            ) : (
+              <>
+                Bookmark <a href={resultsUrl}>this link</a> to see your results again later.
+              </>
+            )}
           </p>
         </div>
       )}

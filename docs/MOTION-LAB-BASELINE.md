@@ -406,9 +406,16 @@ it, close in (a wing) → 2 Point; more than a split (3.0 yd) outside the end of
 the line → Detached — WR Stance; no line to read → 3 Point. Moving him updates
 the default; an authored stance is never rewritten.
 
-**View in 3D (development only).** With `VITE_MOTION_LAB_3D_URL` set (a local,
-gitignored `.env.development.local`) the editor's top bar offers "View in 3D"
-(only once the last edit is confirmed saved). It opens the PEIRA 3D viewer at
+**Preview 3D (was "View in 3D").** Since the first-30-seconds pass (20 October
+2026) **Preview 3D** has its own place in the top bar, between the play and Use
+this play (`Preview3D.tsx`). It is shown only where `VITE_MOTION_LAB_3D_URL` is
+set (a local, gitignored `.env.development.local` today). With no viewer
+configured a production build shows no 3D control at all; local development
+shows an unavailable "Preview 3D · Soon" (`aria-disabled`; pressing it explains,
+hands nothing off and opens nothing) so the slot can be tested. Configuring a
+viewer makes the live button appear with no other change. When live, it hands
+over the play only once the last edit is confirmed saved (an unsaved play is
+told to save first). It opens the PEIRA 3D viewer at
 `?source=peira&play=<id>`; the viewer asks for that play with a request id
 once per page load, and each request is answered once, to the viewer's origin
 only, with the row **as saved at that moment** (fetched from the server), in a
@@ -418,7 +425,7 @@ untouched (`viewIn3D.ts`). So a refresh of the viewer shows the latest save; a
 newer View in 3D takes the viewer window over (the earlier handoff stops
 answering); the handoff ends when the window closes. The viewer checks the
 payload strictly and refuses a malformed play rather than repairing it.
-Unset - every production build - there is no button. Motion Lab knows nothing
+Unset - every production build - nothing is handed off. Motion Lab knows nothing
 about 3D beyond that URL: the viewer runs Motion Lab's own engine on the
 document and hands `presnapStance` to its V5.1 stance resolver, where an
 authored stance always beats the position fallback.
@@ -434,3 +441,16 @@ authored stance always beats the position fallback.
 - **"View in 3D" stays, local development only.** It exists only where
   `VITE_MOTION_LAB_3D_URL` is set and must stay absent from production unless
   that is explicitly enabled.
+  *Confirmed by the owner, 20 October 2026:* with no viewer configured,
+  production shows no 3D control - not even an unavailable one ("a visible
+  button that cannot work creates confusion"). The component and the handoff
+  stay in place, so enabling the viewer later makes Preview 3D appear.
+
+**What production 3D still needs** (checked 20 October 2026): the PEIRA side
+of the handoff is in master (V6, PR #4/#6) and the viewer's vendored engine is
+byte-identical to Motion Lab's (`sync.mjs --check`, 10/10). Missing: (1) the
+viewer is not deployed anywhere (private repo, no host - an owner decision);
+(2) its build must allow PEIRA's origin - `VITE_PEIRA_ORIGINS` defaults to
+localhost only; (3) PEIRA's Netlify build needs `VITE_MOTION_LAB_3D_URL` set to
+that host, then a frontend publish (Netlify is locked); (4) the open catch-point
+fit decision (a receiver can be up to ~0.8 yd off the catch point at the catch).

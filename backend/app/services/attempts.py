@@ -464,22 +464,39 @@ def practice_feedback(attempt, answer) -> dict:
     it as None, and the client shows "Response recorded" rather than inventing
     a verdict a coach has not given.
 
-    The correct answer itself is never included. The coach's explanation is
-    the teaching mechanism; if they want the answer revealed, they write it
-    there.
+    The correct answer itself is never included on a QUIZ - practice or not.
+    The coach's explanation is the teaching mechanism there; if they want the
+    answer revealed, they write it.
+
+    A SITUATIONAL REP IS THE EXCEPTION, by product decision (2026-10-19): a
+    Rep is teaching, so once a decision is checked - and therefore locked -
+    the player is shown the right answer beside the coach's reason
+    (`correct_option_ids`). Judged by the same options scoring used, so the
+    reveal can never disagree with the verdict. Graded attempts never reach
+    this function (the check route refuses them), and a practice QUIZ is
+    unchanged.
     """
     from app.models.question import AUTO_GRADABLE_TYPES
+    from app.models.quiz import REP_KIND
 
     question = answer.question
     auto_gradable = question.question_type in AUTO_GRADABLE_TYPES
 
-    return {
+    feedback = {
         "question_id": question.id,
         "auto_gradable": auto_gradable,
         # None for anything a coach must grade by hand.
         "is_correct": answer.is_correct if auto_gradable else None,
         "answer_explanation": question.answer_explanation or None,
     }
+    if attempt.quiz.kind == REP_KIND and answer.checked_at is not None:
+        if auto_gradable:
+            feedback["correct_option_ids"] = sorted(o.id for o in question.options if o.is_correct_answer)
+        elif question.answer_drawing:
+            # Draw your assignment: his drawing is locked, so the coach's
+            # answer drawing is his to compare against.
+            feedback["answer_drawing"] = question.answer_drawing
+    return feedback
 
 # ---------------------------------------------------------------------------
 # Question order
@@ -584,6 +601,10 @@ def delivery_question_ids(attempt, quiz) -> list[int]:
 
     live_set = set(live)
     kept = [qid for qid in stored if qid in live_set]
+    # TRY THE MISSES AGAIN: a retry is given exactly the misses it was frozen
+    # with (still deliverable) - never the rest of the quiz.
+    if getattr(attempt, "retry_of_attempt_id", None) is not None:
+        return kept
     seen = set(kept)
     appended = [qid for qid in live if qid not in seen]
     return kept + appended

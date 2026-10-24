@@ -31,6 +31,8 @@ export interface QuestionInput {
   subject_man?: string | null;
   /** The coach's ring on a photo - "you are this player". */
   subject_marker?: { x: number; y: number; r: number } | null;
+  /** Draw Response: the coach's drawing of the right answer (null removes it). */
+  answer_drawing?: object | null;
   /** `zone`: a place on the field (a gap, a drop), shown labelled - not a man. */
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** The pre-snap moment to play before the question (motion-lab/presnap.ts). */

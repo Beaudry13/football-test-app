@@ -26,6 +26,7 @@ import { StanceControl } from './StanceControl'
 import { snapX, withStance } from './stances'
 import { DEFENSE_PRESETS, OFFENSE_PRESETS, presetPlayers, type FormationPreset } from './formationPresets'
 import { flipPlay } from './flip'
+import { positionName } from './positionNames'
 
 /**
  * WHAT THE COACH IS DOING RIGHT NOW.
@@ -166,10 +167,10 @@ const BALL_CHOICES: { kind: BallAction['kind']; long: string; short: string }[] 
   { kind: 'pass', long: 'Pass to…', short: 'Pass to…' },
   { kind: 'play-action', long: 'Play action: fake, then pass…', short: 'Play action…' },
 ]
-const VIEWS: { value: View; label: string }[] = [
-  { value: 'overhead', label: 'Overhead' },
-  { value: 'coach', label: 'Coach' },
-  { value: 'player', label: 'Player' },
+const VIEWS: { value: View; label: string; why: string }[] = [
+  { value: 'overhead', label: 'Overhead', why: 'The whole field from above. Build the play here.' },
+  { value: 'coach', label: 'Coach', why: 'From the sideline, the way a coach sees it.' },
+  { value: 'player', label: 'Player', why: "Through one player's eyes." },
 ]
 const HASHES: { value: Situation['hash']; label: string }[] = [
   { value: 'left', label: 'Left' },
@@ -236,15 +237,23 @@ function Seg<T extends string | number>({
   )
 }
 
-/** A text field that commits on Enter/blur and cancels on Escape. */
-function InlineName({ value, onCommit, onCancel, placeholder }: { value: string; onCommit: (v: string) => void; onCancel: () => void; placeholder?: string }) {
+/**
+ * A text field that commits on Enter/blur and cancels on Escape.
+ *
+ * `confirmLabel` adds a button that commits too, for the one place a newcomer
+ * would otherwise have to know about Enter: naming a play to save it. It keeps
+ * the focus in the field as it is pressed, so the commit happens once, from
+ * the button, not again from the field losing focus.
+ */
+function InlineName({ value, onCommit, onCancel, placeholder, confirmLabel }: { value: string; onCommit: (v: string) => void; onCancel: () => void; placeholder?: string; confirmLabel?: string }) {
   const [v, setV] = useState(value)
-  return (
+  const input = (
     <input
       className="inline-name"
       autoFocus
       value={v}
       placeholder={placeholder}
+      aria-label={confirmLabel ? placeholder : undefined}
       onChange={(e) => setV(e.target.value)}
       onKeyDown={(e) => {
         e.stopPropagation()
@@ -253,6 +262,15 @@ function InlineName({ value, onCommit, onCancel, placeholder }: { value: string;
       }}
       onBlur={() => onCommit(v.trim() || value)}
     />
+  )
+  if (!confirmLabel) return input
+  return (
+    <span className="inline-name-row">
+      {input}
+      <button className="gold-line inline-name-ok" onMouseDown={(e) => e.preventDefault()} onClick={() => onCommit(v.trim() || value)}>
+        {confirmLabel}
+      </button>
+    </span>
   )
 }
 
@@ -272,8 +290,30 @@ function PresetThumb({ preset }: { preset: FormationPreset }) {
   )
 }
 
-/** The sets offered on an empty play's strip: the four shapes a coach starts from most. */
-const START_PRESETS = OFFENSE_PRESETS.filter((p) => ['spread', 'trips-rt', 'i-form', 'empty'].includes(p.id))
+/** The resting strip's sentence: the two things a player on the field answers to. */
+const RESTING_HINT = 'Click a player to pick him. Drag a player to move him.'
+
+/**
+ * Whether this device has already built and watched a play. Once it has, an
+ * empty play no longer shows the CREATE YOUR PLAY card: beginner steps are for
+ * beginners. Per device, and quietly absent where storage is unavailable - the
+ * worst case is the card showing again.
+ */
+const LEARNED_KEY = 'peira.motionLab.learned.v1'
+const hasLearned = () => {
+  try {
+    return localStorage.getItem(LEARNED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+const markLearned = () => {
+  try {
+    localStorage.setItem(LEARNED_KEY, '1')
+  } catch {
+    // Nothing to do: the card shows again next time.
+  }
+}
 
 const fmtWhen = (t: number) => {
   const d = new Date(t)
@@ -368,6 +408,14 @@ export function MotionLabEditor({
   const [interaction, setInteraction] = useState<Interaction>('idle')
   /** Mirrors `drewOnce` so the first draw re-renders the board and stops the pulse. */
   const [pulseHandle, setPulseHandle] = useState(!drewOnce)
+  /**
+   * CREATE YOUR PLAY (first 30 seconds): the card on an empty field is done
+   * with once the coach picks a player - from there the strip says what to do
+   * next - and never shows on a device that has built and watched a play.
+   */
+  const [introDone, setIntroDone] = useState(hasLearned)
+  /** The first thing drawn on a device that has never watched a play: Play glows until it is pressed. */
+  const [nudgePlay, setNudgePlay] = useState(false)
   /** Mirrors `advancedOpenMemo` so opening the disclosure re-renders the menu. */
   const [advancedOpen, setAdvancedOpen] = useState(advancedOpenMemo)
   const [draft, setDraft] = useState<Pt[] | null>(null)
@@ -380,7 +428,7 @@ export function MotionLabEditor({
    */
   const [dragging, setDragging] = useState(false)
   const [setup, setSetup] = useState<Setup | null>(null)
-  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'block' | 'viewer' | 'rate' | 'display' | 'legacy'>(null)
+  const [menuOpen, setMenuOpen] = useState<null | 'ball' | 'play' | 'situation' | 'more' | 'formation' | 'block' | 'viewer' | 'rate' | 'display' | 'legacy' | 'view'>(null)
   /**
    * WHICH OF HIS TWO LINES the strip is pointed at (P3.4). Editor state only:
    * never stored, never saved, and it only means anything for a man who has
@@ -837,6 +885,9 @@ export function MotionLabEditor({
     }
     if (time >= duration) setTime(0)
     setPlaying(true)
+    // Built and watched: this device knows how Motion Lab works now.
+    setNudgePlay(false)
+    markLearned()
   }, [duration, playing, time])
 
   /**
@@ -1638,6 +1689,9 @@ export function MotionLabEditor({
       // The handle has been found; it no longer needs to wave.
       drewOnce = true
       setPulseHandle(false)
+      // Something to watch now - and somebody who has never watched one is
+      // shown where.
+      if (!hasLearned()) setNudgePlay(true)
     }
   }
 
@@ -1653,6 +1707,8 @@ export function MotionLabEditor({
   useEffect(() => {
     setPhase('route')
     setAddingMotion(false)
+    // Picking a player is step 1 of CREATE YOUR PLAY; the strip takes over.
+    if (selectedId) setIntroDone(true)
   }, [selectedId])
   const hasPath = !!selected && selected.path.length > 1
   /** He has anything drawn at all - a route, a motion, or both. */
@@ -1663,8 +1719,10 @@ export function MotionLabEditor({
   // choose from; a man with one line keeps today's words.
   const twoLines = hasMotion(selected) || addingMotion
   const drawNoun = activePhase === 'motion' ? 'motion' : 'route'
-  const drawLabel = twoLines ? (hasLine ? `Redraw ${drawNoun}` : `✎ Draw ${drawNoun}`) : hasPath ? 'Redraw' : '✎ Draw assignment'
-  const drawTitle = twoLines ? `Draw his ${drawNoun} · D` : hasPath ? 'Draw it again · D' : 'Draw what he does · D'
+  // A man with one line is given plain words (first-30-seconds pass): what a
+  // newcomer wants to do is make him MOVE, whatever football calls the line.
+  const drawLabel = twoLines ? (hasLine ? `Redraw ${drawNoun}` : `✎ Draw ${drawNoun}`) : hasPath ? 'Redraw' : '✎ Draw movement'
+  const drawTitle = twoLines ? `Draw his ${drawNoun} · D` : hasPath ? 'Draw it again · D' : 'Draw where he goes · D'
   /** The strip's last word on him (ML-UX-7): read from state, never stored. */
   const summary = selected
     ? playerSummary({ player: selected, players, drawn: drawnSchedule.get(selected.id), engagements, derived: engaged, ball, ballThen })
@@ -1965,11 +2023,12 @@ export function MotionLabEditor({
    */
   // With two phases the banner names the line being drawn - and, for the
   // motion, teaches the join: where he is let go is where the snap finds him.
+  // One line: the same plain words as the Draw movement button.
   const hint = !twoLines ? (
     interaction === 'drawing' ? (
-      <>Drawing <b>{selected?.label}</b>'s assignment. Let go to finish. <b>Esc</b> to cancel.</>
+      <>Drawing where <b>{selected?.label}</b> goes. Let go to finish. <b>Esc</b> to cancel.</>
     ) : (
-      <>Draw <b>{selected?.label}</b>'s assignment: drag on the field. <b>Esc</b> to cancel.</>
+      <>Draw where <b>{selected?.label}</b> goes: drag on the field. <b>Esc</b> to cancel.</>
     )
   ) : activePhase === 'motion' ? (
     interaction === 'drawing' ? (
@@ -2173,7 +2232,9 @@ export function MotionLabEditor({
   const ballControl = (
     <div className="ball-menu">
       <button
-        className={`ball-btn${ball ? ' has-action' : ' gold-line'}${menuOpen === 'ball' ? ' active' : ''}`}
+        // Gold-line asks for the ball once there is a play to give it to; on
+        // an empty field the steps to follow are the card's, not this.
+        className={`ball-btn${ball ? ' has-action' : hasPaths ? ' gold-line' : ''}${menuOpen === 'ball' ? ' active' : ''}`}
         disabled={!!setup || interaction === 'drawing' || present}
         onClick={() => toggleMenu('ball')}
         aria-expanded={menuOpen === 'ball'}
@@ -2429,77 +2490,135 @@ export function MotionLabEditor({
     </div>
   )
 
+  /** The empty field's three steps: only while there is nothing on it and nothing under way. */
+  const showIntro =
+    !introDone && !present && !watching && !pickingViewer && !hasPaths && !ball && !setup && !groupMove && interaction === 'idle'
+
+  /*
+    HOW AM I WATCHING (first-30-seconds pass): Overhead, Coach or Player used
+    to be a segment in the top bar, three words a newcomer could not tell
+    apart from the play's own actions. Watching happens in the dock, so the
+    choice sits there, beside Play - one button saying what you are watching
+    from, and a menu that says what each one is.
+  */
+  const viewControl = (
+    <div className="ball-menu view-menu">
+      <button
+        className={`view-btn${menuOpen === 'view' ? ' active' : ''}`}
+        onClick={() => toggleMenu('view')}
+        aria-expanded={menuOpen === 'view'}
+        title="How you watch the play: from above, from the sideline, or through a player's eyes"
+      >
+        <span className="view-word">View</span> {VIEWS.find((v) => v.value === view)?.label} <span className="key">▾</span>
+      </button>
+      {menuOpen === 'view' && (
+        <div className="popover view-pop" role="menu" aria-label="Watch from">
+          <div className="pop-title">Watch from</div>
+          {VIEWS.map((v) => (
+            <button key={v.value} role="menuitemradio" aria-checked={v.value === view} aria-label={v.label} className={v.value === view ? 'active' : ''} onClick={() => switchView(v.value)}>
+              {v.label}
+              <span className="use-why">{v.why}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <div ref={appRef} className={`app${present ? ' present' : ''}${pulseHandle ? '' : ' drew-once'}`}>
       <div className="bar">
+        {/*
+          THE TOP BAR READS LEFT TO RIGHT AS THE QUESTIONS A NEWCOMER ASKS
+          (Motion Lab first-30-seconds pass): where am I and how do I get out
+          (Motion Lab · Home · Library), how do I start another (+ New play),
+          what am I working on and is it kept (the play, Saved / Unsaved,
+          Save), and - at the far end - what can I do with it (Preview 3D,
+          Use this play, Present). How the play is WATCHED is not up here: it
+          lives in the dock, beside Play.
+        */}
+        <div className="brand">
+          Peira <span>Motion Lab</span>
+        </div>
         {/* ML-UX-8: in Present the only way out is Exit Present. A stray click
             on "← Library" in a meeting would drop the coach out of teaching
             and into the Library. It comes back the moment he exits. */}
-        {!present && exit}
-        {/* PEIRA: starting a play is one obvious click, not a menu. */}
-        {!present && onNewPlay && (
+        {!present && exit && (
+          <nav className="ml-nav" aria-label="Leave Motion Lab">
+            {exit}
+          </nav>
+        )}
+        {/* START ANOTHER: one obvious click - and only here. The play's own
+            menu used to offer it too, beside a play that was itself called
+            "New play". */}
+        {!present && (
           <button className="new-play-btn" onClick={() => createPlay(players)} title="Start a new play from this formation">
             + New play
           </button>
         )}
-        <div className="brand">
-          Peira <span>Motion Lab</span>
-        </div>
 
-        {/* The play: name, library, undo */}
-        <div className="ball-menu">
-          {present ? (
-            // Present names the play; it does not offer it (SPEC §2, §13).
-            <span className="play-name present-name" title={playName}>{playName}</span>
-          ) : renaming === 'play' ? (
-            <InlineName value={playName} onCommit={(v) => { setPlayName(v); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Play name" />
-          ) : renaming === 'save' ? (
-            <InlineName value="" onCommit={commitSave} onCancel={() => setRenaming(null)} placeholder="Name this play, then Enter" />
-          ) : (
-            <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} aria-expanded={menuOpen === 'play'} title={present ? playName : 'Play: rename, open, duplicate, delete'}>
-              <span className="play-name">{playName}</span>
-              {!present && <span className="key">▾</span>}
-            </button>
-          )}
-          {menuOpen === 'play' && !present && (
-            <div className="popover play-pop">
-              <button onClick={() => { setMenuOpen(null); setRenaming('play') }}>Rename…</button>
-              <button onClick={() => createPlay(players)}>New play (this formation)</button>
-              {unsaved ? <button onClick={startSave}>Save play</button> : <button onClick={duplicatePlay}>Duplicate</button>}
-              {/* SPEC §13: it used to sit in the strip, permanently, for
-                  something a coach does once in a while and never by accident. */}
-              <button disabled={!hasPaths} onClick={() => { setMenuOpen(null); clearAllPaths() }}>Clear all assignments</button>
-              {!unsaved && <button className="pop-clear" onClick={deletePlay}>Delete play</button>}
-              <div className="pop-title">Open</div>
-              <div className="play-list">
-                {plays.map((p) => (
-                  <button key={p.id} className={`play-row${p.id === playId ? ' active' : ''}`} onClick={() => { if (p.id !== playId) switchTo(p); setMenuOpen(null) }}>
-                    <span className="play-row-name">{p.name}</span>
-                    <span className="play-row-when">{isUnsaved?.(p.id) ? 'not saved' : fmtWhen(p.updatedAt)}</span>
-                  </button>
-                ))}
+        {/* WHAT AM I WORKING ON: the play, whether it is kept, and Save. */}
+        <div className="play-state">
+          <div className="ball-menu">
+            {present ? (
+              // Present names the play; it does not offer it (SPEC §2, §13).
+              <span className="play-name present-name" title={playName}>{playName}</span>
+            ) : renaming === 'play' ? (
+              <InlineName value={playName} onCommit={(v) => { setPlayName(v); setRenaming(null) }} onCancel={() => setRenaming(null)} placeholder="Play name" />
+            ) : renaming === 'save' ? (
+              <InlineName value="" onCommit={commitSave} onCancel={() => setRenaming(null)} placeholder="Name your play" confirmLabel="Save" />
+            ) : (
+              <button className={`play-btn${menuOpen === 'play' ? ' active' : ''}`} onClick={() => (present ? undefined : toggleMenu('play'))} aria-expanded={menuOpen === 'play'} title={present ? playName : 'Rename, open another play, duplicate or delete'}>
+                <span className="play-name">{playName}</span>
+                {!present && <span className="key">▾</span>}
+              </button>
+            )}
+            {menuOpen === 'play' && !present && (
+              <div className="popover play-pop">
+                <button onClick={() => { setMenuOpen(null); setRenaming('play') }}>Rename…</button>
+                {/* New play is the top bar's own button and Save sits beside
+                    the name, so neither is repeated here. */}
+                {!unsaved && <button onClick={duplicatePlay}>Duplicate</button>}
+                {/* SPEC §13: it used to sit in the strip, permanently, for
+                    something a coach does once in a while and never by accident. */}
+                <button disabled={!hasPaths} onClick={() => { setMenuOpen(null); clearAllPaths() }}>Clear all assignments</button>
+                {!unsaved && <button className="pop-clear" onClick={deletePlay}>Delete play</button>}
+                <div className="pop-title">Open</div>
+                <div className="play-list">
+                  {plays.map((p) => (
+                    <button key={p.id} className={`play-row${p.id === playId ? ' active' : ''}`} onClick={() => { if (p.id !== playId) switchTo(p); setMenuOpen(null) }}>
+                      <span className="play-row-name">{p.name}</span>
+                      <span className="play-row-when">{isUnsaved?.(p.id) ? 'not saved' : fmtWhen(p.updatedAt)}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+          </div>
+          {/* UNSAVED, SAID ONCE: one word where "Saved" would be, and Save
+              beside it. Leaving is safe - the play stays on this device - and
+              the word's tooltip says so. While he types the name, the field
+              carries its own Save. */}
+          {!present && unsaved && renaming !== 'save' && (
+            <>
+              <span className="saved unsaved" title="Kept on this device until you save it - leaving won't lose it">
+                Unsaved
+              </span>
+              <button className="gold-line save-play-btn" onClick={startSave} title="Name this play and keep it in your Motion Lab">
+                Save
+              </button>
+            </>
           )}
+          {!present && !unsaved &&
+            (typeof saveStatus === 'function' ? saveStatus({ editPending: saving }) : saveStatus ?? (
+              // Saving outranks a past failure: the next edit IS the retry
+              // (SPEC §3.3), so while it is pending the honest word is
+              // "Saving…". If it fails again, "Not saved" comes straight back.
+              <span className={`saved${!saving && saveFailed ? ' failed' : ''}`} title={saving ? '' : saveFailed ? 'Could not save to browser storage' : savedAt ? `Saved ${fmtWhen(savedAt)}` : ''}>
+                {saving ? 'Saving…' : saveFailed ? 'Not saved' : savedAt ? 'Saved' : ''}
+              </span>
+            ))}
         </div>
-        {/* An unsaved play says so and offers to save it, where "Saved" would be. */}
-        {!present && unsaved && renaming !== 'save' && (
-          <>
-            <span className="saved unsaved" title="This play is only on this device until you save it">Not saved</span>
-            <button className="gold-line save-play-btn" onClick={startSave} title="Save this play to your Motion Lab">
-              Save play
-            </button>
-          </>
-        )}
-        {!present && !unsaved &&
-          (typeof saveStatus === 'function' ? saveStatus({ editPending: saving }) : saveStatus ?? (
-            // Saving outranks a past failure: the next edit IS the retry
-            // (SPEC §3.3), so while it is pending the honest word is
-            // "Saving…". If it fails again, "Not saved" comes straight back.
-            <span className={`saved${!saving && saveFailed ? ' failed' : ''}`} title={saving ? '' : saveFailed ? 'Could not save to browser storage' : savedAt ? `Saved ${fmtWhen(savedAt)}` : ''}>
-              {saving ? 'Saving…' : saveFailed ? 'Not saved' : savedAt ? 'Saved' : ''}
-            </span>
-          ))}
         {!present && (
           <div className="seg">
             <button disabled={!canUndo} onClick={undo} title="Undo · Ctrl+Z">↶</button>
@@ -2513,16 +2632,13 @@ export function MotionLabEditor({
           It belongs with the man it is talking about, so it moved to the strip.
         */}
         <div className="spacer" />
+        {/* WHAT CAN I DO WITH IT: PEIRA's own actions on the play (Preview 3D,
+            Use this play), then Present. They are peers, so they look alike;
+            the one gold outline up here is Save, while the play is unsaved. */}
         {!present && actions}
 
-        {/* "How I am watching", never an editing mode - hence the label
-            (SPEC §2, §11.1). ML-UX-2 added the rule that hides it below
-            1300 px but never the label itself. */}
-        <label className="lbl view-label">View</label>
-        <Seg value={view} options={VIEWS} onChange={switchView} />
-
-        {/* Present and Exit Present are OUTLINED gold: important, not the
-            primary. Play is the one solid-gold control on the screen. */}
+        {/* Exit Present is OUTLINED gold: in Present it is the way out.
+            Play is the one solid-gold control on the screen. */}
         {present ? (
           <>
             {/* Telestration is Overhead only (SPEC §16). No banner while he
@@ -2548,11 +2664,9 @@ export function MotionLabEditor({
             </button>
           </>
         ) : (
-          <>
-            <button className="gold-line" onClick={enterPresent} title="Hide the tools and teach">
-              Present
-            </button>
-          </>
+          <button className="present-btn" onClick={enterPresent} title="Full screen for the meeting room: hide the tools and teach">
+            Present
+          </button>
         )}
       </div>
 
@@ -2669,9 +2783,15 @@ export function MotionLabEditor({
             {renaming === 'player' ? (
               <InlineName value={selected.label} onCommit={(v) => { renamePlayer(selected.id, v) }} onCancel={() => setRenaming(null)} placeholder="Label" />
             ) : (
-              <span className={`chip ${selected.side} chip-static`}>
+              /* WHAT THE LETTERS MEAN: the position, spelled out, only for the
+                 man who is picked (FS -> Free safety). A label with no name
+                 shows his side, as before. */
+              <span
+                className={`chip ${selected.side} chip-static`}
+                title={`${selected.label}${positionName(selected.label) ? ` · ${positionName(selected.label)}` : ''} · ${selected.side === 'offense' ? 'Offense' : 'Defense'}. Drag him on the field to move him.`}
+              >
                 {selected.label}
-                <span className="chip-side">{selected.side === 'offense' ? 'Offense' : 'Defense'}</span>
+                <span className="chip-side">{positionName(selected.label) ?? (selected.side === 'offense' ? 'Offense' : 'Defense')}</span>
               </span>
             )}
 
@@ -2713,6 +2833,17 @@ export function MotionLabEditor({
                 title={activePhase === 'motion' ? 'Move the points of his motion · E' : 'Move the points of his route · E'}
               >
                 Adjust
+              </button>
+            )}
+
+            {/* 3b. ADD MOTION - the next thing to try once an offensive man
+                   has somewhere to go: moving BEFORE the snap. The same first
+                   motion stroke as More's "Add pre-snap motion…", one click
+                   closer; it goes once he has motion, when the Motion | Route
+                   switch takes over. */}
+            {hasPath && selected.side === 'offense' && !hasMotion(selected) && !isLegacyPreSnap(selected) && !addingMotion && !motionBlocked(selected, engagements) && (
+              <button className="add-motion-btn" onClick={clicked(startMotion)} title="Draw where he moves before the snap">
+                + Add motion
               </button>
             )}
 
@@ -2852,23 +2983,12 @@ export function MotionLabEditor({
                 </div>
               )}
             </div>
-            {/* AN EMPTY PLAY STARTS FROM A FORMATION. Until the first job is
-                drawn, the strip offers the common sets as one-click diagrams -
-                the same quick formations as the menu - instead of a sentence. */}
-            {!hasPaths && !ball && !ballNote ? (
-              <div className="start-row" aria-label="Start from a formation">
-                <span className="start-label">Start from</span>
-                {START_PRESETS.map((preset) => (
-                  <button key={preset.id} className="start-chip" onClick={() => applyPreset(preset)} title={`Line the offense up in ${preset.name}`}>
-                    <PresetThumb preset={preset} />
-                    {preset.name}
-                  </button>
-                ))}
-                <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>or drag a player to move him · click one to give him a job</span>
-              </div>
-            ) : (
-              <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? 'Drag a player to move him. Click a player to give him a job.'}</span>
-            )}
+            {/* ONE FORMATION CONTROL. An empty play used to add a second row of
+                its own here - "Start from" and four sets - beside a menu
+                called Formation that offered the same sets: two names for
+                one idea. The sets live in the menu; an empty play's card on
+                the field opens it. */}
+            <span className={`hint${hintFlash ? ' hint-flash' : ''}`}>{ballNote ?? RESTING_HINT}</span>
           </>
         )}
       </div>
@@ -2877,6 +2997,37 @@ export function MotionLabEditor({
       <div className="stage">
         {notice}
         {toast && <div className="toast">{toast}</div>}
+        {/*
+          CREATE YOUR PLAY. An empty field says what to do with it, on the
+          field, in three steps - not a modal, not a tour. It is gone the
+          moment a player is picked (the strip says what comes next), and a
+          device that has built and watched a play never sees it again.
+        */}
+        {showIntro && (
+          <section className="ml-intro" aria-label="Create your play">
+            <h2 className="ml-intro-title">Create your play</h2>
+            <ol className="ml-intro-steps">
+              <li>
+                <b>Pick a player</b> <span>— click any circle</span>
+              </li>
+              <li>
+                <b>Draw where they should go</b>
+              </li>
+              <li>
+                <b>Press ▶ Play</b> <span>to watch it</span>
+              </li>
+            </ol>
+            <div className="ml-intro-foot">
+              <div className="ml-intro-key" aria-hidden="true">
+                <span className="ml-intro-dot offense" /> Offense
+                <span className="ml-intro-dot defense" /> Defense
+              </div>
+              <button className="ml-intro-formation" onClick={() => setMenuOpen('formation')}>
+                Choose a formation
+              </button>
+            </div>
+          </section>
+        )}
         {watching ? (
           <FieldView
             cam={
@@ -2962,7 +3113,16 @@ export function MotionLabEditor({
           ⟲
         </button>
         {/* Keys live in tooltips, not on buttons (SPEC §11.1, DESIGN §18). */}
-        <button className="primary play-toggle" onClick={clicked(togglePlay)} disabled={!canPlay} title={playing ? 'Pause · Space' : 'Play · Space'}>
+        {/* WATCH WHAT YOU MADE. Play is the one solid-gold control on the
+            screen. With nothing drawn it says what it is waiting for, and the
+            first time something is drawn on a device that has never watched
+            a play, it glows until it is pressed. */}
+        <button
+          className={`primary play-toggle${nudgePlay && canPlay && !playing && !present ? ' nudge' : ''}`}
+          onClick={clicked(togglePlay)}
+          disabled={!canPlay}
+          title={!canPlay ? 'Draw where a player goes, then Play shows it' : playing ? 'Pause · Space' : 'Play · Space'}
+        >
           {playing ? '❚❚ Pause' : '▶ Play'}
         </button>
         <button className="icon-btn" onClick={clicked(() => step(-0.1))} disabled={!canPlay} title="Back 0.1 s · ←" aria-label="Back 0.1 seconds">
@@ -3012,6 +3172,7 @@ export function MotionLabEditor({
             </div>
           )}
         </div>
+        {viewControl}
         {/* The third group: the field the play is run on, and how it is shown. */}
         <span className="dock-divider" />
         {situationChip}

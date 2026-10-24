@@ -153,10 +153,12 @@ describe('saving an arrangement', () => {
 })
 
 describe('the play menu', () => {
-  it('calls a new play from this arrangement a formation', () => {
+  it('calls a new play from this arrangement a formation - from the top bar, and only there', () => {
     open(play)
+    expect(screen.getByRole('button', { name: '+ New play' })).toHaveAttribute('title', 'Start a new play from this formation')
+    // First-30-seconds pass: the play's menu no longer repeats it.
     openPlayMenu()
-    expect(within(playMenu()!).getByRole('button', { name: 'New play (this formation)' })).toBeInTheDocument()
+    expect(within(playMenu()!).queryByRole('button', { name: /New play/ })).toBeNull()
   })
 
   it('is where Clear all assignments lives now', async () => {
@@ -251,24 +253,27 @@ describe('flip the play', () => {
   })
 })
 
-describe('an empty play starts from a formation', () => {
-  const startRow = () => screen.queryByLabelText('Start from a formation')
+describe('an empty play starts from a formation - through the one Formation menu', () => {
+  const card = () => screen.queryByRole('region', { name: 'Create your play' })
 
-  it('offers the common sets on the strip until the first job is drawn', async () => {
+  it('has no second row of sets on the strip: the card on the field opens the Formation menu', async () => {
     const empty = newPlay('Blank')
     open(empty)
-    const row = within(startRow()!)
-    expect(row.getAllByRole('button').map((b) => b.textContent)).toEqual(['Spread', 'Trips Rt', 'I-Form', 'Empty'])
-    fireEvent.click(row.getByRole('button', { name: 'I-Form' }))
+    expect(screen.queryByLabelText('Start from a formation')).toBeNull()
+    expect(within(strip()).getAllByRole('button').map((b) => b.textContent)).toEqual(['Formation ▾'])
+
+    fireEvent.click(within(card()!).getByRole('button', { name: 'Choose a formation' }))
+    expect(pop()).not.toBeNull()
+    fireEvent.click(item('I-Form'))
     await settle()
     const offense = repo.listPlays().find((p) => p.id === empty.id)!.players.filter((p) => p.side === 'offense')
     expect(offense.map((p) => p.label)).toContain('FB')
-    // Still empty of jobs, so still offered.
-    expect(startRow()).not.toBeNull()
+    // Still nothing drawn and nobody picked, so the steps still apply.
+    expect(card()).not.toBeNull()
   })
 
   it('is not there once the play has jobs in it', () => {
     open(play)
-    expect(startRow()).toBeNull()
+    expect(card()).toBeNull()
   })
 })

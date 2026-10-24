@@ -163,6 +163,11 @@ class Question(db.Model):
     copied_from_question_id = db.Column(
         db.Integer, db.ForeignKey("questions.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: DRAW YOUR ASSIGNMENT: the coach's own drawing of the right answer to a
+    #: Draw Response question (a peira.drawing document, strokes on the 'coach'
+    #: layer). The answer key, gated exactly like one - never sent to a player
+    #: on a quiz; a Rep shows it after he locks his own drawing.
+    answer_drawing = db.Column(JSONB, nullable=True)
 
     # FILL_BLANK only. The list of strings a typed answer is accepted against;
     # several are allowed because real variation is real ("Cover 3", "C3",
@@ -352,6 +357,7 @@ class Question(db.Model):
         # is that they cannot see it.
         if include_correct_answers:
             data["motion_play_id"] = self.motion_play_id
+            data["answer_drawing"] = self.answer_drawing
             data["answer_explanation"] = self.answer_explanation
             data["expected_answers"] = self.expected_answers or []
             data["answer_matching"] = self.answer_matching

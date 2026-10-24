@@ -308,6 +308,9 @@ export interface Question {
   presnap?: Record<string, unknown> | null;
   /** The coach's "you are this player" ring on a photo (picture fractions). */
   subject_marker?: { x: number; y: number; r: number } | null;
+  /** DRAW YOUR ASSIGNMENT: the coach's drawing of the right answer (a
+   *  peira.drawing document, 'coach' layer). Coach payload only. */
+  answer_drawing?: import('../components/drawing/types').DrawingDocument | null;
   /** Metadata only - never a playable URL. A signed clip URL expires, so the
    *  routes that render one mint it per request. */
   clip?: {
@@ -588,6 +591,14 @@ export interface PlayerResultAnswer {
   is_excluded: boolean;
   coach_feedback: string | null;
   graded_at: string | null;
+  /** THE FOOTBALL PICTURE the question was asked on - the DELIVERED one, so a
+   *  miss is reviewed on the play he answered. Null for a question with none.
+   *  Optional: results cached before it existed simply have no picture. */
+  image?: { id: number | null; image_url: string } | null;
+  /** Who he was in the decision ("Boundary safety"), when the coach said. */
+  subject_role?: string | null;
+  /** The coach's ring on the picture, only while it is still the delivered one. */
+  subject_marker?: { x: number; y: number; r: number } | null;
 }
 
 export interface PlayerResultsResponse {
@@ -925,6 +936,11 @@ export interface PracticeFeedback {
   auto_gradable: boolean;
   is_correct: boolean | null;
   answer_explanation: string | null;
+  /** SITUATIONAL REP ONLY (a Rep is teaching): the right answer, once this
+   *  decision is checked and locked. Never sent for a quiz, practice or graded. */
+  correct_option_ids?: number[];
+  /** SITUATIONAL REP ONLY: a drawing decision's answer drawing, once his own is locked. */
+  answer_drawing?: import('../components/drawing/types').DrawingDocument;
 }
 
 /** A delivered question as a PLAYER may see it. Built by a dedicated
@@ -960,6 +976,8 @@ export interface DeliveredPlayerQuestion {
 export interface AttemptState {
   attempt_id: number;
   status: 'in_progress' | 'submitted';
+  /** TRY THE MISSES AGAIN: this run holds only an earlier run's misses. */
+  is_retry?: boolean;
   /** The attempt's own frozen mode. A coach editing the code mid-session
    *  does not change the rules of work already in progress. */
   mode: AssessmentMode;

@@ -59,6 +59,10 @@ def rep_attempts(quiz, player_id: int | None = None) -> list:
     query = PlayerAttempt.query.filter(
         PlayerAttempt.quiz_id == quiz.id,
         PlayerAttempt.mode == PRACTICE,
+        # TRY THE MISSES AGAIN is learning, not a run: a retry of three missed
+        # decisions, all right, is not a 3-for-3 run. Every run-level reading -
+        # first tries, the coach's results, his "since last time" - leaves it out.
+        PlayerAttempt.retry_of_attempt_id.is_(None),
     )
     if player_id is not None:
         query = query.filter(PlayerAttempt.player_id == player_id)

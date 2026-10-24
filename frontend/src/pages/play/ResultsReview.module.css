@@ -1,0 +1,60 @@
+/* A graded quiz's results: how it went, what he missed on the football, the rest. */
+.score {
+  margin: 0.5em 0 0;
+  font-size: 18px;
+}
+.pending {
+  margin: 0.25em 0 0;
+  font-size: 14px;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.heading {
+  margin: 1.25em 0 0.5em;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--peira-text-muted, var(--color-text-muted));
+}
+.missed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75em;
+}
+.missedCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-color: var(--peira-danger, var(--color-border));
+}
+.picture {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--peira-border, var(--color-border));
+  background: #2e6b3c;
+}
+.prompt {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+.yours,
+.right {
+  color: var(--peira-text, var(--color-text));
+}
+.yours {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--peira-danger, var(--color-border));
+  background: var(--peira-danger-bg, transparent);
+}
+.right {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--peira-success, var(--color-border));
+  background: var(--peira-success-bg, transparent);
+}

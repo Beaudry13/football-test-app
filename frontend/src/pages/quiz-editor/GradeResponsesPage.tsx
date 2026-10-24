@@ -6,7 +6,9 @@ import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type { PlayerResponse, Quiz, QuizDashboard } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { LoadingState } from '../../components/ui/LoadingState';
+import { CompareDrawing } from '../../components/drawing/CompareDrawing';
 import { DrawingViewer } from '../../components/drawing/DrawingViewer';
+import type { DrawingDocument as AnswerDrawingDocument } from '../../components/drawing/types';
 import type { DrawingDocument } from '../../components/drawing/types';
 import {
   buildGradingQueue,
@@ -50,6 +52,9 @@ export function GradeResponsesPage() {
   /** Answers currently being written, so a double-click cannot fire twice and
    *  the button can show it is working without blocking the others. */
   const [saving, setSaving] = useState<ReadonlySet<number>>(new Set());
+  /** DRAWINGS: the coach's answer laid over every player's drawing, or off -
+   *  one switch for the whole question rather than one per drawing. */
+  const [answerShown, setAnswerShown] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -177,6 +182,10 @@ export function GradeResponsesPage() {
 
   if (!current) return null;
 
+  const currentQuestion = quiz?.questions?.find((q) => q.id === current.questionId);
+  const isDrawingQuestion = current.questionType === 'draw_response';
+  const answerDrawing = currentQuestion?.answer_drawing ?? null;
+
   return (
     <div className={styles.page}>
       {backToResults}
@@ -187,6 +196,36 @@ export function GradeResponsesPage() {
           because the coach is holding one standard and applying it to
           everything below. */}
       <header className={styles.header}>
+        {/* A DRAWING QUESTION'S STANDARD IS A DRAWING. The coach's answer,
+            once, in the same green it is laid over every player's drawing in -
+            and the one switch for all of them. */}
+        {isDrawingQuestion &&
+          (answerDrawing && currentQuestion?.image ? (
+            <div className={styles.answerKey}>
+              <span className={styles.acceptedLabel}>The answer</span>
+              <DrawingViewer
+                imageUrl={resolveMediaUrl(currentQuestion.image.image_url)}
+                document={{ ...answerDrawing, strokes: [] }}
+                overlay={answerDrawing}
+                maxWidth={220}
+                alt={`The answer, drawn, for: ${current.questionText}`}
+              />
+              <button
+                type="button"
+                className={styles.keyToggle}
+                aria-pressed={answerShown}
+                onClick={() => setAnswerShown((on) => !on)}
+              >
+                <span className={styles.keySwatch} aria-hidden="true" />
+                Answer over each drawing: {answerShown ? 'on' : 'off'}
+              </button>
+            </div>
+          ) : (
+            <p className={styles.accepted}>
+              No answer drawn for this question yet. Draw it in the question editor and it is laid over every
+              player&rsquo;s drawing here.
+            </p>
+          ))}
         <p className={styles.progress}>
           Question {current.questionNumber}
           {' · '}
@@ -205,7 +244,8 @@ export function GradeResponsesPage() {
         )}
       </header>
 
-      <ol className={styles.responses}>
+      {/* Drawings are judged by eye, side by side: a grid of them. */}
+      <ol className={`${styles.responses} ${isDrawingQuestion ? styles.drawingGrid : ''}`}>
         {/* The answers to ONE question are the list a coach reads together,
             so that is where two John Smiths collide. Attempt mode. */}
         {playerLabels(
@@ -223,6 +263,8 @@ export function GradeResponsesPage() {
             playerLabel={label.text}
             questionType={current.questionType}
             questionText={current.questionText}
+            answerDrawing={answerDrawing}
+            answerShown={answerShown}
             busy={saving.has(target.answerId)}
             onGrade={(isCorrect) => void grade(target, isCorrect)}
           />
@@ -251,6 +293,10 @@ export function GradeResponsesPage() {
   );
 }
 
+/** A drawing tile's picture width: three side by side on a laptop (the grid's
+ *  column minimum in GradeResponsesPage.module.css is this plus the padding). */
+const TILE_DRAWING_WIDTH = 360;
+
 /** One player's answer, and the call.
  *
  * A graded row STAYS, marked. Removing it the instant it is decided would make
@@ -262,10 +308,16 @@ function GradeRow({
   playerLabel,
   questionType,
   questionText,
+  answerDrawing,
+  answerShown = true,
   busy,
   onGrade,
 }: {
   target: GradeTarget;
+  /** The coach's own drawing of the answer, laid over each player's. */
+  answerDrawing?: AnswerDrawingDocument | null;
+  /** The question's one switch for showing that answer. */
+  answerShown?: boolean;
   /** Display only. The grade is written against `target.answerId`. */
   playerLabel: string;
   questionType: string;
@@ -289,9 +341,12 @@ function GradeRow({
       {isDrawing ? (
         target.drawing && image ? (
           <div className={styles.drawing}>
-            <DrawingViewer
+            <CompareDrawing
               imageUrl={resolveMediaUrl(image.image_url)}
               document={target.drawing.document as DrawingDocument}
+              answer={answerDrawing}
+              shown={answerShown}
+              maxWidth={TILE_DRAWING_WIDTH}
               alt={`Drawing by ${playerLabel} for: ${questionText}`}
             />
           </div>

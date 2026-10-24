@@ -5,6 +5,7 @@ import { passerOf } from './roles'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, installPointerStubs, playerMarker } from '../testing/pointerStubs'
+import { chooseView } from '../testing/viewMenu'
 import { U, Y_MAX } from '../engine/field'
 import type { Play } from '../engine/play'
 
@@ -481,7 +482,7 @@ describe('deleting a player, with roles in place (P3.2)', () => {
     const man = withPath(play)
     open(play)
     select(play, man.id)
-    const view = (name: string) => fireEvent.click(within(document.querySelector('.bar') as HTMLElement).getByRole('button', { name }))
+    const view = chooseView
     view('Player')
     await settle()
     expect(strip().textContent).toContain(man.label)

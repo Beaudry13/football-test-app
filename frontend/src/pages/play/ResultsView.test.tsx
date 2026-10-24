@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../components/drawing/DrawingViewer', () => ({
   // jsdom cannot paint a canvas, so the real viewer is replaced by a probe
@@ -75,10 +75,12 @@ describe('ResultsView', () => {
     expect(screen.queryByText(/Correct answer:/)).not.toBeInTheDocument();
   });
 
-  it('leaves an ordinary answer completely unchanged', () => {
+  it('shows an ordinary miss under What you missed, with the correct answer, and no redundant badge', () => {
     render(<ResultsView results={results({})} />);
 
-    expect(screen.getByText('Incorrect')).toBeInTheDocument();
+    const missed = within(screen.getByRole('region', { name: 'What you missed' }));
+    expect(missed.getByText('Is this cover 2?')).toBeInTheDocument();
+    expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
     expect(screen.getByText(/Correct answer:/)).toHaveTextContent('True');
     expect(screen.queryByText('Excluded from scoring')).not.toBeInTheDocument();
   });
@@ -207,5 +209,91 @@ describe('a Draw Response answer', () => {
     // exactly like an ordinary multiple-choice one.
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+  });
+});
+
+/** WHAT YOU MISSED, ON THE FOOTBALL. A graded quiz's results say how it went
+ *  in one line, then each miss on the picture it was asked on, then the rest -
+ *  with the answer revealed exactly where it always was, in words. */
+describe('ResultsView - what you missed', () => {
+  const answer = (over: Partial<PlayerResultsResponse['answers'][0]>): PlayerResultsResponse['answers'][0] => ({
+    question_id: 1,
+    question_number: 1,
+    question_text: 'Q',
+    question_type: 'multiple_choice',
+    your_answer: 'Z',
+    correct_answer: 'X',
+    is_correct: true,
+    is_excluded: false,
+    coach_feedback: null,
+    graded_at: null,
+    ...over,
+  });
+  const quiz = (answers: PlayerResultsResponse['answers']): PlayerResultsResponse => ({
+    quiz_title: 'Week 7 coverage',
+    player_name: 'Marcus Hill',
+    submitted_at: '2026-10-21T00:00:00Z',
+    answers,
+  });
+
+  it('says how it went in one line, counting only what was graded', () => {
+    render(
+      <ResultsView
+        results={quiz([
+          answer({ question_id: 1, is_correct: true }),
+          answer({ question_id: 2, is_correct: false }),
+          answer({ question_id: 3, is_correct: null, question_type: 'written' }),
+          answer({ question_id: 4, is_correct: null, is_excluded: true, correct_answer: null }),
+        ])}
+      />,
+    );
+    expect(screen.getByText(/of 2/).parentElement).toHaveTextContent('1 of 2 correct');
+    expect(screen.getByText('1 answer is waiting on your coach.')).toBeInTheDocument();
+  });
+
+  it('leads with each miss on its picture - who he was, his answer, the correct one - then the rest', () => {
+    render(
+      <ResultsView
+        results={quiz([
+          answer({ question_id: 1, question_text: 'What is the front?', is_correct: true, your_answer: 'Over' }),
+          answer({
+            question_id: 2,
+            question_text: 'Who gets the ball?',
+            is_correct: false,
+            your_answer: 'Z',
+            correct_answer: 'X',
+            image: { id: 5, image_url: '/uploads/play.png' },
+            subject_role: 'Boundary safety',
+            subject_marker: { x: 0.5, y: 0.4, r: 0.06 },
+            coach_feedback: 'Eyes on the QB.',
+          }),
+        ])}
+      />,
+    );
+    const missed = within(screen.getByRole('region', { name: 'What you missed' }));
+    expect(missed.getByRole('img', { name: 'The play for: Who gets the ball?' })).toBeInTheDocument();
+    expect(missed.getByText('Boundary safety')).toBeInTheDocument();
+    expect(missed.getByText('Your answer: Z')).toBeInTheDocument();
+    expect(missed.getByText('Correct answer: X')).toBeInTheDocument();
+    expect(missed.getByText('Eyes on the QB.')).toBeInTheDocument();
+    // The miss is not repeated below; the rest follows it.
+    const rest = within(screen.getByRole('region', { name: 'The rest' }));
+    expect(rest.getByText('What is the front?')).toBeInTheDocument();
+    expect(rest.queryByText('Who gets the ball?')).toBeNull();
+    // Nothing to press and nothing marked on the picture: the review is to read.
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('with nothing missed there is no review section - just the answers', () => {
+    render(<ResultsView results={quiz([answer({ question_id: 1, is_correct: true })])} />);
+    expect(screen.queryByRole('region', { name: 'What you missed' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Your answers' })).toBeInTheDocument();
+  });
+
+  it('a missed question without a picture still reads plainly', () => {
+    render(<ResultsView results={quiz([answer({ question_id: 9, question_text: 'Name the coverage', is_correct: false, image: null })])} />);
+    const missed = within(screen.getByRole('region', { name: 'What you missed' }));
+    expect(missed.queryByRole('img')).toBeNull();
+    expect(missed.getByText('Your answer: Z')).toBeInTheDocument();
   });
 });

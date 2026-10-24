@@ -1111,7 +1111,12 @@ class TestNothingUserVisibleChanged:
             "answers",
             "feedback",
             "questions",  # added by 4a-bis, above
+            # Added by Try the misses again: whether this attempt holds only an
+            # earlier run's misses. A flag about the attempt - nothing about the
+            # snapshot mechanism, and no answer key.
+            "is_retry",
         }
+        assert body["is_retry"] is False
         # The mechanism itself leaks nothing, at any depth.
         blob = json.dumps(body)
         for internal in ("from_snapshot", "snapshot_id", "is_correct_answer", "expected_answers"):

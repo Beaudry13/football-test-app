@@ -1559,42 +1559,6 @@
   fill: var(--defense);
 }
 
-/* AN EMPTY PLAY'S STRIP: "Start from" and the four common sets, then the hint. */
-.motion-lab-root .start-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-}
-.motion-lab-root .start-label {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.motion-lab-root button.start-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px 2px 4px;
-  font-size: 12px;
-  white-space: nowrap;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-.motion-lab-root button.start-chip:hover {
-  border-color: var(--accent);
-}
-.motion-lab-root button.start-chip .preset-thumb {
-  width: 34px;
-  height: 19px;
-}
-.motion-lab-root .start-row .hint {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* MOTION LAB -> QUIZ: the "Make question" panel. */
 .motion-lab-root .popover.make-q-pop {
   width: 380px;
@@ -1806,4 +1770,265 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   font-weight: 700;
+}
+
+/* A quiet line in a Make panel: what PEIRA did for you. */
+.motion-lab-root .make-q-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- FIRST 30 SECONDS: the editor teaches itself --------------------------
+ * Additive, like every pass since ML-UX-2. The top bar reads as the questions
+ * a newcomer asks - where am I (brand, Home, Library), start another (+ New
+ * play), what am I working on and is it kept (the play, Saved / Unsaved,
+ * Save), what can I do with it (Preview 3D, Use this play, Present). An empty
+ * field carries three steps; Play says it is the way to watch.
+ */
+
+/* Home and Library: quiet, always in the same place. */
+.motion-lab-root .ml-nav {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding-right: 8px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+}
+.motion-lab-root .ml-nav > button {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.motion-lab-root .ml-nav > button:hover {
+  background: #222529;
+  color: var(--text);
+}
+.motion-lab-root .new-play-btn {
+  flex: none;
+}
+
+/* The play, whether it is kept, and Save: one cluster, set off by a hairline. */
+.motion-lab-root .play-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 12px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border);
+}
+.motion-lab-root .play-state .saved {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.motion-lab-root .play-state .saved::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.motion-lab-root .play-state .saved.unsaved {
+  color: #f0c75e;
+  font-weight: 700;
+}
+.motion-lab-root .bar button.save-play-btn,
+.motion-lab-root .bar button.inline-name-ok {
+  flex: none;
+  padding: 6px 16px;
+  font-weight: 700;
+}
+.motion-lab-root .inline-name-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* What can I do with it: three peers, alike. */
+.motion-lab-root .present-btn {
+  flex: none;
+}
+
+/* CREATE YOUR PLAY: on the field, in the corner the players leave empty -
+   small enough to clear the nearest corner and safety at 1280 x 720. */
+.motion-lab-root .ml-intro {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 5;
+  width: 290px;
+  padding: 10px 14px 12px;
+  background: rgba(15, 16, 18, 0.92);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.motion-lab-root .ml-intro-title {
+  margin: 0 0 7px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.motion-lab-root .ml-intro-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ml-intro;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.motion-lab-root .ml-intro-steps li {
+  counter-increment: ml-intro;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+  color: var(--text);
+}
+.motion-lab-root .ml-intro-steps li::before {
+  content: counter(ml-intro);
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+.motion-lab-root .ml-intro-steps li span {
+  color: var(--muted);
+}
+/* The last row: what the colours mean, and the one way to a formation. */
+.motion-lab-root .ml-intro-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+}
+.motion-lab-root .ml-intro-key {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.motion-lab-root .ml-intro-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.motion-lab-root .ml-intro-dot.offense {
+  background: var(--offense);
+}
+.motion-lab-root .ml-intro-dot.defense {
+  margin-left: 6px;
+  background: var(--defense);
+}
+.motion-lab-root button.ml-intro-formation {
+  flex: none;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+/* WATCH: Play is bigger than everything else in the dock, and the first
+   time there is something to watch it glows until it is pressed. */
+.motion-lab-root .bar.bottom .play-toggle {
+  height: 40px;
+  min-width: 112px;
+  padding: 0 22px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.motion-lab-root .bar.bottom .play-toggle.nudge {
+  animation: motion-lab-play-nudge 1.4s ease-in-out infinite;
+}
+@keyframes motion-lab-play-nudge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(247, 201, 72, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(247, 201, 72, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motion-lab-root .bar.bottom .play-toggle.nudge {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(247, 201, 72, 0.45);
+  }
+}
+
+/* How you are watching, beside Play. */
+.motion-lab-root .bar.bottom .view-menu {
+  flex: 0 0 auto;
+}
+.motion-lab-root .view-btn .view-word {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+.motion-lab-root .view-btn.active .view-word {
+  color: inherit;
+}
+.motion-lab-root .popover.view-pop {
+  min-width: 250px;
+}
+.motion-lab-root .popover.view-pop button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 7px 10px;
+}
+.motion-lab-root .popover.view-pop button.active .use-why {
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* PREVIEW 3D: PEIRA's signature view gets its own button in the top bar. */
+.motion-lab-root .preview-3d {
+  position: relative;
+  flex: none;
+}
+.motion-lab-root .preview-3d-btn.unavailable:not(.active) {
+  color: var(--muted);
+}
+.motion-lab-root .preview-3d-btn .soon {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.motion-lab-root .popover.preview-3d-pop {
+  width: 280px;
+  padding: 12px 14px;
+  gap: 6px;
+  white-space: normal;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.motion-lab-root .popover.preview-3d-pop b {
+  color: var(--text);
 }

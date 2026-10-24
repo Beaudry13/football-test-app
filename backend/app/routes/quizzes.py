@@ -830,6 +830,7 @@ def _copy_questions_into(
             subject_role=question.subject_role,
             subject_man=question.subject_man,
             subject_marker=question.subject_marker,
+            answer_drawing=question.answer_drawing,
             # Provenance: where this copy came from (did a retest stick?).
             copied_from_question_id=question.id,
             motion_play_id=question.motion_play_id,

@@ -76,3 +76,17 @@ describe('JoinStep', () => {
     expect(onJoined).toHaveBeenCalledWith('GOODCODE', result);
   });
 });
+
+describe('JoinStep on Player Home', () => {
+  it('says "code", not "quiz" - a code can be a Rep - and takes the focus when it is the only thing', () => {
+    render(<JoinStep initialCode="" onJoined={() => undefined} />);
+    expect(screen.getByRole('heading', { name: 'Enter your code' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveFocus();
+  });
+
+  it('as the second thing: a smaller "Got a new code?", and no focus to pop a phone keyboard over his work', () => {
+    render(<JoinStep initialCode="" onJoined={() => undefined} secondary />);
+    expect(screen.getByRole('heading', { name: 'Got a new code?' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).not.toHaveFocus();
+  });
+});

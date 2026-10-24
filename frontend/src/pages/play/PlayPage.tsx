@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getQuizTitleByCode, validateCode } from '../../api/play';
 import type {
   AssessmentMode,
@@ -16,7 +16,8 @@ import { clearAttemptToken, readAttemptToken } from './attemptToken';
 import { JoinStep } from './JoinStep';
 import { NameStep } from './NameStep';
 import { PinStep } from './PinStep';
-import { enterAsPlayer, enterWithPin, pinNoticeFor, type EntryOutcome } from './playerEntry';
+import { enterAsPlayer, enterWithPin, pinNoticeFor, retryEndReason, type EntryOutcome } from './playerEntry';
+import { RetryDone } from './RetryDone';
 import {
   forgetPlayer,
   rememberedPlayer,
@@ -28,6 +29,10 @@ import type { PlayerAnswer } from './QuestionInput';
 import { QuizStep, type PracticeReview } from './QuizStep';
 import { RepIntro } from './RepIntro';
 import { RepRunner } from './RepRunner';
+import { HomeReview } from './HomeReview';
+import { MyWork } from './MyWork';
+import { OtherWorkLink } from './OtherWorkLink';
+import { progressOf, recordDone, recordStarted, reviewFrom, type StoredReview } from './workProgress';
 import { SubmittedStep } from './SubmittedStep';
 import player from '../../styles/player.module.css';
 import styles from './PlayPage.module.css';
@@ -42,8 +47,19 @@ interface CarriedWork {
 
 type Step =
   | { name: 'loading' }
+  /** Player Home: what to do next, from the work on this device (/play). */
+  | { name: 'home' }
+  /** His last run's misses, reviewed from Player Home without a new run. */
+  | { name: 'review'; code: string; joined: ValidateCodeResponse; review: StoredReview }
   | { name: 'join' }
-  | { name: 'name'; code: string; joined: ValidateCodeResponse; remembered: RememberedPlayer | null }
+  | {
+      name: 'name';
+      code: string;
+      joined: ValidateCodeResponse;
+      remembered: RememberedPlayer | null;
+      /** TRY THE MISSES AGAIN, waiting on him saying who he is. */
+      retryOf?: number;
+    }
   | {
       name: 'pin';
       code: string;
@@ -52,6 +68,8 @@ type Step =
       notice: string | null;
       carried: CarriedWork | null;
       run: number;
+      /** TRY THE MISSES AGAIN, carried through the PIN the server asked for. */
+      retryOf?: number;
     }
   | {
       name: 'quiz';
@@ -72,6 +90,8 @@ type Step =
       deliveredQuestions?: DeliveredPlayerQuestion[];
       initialFeedback: PracticeFeedback[];
       carryOverAnswers?: Record<number, PlayerAnswer>;
+      /** This run holds only an earlier run's misses (the server says so). */
+      isRetry: boolean;
       /** Bumped on Try Again. Remounts QuizStep so its answers, feedback and
        * lock state all reset - the alternative, resetting each piece from
        * outside, is the kind of partial reset that leaves one stale field
@@ -79,6 +99,16 @@ type Step =
       run: number;
     }
   | { name: 'submitted'; code: string; player: RememberedPlayer }
+  /** He asked for his misses and there were none left (or none it may retry):
+   *  said plainly, with the full practice his to choose. */
+  | {
+      name: 'retry-done';
+      code: string;
+      joined: ValidateCodeResponse;
+      player: RememberedPlayer;
+      run: number;
+      reason: 'fixed' | 'unavailable';
+    }
   | {
       name: 'practice-complete';
       code: string;
@@ -87,6 +117,9 @@ type Step =
       feedback: PracticeFeedback[];
       review?: PracticeReview;
       run: number;
+      /** The finished run - what "Try the misses again" retries. */
+      attemptId?: number;
+      isRetry: boolean;
     };
 
 /** A roster label for a player the server named (a PIN was required for an id
@@ -100,9 +133,32 @@ function playerFromRoster(joined: ValidateCodeResponse, playerId: number, fallba
 
 export function PlayPage() {
   const { code: urlCode } = useParams<{ code?: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  /** ?review=1 from Player Home, and this device holds that run's misses. */
+  const reviewAsked =
+    !!urlCode && new URLSearchParams(location.search).get('review') === '1' && !!progressOf(urlCode)?.review;
   const [step, setStep] = useState<Step>(() =>
-    urlCode && rememberedPlayer(urlCode) ? { name: 'loading' } : { name: 'join' },
+    !urlCode ? { name: 'home' } : reviewAsked || rememberedPlayer(urlCode) ? { name: 'loading' } : { name: 'join' },
   );
+
+  /* REVIEW FROM PLAYER HOME: the code's questions, his stored misses. */
+  useEffect(() => {
+    if (!urlCode || !reviewAsked) return;
+    const review = progressOf(urlCode)?.review;
+    if (!review) return;
+    let cancelled = false;
+    validateCode(urlCode)
+      .then((joined) => {
+        if (!cancelled) setStep({ name: 'review', code: urlCode, joined, review });
+      })
+      .catch(() => {
+        if (!cancelled) setStep({ name: 'join' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlCode, reviewAsked]);
   // Fetched once, up front from the URL's code - before the player has
   // picked a name, `step` itself carries no quiz data yet to set a title
   // from. Once JoinStep's own validateCode resolves (step advances past
@@ -156,7 +212,7 @@ export function PlayPage() {
   // StrictMode does), and a flag would let the cancelled first run win and the
   // second never start - leaving the player on "Loading…".
   useEffect(() => {
-    if (!urlCode) return;
+    if (!urlCode || reviewAsked) return;
     const remembered = rememberedPlayer(urlCode);
     if (!remembered) return;
     let cancelled = false;
@@ -181,6 +237,8 @@ export function PlayPage() {
                 chosen: finished.chosen,
               },
               run: 0,
+              attemptId: finished.attemptId,
+              isRetry: false,
             });
             return;
           }
@@ -220,6 +278,7 @@ export function PlayPage() {
     outcome: EntryOutcome,
     run: number,
     carried: CarriedWork | null = null,
+    retryOf?: number,
   ) {
     if (outcome.kind === 'pin') {
       setStep({
@@ -230,10 +289,12 @@ export function PlayPage() {
         notice: outcome.notice,
         carried,
         run,
+        retryOf,
       });
       return;
     }
     if (outcome.kind === 'submitted') {
+      recordDone(code, 0, undefined, { graded: true });
       setStep({ name: 'submitted', code, player: who });
       return;
     }
@@ -241,6 +302,8 @@ export function PlayPage() {
     // Only the SAME attempt gets the unsaved work back - never a new practice
     // run that happens to follow it.
     const carryOverAnswers = carried && carried.attemptId === attempt.attempt_id ? carried.answers : undefined;
+    // Player Home: this is in progress now (a new run replaces a finished one).
+    recordStarted(code, { retry: !!attempt.is_retry });
     setStep({
       name: 'quiz',
       code,
@@ -257,8 +320,38 @@ export function PlayPage() {
       deliveredQuestions: attempt.questions,
       initialFeedback: attempt.feedback,
       carryOverAnswers,
+      isRetry: !!attempt.is_retry,
       run,
     });
+  }
+
+  /** TRY THE MISSES AGAIN: a new practice run holding only what `fromAttempt`
+   *  missed - continuing as the same player, so a device holding his token
+   *  needs no PIN. NEVER A DIFFERENT TASK: with nothing left to retry he is
+   *  told so (RetryDone) and the full run is his to choose. */
+  async function retryMisses(code: string, joined: ValidateCodeResponse, who: RememberedPlayer, fromAttempt: number, run: number) {
+    clearPracticeReview(code);
+    try {
+      const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true, retryOf: fromAttempt });
+      follow(code, joined, who, outcome, run + 1, null, fromAttempt);
+    } catch (error) {
+      const ended = retryEndReason(error);
+      if (ended) {
+        setStep({ name: 'retry-done', code, joined, player: who, run, reason: ended });
+        return;
+      }
+      setStep({ name: 'name', code, joined, remembered: who, retryOf: fromAttempt });
+    }
+  }
+
+  /** The full practice, because he chose it (from RetryDone). */
+  async function runFull(code: string, joined: ValidateCodeResponse, who: RememberedPlayer, run: number) {
+    try {
+      const outcome = await enterAsPlayer({ code, accessCodeId: joined.access_code_id, player: who, continuing: true });
+      follow(code, joined, who, outcome, run + 1);
+    } catch {
+      setStep({ name: 'name', code, joined, remembered: who });
+    }
   }
 
   function handleJoined(code: string, joined: ValidateCodeResponse) {
@@ -332,6 +425,33 @@ export function PlayPage() {
         <PeiraLogo variant="light" markOnly size={28} />
       </div>
       {step.name === 'loading' && <LoadingState label="Loading…" />}
+      {step.name === 'home' && (
+        <MyWork joinSlot={(secondary) => <JoinStep initialCode="" onJoined={handleJoined} secondary={secondary} />} />
+      )}
+      {step.name === 'review' && (
+        <HomeReview
+          questions={step.joined.quiz.questions ?? []}
+          review={step.review}
+          isRep={step.joined.quiz.kind === 'REP'}
+          onDone={() => navigate('/play')}
+          onRunAgain={() => {
+            // Off ?review, onto the ordinary way in: "Continue as", then a fresh run.
+            window.history.replaceState(window.history.state, '', `/play/${encodeURIComponent(step.code)}`);
+            setStep({ name: 'name', code: step.code, joined: step.joined, remembered: rememberedPlayer(step.code) });
+          }}
+          onRetryMisses={
+            step.review.attemptId !== undefined
+              ? () => {
+                  const from = step.review.attemptId!;
+                  window.history.replaceState(window.history.state, '', `/play/${encodeURIComponent(step.code)}`);
+                  const who = rememberedPlayer(step.code);
+                  if (who) void retryMisses(step.code, step.joined, who, from, 0);
+                  else setStep({ name: 'name', code: step.code, joined: step.joined, remembered: null, retryOf: from });
+                }
+              : undefined
+          }
+        />
+      )}
       {step.name === 'join' && <JoinStep initialCode={urlCode ?? ''} onJoined={handleJoined} />}
       {/* SITUATIONAL REP: the assignment first, big - then tap your name and go. */}
       {step.name === 'name' && step.joined.quiz.kind === 'REP' && <RepIntro quiz={step.joined.quiz} />}
@@ -345,13 +465,22 @@ export function PlayPage() {
             setStep({ ...step, remembered: null });
           }}
           onChoose={async (who, continuing) => {
-            const outcome = await enterAsPlayer({
-              code: step.code,
-              accessCodeId: step.joined.access_code_id,
-              player: who,
-              continuing,
-            });
-            follow(step.code, step.joined, who, outcome, 0);
+            let outcome: EntryOutcome;
+            try {
+              outcome = await enterAsPlayer({
+                code: step.code,
+                accessCodeId: step.joined.access_code_id,
+                player: who,
+                continuing,
+                retryOf: step.retryOf,
+              });
+            } catch (error) {
+              const ended = step.retryOf !== undefined ? retryEndReason(error) : null;
+              if (!ended) throw error;
+              setStep({ name: 'retry-done', code: step.code, joined: step.joined, player: who, run: 0, reason: ended });
+              return;
+            }
+            follow(step.code, step.joined, who, outcome, 0, null, step.retryOf);
           }}
         />
       )}
@@ -361,13 +490,22 @@ export function PlayPage() {
           player={step.player}
           notice={step.notice}
           onSubmitPin={async (pin) => {
-            const outcome = await enterWithPin({
-              code: step.code,
-              accessCodeId: step.joined.access_code_id,
-              player: step.player,
-              pin,
-            });
-            follow(step.code, step.joined, step.player, outcome, step.run, step.carried);
+            let outcome: EntryOutcome;
+            try {
+              outcome = await enterWithPin({
+                code: step.code,
+                accessCodeId: step.joined.access_code_id,
+                player: step.player,
+                pin,
+                retryOf: step.retryOf,
+              });
+            } catch (error) {
+              const ended = step.retryOf !== undefined ? retryEndReason(error) : null;
+              if (!ended) throw error;
+              setStep({ name: 'retry-done', code: step.code, joined: step.joined, player: step.player, run: step.run, reason: ended });
+              return;
+            }
+            follow(step.code, step.joined, step.player, outcome, step.run, step.carried, step.retryOf);
           }}
           onNotYou={() => {
             forgetPlayer(step.code);
@@ -375,6 +513,8 @@ export function PlayPage() {
           }}
         />
       )}
+      {/* His misses again: said once, above the run. */}
+      {step.name === 'quiz' && step.isRetry && <p className={styles.retryNote}>Your misses, again</p>}
       {step.name === 'quiz' && step.joined.quiz.kind === 'REP' && (
         <RepRunner
           key={`${step.run}:${step.attemptId}`}
@@ -391,6 +531,13 @@ export function PlayPage() {
           }
           onAuthRequired={handleAuthRequired}
           onRunAgain={() => void handleRunRepAgain()}
+          onRetryMisses={() => void retryMisses(step.code, step.joined, step.player, step.attemptId, step.run)}
+          isRetry={step.isRetry}
+          afterFinish={<OtherWorkLink code={step.code} />}
+          onFinished={(order, feedback, chosen) => {
+            const review = reviewFrom(order, feedback, chosen, step.attemptId);
+            recordDone(step.code, review.missedIds.length, review);
+          }}
         />
       )}
       {step.name === 'quiz' && step.joined.quiz.kind !== 'REP' && (
@@ -410,11 +557,18 @@ export function PlayPage() {
             step.player.playerId === null ? null : readAttemptToken(step.code, step.player.playerId)
           }
           onAuthRequired={handleAuthRequired}
-          onSubmitted={() => setStep({ name: 'submitted', code: step.code, player: step.player })}
+          onSubmitted={() => {
+            recordDone(step.code, 0, undefined, { graded: true });
+            setStep({ name: 'submitted', code: step.code, player: step.player });
+          }}
           onPracticeComplete={(feedback, review) => {
             if (review) {
-              savePracticeReview(step.code, step.player, feedback, review.questions.map((q) => q.id), review.chosen);
+              savePracticeReview(step.code, step.player, feedback, review.questions.map((q) => q.id), review.chosen, step.attemptId);
             }
+            const stored = review
+              ? reviewFrom(review.questions.map((q) => q.id), feedback, review.chosen, step.attemptId)
+              : undefined;
+            recordDone(step.code, feedback.filter((f) => f.is_correct === false).length, stored);
             setStep({
               name: 'practice-complete',
               code: step.code,
@@ -423,20 +577,47 @@ export function PlayPage() {
               feedback,
               review,
               run: step.run,
+              attemptId: step.attemptId,
+              isRetry: step.isRetry,
             });
           }}
         />
       )}
       {step.name === 'practice-complete' && (
-        <PracticeCompleteStep feedback={step.feedback} review={step.review} onTryAgain={() => void handleTryAgain()} />
+        <>
+          <PracticeCompleteStep
+            feedback={step.feedback}
+            review={step.review}
+            isRetry={step.isRetry}
+            onTryAgain={() => void handleTryAgain()}
+            onRetryMisses={
+              step.attemptId !== undefined
+                ? () => void retryMisses(step.code, step.joined, step.player, step.attemptId!, step.run)
+                : undefined
+            }
+          />
+          <OtherWorkLink code={step.code} />
+        </>
+      )}
+      {step.name === 'retry-done' && (
+        <>
+          <RetryDone
+            reason={step.reason}
+            onRunFull={() => void runFull(step.code, step.joined, step.player, step.run)}
+          />
+          <OtherWorkLink code={step.code} />
+        </>
       )}
       {step.name === 'submitted' && (
-        <SubmittedStep
-          code={step.code}
-          playerName={step.player.name}
-          playerId={step.player.playerId ?? undefined}
-          player={step.player}
-        />
+        <>
+          <SubmittedStep
+            code={step.code}
+            playerName={step.player.name}
+            playerId={step.player.playerId ?? undefined}
+            player={step.player}
+          />
+          <OtherWorkLink code={step.code} />
+        </>
       )}
     </div>
   );

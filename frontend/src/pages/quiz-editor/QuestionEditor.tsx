@@ -17,6 +17,10 @@ import styles from './QuestionEditor.module.css';
 import { TapCheck } from '../../components/football/TapCheck';
 import { spreadTargets, type Marker, type TapTarget } from '../../components/football/tapTargets';
 import { MarkerEditor } from '../../components/football/MarkerEditor';
+import { DrawingBoard } from '../../components/drawing/DrawingBoard';
+import { createDocument, hasDrawnAnswer } from '../../components/drawing/drawingDocument';
+import type { DrawingDocument } from '../../components/drawing/types';
+import { measureImage } from '../play/drawingDraft';
 
 const TRUE_FALSE_OPTIONS: QuestionOptionInput[] = [
   { option_text: 'True', is_correct_answer: true },
@@ -91,6 +95,8 @@ interface QuestionEditorProps {
   /** The coach's "you are this player" ring on the photo, and his words for him. */
   existingMarker?: Marker | null;
   initialRole?: string | null;
+  /** Draw Response: the coach's own drawing of the answer, already saved. */
+  existingAnswerDrawing?: DrawingDocument | null;
 }
 
 /** The image types Peira accepts, in ONE place.
@@ -154,7 +160,14 @@ export function QuestionEditor({
   existingImageHasMarks = false,
   existingMarker = null,
   initialRole = null,
+  existingAnswerDrawing = null,
 }: QuestionEditorProps) {
+  /* DRAW THE ANSWER: on a Draw Response question, the coach draws the right
+     answer on the same picture, with the same board a player uses. It is what
+     he reviews every player's drawing against; a Rep's player sees it after
+     locking his own. */
+  const [answerDrawing, setAnswerDrawing] = useState<DrawingDocument | null>(existingAnswerDrawing);
+  const [answerDraft, setAnswerDraft] = useState<DrawingDocument | null>(null);
   /* YOU ARE THIS PLAYER: the coach rings the man on his photo himself
      (MarkerEditor) and says who he is. Locked once players have it. */
   const [marker, setMarker] = useState<Marker | null>(existingMarker);
@@ -471,6 +484,45 @@ export function QuestionEditor({
     setOptions((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function openAnswerBoard() {
+    if (!pictureUrl) return;
+    if (answerDrawing) {
+      setAnswerDraft(answerDrawing);
+      return;
+    }
+    try {
+      const { width, height } = await measureImage(pictureUrl);
+      setAnswerDraft(
+        createDocument({
+          // The real image id is bound by the server on save (a new picture has none yet).
+          source: { image_id: 'pending', image_version: null, natural_width: width, natural_height: height },
+          now: new Date().toISOString(),
+        }),
+      );
+    } catch {
+      setError('Could not open the drawing board. Check your connection and try again.');
+    }
+  }
+  const answerControls = questionType === 'draw_response' && pictureUrl && (
+    <div className={styles.imageActions}>
+      {answerDrawing && hasDrawnAnswer(answerDrawing) ? (
+        <>
+          <span className={styles.imageHint}>✓ Your answer is drawn - players are reviewed against it.</span>
+          <button type="button" className={nb.btnSm} onClick={() => void openAnswerBoard()}>
+            Edit the answer
+          </button>
+          <button type="button" className={nb.btnSm} onClick={() => setAnswerDrawing(null)}>
+            Remove
+          </button>
+        </>
+      ) : (
+        <button type="button" className={nb.btnSm} onClick={() => void openAnswerBoard()}>
+          Draw the answer
+        </button>
+      )}
+    </div>
+  );
+
   /* ON THE PICTURE, ONE ROW: who they are in it and how they answer on it.
      Each part is offered only when it applies and says its state in a few
      words; the setup itself (the ring, the spots) opens on tap. Two stacked
@@ -580,6 +632,11 @@ export function QuestionEditor({
             ? { subject_marker: marker }
             : {}),
           ...(role.trim() !== (initialRole ?? '').trim() ? { subject_role: role.trim() || null } : {}),
+          // The coach's answer drawing, when it changed (Draw Response only).
+          ...(questionType === 'draw_response' &&
+          JSON.stringify(answerDrawing) !== JSON.stringify(existingAnswerDrawing ?? null)
+            ? { answer_drawing: answerDrawing && hasDrawnAnswer(answerDrawing) ? answerDrawing : null }
+            : {}),
           // Spots go only with exactly one per answer, and only when they changed.
           ...(tapsAllowed && JSON.stringify(tapTargets) !== JSON.stringify(existingTapTargets ?? null)
             ? { tap_targets: tapTargets && tapTargets.length === options.length ? tapTargets : null }
@@ -947,11 +1004,24 @@ export function QuestionEditor({
               drawn on it.
             </p>
             {pictureControls}
+            {answerControls}
             {existingImageHasMarks && questionType === 'multiple_choice' && (
               <p className={styles.imageHint}>Tap answers need a picture without your markings.</p>
             )}
           </div>
         </div>
+      )}
+      {answerDraft && pictureUrl && (
+        <DrawingBoard
+          imageUrl={pictureUrl}
+          document={answerDraft}
+          onChange={setAnswerDraft}
+          onClose={() => {
+            // Closing keeps what he drew; an empty board leaves the answer as it was.
+            if (hasDrawnAnswer(answerDraft)) setAnswerDrawing(answerDraft);
+            setAnswerDraft(null);
+          }}
+        />
       )}
       {marking && pictureUrl && (
         <MarkerEditor
@@ -1139,6 +1209,7 @@ export function QuestionEditor({
                 </button>
               </div>
               {pictureControls}
+              {answerControls}
             </div>
           ) : (
             /* A drop target and an explanation, not a bare file input. The

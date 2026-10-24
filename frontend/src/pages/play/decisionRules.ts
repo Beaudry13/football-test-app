@@ -15,3 +15,9 @@ export function roleOf(question: Question): string | null {
 export function missedOf(decisions: Question[], feedback: Record<number, PracticeFeedback>) {
   return decisions.filter((q) => feedback[q.id]?.is_correct === false);
 }
+
+/** The right answer's words, when a Rep has said which it is (after the lock). */
+export function rightAnswerOf(question: Question, feedback: PracticeFeedback | undefined): string[] {
+  const ids = feedback?.correct_option_ids ?? [];
+  return question.options.filter((o) => ids.includes(o.id)).map((o) => o.option_text);
+}

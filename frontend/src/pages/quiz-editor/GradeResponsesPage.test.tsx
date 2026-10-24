@@ -21,8 +21,8 @@ vi.mock('../../api/grading', () => ({
 // something identifiable so the tests can assert the drawing IS presented and
 // which image it was drawn over, without asserting pixels.
 vi.mock('../../components/drawing/DrawingViewer', () => ({
-  DrawingViewer: ({ imageUrl, alt }: { imageUrl: string; alt: string }) => (
-    <div data-testid="drawing" data-image={imageUrl}>
+  DrawingViewer: ({ imageUrl, alt, overlay }: { imageUrl: string; alt: string; overlay?: unknown }) => (
+    <div data-testid="drawing" data-image={imageUrl} data-overlay={overlay ? 'on' : 'off'}>
       {alt}
     </div>
   ),
@@ -287,6 +287,47 @@ describe('drawings', () => {
     await waitFor(() =>
       expect(gradeAnswer).toHaveBeenCalledWith(101, { is_correct: true, coach_feedback: null }),
     );
+  });
+});
+
+describe('a drawing question is graded against the drawn answer', () => {
+  const ANSWER = { format: 'peira.drawing', version: 1, coordinate_width: 1200, coordinate_height: 800, strokes: [{ points: [1, 1, 2, 2] }] };
+  const withAnswer = () => {
+    const q = quiz();
+    const draw = q.questions!.find((x) => x.id === DRAW_Q)!;
+    Object.assign(draw, { answer_drawing: ANSWER, image: { image_url: '/uploads/live-drop.jpg' } });
+    return q;
+  };
+
+  it('shows the answer once, beside the question, and lays it over every drawing - one switch for all', async () => {
+    vi.mocked(getQuiz).mockResolvedValue(withAnswer());
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    await user.click(screen.getByRole('button', { name: /Next question/ }));
+    await screen.findByRole('heading', { name: 'Draw your drop.' });
+
+    expect(screen.getByText('The answer')).toBeInTheDocument();
+    const key = screen.getByText('The answer, drawn, for: Draw your drop.');
+    expect(key.getAttribute('data-image')).toContain('/uploads/live-drop.jpg');
+    const tile = () => screen.getByText(/Drawing by .* for: Draw your drop\./);
+    expect(tile().getAttribute('data-overlay')).toBe('on');
+    // No per-drawing toggle: the question's switch governs them all.
+    expect(screen.queryByRole('button', { name: /Your answer/ })).toBeNull();
+
+    await user.click(screen.getByRole('button', { name: /Answer over each drawing/ }));
+    expect(tile().getAttribute('data-overlay')).toBe('off');
+    // The key itself always shows the answer.
+    expect(key.getAttribute('data-overlay')).toBe('on');
+  });
+
+  it('without a drawn answer, says how to add one', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mike Beaudry');
+    await user.click(screen.getByRole('button', { name: /Next question/ }));
+    await screen.findByRole('heading', { name: 'Draw your drop.' });
+    expect(screen.getByText(/No answer drawn for this question yet/)).toBeInTheDocument();
   });
 });
 

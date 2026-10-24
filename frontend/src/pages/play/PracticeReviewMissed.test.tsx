@@ -54,3 +54,41 @@ describe('practice ends with Review missed, as a Rep does', () => {
     expect(screen.queryByRole('button', { name: 'Review missed' })).toBeNull();
   });
 });
+
+/** TRY THE MISSES AGAIN: after seeing what he missed, the one obvious next
+ *  thing is trying just those - the whole quiz again stays, quietly. */
+describe('try the misses again', () => {
+  it('review first, then just the misses - the whole quiz over is still there, quietly', () => {
+    const onRetry = vi.fn();
+    const onWhole = vi.fn();
+    render(
+      <PracticeCompleteStep
+        feedback={feedback}
+        review={{ questions, chosen: { 1: [11], 2: [20] } }}
+        onTryAgain={onWhole}
+        onRetryMisses={onRetry}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Review missed' }).className).toMatch(/btn-primary/);
+    expect(screen.getByRole('button', { name: 'Try the misses again' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start the whole quiz over' }));
+    expect(onWhole).toHaveBeenCalled();
+    // And at the end of the review it is the one thing to do next.
+    fireEvent.click(screen.getByRole('button', { name: 'Review missed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Try the misses again' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('nothing missed: no retry offered, just Try again', () => {
+    render(
+      <PracticeCompleteStep feedback={[feedback[1]]} review={{ questions, chosen: {} }} onTryAgain={vi.fn()} onRetryMisses={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Try the misses again' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' }).className).toMatch(/btn-primary/);
+  });
+
+  it('a run that was his misses again says so', () => {
+    render(<PracticeCompleteStep feedback={[feedback[1]]} review={{ questions, chosen: {} }} onTryAgain={vi.fn()} isRetry />);
+    expect(screen.getByRole('heading', { name: 'Your misses, again' })).toBeInTheDocument();
+  });
+});

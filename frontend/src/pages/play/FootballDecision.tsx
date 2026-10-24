@@ -2,7 +2,7 @@ import type { PracticeFeedback, Question } from '../../api/types';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { TapHint, YouAre } from '../../components/football/DecisionWords';
 import { usableTargets, type TapTarget } from '../../components/football/tapTargets';
-import { missedOf, roleOf } from './decisionRules';
+import { missedOf, rightAnswerOf, roleOf } from './decisionRules';
 import styles from './RepRunner.module.css';
 
 // THE FOOTBALL DECISION, ON THE PLAYER'S SCREEN - one component for a Rep's
@@ -21,8 +21,11 @@ export function Decision({
   still = false,
   onMotionDone,
   showTaps = false,
+  correctIds,
 }: {
   question: Question;
+  /** A Rep, after the decision is locked: the right answer, lit beside his. */
+  correctIds?: number[];
   onTap?: (optionId: number) => void;
   /** Review: the answers in the picture, his marked, nothing to tap. */
   showTaps?: boolean;
@@ -35,6 +38,23 @@ export function Decision({
 }) {
   const role = roleOf(question);
   const targets = tapTargetsOf(question);
+  /* HIS TAP AND THE RIGHT ONE, on the picture: green for the right answer,
+     red for his when it was not. Only once the coach's answer is known. */
+  const marks = correctIds
+    ? Object.fromEntries([
+        ...(chosen ?? []).filter((id) => !correctIds.includes(id)).map((id) => [id, 'wrong' as const]),
+        ...correctIds.map((id) => [id, 'right' as const]),
+      ])
+    : undefined;
+  /* AND SAID IN WORDS ON THE PICTURE, so the colours never have to be decoded:
+     "You" on his pick when it was not it, "Right" on the answer - "You ✓"
+     when he picked it. */
+  const badges = correctIds
+    ? Object.fromEntries([
+        ...(chosen ?? []).filter((id) => !correctIds.includes(id)).map((id) => [id, 'You']),
+        ...correctIds.map((id) => [id, (chosen ?? []).includes(id) ? 'You ✓' : 'Right']),
+      ])
+    : undefined;
   return (
     <>
       {role && <YouAre role={role} />}
@@ -48,6 +68,8 @@ export function Decision({
         onTap={onTap}
         chosen={chosen}
         tone={tone}
+        marks={marks}
+        badges={badges}
         disabled={disabled}
         still={still}
         onMotionDone={onMotionDone}
@@ -56,7 +78,8 @@ export function Decision({
         motionKey={question.id}
       />
       <h1 className={styles.prompt}>{question.question_text}</h1>
-      {onTap && targets && <TapHint targets={targets} />}
+      {/* How to answer - only while there is still something to answer. */}
+      {onTap && targets && !disabled && <TapHint targets={targets} />}
     </>
   );
 }
@@ -66,7 +89,7 @@ function tapTargetsOf(question: Question): TapTarget[] | null {
   return usableTargets(question.tap_targets, question.options.length, !!(question.image || question.presnap));
 }
 
-export function Verdict({ feedback }: { feedback: PracticeFeedback }) {
+export function Verdict({ feedback, right = [] }: { feedback: PracticeFeedback; right?: string[] }) {
   const word = feedback.is_correct === true ? 'Correct' : feedback.is_correct === false ? 'Not quite' : 'Locked in';
   const tone =
     feedback.is_correct === true ? styles.verdictRight : feedback.is_correct === false ? styles.verdictWrong : '';
@@ -76,6 +99,12 @@ export function Verdict({ feedback }: { feedback: PracticeFeedback }) {
         {feedback.is_correct === true ? '✓ ' : feedback.is_correct === false ? '✕ ' : ''}
         {word}
       </span>
+      {/* A Rep teaches: when he missed it, the right answer is said plainly. */}
+      {feedback.is_correct === false && right.length > 0 && (
+        <p className={styles.rightAnswer}>
+          Right answer: <strong>{right.join(', ')}</strong>
+        </p>
+      )}
       {feedback.answer_explanation && (
         <p className={styles.why}>
           <span className={styles.whyLead}>Coach:</span> {feedback.answer_explanation}
@@ -85,7 +114,8 @@ export function Verdict({ feedback }: { feedback: PracticeFeedback }) {
   );
 }
 
-/** Each missed decision again: the situation, what he chose, why the coach says otherwise. */
+/** Each missed decision again: the situation, what he chose, the right answer
+ *  when a Rep says it, the coach's point - and then a way to try it again. */
 export function ReviewMissed({
   decisions,
   feedback,
@@ -93,6 +123,8 @@ export function ReviewMissed({
   at,
   onAt,
   onDone,
+  onRunAgain,
+  runAgainLabel = 'Run it again',
 }: {
   decisions: Question[];
   feedback: Record<number, PracticeFeedback>;
@@ -101,36 +133,47 @@ export function ReviewMissed({
   at: number;
   onAt: (index: number) => void;
   onDone: () => void;
+  /** The next action after the last missed one: run it again. */
+  onRunAgain?: () => void;
+  /** "Run it again" on a Rep; a practice quiz says "Try again". */
+  runAgainLabel?: string;
 }) {
   const missed = missedOf(decisions, feedback);
   const position = Math.max(0, missed.indexOf(decisions[at]));
   const question = missed[position];
-  if (!question) {
-    return (
-      <div className={styles.summaryActions}>
-        <button type="button" className="btn btn-primary" onClick={onDone}>
-          Done
+  const finalActions = (
+    <div className={styles.summaryActions}>
+      {onRunAgain && (
+        <button type="button" className="btn btn-primary" onClick={onRunAgain}>
+          {runAgainLabel}
         </button>
-      </div>
-    );
-  }
+      )}
+      <button type="button" className={onRunAgain ? 'btn' : 'btn btn-primary'} onClick={onDone}>
+        Done
+      </button>
+    </div>
+  );
+  if (!question) return finalActions;
   const picked = question.options
     .filter((o) => chosen[question.id]?.includes(o.id))
     .map((o) => o.option_text);
   const next = missed[position + 1];
+  const reveal = feedback[question.id]?.correct_option_ids;
   return (
     <div className={styles.rep}>
       <div className={styles.reviewHead}>
         Missed {position + 1} of {missed.length}
       </div>
-      {/* HIS TAP, ON THE PICTURE HE TAPPED - and only his: the right one is
-          the coach's to say, in his reason below (no automatic reveal). */}
+      {/* HIS TAP, ON THE PICTURE HE TAPPED. On a Rep (teaching) the right
+          one is lit beside it; a practice quiz leaves the answer to the
+          coach's reason below, as it always has. */}
       <Decision
         question={question}
         still
         showTaps
         chosen={chosen[question.id] ?? []}
         tone="wrong"
+        correctIds={reveal}
         disabled
       />
       {picked.length > 0 && (
@@ -138,18 +181,16 @@ export function ReviewMissed({
           You chose: {picked.join(', ')}
         </div>
       )}
-      <Verdict feedback={feedback[question.id]} />
-      <div className={styles.summaryActions}>
-        {next ? (
+      <Verdict feedback={feedback[question.id]} right={rightAnswerOf(question, feedback[question.id])} />
+      {next ? (
+        <div className={styles.summaryActions}>
           <button type="button" className="btn btn-primary" onClick={() => onAt(decisions.indexOf(next))}>
             Next missed
           </button>
-        ) : (
-          <button type="button" className="btn btn-primary" onClick={onDone}>
-            Done
-          </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        finalActions
+      )}
     </div>
   );
 }

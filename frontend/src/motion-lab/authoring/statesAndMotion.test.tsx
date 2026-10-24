@@ -10,6 +10,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, installPointerStubs, playerMarker } from '../testing/pointerStubs'
+import { chooseView } from '../testing/viewMenu'
 import { U, Y_MAX } from '../engine/field'
 import type { Play } from '../engine/play'
 
@@ -81,14 +82,14 @@ describe('tooltips carry the key (SPEC §11.1)', () => {
     open(pane('Inside Zone Rt'))
     expect(btnIn(topBar(), '↶')).toHaveAttribute('title', 'Undo · Ctrl+Z')
     expect(btnIn(topBar(), '↷')).toHaveAttribute('title', 'Redo · Ctrl+Shift+Z')
-    expect(btnIn(topBar(), 'Present')).toHaveAttribute('title', 'Hide the tools and teach')
+    expect(btnIn(topBar(), 'Present')).toHaveAttribute('title', 'Full screen for the meeting room: hide the tools and teach')
   })
 
-  it('strip: Draw assignment, Redraw (PEIRA\'s own words), Adjust', () => {
+  it("strip: Draw movement (plain words for a newcomer), Redraw, Adjust", () => {
     const play = pane('Inside Zone Rt')
     open(play)
     select(play, byLabel(play, 'LT').id) // no route
-    expect(btnIn(strip(), /Draw assignment/)).toHaveAttribute('title', 'Draw what he does · D')
+    expect(btnIn(strip(), '✎ Draw movement')).toHaveAttribute('title', 'Draw where he goes · D')
 
     select(play, byLabel(play, 'RB').id) // has one
     expect(btnIn(strip(), 'Redraw')).toHaveAttribute('title', 'Draw it again · D')
@@ -406,12 +407,14 @@ describe('every control takes the same step', () => {
     expect(wins(`${R} button.gold-line:not(:disabled):not(.active):hover`, `${R} .bar button.gold-line`)).toBe(true)
     expect(decl(rule(`${R} button.gold-line:not(:disabled):not(.active):active`), 'background')).toBe('transparent')
 
+    // Exit Present is the top bar's gold-line in Present (Present itself is a plain peer now).
     open(pane('Inside Zone Rt'))
-    expect(btnIn(topBar(), 'Present').matches(`${R} button.gold-line:not(:disabled):not(.active)`)).toBe(true)
+    fireEvent.click(btnIn(topBar(), 'Present'))
+    expect(btnIn(topBar(), 'Exit Present').matches(`${R} button.gold-line:not(:disabled):not(.active)`)).toBe(true)
   })
 })
 
-/** The nine menus, each opened the way a coach opens it. */
+/** The ten menus, each opened the way a coach opens it. */
 const MENUS: { name: string; setup: () => HTMLElement }[] = [
   { name: 'play', setup: () => { open(pane('Inside Zone Rt')); return topBar().querySelector('.play-btn') as HTMLElement } },
   { name: 'Formation', setup: () => { open(pane('Inside Zone Rt')); return btnIn(strip(), /^Formation/) } },
@@ -437,12 +440,14 @@ const MENUS: { name: string; setup: () => HTMLElement }[] = [
   { name: 'rate', setup: () => { open(pane('Inside Zone Rt')); return dock().querySelector('.rate-pill') as HTMLElement } },
   { name: 'Situation', setup: () => { open(pane('Inside Zone Rt')); return dock().querySelector('.sit-chip') as HTMLElement } },
   { name: 'Display', setup: () => { open(pane('Inside Zone Rt')); return btnIn(dock(), /^Display/) } },
+  // First-30-seconds pass: how you watch is a menu in the dock, beside Play.
+  { name: 'View', setup: () => { open(pane('Inside Zone Rt')); return btnIn(dock(), /^View /) } },
   {
     name: 'Change',
     setup: () => {
       const play = pane('Inside Zone Rt')
       open(play)
-      fireEvent.click(btnIn(topBar(), 'Player'))
+      chooseView('Player')
       select(play, byLabel(play, 'FS').id)
       return btnIn(strip(), 'Change ▾')
     },
@@ -474,10 +479,12 @@ describe('an open menu\'s button is not gold (SPEC §1.4)', () => {
   })
 
   it('a chosen segment is still gold: it is not a menu', () => {
-    open(pane('Inside Zone Rt'))
-    const overhead = btnIn(topBar(), 'Overhead')
-    expect(overhead).toHaveClass('active')
-    expect(overhead.matches(OPEN)).toBe(false)
+    const play = pane('Inside Zone Rt')
+    open(play)
+    select(play, byLabel(play, 'RB').id)
+    const chosen = strip().querySelector('.seg button.active') as HTMLElement
+    expect(chosen).toHaveClass('active')
+    expect(chosen.matches(OPEN)).toBe(false)
   })
 })
 
@@ -500,7 +507,7 @@ describe('the keyboard\'s focus ring', () => {
     const play = pane('Inside Zone Rt')
     open(play)
     select(play, byLabel(play, 'RB').id)
-    for (const b of [btnIn(topBar(), '↶'), btnIn(topBar(), 'Overhead'), strip().querySelector('.seg button.active') as HTMLElement]) {
+    for (const b of [btnIn(topBar(), '↶'), btnIn(topBar(), '↷'), strip().querySelector('.seg button.active') as HTMLElement]) {
       expect(b.matches(`${R} .seg button`)).toBe(true)
     }
     expect(playBtn().matches(`${R} .seg button`)).toBe(false) // Play keeps the outside ring
@@ -529,10 +536,11 @@ describe('menus fade in (120 ms), and only in', () => {
 })
 
 describe('what did not move, and what did', () => {
-  it('Present is still gold-line and the strip chip still not a button; no button is named for its key any more', () => {
+  it('Present is a plain peer of the play actions now, the strip chip still not a button; no button is named for its key any more', () => {
     const play = pane('Inside Zone Rt')
     open(play)
-    expect(btnIn(topBar(), 'Present')).toHaveClass('gold-line')
+    expect(btnIn(topBar(), 'Present')).toHaveClass('present-btn')
+    expect(btnIn(topBar(), 'Present')).not.toHaveClass('gold-line')
     select(play, byLabel(play, 'RB').id)
     expect(strip().querySelector('.chip-static')!.tagName).toBe('SPAN')
     expect(screen.queryAllByRole('button', { name: /Space|^B$/ })).toEqual([])

@@ -78,7 +78,7 @@ describe('the phase switch', () => {
     open(play)
     select(play, H)
     expect(phaseSeg()).toBeNull()
-    expect(stripBtn('✎ Draw assignment')).toBeInTheDocument()
+    expect(stripBtn('✎ Draw movement')).toBeInTheDocument()
   })
 
   it('appears once he has motion, on Route', () => {
@@ -151,7 +151,7 @@ describe('adding motion and drawing both phases', () => {
     fireEvent.click(moreItem('Add pre-snap motion…'))
     key('Escape')
     expect(phaseSeg()).toBeNull()
-    expect(stripBtn('✎ Draw assignment')).toBeInTheDocument()
+    expect(stripBtn('✎ Draw movement')).toBeInTheDocument()
   })
 
   it('draws the route from where the motion ends, whatever the pointer does', async () => {

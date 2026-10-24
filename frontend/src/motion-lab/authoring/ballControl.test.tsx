@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { gapPlays, panePlays } from '../__characterization__/fixtures'
 import { board, drawFromHandle, installPointerStubs, playerMarker } from '../testing/pointerStubs'
+import { chooseView } from '../testing/viewMenu'
 import { U, Y_MAX } from '../engine/field'
 import type { Play } from '../engine/play'
 
@@ -339,7 +340,7 @@ describe('a pick that is abandoned changes nothing', () => {
     ['Escape', () => key('Escape')],
     ['the Cancel button', () => fireEvent.click(within(strip()).getByRole('button', { name: /Cancel/ }))],
     ['pressing Play', () => key(' ')],
-    ['changing view', () => fireEvent.click(screen.getByRole('button', { name: 'Coach' }))],
+    ['changing view', () => chooseView('Coach')],
   ]
 
   it.each(abandon)('%s leaves the ball exactly as it was', async (_name, act_) => {
@@ -400,7 +401,7 @@ describe('from Coach view', () => {
   it('the menu still works, and a pick brings the board back', () => {
     const play = pane('Inside Zone Rt')
     open({ ...play, ball: null, ballThen: null })
-    fireEvent.click(screen.getByRole('button', { name: 'Coach' }))
+    chooseView('Coach')
     expect(overhead()).toBeNull()
 
     expect(ballBtn()).not.toBeDisabled()
@@ -415,7 +416,7 @@ describe('from Coach view', () => {
   it('a keep needs no switch', () => {
     const play = pane('Inside Zone Rt')
     open({ ...play, ball: null, ballThen: null })
-    fireEvent.click(screen.getByRole('button', { name: 'Coach' }))
+    chooseView('Coach')
 
     openMenu()
     fireEvent.click(popBtn('QB keeps it'))

@@ -10,6 +10,7 @@ import { MotionLabEditor } from './MotionLabEditor'
 import { createLocalPlayRepository, CURRENT_KEY, PLAYS_KEY } from '../storage/localPlayRepository'
 import { panePlays } from '../__characterization__/fixtures'
 import { board, installPointerStubs, playerMarker } from '../testing/pointerStubs'
+import { chooseView, currentView } from '../testing/viewMenu'
 import { U, Y_MAX } from '../engine/field'
 import type { Play } from '../engine/play'
 
@@ -163,7 +164,7 @@ describe('D with nobody selected: the resting hint flashes gold (SPEC §12.1)', 
 
   it('not in Coach view, not in Player view, not in Present, not during a pick', () => {
     const play = pane()
-    const view = (name: string) => fireEvent.click(within(topBar()).getByRole('button', { name }))
+    const view = chooseView
 
     open(play)
     view('Coach')
@@ -270,7 +271,7 @@ describe('a ball with nobody to give it to (SPEC §12.3)', () => {
     expect(ballMenu()).not.toBeNull()
     expect(strip()!.querySelector('.banner')).toBeNull()
     expect(toast()).toBeNull()
-    expect(within(topBar()).getByRole('button', { name: 'Overhead' })).toHaveClass('active')
+    expect(currentView()).toBe('Overhead')
     await settle()
     expect(JSON.stringify(stored(play))).toBe(before)
   })
@@ -304,11 +305,11 @@ describe('a ball with nobody to give it to (SPEC §12.3)', () => {
 
   it('from Coach view too - the menu is in the dock', () => {
     open(offenseOnly((l) => l === 'QB'))
-    fireEvent.click(within(topBar()).getByRole('button', { name: 'Coach' }))
+    chooseView('Coach')
     fireEvent.click(ballBtn())
     expectNobodyToGiveItTo()
     fireEvent.click(item('Pass to…'))
     // Disabled: it did not take him back to Overhead for a pick.
-    expect(within(topBar()).getByRole('button', { name: 'Coach' })).toHaveClass('active')
+    expect(currentView()).toBe('Coach')
   })
 })

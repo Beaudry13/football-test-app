@@ -11,6 +11,7 @@ import { TeachPlay } from './TeachPlay'
 import type { Player } from './engine/formation'
 import type { Play } from './engine/play'
 import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
+import { Preview3D } from './Preview3D'
 import { VIEWER_3D_URL, viewIn3D } from './viewIn3D'
 import './motionLab.css'
 
@@ -31,8 +32,8 @@ import './motionLab.css'
  * MOTION LAB OPENS ON THE FIELD. At /motion-lab (no play id) the coach lands
  * straight in the editor, on his SCRATCH play - kept on this device, never
  * written to PEIRA (apiPlayRepository: the scratch play) - so opening Motion Lab
- * creates nothing. "Save play" saves it as an ordinary play and the URL moves to
- * it. "+ New play" starts a fresh scratch play; if the old one had work in it,
+ * creates nothing. Save (beside "Unsaved" in the top bar) saves it as an
+ * ordinary play and the URL moves to it. "+ New play" starts a fresh scratch play; if the old one had work in it,
  * Undo puts it back for a few seconds. Opening a saved play leaves the scratch
  * play where it is: /motion-lab (or "Continue" in the Library) brings it back.
  */
@@ -225,20 +226,20 @@ export default function MotionLabEditorPage() {
   const folderId = current ? session.folderIdOf(current) : null
 
   /**
-   * V6, development only: open the saved play in the 3D viewer. Offered when
+   * PREVIEW 3D: open the saved play in the 3D viewer. Live when
    * VITE_MOTION_LAB_3D_URL is set; hands over only a play whose last edit the
    * server has confirmed, because the viewer is shown the SAVED play.
    */
   const open3D = () => {
     const id = session.repository.currentPlayId()
     if (id && session.isScratch(id)) {
-      setNotices((all) => [...all, 'Save the play first - View in 3D shows the saved play.'])
+      setNotices((all) => [...all, 'Save the play first - Preview 3D shows the saved play.'])
       return
     }
     const serverId = id ? session.serverIdOf(id) : null
     const saved = id !== null && session.stateOf(id).state === 'saved' && !editPending.current
     if (!VIEWER_3D_URL || serverId === null || !saved) {
-      setNotices((all) => [...all, 'Saving… View in 3D shows the saved play - try again in a moment.'])
+      setNotices((all) => [...all, 'Saving… Preview 3D shows the saved play - try again in a moment.'])
       return
     }
     if (!viewIn3D(VIEWER_3D_URL, serverId)) setNotices((all) => [...all, 'The 3D viewer window was blocked - allow pop-ups for this site.'])
@@ -262,7 +263,6 @@ export default function MotionLabEditorPage() {
     if (!scratchRoute) navigate('/motion-lab')
     setEditorKey((key) => key + 1)
   }
-  const onScratch = current !== null && session.isScratch(current)
   const currentPlay = current ? session.repository.listPlays().find((p) => p.id === current) ?? null : null
 
   let notice = null
@@ -327,14 +327,16 @@ export default function MotionLabEditorPage() {
         repository={session.repository}
         exit={
           <>
+            {/* HOME, WITHOUT THE BROWSER'S BACK BUTTON. Leaving is safe the
+                same way Library is: a pending edit is flushed to the server on
+                the way out, and an unsaved scratch play stays on this device
+                (Home's Motion Lab card offers "Continue"). */}
+            <button className="home-btn" onClick={() => navigate('/dashboard')} title="PEIRA Home">
+              Home
+            </button>
             <button onClick={() => navigate(folderId !== null ? `/motion-lab/folders/${folderId}` : '/motion-lab/library')} title="Your saved plays">
               Library
             </button>
-            {VIEWER_3D_URL && !onScratch && (
-              <button onClick={open3D} title="Open the saved play in the PEIRA 3D viewer (development)">
-                View in 3D
-              </button>
-            )}
           </>
         }
         saveStatus={({ editPending: pending }) => {
@@ -348,10 +350,17 @@ export default function MotionLabEditorPage() {
         }}
         notice={notice}
         actions={
-          /* USE THIS PLAY: one button for everything that takes the play
-             somewhere else - a Rep, a quiz question, a moment taught on the
-             big screen - so the field keeps the top bar. Each still opens
-             its own one-panel flow, one panel at a time. */
+          <>
+          {/* PREVIEW 3D gets its own button: one of PEIRA's signature views
+              is never a menu item. Owner decision (20 October 2026): only
+              where a viewer is configured. Without one, production shows
+              nothing - a button that cannot work only confuses - while local
+              development still shows the explained "Soon" state to test. */}
+          {(VIEWER_3D_URL !== null || import.meta.env.DEV) && <Preview3D available={VIEWER_3D_URL !== null} onOpen={open3D} />}
+          {/* USE THIS PLAY: one button for everything that takes the play
+              somewhere else - a Rep, a quiz question, a moment taught on the
+              big screen - so the field keeps the top bar. Each still opens
+              its own one-panel flow, one panel at a time. */}
           <div className="ball-menu make-actions">
             <button
               className={using || repping || asking || teachingPlay ? 'active' : ''}
@@ -406,6 +415,7 @@ export default function MotionLabEditorPage() {
             )}
             {teachingPlay && currentPlay && <TeachPlay play={currentPlay} onClose={() => setTeachingPlay(false)} />}
           </div>
+          </>
         }
         isUnsaved={(id) => session.isScratch(id)}
         onSaveUnsaved={(play) => session.saveScratch(play)}

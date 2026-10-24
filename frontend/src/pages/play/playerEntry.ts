@@ -42,6 +42,16 @@ export function pinNoticeFor(reason: string | undefined, deviceHadToken: boolean
   return null;
 }
 
+/** TRY THE MISSES AGAIN refused for a reason that is an answer, not a failure:
+ *  nothing left to retry (`fixed`), or the run can no longer be retried. The
+ *  caller says so - it never quietly starts a different task instead. */
+export function retryEndReason(error: unknown): 'fixed' | 'unavailable' | null {
+  if (!(error instanceof ApiError) || error.status !== 422) return null;
+  if (error.reason === 'nothing_to_retry') return 'fixed';
+  if (error.reason === 'retry_not_available') return 'unavailable';
+  return null;
+}
+
 /** Plain words for a PIN that was not accepted. No reason codes, no jargon. */
 export function pinErrorMessage(error: unknown): string {
   if (!(error instanceof ApiError)) return getErrorMessage(error);
@@ -86,12 +96,18 @@ function fromClaim(code: string, player: RememberedPlayer, response: ClaimAttemp
   return { kind: 'submitted' };
 }
 
-async function startByRoster(code: string, accessCodeId: number, player: RememberedPlayer): Promise<EntryOutcome> {
+async function startByRoster(
+  code: string,
+  accessCodeId: number,
+  player: RememberedPlayer,
+  retryOf?: number,
+): Promise<EntryOutcome> {
   try {
     const attempt = await startAttempt({
       access_code_id: accessCodeId,
       player_name: player.name,
       player_id: player.playerId ?? undefined,
+      ...(retryOf !== undefined ? { retry_of_attempt_id: retryOf } : {}),
     });
     rememberPlayer(code, player);
     return { kind: 'quiz', attempt };
@@ -118,13 +134,16 @@ export async function enterAsPlayer(input: {
   accessCodeId: number;
   player: RememberedPlayer;
   continuing: boolean;
+  /** TRY THE MISSES AGAIN: the finished practice run whose misses the new run holds. */
+  retryOf?: number;
 }): Promise<EntryOutcome> {
-  const { code, accessCodeId, player, continuing } = input;
+  const { code, accessCodeId, player, continuing, retryOf } = input;
+  const retry = retryOf !== undefined ? { retry_of_attempt_id: retryOf } : {};
   if (continuing && player.playerId !== null) {
     const token = readAttemptToken(code, player.playerId);
     if (token) {
       try {
-        const response = await claimAttempt({ access_code_id: accessCodeId, player_id: player.playerId }, token);
+        const response = await claimAttempt({ access_code_id: accessCodeId, player_id: player.playerId, ...retry }, token);
         return fromClaim(code, player, response);
       } catch (error) {
         if (isAuthRefusal(error)) {
@@ -137,7 +156,7 @@ export async function enterAsPlayer(input: {
       }
     }
   }
-  return startByRoster(code, accessCodeId, player);
+  return startByRoster(code, accessCodeId, player, retryOf);
 }
 
 /** The player typed their PIN. Errors are thrown for the PIN screen to word
@@ -147,10 +166,17 @@ export async function enterWithPin(input: {
   accessCodeId: number;
   player: RememberedPlayer & { playerId: number };
   pin: string;
+  /** TRY THE MISSES AGAIN, carried through a PIN the server asked for. */
+  retryOf?: number;
 }): Promise<EntryOutcome> {
-  const { code, accessCodeId, player, pin } = input;
+  const { code, accessCodeId, player, pin, retryOf } = input;
   try {
-    const response = await claimAttempt({ access_code_id: accessCodeId, player_id: player.playerId, pin });
+    const response = await claimAttempt({
+      access_code_id: accessCodeId,
+      player_id: player.playerId,
+      pin,
+      ...(retryOf !== undefined ? { retry_of_attempt_id: retryOf } : {}),
+    });
     return fromClaim(code, player, response);
   } catch (error) {
     if (error instanceof ApiError && error.reason === 'legacy_attempt') {

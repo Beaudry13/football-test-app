@@ -1008,6 +1008,11 @@ class TestOfficialScopeGuard:
         # PRACTICE, and produces a diagnosis - never a grade, an average or an
         # export that official results show.
         "app/services/rep_results.py",
+        # Player-home groundwork. One player's OWN status on a live code
+        # (not started / started / finished) - a practice run he began IS
+        # "started", so official_only would hide work he is in the middle of.
+        # Never a grade, average or export; no route serves it yet.
+        "app/services/player_assignments.py",
     }
 
     def test_every_reporting_query_goes_through_attempt_scope(self):

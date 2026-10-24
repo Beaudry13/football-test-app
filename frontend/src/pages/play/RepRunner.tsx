@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { checkAnswer, saveAnswer, submitQuiz } from '../../api/play';
 import { getRepProgress, type RepProgress } from '../../api/reps';
-import { getErrorMessage } from '../../api/client';
+import { getErrorMessage, resolveMediaUrl } from '../../api/client';
 import type {
   DeliveredPlayerQuestion,
   PracticeFeedback,
@@ -10,12 +10,14 @@ import type {
   ResumedAnswer,
 } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { CompareDrawing } from '../../components/drawing/CompareDrawing';
+import type { DrawingDocument } from '../../components/drawing/types';
 import { applyDeliveredContent } from './deliveredQuestions';
 import { orderQuestions } from './questionOrder';
 import { isAuthRefusal } from './playerEntry';
 import { QuestionInput, type PlayerAnswer } from './QuestionInput';
 import { Decision, ReviewMissed, Verdict } from './FootballDecision';
-import { missedOf, TAPPABLE } from './decisionRules';
+import { missedOf, rightAnswerOf, TAPPABLE } from './decisionRules';
 import styles from './RepRunner.module.css';
 
 /**
@@ -55,6 +57,10 @@ export function RepRunner({
   attemptToken,
   onAuthRequired,
   onRunAgain,
+  onRetryMisses,
+  isRetry = false,
+  onFinished,
+  afterFinish,
 }: {
   quiz: Quiz;
   deliveredQuestions?: DeliveredPlayerQuestion[];
@@ -67,6 +73,14 @@ export function RepRunner({
   attemptToken?: () => string | null;
   onAuthRequired?: (reason: string | undefined, answers: Record<number, PlayerAnswer>) => void;
   onRunAgain: () => void;
+  /** TRY THE MISSES AGAIN: a new run holding only what this one missed. */
+  onRetryMisses?: () => void;
+  /** This run IS his misses again: it says so, and is not measured against a run. */
+  isRetry?: boolean;
+  /** The run is over: the decisions in order, his verdicts and picks (Player Home's review). */
+  onFinished?: (order: number[], feedback: PracticeFeedback[], chosen: Record<number, number[]>) => void;
+  /** Under the finish: the way back to his other work (Player Home). */
+  afterFinish?: React.ReactNode;
 }) {
   const decisions = useMemo(
     () => orderQuestions(applyDeliveredContent(quiz.questions ?? [], deliveredQuestions), questionOrder),
@@ -194,8 +208,15 @@ export function RepRunner({
     } finally {
       setBusy(false);
       setFinished(true);
+      onFinished?.(
+        decisions.map((q) => q.id),
+        Object.values(feedback),
+        Object.fromEntries(Object.entries(taken).map(([id, t]) => [id, t.optionIds])),
+      );
     }
-    // Where he stands against last time - a bonus, never a blocker.
+    // Where he stands against last time - a bonus, never a blocker. Not for
+    // his misses again: two decisions are not a run to compare with one.
+    if (isRetry) return;
     getRepProgress({ access_code_id: accessCodeId, player_name: playerName, player_id: playerId }, ...tokenArgs())
       .then(setProgress)
       .catch(() => undefined);
@@ -211,22 +232,31 @@ export function RepRunner({
           at={reviewing}
           onAt={setReviewing}
           onDone={() => setReviewing(null)}
+          onRunAgain={onRetryMisses ?? onRunAgain}
+          runAgainLabel={onRetryMisses ? 'Try the misses again' : 'Run it again'}
         />
       );
     }
     return (
-      <Summary
-        decisions={decisions}
-        feedback={feedback}
-        taken={taken}
-        progress={progress}
-        onReview={(first) => setReviewing(first)}
-        onRunAgain={onRunAgain}
-      />
+      <>
+        <Summary
+          decisions={decisions}
+          feedback={feedback}
+          taken={taken}
+          progress={progress}
+          isRetry={isRetry}
+          onReview={(first) => setReviewing(first)}
+          onRunAgain={onRunAgain}
+          onRetryMisses={onRetryMisses}
+        />
+        {afterFinish}
+      </>
     );
   }
 
   const verdict = feedback[decision.id];
+  /** A Rep teaches: once locked, the right answer (from the server, never before). */
+  const correct = verdict?.correct_option_ids;
   const last = index === decisions.length - 1;
   const tappable = TAPPABLE.has(decision.question_type) && !decision.allows_multiple_answers;
 
@@ -238,6 +268,7 @@ export function RepRunner({
         onTap={tappable && !watching ? (optionId) => void lockIn(decision, { selected_option_id: optionId }) : undefined}
         chosen={taken[decision.id]?.optionIds}
         tone={verdict ? (verdict.is_correct ? 'right' : verdict.is_correct === false ? 'wrong' : null) : null}
+        correctIds={correct}
         disabled={busy || !!verdict}
         still={judged}
         onMotionDone={() => {
@@ -252,7 +283,8 @@ export function RepRunner({
         <div className={styles.choices} role="group" aria-label="Your answer">
           {decision.options.map((option) => {
             const chosen = taken[decision.id]?.optionIds.includes(option.id);
-            const tone = chosen && verdict ? (verdict.is_correct ? styles.right : styles.wrong) : '';
+            const isRight = !!correct?.includes(option.id);
+            const tone = isRight ? styles.right : chosen && verdict ? (verdict.is_correct ? styles.right : styles.wrong) : '';
             return (
               <button
                 key={option.id}
@@ -262,6 +294,7 @@ export function RepRunner({
                 aria-pressed={chosen}
                 onClick={() => void lockIn(decision, { selected_option_id: option.id })}
               >
+                {isRight && !chosen ? '✓ ' : ''}
                 {option.option_text}
               </button>
             );
@@ -287,6 +320,18 @@ export function RepRunner({
               Lock it in
             </button>
           )}
+          {/* DRAW YOUR ASSIGNMENT, THEN SEE IT: his locked drawing with the
+              coach's answer over it (a Rep teaches - quizzes never show it). */}
+          {verdict?.answer_drawing && drafts[decision.id]?.drawing && decision.image && (
+            <CompareDrawing
+              imageUrl={resolveMediaUrl(decision.image.image_url)}
+              document={drafts[decision.id]!.drawing as DrawingDocument}
+              answer={verdict.answer_drawing}
+              answerLabel="Coach's answer"
+              alt="Your drawing with the coach's answer"
+              maxWidth={520}
+            />
+          )}
         </div>
       )}
 
@@ -294,7 +339,7 @@ export function RepRunner({
 
       {verdict && (
         <div ref={afterRef} className={styles.after} aria-live="polite">
-          <Verdict feedback={verdict} />
+          <Verdict feedback={verdict} right={rightAnswerOf(decision, verdict)} />
           <button
             type="button"
             className={`btn btn-primary ${styles.next}`}
@@ -337,15 +382,19 @@ function Summary({
   feedback,
   taken,
   progress,
+  isRetry,
   onReview,
   onRunAgain,
+  onRetryMisses,
 }: {
   decisions: Question[];
   feedback: Record<number, PracticeFeedback>;
   taken: Record<number, Taken>;
   progress: RepProgress | null;
+  isRetry: boolean;
   onReview: (first: number) => void;
   onRunAgain: () => void;
+  onRetryMisses?: () => void;
 }) {
   const judged = decisions.filter((q) => typeof feedback[q.id]?.is_correct === 'boolean');
   const right = judged.filter((q) => feedback[q.id]?.is_correct).length;
@@ -366,7 +415,7 @@ function Summary({
   return (
     <div className={styles.rep}>
       <div className={styles.summary}>
-        <span className={styles.summaryLead}>Rep done</span>
+        <span className={styles.summaryLead}>{isRetry ? 'Your misses, again' : 'Rep done'}</span>
         <span className={styles.score}>
           {right} of {judged.length}
         </span>
@@ -421,9 +470,23 @@ function Summary({
             Review missed
           </button>
         )}
-        <button type="button" className={missed.length > 0 ? 'btn' : 'btn btn-primary'} onClick={onRunAgain}>
-          Run it again
-        </button>
+        {/* DO WORK -> SEE WHAT I MISSED -> TRY IT AGAIN: with misses, the next
+            thing after reviewing them is trying just those; the whole rep
+            again is still there, quietly. */}
+        {missed.length > 0 && onRetryMisses ? (
+          <>
+            <button type="button" className="btn" onClick={onRetryMisses}>
+              Try the misses again
+            </button>
+            <button type="button" className={styles.quietAction} onClick={onRunAgain}>
+              Run the whole rep again
+            </button>
+          </>
+        ) : (
+          <button type="button" className={missed.length > 0 ? 'btn' : 'btn btn-primary'} onClick={onRunAgain}>
+            Run it again
+          </button>
+        )}
       </div>
     </div>
   );
