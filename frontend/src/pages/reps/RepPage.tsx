@@ -30,6 +30,7 @@ import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
 import { FootballProblem } from '../../components/football/FootballProblem';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useRememberWork } from '../home/lastWork';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
@@ -105,10 +106,15 @@ export function RepPage() {
   /** Retest = a new Rep of this concept for exactly the players who missed it, sent, opened. */
   const retest = async (problem: RepConcept) => {
     const made = await createRepRetest(id, problem.concept?.id ?? null);
-    await activateQuiz(made.id, [], 'PRACTICE');
-    navigate(`/reps/${made.id}`);
+    try {
+      await activateQuiz(made.id, [], 'PRACTICE');
+    } finally {
+      navigate(`/reps/${made.id}`);
+    }
   };
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
+  // Home's "Pick up where you left off".
+  useRememberWork(results ? { kind: 'rep', id, title: results.title } : null);
 
   /* A VARIATION: the same Rep copied - every decision with its man, play,
      motion, concept and reason - and opened as a new Rep to change what is
@@ -258,14 +264,21 @@ export function RepPage() {
           </>
         )}
       </div>
-      {teaching && results && (
-        <Teach
-          problem={teaching}
-          decisions={results.decisions}
-          onClose={() => setTeaching(null)}
-          onRetest={teaching.retest ? undefined : () => retest(teaching)}
-        />
-      )}
+      {teaching && results && (() => {
+        /* ONE TEACHING SCREEN FOR THE REP: Next walks to the next football
+           problem (each opened is marked taught, as from its card). */
+        const current = problems.find((p) => conceptKey(p) === conceptKey(teaching)) ?? teaching;
+        const following = problems[problems.findIndex((p) => conceptKey(p) === conceptKey(current)) + 1] ?? null;
+        return (
+          <Teach
+            problem={current}
+            decisions={results.decisions}
+            onClose={() => setTeaching(null)}
+            onRetest={current.retest ? undefined : () => retest(current)}
+            next={following ? { label: `${following.name} · ${following.missed} missed`, onGo: () => teach(following) } : null}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -599,12 +612,15 @@ function Teach({
   decisions,
   onClose,
   onRetest,
+  next = null,
 }: {
   problem: RepConcept;
   decisions: RepDecision[];
   onClose: () => void;
   /** Absent once it has been retested. */
   onRetest?: () => Promise<void>;
+  /** The Rep's next football problem, taught in the same screen. */
+  next?: { label: string; onGo: () => void } | null;
 }) {
   const [sending, setSending] = useState(false);
   const n = problem.players_missed.length;
@@ -623,10 +639,14 @@ function Teach({
       motionPlayId: d.motion_play_id ?? problem.motion_play_id,
       // The play moving to the decision moment, exactly as the players saw
       // it - and, when they tapped, the right spot lit.
-      picture: d.presnap || targetsOf(d) ? (
+      // Ask first: the play without the right spot lit.
+      pictureAsk: targetsOf(d) ? <PlayPicture image={d.image} presnap={d.presnap} marker={d.subject_marker} motionKey={d.question_id} /> : undefined,
+      picture: d.presnap || targetsOf(d) || d.subject_marker ? (
         <PlayPicture
           image={d.image}
           presnap={d.presnap}
+          // HIS JOB: the coach's ring on a photo (a moving play rings him itself).
+          marker={d.subject_marker}
           targets={targetsOf(d)}
           options={choicesOf(d)}
           chosen={d.choices.filter((c) => c.is_correct).map((c) => c.option_id)}
@@ -643,8 +663,14 @@ function Teach({
       slides={slides}
       start={Math.max(0, inProblem.indexOf(worst))}
       onClose={onClose}
+      // WHO MISSED IT, on the screen the coach is teaching from.
+      room={{ missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name) }}
+      next={next}
       action={
-        onRetest && n > 0 ? (
+        problem.retest ? (
+          /* Retested already: the retest itself is the next thing to see. */
+          <Link to={`/reps/${problem.retest.id}`}>Open retest</Link>
+        ) : onRetest && n > 0 ? (
           <button
             type="button"
             disabled={sending}
@@ -1564,6 +1590,13 @@ function Players({ results }: { results: RepResults }) {
                     {open === p.key ? '▾' : '▸'} {p.display_name}
                   </button>
                   {p.position ? <span className={styles.pos}> {p.position}</span> : null}
+                  {/* HIS WHOLE PICTURE - every quiz and Rep, what he still
+                      needs - one tap away, not just this Rep's answers. */}
+                  {p.player_id !== null && (
+                    <Link to={`/roster/${p.player_id}`} className={styles.playerProfile} aria-label={`${p.display_name}'s profile`}>
+                      Profile
+                    </Link>
+                  )}
                 </td>
                 <td className={p.correct < p.answered ? styles.missedCell : ''}>
                   {p.correct} of {p.answered}

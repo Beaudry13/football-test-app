@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/quizzes', () => ({ listQuizzes: vi.fn(), createQuiz: vi.fn() }))
 vi.mock('../api/questions', () => ({ createQuestion: vi.fn() }))
 vi.mock('../api/concepts', () => ({ listConcepts: vi.fn(), createConcept: vi.fn() }))
-vi.mock('../api/reps', () => ({ getRepsForPlay: vi.fn() }))
+vi.mock('../api/reps', () => ({ getMadeFromPlay: vi.fn() }))
 // jsdom cannot draw; the picture is playImage's business.
 vi.mock('./playImage', () => ({
   IMAGE_WIDTH: 1376,
@@ -34,12 +34,12 @@ function Probe() {
   return null
 }
 
-function open(play: Play = newPlay('Trips Jet'), motionPlayId: number | null = 14) {
+function open(play: Play = newPlay('Trips Jet'), motionPlayId: number | null = 14, selectedMan: string | null = null) {
   render(
     <MemoryRouter initialEntries={['/motion-lab']}>
       <Probe />
       <Routes>
-        <Route path="/motion-lab" element={<MakeRep play={play} motionPlayId={motionPlayId} onClose={vi.fn()} />} />
+        <Route path="/motion-lab" element={<MakeRep play={play} motionPlayId={motionPlayId} onClose={vi.fn()} selectedMan={selectedMan} />} />
         <Route path="/reps/:id" element={<p>rep page</p>} />
       </Routes>
     </MemoryRouter>,
@@ -59,7 +59,7 @@ beforeEach(() => {
   vi.mocked(questionsApi.createQuestion).mockResolvedValue({ id: 900 } as never)
   vi.mocked(conceptsApi.listConcepts).mockResolvedValue([{ id: 2, name: 'Leverage', is_archived: false }])
   vi.mocked(conceptsApi.createConcept).mockResolvedValue({ id: 5, name: 'Motion adjustment', is_archived: false })
-  vi.mocked(repsApi.getRepsForPlay).mockResolvedValue([])
+  vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({ made: [], last: null })
 })
 
 const type = (label: RegExp | string, value: string, role: 'textbox' | 'combobox' = 'textbox') =>
@@ -303,12 +303,51 @@ describe('Make a rep from a play', () => {
   })
 
   it('the Rep already made from this play is offered first, and chosen', async () => {
-    vi.mocked(repsApi.getRepsForPlay).mockResolvedValue([{ id: 8, title: 'Red zone - Mike', question_count: 2 }])
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
+      made: [
+        { id: 3, title: 'Week 3 install', kind: 'QUIZ', from_play: 1, question_count: 4, concepts: [], roles: [], taught_at: null },
+        { id: 8, title: 'Red zone - Mike', kind: 'REP', from_play: 2, question_count: 2, concepts: [], roles: [], taught_at: null },
+      ],
+      last: null,
+    })
     open()
     await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('8'))
     const options = within(screen.getByRole('combobox', { name: /Put it in/ })).getAllByRole('option')
     expect(options[1].textContent).toBe('Red zone - Mike (2) - from this play')
-    expect(repsApi.getRepsForPlay).toHaveBeenCalledWith(14)
+    expect(repsApi.getMadeFromPlay).toHaveBeenCalledWith(14)
+  })
+
+  it('the man selected on the field is the man the decision is about', () => {
+    const play = newPlay('Trips Jet')
+    const fs = play.players.find((p) => p.label === 'FS')!
+    open(play, 14, fs.id)
+    expect(screen.getByRole('textbox', { name: /You’re the/ })).toHaveValue('Free safety')
+  })
+
+  it('with nothing on this device, "last time" from the server says who he is and the concept - his words', async () => {
+    const play = newPlay('Trips Jet')
+    const fs = play.players.find((p) => p.label === 'FS')!
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
+      made: [],
+      last: { concept: { id: 2, name: 'Leverage' }, subject_man: fs.id, subject_role: 'Boundary safety' },
+    })
+    open(play)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /You’re the/ })).toHaveValue('Boundary safety'))
+    expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Leverage')
+  })
+
+  it('a man he selected on the field is not replaced by "last time"', async () => {
+    const play = newPlay('Trips Jet')
+    const fs = play.players.find((p) => p.label === 'FS')!
+    const mike = play.players.find((p) => p.side === 'defense' && p.id !== fs.id)!
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
+      made: [],
+      last: { concept: null, subject_man: mike.id, subject_role: 'Somebody else' },
+    })
+    open(play, 14, fs.id)
+    await waitFor(() => expect(repsApi.getMadeFromPlay).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.getByRole('textbox', { name: /You’re the/ })).toHaveValue('Free safety')
   })
 
   it('a play with motion carries its pre-snap moment, and the tap spots are where the men stand at the snap', async () => {

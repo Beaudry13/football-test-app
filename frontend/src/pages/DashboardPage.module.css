@@ -496,3 +496,17 @@ button.actionDelete:hover:not(:disabled) {
   letter-spacing: 0;
   color: var(--nb-text-faint);
 }
+
+/* "Pick up where you left off" - one quiet line under Next up. */
+.pickUp {
+  margin: 0 0 var(--space-4);
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}
+.pickUpLink {
+  color: var(--nb-text);
+  font-weight: 600;
+}
+.pickUpKind {
+  color: var(--nb-text-faint);
+}

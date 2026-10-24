@@ -15,9 +15,9 @@ import styles from './WeakestConcepts.module.css';
  * identically from either. A second copy of this flow would be one edit away
  * from confirming different things in different places.
  *
- * PEIRA ASSEMBLES; THE COACH SENDS. This creates a draft and navigates to the
- * ordinary editor. It does not activate, does not generate a code, and does not
- * notify anyone.
+ * PEIRA ASSEMBLES; THE COACH SENDS. This creates a draft and opens the
+ * ordinary editor on its Activate tab - who gets it, said, and one button. It
+ * does not activate, does not generate a code, and does not notify anyone.
  */
 export function RetestAction({
   quizId,
@@ -82,8 +82,8 @@ export function RetestAction({
             </p>
           )}
           <p className={styles.confirmNote}>
-            Nothing is sent. It opens in the normal editor so you can change the questions, the
-            wording, and who gets it.
+            Nothing is sent yet. It opens ready to send, saying who gets it - the questions are one
+            tab over if you want to change them.
           </p>
           {error && (
             <p className={styles.confirmError} role="alert">
@@ -113,7 +113,7 @@ export function RetestAction({
                       .filter((p) => p.player_id === null)
                       .map((p) => p.player_name),
                   });
-                  navigate(`/quizzes/${draft.id}?tab=questions`);
+                  navigate(`/quizzes/${draft.id}?tab=activate`);
                 } catch (err) {
                   setError(getErrorMessage(err));
                   setIsCreating(false);

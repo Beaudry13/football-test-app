@@ -182,6 +182,35 @@ export function getRepProgress(
   return api.post<RepProgress>('/play/rep-progress', input, { auth: false, headers: attemptTokenHeaders(token ?? null) });
 }
 
+/** One quiz or Rep holding questions made from a Motion Lab play. */
+export interface MadeFromPlay {
+  id: number;
+  title: string;
+  kind: 'QUIZ' | 'REP';
+  /** How many of its live questions came from this play. */
+  from_play: number;
+  question_count: number;
+  /** The concepts and "You're the..." of those questions, in the coach's words. */
+  concepts: string[];
+  roles: string[];
+  /** A Rep problem marked taught: when it last was. */
+  taught_at: string | null;
+}
+
+/** What the coach said the last time he made something from the play - his words, verbatim. */
+export interface LastFromPlay {
+  concept: { id: number; name: string } | null;
+  subject_man: string | null;
+  subject_role: string | null;
+  /** His point on that question, as he wrote it. */
+  answer_explanation?: string | null;
+}
+
+/** CREATE ONCE: this coach's quizzes and Reps made from a play (most recent first), and "last time". */
+export function getMadeFromPlay(playId: number): Promise<{ made: MadeFromPlay[]; last: LastFromPlay | null }> {
+  return api.get(`/quizzes/made-from-play/${playId}`);
+}
+
 /** The Reps already holding a decision made from this Motion Lab play, newest first. */
 export function getRepsForPlay(playId: number): Promise<{ id: number; title: string; question_count: number }[]> {
   return api.get(`/quizzes/reps-for-play/${playId}`);

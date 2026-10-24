@@ -386,6 +386,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                         title={`Q${row.question_number}`}
                         repTitle={`${quiz.title} - Q${row.question_number}`}
                         retestTargets={missedBy(row.question_id)}
+                        missed={missedBy(row.question_id)}
                       />
                     )}
                     {questionRetest(row.question_id) && <RetestStatus retest={questionRetest(row.question_id)!} />}
@@ -441,6 +442,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                               title={`Q${q.question_number}`}
                               repTitle={`${quiz.title} - Q${q.question_number}`}
                               retestTargets={missedBy(q.question_id)}
+                              missed={missedBy(q.question_id)}
                             />
                           </div>
                         )}

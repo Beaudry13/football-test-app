@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 vi.mock('../api/quizzes', () => ({ listQuizzes: vi.fn(), createQuiz: vi.fn() }))
 vi.mock('../api/questions', () => ({ createQuestion: vi.fn() }))
+vi.mock('../api/reps', () => ({ getMadeFromPlay: vi.fn() }))
 vi.mock('../api/concepts', () => ({
   listConcepts: vi.fn(async () => [{ id: 7, name: 'Quick game', is_archived: false }]),
   createConcept: vi.fn(async (name: string) => ({ id: 99, name, is_archived: false })),
@@ -18,7 +19,9 @@ vi.mock('./playImage', () => ({
 import * as quizzesApi from '../api/quizzes'
 import * as questionsApi from '../api/questions'
 import * as conceptsApi from '../api/concepts'
+import * as repsApi from '../api/reps'
 import * as image from './playImage'
+import { readRepMemory } from './playRep'
 import { MakeQuestion } from './MakeQuestion'
 import { newPlay, type Play } from './engine/play'
 import { px } from './playImageLayout'
@@ -28,7 +31,8 @@ import { px } from './playImageLayout'
  * click: a Draw question on a picture of the formation (routes hidden), or -
  * when the play gives someone the ball - "Who gets the ball?" with the play's
  * own target as the answer. It lands in the chosen quiz (or a new one named
- * after the play) and the quiz editor opens on it.
+ * after the play) and the coach stays in Motion Lab: "Make another" or
+ * "Open quiz".
  */
 
 let lastPath = ''
@@ -49,13 +53,16 @@ function withMotion(): Play {
 
 const passTo = (targetId: string): Play => ({ ...newPlay('Jet Dig'), ball: { kind: 'pass', targetId, catchPoint: { x: 17, y: 11 } } })
 
-function open(play: Play, motionPlayId: number | null = null) {
+function open(play: Play, motionPlayId: number | null = null, selectedMan: string | null = null) {
   const onClose = vi.fn()
   render(
     <MemoryRouter initialEntries={['/motion-lab']}>
       <PathProbe />
       <Routes>
-        <Route path="/motion-lab" element={<MakeQuestion play={play} motionPlayId={motionPlayId} onClose={onClose} />} />
+        <Route
+          path="/motion-lab"
+          element={<MakeQuestion play={play} motionPlayId={motionPlayId} selectedMan={selectedMan} onClose={onClose} />}
+        />
         <Route path="/quizzes/:quizId" element={<div>quiz editor</div>} />
       </Routes>
     </MemoryRouter>,
@@ -70,7 +77,9 @@ const QUIZZES = [
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
   lastPath = ''
+  vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({ made: [], last: null })
   vi.mocked(quizzesApi.listQuizzes).mockResolvedValue(QUIZZES as never)
   vi.mocked(quizzesApi.createQuiz).mockResolvedValue({ id: 31 } as never)
   vi.mocked(questionsApi.createQuestion).mockResolvedValue({ id: 500 } as never)
@@ -116,7 +125,11 @@ describe('Make a quiz question from a play', () => {
     // No pre-snap motion in this play, so there is nothing to play.
     expect(screen.queryByRole('checkbox', { name: 'Play the motion' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
-    await waitFor(() => expect(lastPath).toBe('/quizzes/31'))
+    // Made - and he is still in Motion Lab, one click from the quiz.
+    expect(await screen.findByRole('dialog', { name: 'Question made' })).toHaveTextContent('Question 1 added to Trips Right Smash')
+    expect(lastPath).toBe('/motion-lab')
+    fireEvent.click(screen.getByRole('button', { name: 'Open quiz' }))
+    expect(lastPath).toBe('/quizzes/31')
     expect(quizzesApi.createQuiz).toHaveBeenCalledWith({ title: 'Trips Right Smash' })
     const [quizId, input, file] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(quizId).toBe(31)
@@ -168,7 +181,7 @@ describe('Make a quiz question from a play', () => {
     expect(within(screen.getByRole('combobox')).getAllByRole('option').map((o) => o.textContent)).toEqual(['A new quiz: “Jet Dig”', 'Red zone (2)', 'Week 3 install (6)'])
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
-    await waitFor(() => expect(lastPath).toBe('/quizzes/4'))
+    expect(await screen.findByRole('dialog', { name: 'Question made' })).toHaveTextContent('Question 7 added to Week 3 install')
     expect(quizzesApi.createQuiz).not.toHaveBeenCalled()
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(input.question_type).toBe('multiple_choice')
@@ -201,7 +214,7 @@ describe('Make a quiz question from a play', () => {
 
     fireEvent.change(whose, { target: { value: 'O8' } })
     fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
-    await waitFor(() => expect(lastPath).toBe('/quizzes/31'))
+    await screen.findByRole('dialog', { name: 'Question made' })
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(input.question_text).toBe("You're the X. Draw your assignment.")
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: false, highlight: 'O8' })
@@ -293,6 +306,66 @@ describe('Make a quiz question from a play', () => {
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1].presnap).toBeUndefined()
     expect(vi.mocked(image.playImage).mock.calls[0][1]).toEqual({ routes: true })
+  })
+
+  it('the man selected on the field is the man the Draw question is about', () => {
+    open(newPlay('Jet Dig'), null, 'O8')
+    expect(screen.getByRole('combobox', { name: /Whose job/ })).toHaveValue('O8')
+    expect(screen.getByRole('textbox', { name: 'Question' })).toHaveValue("You're the X. Draw your assignment.")
+  })
+
+  it('"Make another" stays in the play and puts the next question in the same quiz', async () => {
+    open(newPlay('Trips Right Smash'), null, 'O8')
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await screen.findByRole('dialog', { name: 'Question made' })
+    fireEvent.click(screen.getByRole('button', { name: 'Make another' }))
+    // A fresh question - nobody marked, his concept and quiz kept.
+    expect(screen.getByRole('combobox', { name: /Whose job/ })).toHaveValue('')
+    expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('31')
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    expect(await screen.findByRole('dialog', { name: 'Question made' })).toHaveTextContent('Question 2 added to Trips Right Smash')
+    expect(quizzesApi.createQuiz).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(questionsApi.createQuestion).mock.calls.map((c) => c[0])).toEqual([31, 31])
+    expect(lastPath).toBe('/motion-lab')
+  })
+
+  it('"Put it in" starts at the quiz he last used; else the quiz that already holds this play', async () => {
+    localStorage.setItem('peira.makeQuestion.quiz.v1', '9')
+    open(newPlay('Jet Dig'))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('9'))
+    cleanup()
+    localStorage.clear()
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({
+      made: [{ id: 4, title: 'Week 3 install', kind: 'QUIZ', from_play: 2, question_count: 6, concepts: [], roles: [], taught_at: null }],
+      last: null,
+    })
+    open(newPlay('Jet Dig'), 14)
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('4'))
+    expect(screen.getByRole('option', { name: 'Week 3 install (6) · has this play' })).toBeInTheDocument()
+    expect(repsApi.getMadeFromPlay).toHaveBeenCalledWith(14)
+  })
+
+  it('a quiz question is not offered a Rep to go in', async () => {
+    vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([...QUIZZES, { id: 12, title: 'Boundary safety', kind: 'REP', question_count: 3, updated_at: '2026-10-12T00:00:00Z' }] as never)
+    open(newPlay('Jet Dig'))
+    await waitFor(() => expect(within(screen.getByRole('combobox', { name: /Put it in/ })).getAllByRole('option')).toHaveLength(3))
+    expect(screen.queryByRole('option', { name: /Boundary safety/ })).toBeNull()
+  })
+
+  it('with nothing on this device, his concept for this play comes from the server', async () => {
+    vi.mocked(repsApi.getMadeFromPlay).mockResolvedValue({ made: [], last: { concept: { id: 7, name: 'Quick game' }, subject_man: null, subject_role: null } })
+    open(newPlay('Jet Dig'), 14)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /Concept/ })).toHaveValue('Quick game'))
+  })
+
+  it('what he names here, Make rep starts from', async () => {
+    const play = newPlay('Jet Dig')
+    open(play, null, 'O8')
+    fireEvent.change(screen.getByRole('textbox', { name: /Concept/ }), { target: { value: 'Quick game' } })
+    await waitFor(() => expect(conceptsApi.listConcepts).toHaveBeenCalled())
+    fireEvent.click(screen.getByRole('button', { name: 'Make question' }))
+    await screen.findByRole('dialog', { name: 'Question made' })
+    expect(readRepMemory()).toMatchObject({ playId: play.id, who: 'O8', concept: 'Quick game' })
   })
 
   it('Cancel closes it', () => {

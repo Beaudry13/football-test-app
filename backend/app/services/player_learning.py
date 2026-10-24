@@ -52,10 +52,18 @@ def _sitting(attempt, by_question) -> dict[int, tuple[str, list[int]]]:
 
 
 def player_learning(coach, player) -> dict:
+    return players_learning(coach, [player])[player.id]
+
+
+def players_learning(coach, players) -> dict[int, dict]:
+    """player_learning for several players in ONE pass over the coach's
+    quizzes - the same rules, the same rows - so a position group ("what are
+    my safeties missing?") costs one read, not one per player."""
+    ids = {p.id for p in players}
     quizzes = Quiz.query.filter(
         Quiz.organization_id == coach.organization_id, Quiz.coach_id == coach.id
     ).all()
-    events: list[dict] = []
+    events_by_player: dict[int, list[dict]] = {pid: [] for pid in ids}
     names: dict[int, str] = {}
     for quiz in quizzes:
         by_question = {q.id: q for q in quiz.questions}
@@ -63,19 +71,21 @@ def player_learning(coach, player) -> dict:
             if q.concept is not None:
                 names[q.concept.id] = q.concept.name
         if quiz.kind == REP_KIND:
-            firsts = first_tries(rep_attempts(quiz, player_id=player.id))
+            firsts = first_tries(rep_attempts(quiz, player_ids=ids))
             attempts = [attempt for attempt, _made in firsts.values()]
         else:
             # The official rule, written once (attempt_scope): practice never counts.
             attempts = official_only(PlayerAttempt.query).filter(
                 PlayerAttempt.quiz_id == quiz.id,
-                PlayerAttempt.player_id == player.id,
+                PlayerAttempt.player_id.in_(list(ids)),
                 PlayerAttempt.status == AttemptStatus.SUBMITTED,
             ).all()
         for attempt in attempts:
+            if attempt.player_id not in events_by_player:
+                continue
             when = attempt.submitted_at or attempt.started_at
             for concept_id, (outcome, question_ids) in _sitting(attempt, by_question).items():
-                events.append(
+                events_by_player[attempt.player_id].append(
                     {
                         "concept_id": concept_id,
                         "outcome": outcome,
@@ -88,6 +98,11 @@ def player_learning(coach, player) -> dict:
                     }
                 )
 
+    return {pid: _summary(events, names) for pid, events in events_by_player.items()}
+
+
+def _summary(events: list[dict], names: dict[int, str]) -> dict:
+    """One player's events as HAS / WORK ON / RECENT (the profile's rows)."""
     by_concept: dict[int, list[dict]] = {}
     for event in sorted(events, key=lambda e: e["at"] or ""):
         by_concept.setdefault(event["concept_id"], []).append(event)
@@ -107,3 +122,28 @@ def player_learning(coach, player) -> dict:
     work_on.sort(key=newest, reverse=True)
     recent.sort(key=lambda r: r["trail"][-1]["at"] or "", reverse=True)
     return {"has": has, "work_on": work_on, "recent": recent[:5]}
+
+
+def group_needs(coach, players) -> dict:
+    """WHAT A GROUP NEEDS - "show me what my safeties are missing" - from the
+    same per-player rows the profile shows: for each concept at least one of
+    them is still working on, who (with where he last missed it, so a retest
+    can send those questions back) and how many of them have it. Most missed
+    first, then the most recent miss. Nothing the coach did not tag."""
+    learning = players_learning(coach, players)
+    by_id = {p.id: p for p in players}
+    rows: dict[int, dict] = {}
+    for pid, summary in learning.items():
+        for row in summary["work_on"]:
+            entry = rows.setdefault(row["concept_id"], {"concept_id": row["concept_id"], "name": row["name"], "missing": [], "got": 0})
+            entry["missing"].append({"player_id": pid, "name": by_id[pid].full_name, "last": row["last"]})
+        for row in summary["has"]:
+            entry = rows.setdefault(row["concept_id"], {"concept_id": row["concept_id"], "name": row["name"], "missing": [], "got": 0})
+            entry["got"] += 1
+    concepts = [r for r in rows.values() if r["missing"]]
+    for r in concepts:
+        r["missing"].sort(key=lambda m: m["name"])
+    # Most missed first; within a count, the most recent miss (a stable sort, twice).
+    concepts.sort(key=lambda r: max(m["last"]["at"] or "" for m in r["missing"]), reverse=True)
+    concepts.sort(key=lambda r: len(r["missing"]), reverse=True)
+    return {"players": len(players), "concepts": concepts}

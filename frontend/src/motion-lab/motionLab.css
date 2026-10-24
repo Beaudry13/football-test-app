@@ -1358,6 +1358,21 @@
   background: #2a2412;
 }
 
+/* A panel's one primary action (Make question, Make rep, Open rep) keeps its
+   gold. Without this the prototype's `.popover button` rule - same
+   specificity, later - left it dark text on the dark panel: the button that finishes the job, barely visible. */
+.motion-lab-root .popover button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  text-align: center;
+}
+.motion-lab-root .popover button.primary:not(:disabled):hover {
+  background: var(--accent-hover);
+}
+.motion-lab-root .popover button.primary:disabled:hover {
+  background: var(--accent);
+}
+
 /* THE PRIMARY. Hover darkens rather than lightening (the prototype's
    #ffd966), and it stays opaque: fading the button would fade its words. */
 .motion-lab-root button.primary:not(:disabled):hover {
@@ -1595,6 +1610,59 @@
 .motion-lab-root .use-why {
   font-size: 11px;
   color: var(--muted);
+}
+/* CREATE ONCE: "Made from this play", quiet, under the three ways to use it. */
+.motion-lab-root .use-made {
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.motion-lab-root .use-made-title {
+  padding: 0 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.motion-lab-root .use-made-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: inherit;
+  text-decoration: none;
+  max-width: 300px;
+}
+.motion-lab-root .use-made-row:hover,
+.motion-lab-root .use-made-row:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+.motion-lab-root .use-made-taught {
+  padding: 0 10px 4px;
+}
+.motion-lab-root .use-made-row .use-why {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.motion-lab-root .use-made-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.motion-lab-root .use-made-kind {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.motion-lab-root .use-made-more {
+  padding: 2px 10px 4px;
 }
 .motion-lab-root .make-actions {
   display: flex;
@@ -2031,4 +2099,55 @@
 }
 .motion-lab-root .popover.preview-3d-pop b {
   color: var(--text);
+}
+
+/* ---- PREVIEW 3D, inside Motion Lab: the viewer over the editor ------------- */
+.motion-lab-root .preview-3d-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  grid-template-rows: 44px 1fr;
+  background: #0b0d0f;
+}
+.motion-lab-root .preview-3d-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.motion-lab-root button.preview-3d-back {
+  flex: none;
+  font-weight: 700;
+}
+.motion-lab-root .preview-3d-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 14px;
+}
+.motion-lab-root .preview-3d-tag {
+  flex: none;
+  color: #f0c75e;
+  font-size: 12px;
+  font-weight: 700;
+}
+.motion-lab-root .preview-3d-kind {
+  margin-left: auto;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.motion-lab-root .preview-3d-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
 }

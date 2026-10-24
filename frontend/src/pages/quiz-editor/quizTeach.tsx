@@ -32,7 +32,14 @@ export function quizTeachSlides(questions: Question[], breakdown: QuestionBreakd
       right: q.question_type === 'fill_blank' ? (q.expected_answers ?? []) : right.map((o) => o.option_text),
       why: q.answer_explanation ?? null,
       wrong: mostChosenWrong(row),
+      concept: q.concept?.name ?? null,
       motionPlayId: q.motion_play_id ?? null,
+      /* ASK FIRST: the same football with the answer held back - the
+         assignment not yet drawn, the right spot not yet lit. */
+      pictureAsk:
+        (q.question_type === 'draw_response' && q.answer_drawing && q.image) || targets ? (
+          <PlayPicture image={q.image} presnap={q.presnap} marker={q.subject_marker} motionKey={q.id} />
+        ) : undefined,
       picture:
         /* DRAW YOUR ASSIGNMENT, TAUGHT: the coach's answer drawing on the
            picture - the assignment itself, big, for the room. */

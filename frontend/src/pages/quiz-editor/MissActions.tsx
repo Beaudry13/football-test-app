@@ -36,6 +36,8 @@ export function MissActions({
   conceptId,
   show = 'all',
   startTeaching = false,
+  missed = [],
+  onTeach,
 }: {
   quizId: number;
   /** The questions this miss is about, in quiz order. */
@@ -64,6 +66,10 @@ export function MissActions({
   show?: 'all' | 'teach' | 'more';
   /** Arrived from Home's "Teach it" (?teach=<concept>): Teach opens straight away. */
   startTeaching?: boolean;
+  /** WHO MISSED IT, one tap down (behind More): each name opens his profile. */
+  missed?: { player_id: number | null; player_name: string; display_name?: string }[];
+  /** The caller runs Teach itself (one screen that walks problem to problem). */
+  onTeach?: () => void;
 }) {
   const motionLab = useMayUseMotionLab();
   /** The Motion Lab play a missed question came from - the football source, one tap away. */
@@ -82,6 +88,10 @@ export function MissActions({
   const [making, setMaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tappable = questions.filter((q) => q.question_type === 'multiple_choice' || q.question_type === 'true_false');
+  /* A Rep made from a miss goes to the players who missed it - named by the
+     caller, else the ones a retest of these questions would reach. */
+  const repPlayers =
+    playerIds.length > 0 ? playerIds : (retestTargets ?? []).map((p) => p.player_id).filter((id): id is number => id !== null);
 
   const [retesting, setRetesting] = useState(false);
   const retest = async () => {
@@ -94,7 +104,7 @@ export function MissActions({
         player_ids: retestTargets.map((p) => p.player_id).filter((id): id is number => id !== null),
         player_names: retestTargets.filter((p) => p.player_id === null).map((p) => p.player_name),
       });
-      navigate(`/quizzes/${draft.id}?tab=questions`);
+      navigate(`/quizzes/${draft.id}?tab=activate`);
     } catch (err) {
       setError(getErrorMessage(err));
       setRetesting(false);
@@ -109,7 +119,7 @@ export function MissActions({
       const [first, ...rest] = [...byQuiz.entries()].sort((a, b) => Number(b[0] === quizId) - Number(a[0] === quizId));
       const rep = await makeRepFromQuiz(first[0], first[1], repTitle);
       for (const [fromQuiz, ids] of rest) await addDecisions(rep.id, fromQuiz, ids);
-      if (playerIds.length > 0) await addRosterMembers(rep.id, playerIds);
+      if (repPlayers.length > 0) await addRosterMembers(rep.id, repPlayers);
       navigate(`/reps/${rep.id}`);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -137,8 +147,8 @@ export function MissActions({
 
   if (questions.length === 0) return null;
   const repLabel = [
-    tappable.length > 1 ? `Make a rep of all ${tappable.length}` : playerIds.length > 0 ? 'Make a rep' : 'Make rep',
-    playerIds.length > 0 ? `for the ${playerIds.length}` : '',
+    tappable.length > 1 ? `Make a rep of all ${tappable.length}` : repPlayers.length > 0 ? 'Make a rep' : 'Make rep',
+    repPlayers.length > 0 ? `for the ${repPlayers.length}` : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -154,15 +164,33 @@ export function MissActions({
   );
   const teachPart = (
     <>
-      <button type="button" className={styles.action} onClick={() => setTeaching(true)}>
+      <button type="button" className={styles.action} onClick={() => (onTeach ? onTeach() : setTeaching(true))}>
         {teachLabel}
       </button>
       {retestButton}
     </>
   );
-  const hasMore = !!repButton || (!!conceptId && tappable.length > 0) || (motionLab && sourcePlay !== undefined);
+  const hasMore =
+    !!repButton || (!!conceptId && tappable.length > 0) || (motionLab && sourcePlay !== undefined) || missed.length > 0;
   const morePart = (
     <>
+      {missed.length > 0 && (
+        <span className={styles.missed}>
+          <span className={styles.pickerNote}>Who missed it:</span>{' '}
+          {missed.map((p, i) => (
+            <span key={p.player_id ?? `name:${p.player_name}`}>
+              {i > 0 && ', '}
+              {p.player_id !== null ? (
+                <Link to={`/roster/${p.player_id}`} className={styles.link}>
+                  {p.display_name ?? p.player_name}
+                </Link>
+              ) : (
+                p.display_name ?? p.player_name
+              )}
+            </span>
+          ))}
+        </span>
+      )}
       {repButton}
       {conceptId && tappable.length > 0 && (
         <button type="button" className={styles.link} aria-expanded={picking} onClick={openPicker}>
@@ -241,6 +269,16 @@ export function MissActions({
           title={title}
           slides={slides ?? quizTeachSlides(questions, breakdown)}
           onClose={() => setTeaching(false)}
+          /* WHO MISSED IT, on the teaching screen - of everyone who answered. */
+          room={
+            missed.length > 0
+              ? {
+                  missed: missed.length,
+                  of: questions.length === 1 ? (breakdown?.find((r) => r.question_id === questions[0].id)?.answered_count ?? null) : null,
+                  names: missed.map((p) => p.display_name ?? p.player_name),
+                }
+              : null
+          }
           action={
             <>
               {extraAction}

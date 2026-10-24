@@ -23,6 +23,18 @@ export function gradeAnswer(
   return api.patch<Answer>(`/answers/${answerId}/grade`, input);
 }
 
+/** One of the coach's quizzes with answers only he can decide, still waiting. */
+export interface ToGrade {
+  quiz_id: number;
+  title: string;
+  count: number;
+}
+
+/** What is waiting on the coach's eyes - the grading screen's own rules. */
+export function listToGrade(): Promise<ToGrade[]> {
+  return api.get<ToGrade[]>('/quizzes/to-grade');
+}
+
 export function getQuizDashboard(quizId: number): Promise<QuizDashboard> {
   return api.get<QuizDashboard>(`/quizzes/${quizId}/dashboard`);
 }

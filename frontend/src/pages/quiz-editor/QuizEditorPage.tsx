@@ -12,6 +12,7 @@ import nb from '../../styles/notebook.module.css';
 import styles from './QuizEditorPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { Icon } from '../../components/ui/Icon';
+import { useRememberWork } from '../home/lastWork';
 
 const TABS = [
   { key: 'questions', label: 'Questions' },
@@ -52,6 +53,9 @@ export function QuizEditorPage() {
   const applyPatched = useCallback((updated: Quiz) => {
     setQuiz((previous) => (previous ? { ...previous, ...updated } : updated));
   }, []);
+
+  // Home's "Pick up where you left off".
+  useRememberWork(quiz ? { kind: quiz.kind === 'REP' ? 'rep' : 'quiz', id: quiz.id, title: quiz.title } : null);
 
   const reload = useCallback(async () => {
     if (!quizId) return;

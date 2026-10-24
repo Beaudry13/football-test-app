@@ -86,7 +86,7 @@ export function PlayerLearning({ playerId, firstName }: { playerId: number; firs
                     to={
                       c.last.kind === 'REP'
                         ? `/reps/${c.last.quiz_id}?teach=${c.concept_id}`
-                        : `/quizzes/${c.last.quiz_id}?tab=results`
+                        : `/quizzes/${c.last.quiz_id}?tab=results&teach=${c.concept_id}`
                     }
                   >
                     Teach

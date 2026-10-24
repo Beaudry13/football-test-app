@@ -1,4 +1,7 @@
-/* TEACH: the meeting-room view (components/teach/TeachView). Full screen, the picture as big as it goes. */
+/* TEACH: the meeting-room view (components/teach/TeachView). Full screen, the
+   football as big as the screen allows - on a laptop, a 16:9 TV, a projector.
+   Type scales with the screen (clamp + vw) so the back row can read it; the
+   controls are few and large. */
 .teach {
   position: fixed;
   inset: 0;
@@ -8,28 +11,39 @@
   background: #0f1012;
   color: #f2f2ee;
 }
+/* Focus moves to the screen so it has the keys; no ring around the whole room. */
+.teach:focus {
+  outline: none;
+}
 .bar {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 20px;
+  gap: 12px;
+  padding: 10px 18px;
   border-bottom: 1px solid #2a2d32;
+  min-height: 64px;
 }
 .title {
-  font-size: 18px;
+  font-size: clamp(16px, 1.25vw, 26px);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .steps {
   display: flex;
-  gap: 4px;
+  gap: 6px;
 }
 .steps button {
   font: inherit;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  font-weight: 700;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
   border: 1px solid #2a2d32;
   background: transparent;
   color: inherit;
@@ -39,31 +53,69 @@
   border-color: #d9a441;
   color: #d9a441;
 }
-.play {
-  margin-left: auto;
-  color: #d9a441;
-  font-weight: 700;
+.spacer {
+  flex: 1;
 }
-.action button {
+.action {
+  display: flex;
+  gap: 8px;
+}
+.action button,
+.action a {
   font: inherit;
   font-weight: 700;
   font-size: 15px;
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 44px;
+  padding: 0 18px;
   border: 0;
   border-radius: 8px;
   background: #d9a441;
   color: #111;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 .action button:disabled {
   opacity: 0.6;
   cursor: default;
 }
+.next {
+  font: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: transparent;
+  color: #d9a441;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tool {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid #2a2d32;
+  border-radius: 8px;
+  background: transparent;
+  color: #c9ccd1;
+  cursor: pointer;
+}
+.tool[aria-pressed='true'] {
+  border-color: #d9a441;
+  color: #d9a441;
+}
 .close {
   font: inherit;
-  font-size: 26px;
+  font-size: 30px;
   line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -72,30 +124,66 @@
 .body {
   flex: 1;
   display: flex;
-  gap: 24px;
-  padding: 24px;
+  gap: clamp(16px, 1.6vw, 36px);
+  padding: clamp(14px, 1.4vw, 32px);
   min-height: 0;
 }
-.picture {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 10px;
-}
+/* THE FOOTBALL: centred, as big as the space allows, never past the bottom of
+   the screen. A play picture is 1376 x 720 (1.911:1): its width follows the
+   height left under the bar, so it is never taller than the screen. */
 .pictureSlot {
   flex: 1 1 auto;
   min-width: 0;
-  align-self: center;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pictureSlot > * {
+  width: min(100%, calc((100vh - 120px) * 1.911));
+}
+.picture {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  width: auto;
+  object-fit: contain;
+  border-radius: 10px;
 }
 .side {
-  flex: 0 0 320px;
+  flex: 0 0 clamp(300px, 26vw, 600px);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: clamp(10px, 0.9vw, 20px);
+  overflow-y: auto;
+}
+.room {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-left: 4px solid #e2573a;
+  background: rgba(226, 87, 58, 0.08);
+  border-radius: 6px;
+}
+.roomCount {
+  font-size: clamp(16px, 1.2vw, 26px);
+  font-weight: 800;
+  color: #ff9b85;
+}
+.roomNames {
+  font-size: clamp(13px, 0.95vw, 20px);
+  color: #e6c9c2;
+}
+.concept {
+  font-size: clamp(12px, 0.85vw, 18px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9aa0a6;
 }
 .role {
-  font-size: 14px;
+  font-size: clamp(14px, 1vw, 22px);
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -104,25 +192,21 @@
 .prompt {
   margin: 0;
   color: #f2f2ee;
-  font-size: 24px;
+  font-size: clamp(20px, 1.7vw, 38px);
   font-weight: 700;
   line-height: 1.3;
   /* A coaching point written over a few lines keeps its lines. */
   white-space: pre-line;
 }
-/* Focus moves to the screen so it has the keys; no ring around the whole room. */
-.teach:focus {
-  outline: none;
-}
 .right {
   margin: 0;
-  font-size: 22px;
+  font-size: clamp(18px, 1.5vw, 34px);
   font-weight: 800;
   color: #6fcf8a;
 }
 .right span {
   display: block;
-  font-size: 12px;
+  font-size: clamp(11px, 0.75vw, 16px);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #9aa0a6;
@@ -130,19 +214,54 @@
 .why {
   margin: 0;
   color: #f2f2ee;
-  font-size: 18px;
+  font-size: clamp(16px, 1.25vw, 28px);
   line-height: 1.4;
+  white-space: pre-line;
 }
 .wrong {
   margin: 0;
-  font-size: 16px;
+  font-size: clamp(15px, 1.05vw, 24px);
   color: #ff9b85;
+}
+.play {
+  margin-top: auto;
+  color: #d9a441;
+  font-weight: 700;
+  font-size: clamp(14px, 0.95vw, 20px);
 }
 @media (max-width: 900px) {
   .body {
     flex-direction: column;
+    overflow-y: auto;
   }
   .side {
     flex: none;
   }
+  .pictureSlot > * {
+    width: 100%;
+  }
+  .bar {
+    flex-wrap: wrap;
+  }
+}
+/* ASK FIRST: the one thing to press when the room has answered. */
+.reveal {
+  align-self: flex-start;
+  font: inherit;
+  font-size: clamp(16px, 1.2vw, 26px);
+  font-weight: 800;
+  min-height: 52px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 10px;
+  background: #6fcf8a;
+  color: #0f1012;
+  cursor: pointer;
+}
+.revealKey {
+  margin-left: 10px;
+  padding: 1px 7px;
+  border: 1px solid rgba(15, 16, 18, 0.45);
+  border-radius: 5px;
+  font-size: 0.75em;
 }

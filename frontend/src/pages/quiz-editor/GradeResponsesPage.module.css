@@ -409,3 +409,64 @@
   max-width: none;
   max-height: none;
 }
+
+/* GRADE FAST. What the question is about, beside it. */
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-3) 0 0;
+  font-size: var(--peira-text-control);
+  color: var(--nb-text);
+}
+
+.contextLink {
+  color: var(--color-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.contextLink:hover {
+  text-decoration: underline;
+}
+
+/* "Ungraded only" and the keys, one quiet line at the foot of the plane. */
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.keys {
+  font-size: var(--peira-text-meta);
+  color: var(--nb-text-faint);
+}
+
+.keys kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 4px;
+  margin-right: 3px;
+  border: 1px solid var(--nb-border);
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  color: var(--nb-text-muted);
+}
+
+/* A phone has no keyboard to read about. */
+@media (max-width: 720px) {
+  .keys {
+    display: none;
+  }
+}
+
+/* The answer the keys act on. */
+.rowCurrent {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-md);
+}

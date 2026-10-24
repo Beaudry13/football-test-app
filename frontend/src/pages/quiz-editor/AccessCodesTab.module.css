@@ -179,3 +179,21 @@
   margin: 0 0 0.5em;
   padding-left: 1.2em;
 }
+
+/* "Same as last time: Safeties" - one tap to pick the last audience again. */
+.sameAsLast {
+  align-self: flex-start;
+  margin: var(--space-1) 0 var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: var(--peira-text-control);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.sameAsLast:hover {
+  text-decoration: underline;
+}

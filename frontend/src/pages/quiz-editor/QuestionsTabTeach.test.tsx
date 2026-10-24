@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { Quiz } from '../../api/types';
 
@@ -45,8 +45,55 @@ describe('Teach this, from the quiz editor', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Teach this' }));
-    const teach = within(screen.getByRole('dialog', { name: 'Teach Identify the coverage.' }));
+    const teach = within(screen.getByRole('dialog', { name: 'Teach Week 3' }));
     expect(teach.getByText('Cover 3')).toBeInTheDocument();
     expect(teach.getByText('Single high, corners bail.')).toBeInTheDocument();
+  });
+
+  it('a question made from a Motion Lab play opens the play, for a coach who has Motion Lab - and only then', async () => {
+    const fromPlay = { ...question, motion_play_id: 14 };
+    const quiz = { id: 500, title: 'Week 3', kind: 'QUIZ', questions: [fromPlay], question_count: 1 } as unknown as Quiz;
+    const auth = vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: false } } as never);
+    const { unmount } = render(
+      <MemoryRouter>
+        <QuestionsTab quiz={quiz} reload={vi.fn(async () => undefined)} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
+    await screen.findByRole('menuitem', { name: 'Teach this' });
+    expect(screen.queryByRole('menuitem', { name: 'Open the play' })).toBeNull();
+    unmount();
+
+    auth.mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
+    render(
+      <MemoryRouter initialEntries={['/quizzes/500']}>
+        <Routes>
+          <Route path="/quizzes/500" element={<QuestionsTab quiz={quiz} reload={vi.fn(async () => undefined)} />} />
+          <Route path="/motion-lab/plays/14" element={<p>the play</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for question 1' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Open the play' }));
+    expect(await screen.findByText('the play')).toBeInTheDocument();
+  });
+
+  it('opens on that question and the arrows walk the rest of the quiz', async () => {
+    vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: false } } as never);
+    const second = { ...question, id: 2, question_text: 'Where is the force?', answer_explanation: 'The corner.', options: question.options.map((o) => ({ ...o, question_id: 2 })) };
+    render(
+      <MemoryRouter>
+        <QuestionsTab
+          quiz={{ id: 500, title: 'Week 3', kind: 'QUIZ', questions: [question, second], question_count: 2 } as unknown as Quiz}
+          reload={vi.fn(async () => undefined)}
+        />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for question 2' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Teach this' }));
+    const dialog = screen.getByRole('dialog', { name: 'Teach Week 3' });
+    expect(within(dialog).getByText('Where is the force?')).toBeInTheDocument();
+    fireEvent.keyDown(dialog, { key: 'ArrowLeft' });
+    expect(within(dialog).getByText('Identify the coverage.')).toBeInTheDocument();
   });
 });

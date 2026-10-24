@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { createQuiz, deleteQuiz, duplicateQuiz, listQuizzes, updateQuiz } from '../api/quizzes';
 import { AnswerKeyDialog } from '../components/AnswerKeyDialog';
 import { createFolder, deleteFolder, listFolders, renameFolder } from '../api/folders';
@@ -23,6 +24,8 @@ import { useMayUseMotionLab } from '../motion-lab/motionLabAccess';
 import { RepsHomeCard } from './reps/RepsHomeCard';
 import { useRepsSummary } from './reps/useRepsSummary';
 import { NextUp } from './home/NextUp';
+import { readLastWork, type LastWork } from './home/lastWork';
+import { listToGrade, type ToGrade } from '../api/grading';
 import nb from '../styles/notebook.module.css';
 import styles from './DashboardPage.module.css';
 
@@ -49,6 +52,17 @@ export function DashboardPage() {
   const activeEntries = useActiveStatus();
   /** Fetched once: Next up and the Reps card read the same summary. */
   const reps = useRepsSummary();
+  /** GRADE IT: what is waiting on the coach's eyes, for the rail. */
+  const [toGrade, setToGrade] = useState<ToGrade[]>([]);
+  /** Every quiz and Rep he has, by id - what "pick up" may point at. */
+  const [allWork, setAllWork] = useState<Map<number, Quiz> | null>(null);
+  /** PICK UP: the quiz or Rep he last opened here - only while it still
+   *  exists, under its current name, so the line is never a dead link. */
+  const pickUp = useMemo<LastWork | null>(() => {
+    const last = readLastWork(coach?.id);
+    const still = last && allWork ? allWork.get(last.id) : undefined;
+    return last && still ? { ...last, title: still.title, kind: still.kind === 'REP' ? 'rep' : 'quiz' } : null;
+  }, [allWork, coach?.id]);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<number | null>(null);
@@ -73,6 +87,10 @@ export function DashboardPage() {
       // Situational Reps have their own page (/reps); the worklist is quizzes.
       setQuizzes(quizList.filter((q) => q.kind !== 'REP'));
       setFolders(folderList);
+      setAllWork(new Map(quizList.map((q) => [q.id, q])));
+      listToGrade()
+        .then(setToGrade)
+        .catch(() => setToGrade([]));
     } catch (err) {
       setError(getErrorMessage(err));
     }
@@ -287,6 +305,16 @@ export function DashboardPage() {
                 with now, from a Rep or the latest quiz, one tap from Teach or
                 Retest. Then what the coach was working on: Reps, plays. */}
             <NextUp reps={reps} quizzes={quizzes} />
+            {/* WHERE HE LEFT OFF - one quiet line, not a wall of recents. */}
+            {pickUp && (
+              <p className={styles.pickUp}>
+                Pick up where you left off:{' '}
+                <Link to={pickUp.kind === 'rep' ? `/reps/${pickUp.id}` : `/quizzes/${pickUp.id}`} className={styles.pickUpLink}>
+                  {pickUp.title}
+                </Link>
+                <span className={styles.pickUpKind}>{pickUp.kind === 'rep' ? ' · Rep' : ' · Quiz'}</span>
+              </p>
+            )}
             {/* Every coach; it stays away until there is a Rep, unless the
                 coach can make one from a play. */}
             <RepsHomeCard reps={reps ?? null} showNextUp={false} inviteWhenEmpty={motionLab} />
@@ -449,7 +477,7 @@ export function DashboardPage() {
         )}
           </div>
 
-          <DashboardRail entries={activeEntries} quizzes={quizzes} />
+          <DashboardRail entries={activeEntries} quizzes={quizzes} toGrade={toGrade} />
         </div>
 
         {/* THE CHECKLIST, AFTER THE WORK IT IS ABOUT.

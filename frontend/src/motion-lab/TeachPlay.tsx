@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { PlayPicture, type DrawnStill } from '../components/football/PlayPicture'
 import { TeachView, type TeachSlide } from '../components/teach/TeachView'
+import { rememberTaught } from './taughtMemory'
+import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
+import { readRepMemory } from './playRep'
+import { CheckThem } from './CheckThem'
+import checkStyles from './CheckThem.module.css'
+import { Preview3DOverlay } from './Preview3DOverlay'
+import type { DraftPayload, PreviewTarget, ViewerPayload } from './viewIn3D'
 import type { Play } from './engine/play'
 import { MomentPicker } from './MomentPicker'
 import { drawPlay, IMAGE_HEIGHT, IMAGE_WIDTH } from './playImage'
@@ -34,15 +41,69 @@ function writeNotes(playId: string, notes: string) {
  * then Teach it, full screen: the play moving to that moment, "Watch again",
  * the man ringed, the point beside it. Nothing is saved to PEIRA and nothing
  * is sent - it is the play, taught.
+ *
+ * WHAT PEIRA ALREADY KNOWS, it starts from: the man selected on the field is
+ * the man to watch; the coaching point is the one he wrote for this play
+ * (here, or as the "why" of a question or Rep made from it); the concept is
+ * the one he named for it. All starting values, all his.
+ *
+ * AFTER TEACHING: Check them - what is already made from the play, or make
+ * the check from this football (a Rep, a quiz question) with the man already
+ * chosen. And, where a 3D viewer is set up, the same play in 3D ("Back to
+ * Teach" returns to it).
  */
-export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }) {
-  const [who, setWho] = useState<string | null>(null)
-  const [role, setRole] = useState('')
+export function TeachPlay({
+  play,
+  onClose,
+  selectedMan = null,
+  motionPlayId = null,
+  onCheck,
+  preview3d = null,
+}: {
+  play: Play
+  onClose: () => void
+  /** The man selected on the field when the coach asked: he is the man to watch. */
+  selectedMan?: string | null
+  /** The saved play (what is made from it, what he said last time). */
+  motionPlayId?: number | null
+  /** Check them: make a Rep or a quiz question from this play, for this man. */
+  onCheck?: (kind: 'rep' | 'question', man: string | null) => void
+  /** The 3D viewer, when one is set up: the same play, from Motion Lab's own handoff. */
+  preview3d?: { viewerUrl: string; target: PreviewTarget; load: () => Promise<ViewerPayload | DraftPayload> } | null
+}) {
+  const [start] = useState(() => {
+    const man = selectedMan ? play.players.find((p) => p.id === selectedMan) : undefined
+    return man ? { who: man.id, role: roleName(man) } : { who: null, role: '' }
+  })
+  const [who, setWho] = useState<string | null>(start.who)
+  const [role, setRole] = useState(start.role)
   const [motion, setMotion] = useState(() => hasMotion(play))
   const [routes, setRoutes] = useState(false)
   const [moment, setMoment] = useState<DecisionMoment>('snap')
   const [notes, setNotes] = useState(() => readNotes(play.id))
+  const notesTyped = useRef(false)
   const [teaching, setTeaching] = useState(false)
+  const [show3d, setShow3d] = useState(false)
+  const [made, setMade] = useState<MadeFromPlay[]>([])
+  const [memory] = useState(() => readRepMemory())
+  const [concept, setConcept] = useState<string | null>(() => (memory?.playId === play.id && memory.concept ? memory.concept : null))
+  useEffect(() => {
+    if (motionPlayId === null) return
+    let live = true
+    getMadeFromPlay(motionPlayId)
+      .then(({ made: list, last }) => {
+        if (!live) return
+        setMade(list)
+        if (last?.concept) setConcept((now) => now ?? last.concept!.name)
+        // His point for this play, as he wrote it on a question or Rep - when
+        // he has none here yet.
+        if (last?.answer_explanation && !notesTyped.current) setNotes((now) => now || last.answer_explanation!)
+      })
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [motionPlayId])
   const preview = useRef<HTMLCanvasElement>(null)
   const moments = useMemo(() => momentsFor(play), [play])
   const clip = useMemo(() => (motion ? presnapOf(play, who, moment) : null), [play, who, motion, moment])
@@ -74,6 +135,10 @@ export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }
     () => ({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT, draw: (ctx) => drawPlay(ctx, play, { routes, motion, highlight: who }) }),
     [play, routes, motion, who],
   )
+  const drawnAsk = useMemo<DrawnStill>(
+    () => ({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT, draw: (ctx) => drawPlay(ctx, play, { routes: false, motion, highlight: who }) }),
+    [play, motion, who],
+  )
   const slide: TeachSlide = {
     key: `${play.id}-${moment}-${who ?? 'all'}-${routes}`,
     imageUrl: null,
@@ -84,11 +149,15 @@ export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }
     wrong: null,
     // Already in Motion Lab: no "open the play" link back to it.
     motionPlayId: null,
+    concept,
     picture: <PlayPicture presnap={clip} drawn={drawn} motionKey={`${play.id}-${moment}-${who}`} alt={play.name || 'The play'} />,
+    // Ask first: his job, then his route - the authored path shown on reveal.
+    pictureAsk: routes ? <PlayPicture presnap={clip} drawn={drawnAsk} motionKey={`${play.id}-${moment}-${who}-ask`} alt={play.name || 'The play'} /> : undefined,
   }
 
   const teach = () => {
     writeNotes(play.id, notes)
+    rememberTaught(play.id)
     setTeaching(true)
   }
 
@@ -123,7 +192,10 @@ export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }
           <span>The coaching point</span>
           <textarea
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => {
+              notesTyped.current = true
+              setNotes(e.target.value)
+            }}
             placeholder="#3 motions across - you rotate down. Eyes on the motion man, not the QB."
             rows={3}
             maxLength={600}
@@ -136,7 +208,34 @@ export function TeachPlay({ play, onClose }: { play: Play; onClose: () => void }
           </button>
         </div>
       </div>
-      {teaching && <TeachView title={play.name.trim() || 'The play'} slides={[slide]} onClose={() => setTeaching(false)} />}
+      {teaching && !show3d && (
+        <TeachView
+          title={play.name.trim() || 'The play'}
+          slides={[slide]}
+          onClose={() => setTeaching(false)}
+          action={
+            <span className={checkStyles.wrap}>
+              {preview3d && (
+                <button type="button" className={checkStyles.view3d} onClick={() => setShow3d(true)} title="The same play in 3D">
+                  3D
+                </button>
+              )}
+              {onCheck && <CheckThem made={made} who={who ? role.trim() || null : null} onMake={(kind) => onCheck(kind, who)} />}
+            </span>
+          }
+        />
+      )}
+      {/* 2D | 3D: the play in the 3D viewer, Motion Lab's own handoff; back to the 2D teaching screen. */}
+      {teaching && show3d && preview3d && (
+        <Preview3DOverlay
+          viewerUrl={preview3d.viewerUrl}
+          target={preview3d.target}
+          playName={play.name.trim() || 'The play'}
+          load={preview3d.load}
+          onClose={() => setShow3d(false)}
+          backLabel="Back to Teach"
+        />
+      )}
     </>
   )
 }

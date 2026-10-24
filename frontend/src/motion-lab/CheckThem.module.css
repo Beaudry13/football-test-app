@@ -1,0 +1,66 @@
+/* Teach -> Check them: a small menu under the Teach screen's bar. Two-class
+   selectors so the Teach bar's gold "action" buttons do not restyle its items. */
+.wrap {
+  position: relative;
+}
+.wrap .menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 300px;
+  padding: 8px;
+  border: 1px solid #2a2d32;
+  border-radius: 10px;
+  background: #17191c;
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.9);
+}
+.wrap .head {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8b8f96;
+}
+.wrap .item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-height: 0;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #f2f2ee;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.wrap .item:hover,
+.wrap .item:focus-visible {
+  background: #2b2f34;
+}
+.wrap .kind {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #d9a441;
+}
+.wrap .why {
+  font-size: 12px;
+  font-weight: 500;
+  color: #9aa0a6;
+}
+/* "3D": the same play in the 3D viewer, a quieter button beside Check them. */
+.wrap .view3d {
+  background: transparent;
+  border: 1px solid #d9a441;
+  color: #d9a441;
+}

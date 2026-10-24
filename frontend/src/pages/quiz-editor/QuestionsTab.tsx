@@ -530,13 +530,20 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
         </div>
       )}
 
-      {teachingQuestion && (
-        <TeachView
-          title={teachingQuestion.question_text}
-          slides={quizTeachSlides([teachingQuestion])}
-          onClose={() => setTeachingQuestion(null)}
-        />
-      )}
+      {/* TEACH THE QUIZ: opened on this question, the arrows walk the rest
+          of the quiz's football - the install, taught in order. */}
+      {teachingQuestion && (() => {
+        const taught = questions.filter((q) => !q.is_retired && teachable(q));
+        const at = Math.max(0, taught.findIndex((q) => q.id === teachingQuestion.id));
+        return (
+          <TeachView
+            title={quiz.title}
+            slides={quizTeachSlides(taught)}
+            start={at}
+            onClose={() => setTeachingQuestion(null)}
+          />
+        );
+      })()}
       {addingToRep && (
         <Modal onDismiss={() => setAddingToRep(null)} ariaLabel="Add to a rep" showCloseButton>
           <div className={styles.repPick}>
@@ -899,6 +906,12 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                         football to show. */}
                     {teachable(question) && (
                       <MenuItem onSelect={() => setTeachingQuestion(question)}>Teach this</MenuItem>
+                    )}
+                    {/* WHERE IT CAME FROM: the Motion Lab play it was made
+                        from, for a coach who has Motion Lab. Changing the play
+                        never changes this question - its picture is its own. */}
+                    {motionLab && question.motion_play_id != null && (
+                      <MenuItem onSelect={() => navigate(`/motion-lab/plays/${question.motion_play_id}`)}>Open the play</MenuItem>
                     )}
                     {/* QUIZ -> REP, one question at a time. */}
                     {repReady(question) && (

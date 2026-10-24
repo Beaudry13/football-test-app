@@ -46,7 +46,7 @@ from app.services.player_identity import PlayerKey
 from app.services.question_snapshots import has_history
 
 
-def rep_attempts(quiz, player_id: int | None = None) -> list:
+def rep_attempts(quiz, player_id: int | None = None, player_ids=None) -> list:
     """Every attempt at this Rep, oldest first - or one rostered player's,
     asked of the database rather than filtered after loading everyone's.
 
@@ -66,6 +66,8 @@ def rep_attempts(quiz, player_id: int | None = None) -> list:
     )
     if player_id is not None:
         query = query.filter(PlayerAttempt.player_id == player_id)
+    if player_ids is not None:
+        query = query.filter(PlayerAttempt.player_id.in_(list(player_ids)))
     return (
         query.options(
             answers.selectinload(Answer.selected_options),

@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
-import { listMotionLooks, listMotionPlays } from '../api/motionLab'
+import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
+import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
-import { MotionLabEditor } from './authoring/MotionLabEditor'
+import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
 import { MakeQuestion } from './MakeQuestion'
 import { MakeRep } from './MakeRep'
 import { TeachPlay } from './TeachPlay'
+import { readTaught } from './taughtMemory'
 import type { Player } from './engine/formation'
-import type { Play } from './engine/play'
-import { getMotionLabSession, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
+import { SCHEMA_VERSION, type Play } from './engine/play'
+import { getMotionLabSession, toDocument, type MotionLabSession, type PlaySaveState } from './storage/apiPlayRepository'
 import { Preview3D } from './Preview3D'
-import { VIEWER_3D_URL, viewIn3D } from './viewIn3D'
+import { Preview3DOverlay } from './Preview3DOverlay'
+import { draftPayload, toViewerPayload, VIEWER_3D_URL, type PreviewTarget } from './viewIn3D'
 import './motionLab.css'
 
 /**
@@ -58,8 +61,17 @@ export default function MotionLabEditorPage() {
   const [teachingPlay, setTeachingPlay] = useState(false)
   /** The "Use this play" menu is open. */
   const [using, setUsing] = useState(false)
+  /** What the page may ask of the editor (flush an edit, the selected man). */
+  const editor = useRef<EditorHandle | null>(null)
+  /** PREVIEW 3D: the play shown in the 3D viewer over the editor, or null. */
+  const [preview, setPreview] = useState<PreviewTarget | null>(null)
+  /** The man selected on the field when a panel was opened: its question is his. */
+  const [panelMan, setPanelMan] = useState<string | null>(null)
+  /** CREATE ONCE: what this coach has already made from the play (under Use this play). */
+  const [made, setMade] = useState<MadeFromPlay[] | null>(null)
   /** One panel at a time, chosen from the menu. */
   const openPanel = (kind: 'rep' | 'question' | 'teach') => {
+    setPanelMan(editor.current?.selectedId() ?? null)
     setUsing(false)
     setRepping(kind === 'rep')
     setAsking(kind === 'question')
@@ -226,23 +238,39 @@ export default function MotionLabEditorPage() {
   const folderId = current ? session.folderIdOf(current) : null
 
   /**
-   * PREVIEW 3D: open the saved play in the 3D viewer. Live when
-   * VITE_MOTION_LAB_3D_URL is set; hands over only a play whose last edit the
-   * server has confirmed, because the viewer is shown the SAVED play.
+   * PREVIEW 3D: the play in the 3D viewer, over the editor (Preview3DOverlay).
+   * Live when VITE_MOTION_LAB_3D_URL is set. A saved play is shown as saved; the
+   * unsaved scratch play as the draft on screen - nothing is saved to preview it.
    */
   const open3D = () => {
+    // The last touch first: an edit inside the quiet period reaches the play now.
+    editor.current?.flush()
     const id = session.repository.currentPlayId()
-    if (id && session.isScratch(id)) {
-      setNotices((all) => [...all, 'Save the play first - Preview 3D shows the saved play.'])
-      return
+    if (!id || !VIEWER_3D_URL) return
+    const serverId = session.isScratch(id) ? null : session.serverIdOf(id)
+    setPreview(serverId !== null ? serverId : 'draft')
+  }
+
+  /**
+   * What the viewer is handed, when it asks. The coach's last touch reaches the
+   * play first - the editor's quiet period, and for a saved play the write - so
+   * the viewer never shows a step behind and he is never told to try again.
+   */
+  const loadPreview = async (target: PreviewTarget) => {
+    editor.current?.flush()
+    const id = session.repository.currentPlayId()
+    const deadline = Date.now() + 10000
+    while (Date.now() < deadline) {
+      const settled = !editPending.current && (target === 'draft' || (id !== null && session.stateOf(id).state === 'saved'))
+      if (settled) break
+      await new Promise((resolve) => setTimeout(resolve, 150))
     }
-    const serverId = id ? session.serverIdOf(id) : null
-    const saved = id !== null && session.stateOf(id).state === 'saved' && !editPending.current
-    if (!VIEWER_3D_URL || serverId === null || !saved) {
-      setNotices((all) => [...all, 'Saving… Preview 3D shows the saved play - try again in a moment.'])
-      return
+    if (target === 'draft') {
+      const play = id ? session.repository.listPlays().find((p) => p.id === id) : null
+      if (!play) throw new Error('the play is no longer open in Motion Lab')
+      return draftPayload(play.name, toDocument(play), SCHEMA_VERSION)
     }
-    if (!viewIn3D(VIEWER_3D_URL, serverId)) setNotices((all) => [...all, 'The 3D viewer window was blocked - allow pop-ups for this site.'])
+    return toViewerPayload(await getMotionPlay(target))
   }
 
   /** "+ New play": a fresh scratch play from these men. Undo brings the old one back. */
@@ -371,6 +399,14 @@ export default function MotionLabEditorPage() {
                 setAsking(false)
                 setTeachingPlay(false)
                 setUsing((open) => !open)
+                // Asked fresh each time: something may have been made since.
+                const serverId = !using && current && !session.isScratch(current) ? session.serverIdOf(current) : null
+                setMade(null)
+                if (serverId !== null) {
+                  getMadeFromPlay(serverId)
+                    .then(({ made: list }) => setMade(list))
+                    .catch(() => setMade(null))
+                }
               }}
               title="Make a rep or a quiz question from this play, or teach a moment from it"
             >
@@ -396,6 +432,28 @@ export default function MotionLabEditorPage() {
                 <button role="menuitem" onClick={() => openPanel('teach')}>
                   Teach a moment <span className="use-why">stop it, ring him, say the point</span>
                 </button>
+                {/* WHAT HAVE I ALREADY MADE FROM THIS PLAY? Only when there is
+                    something; each opens where it lives. */}
+                {((made && made.length > 0) || (currentPlay && readTaught(currentPlay.id))) && (
+                  <div className="use-made" role="group" aria-label="Made from this play">
+                    <span className="use-made-title">Made from this play</span>
+                    {/* TAUGHT FROM HERE (this device): Teach a moment saves nothing else. */}
+                    {currentPlay && readTaught(currentPlay.id) && (
+                      <span className="use-why use-made-taught">You taught it {shortDay(readTaught(currentPlay.id)!)}</span>
+                    )}
+                    {(made ?? []).slice(0, MADE_SHOWN).map((m) => (
+                      <Link key={m.id} role="menuitem" className="use-made-row" to={m.kind === 'REP' ? `/reps/${m.id}` : `/quizzes/${m.id}`}>
+                        <span className="use-made-name">
+                          <span className="use-made-kind">{m.kind === 'REP' ? 'Rep' : 'Quiz'}</span> {m.title}
+                        </span>
+                        <span className="use-why" title={madeDetail(m)}>
+                          {madeDetail(m)}
+                        </span>
+                      </Link>
+                    ))}
+                    {(made ?? []).length > MADE_SHOWN && <span className="use-why use-made-more">and {(made ?? []).length - MADE_SHOWN} more</span>}
+                  </div>
+                )}
               </div>
             )}
             {repping && currentPlay && (
@@ -404,23 +462,54 @@ export default function MotionLabEditorPage() {
                 motionPlayId={current ? session.serverIdOf(current) : null}
                 onClose={() => setRepping(false)}
                 intoRep={intoRep}
+                selectedMan={panelMan}
               />
             )}
             {asking && currentPlay && (
               <MakeQuestion
                 play={currentPlay}
                 motionPlayId={current ? session.serverIdOf(current) : null}
+                selectedMan={panelMan}
                 onClose={() => setAsking(false)}
               />
             )}
-            {teachingPlay && currentPlay && <TeachPlay play={currentPlay} onClose={() => setTeachingPlay(false)} />}
+            {teachingPlay && currentPlay && (
+              <TeachPlay
+                play={currentPlay}
+                onClose={() => setTeachingPlay(false)}
+                selectedMan={panelMan}
+                motionPlayId={current && !session.isScratch(current) ? session.serverIdOf(current) : null}
+                // TEACH -> CHECK THEM: the panel that makes it, the man already chosen.
+                onCheck={(kind, man) => {
+                  setPanelMan(man)
+                  setTeachingPlay(false)
+                  setRepping(kind === 'rep')
+                  setAsking(kind === 'question')
+                }}
+                preview3d={(() => {
+                  if (!VIEWER_3D_URL || !current) return null
+                  const target: PreviewTarget = session.isScratch(current) ? 'draft' : (session.serverIdOf(current) ?? 'draft')
+                  return { viewerUrl: VIEWER_3D_URL, target, load: () => loadPreview(target) }
+                })()}
+              />
+            )}
           </div>
           </>
         }
         isUnsaved={(id) => session.isScratch(id)}
         onSaveUnsaved={(play) => session.saveScratch(play)}
         onNewPlay={startNewPlay}
+        handle={editor}
       />
+      {preview !== null && VIEWER_3D_URL && (
+        <Preview3DOverlay
+          viewerUrl={VIEWER_3D_URL}
+          target={preview}
+          playName={currentName ?? 'This play'}
+          load={() => loadPreview(preview)}
+          onClose={() => setPreview(null)}
+        />
+      )}
     </div>
   )
 }
@@ -444,6 +533,25 @@ export default function MotionLabEditorPage() {
  */
 /** How long a replaced scratch play can be brought back. */
 const UNDO_MS = 10000
+
+/** How many of the play's quizzes and Reps the menu lists; the rest are counted. */
+const MADE_SHOWN = 4
+/** "Tue Oct 21" - when, in a coach's words. */
+function shortDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+/** WHAT, WHO AND WHETHER IT WAS TAUGHT: "3 decisions · Boundary safety · Motion adjustment · taught Oct 21". */
+function madeDetail(m: MadeFromPlay): string {
+  const word = m.kind === 'REP' ? 'decision' : 'question'
+  return [
+    `${m.from_play} ${word}${m.from_play === 1 ? '' : 's'}`,
+    ...(m.roles ?? []).slice(0, 2),
+    ...(m.concepts ?? []).slice(0, 2),
+    m.taught_at ? `taught ${new Date(m.taught_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
 
 function shownSaveState(session: PlaySaveState, editPending: boolean): PlaySaveState {
   return editPending && session === 'saved' ? 'saving' : session
