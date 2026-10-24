@@ -2070,6 +2070,35 @@
   opacity: 0.8;
 }
 
+/* THE DOCK ON A NARROW SCREEN (a small laptop window, a tablet on its side).
+   With Play bigger and View beside it the row no longer fits under ~1240 px,
+   and the menus' wrappers shrank while their buttons did not - drawn over
+   one another. Here only the words give way, as the dock always meant: the
+   ball's sentence and the situation shorten (their tooltips say the whole
+   thing), the VIEW word goes as the top bar's does, and the scrubber gives up
+   some length. Every control keeps its size. */
+@media (max-width: 1240px) {
+  .motion-lab-root .bar.bottom .ball-menu {
+    display: flex;
+  }
+  .motion-lab-root .bar.bottom .ball-menu > .ball-btn,
+  .motion-lab-root .bar.bottom .ball-menu > .sit-chip {
+    min-width: 0;
+  }
+  .motion-lab-root .bar.bottom .ball-menu:not(:has(> .ball-btn)):not(:has(> .sit-chip)) {
+    flex-shrink: 0;
+  }
+  .motion-lab-root .bar.bottom .view-btn .view-word {
+    display: none;
+  }
+  .motion-lab-root .bar.bottom .scrub {
+    min-width: 80px;
+  }
+  .motion-lab-root .bar.bottom .scrub input {
+    min-width: 0;
+  }
+}
+
 /* PREVIEW 3D: PEIRA's signature view gets its own button in the top bar. */
 .motion-lab-root .preview-3d {
   position: relative;
