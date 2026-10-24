@@ -525,3 +525,12 @@ class TestTheOriginalKnowsHowItsConceptRetestWent:
         _activate(client, coach_headers, retest["id"])
         after = client.get(f"/api/quizzes/{quiz['id']}/dashboard", headers=coach_headers).get_json()
         assert after["retests"][0]["sent"] is True
+
+    def test_the_retest_itself_knows_whether_it_was_sent(self, client, coach_headers):
+        quiz, _tf, concept, _code = _parent_with_misses(client, coach_headers)
+        retest = _make_retest(client, coach_headers, quiz["id"], concept["id"], ["A", "B"])
+        own = client.get(f"/api/quizzes/{retest['id']}/dashboard", headers=coach_headers).get_json()
+        assert own["verification"]["sent"] is False
+        _activate(client, coach_headers, retest["id"])
+        own = client.get(f"/api/quizzes/{retest['id']}/dashboard", headers=coach_headers).get_json()
+        assert own["verification"]["sent"] is True

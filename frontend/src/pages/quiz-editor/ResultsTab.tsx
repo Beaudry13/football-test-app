@@ -580,7 +580,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           message="No answers in yet."
           action={
             <Link to={`/quizzes/${quiz.id}?tab=activate`} className={nb.btnSecondary}>
-              See who it went to
+              See who gets it
             </Link>
           }
         />

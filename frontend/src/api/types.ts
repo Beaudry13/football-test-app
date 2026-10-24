@@ -680,6 +680,8 @@ export interface QuestionBreakdown {
 export interface RetestVerification {
   parent_quiz_id: number;
   parent_quiz_title: string;
+  /** Whether this retest has been sent. Retest builds and Send sends. */
+  sent?: boolean;
   /** "snapshot" = what these players were actually delivered. "live_fallback"
    *  = the delivery predates concept tagging, so the question's current tag
    *  stood in. Never presented to a coach as recorded history. */

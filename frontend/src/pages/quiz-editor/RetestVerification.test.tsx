@@ -56,6 +56,26 @@ describe('the verification card', () => {
     expect(document.body.textContent).not.toMatch(/%/);
   });
 
+  it('a retest not sent yet went to nobody - and says so', () => {
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          sent: false,
+          concept_source: 'live_fallback',
+          correct_count: 0,
+          incorrect_count: 0,
+          not_submitted_count: 6,
+          is_complete: false,
+          still_missing: [],
+        })}
+      />,
+    );
+    expect(screen.getByText(/This retest is for the/)).toHaveTextContent('not sent yet');
+    expect(screen.queryByText(/went to/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/answered yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/was sent before/)).not.toBeInTheDocument();
+  });
+
   it('names who is still missing it', () => {
     renderCard(<RetestVerification verification={verification()} />);
 

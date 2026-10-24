@@ -438,11 +438,21 @@ def _build_dashboard_data(quiz: Quiz, responses: list[PlayerAttempt]) -> dict:
         #: DID THE RESULT IMPROVE? Present only on a quiz that was built as a
         #: retest; None everywhere else, which is the client's signal to render
         #: nothing rather than an empty verification card.
-        "verification": verification_for(quiz),
+        "verification": _with_sent(verification_for(quiz), quiz),
         #: How each retest built from THIS quiz went - "did it stick?" on the
         #: original, beside the concept or question it re-asked.
         "retests": retests_of(quiz),
     }
+
+
+def _with_sent(verification: dict | None, quiz: Quiz) -> dict | None:
+    """A retest's own card, and whether it has been sent. Retest builds and
+    Send sends, so it can sit unsent - and "went to the 2 players" would be a
+    claim about players who were never given it."""
+    if verification is None:
+        return None
+    sent = db.session.query(AccessCode.id).filter(AccessCode.quiz_id == quiz.id).first() is not None
+    return {**verification, "sent": sent}
 
 
 def _load_responses_for_export(quiz: Quiz) -> list[PlayerAttempt]:
