@@ -107,6 +107,7 @@ export async function loadTeachItem(item: InstallItem, ctx: TeachContext): Promi
         <CheckThem
           made={made?.made ?? []}
           who={role}
+          linkState={ctx.back()}
           onMake={(kind) => ctx.navigate(`/motion-lab/plays/${item.ref_id}?make=${kind}${man ? `&man=${encodeURIComponent(man)}` : ''}`)}
         />
       ),

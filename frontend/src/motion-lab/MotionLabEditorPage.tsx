@@ -4,7 +4,7 @@ import { getErrorMessage } from '../api/client'
 import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
 import { AddToInstallPanel } from '../pages/installs/AddToInstall'
-import { readFrom } from '../navigation/backTo'
+import { fromHere, readFrom } from '../navigation/backTo'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
@@ -520,6 +520,8 @@ export default function MotionLabEditorPage() {
                   setRepping(kind === 'rep')
                   setAsking(kind === 'question')
                 }}
+                // A Rep or quiz already made from it opens with "← this play".
+                checkLinkState={fromHere(location)}
                 preview3d={(() => {
                   if (!VIEWER_3D_URL || !current) return null
                   const target: PreviewTarget = session.isScratch(current) ? 'draft' : (session.serverIdOf(current) ?? 'draft')

@@ -58,6 +58,7 @@ export function TeachPlay({
   selectedMan = null,
   motionPlayId = null,
   onCheck,
+  checkLinkState = null,
   preview3d = null,
 }: {
   play: Play
@@ -68,6 +69,8 @@ export function TeachPlay({
   motionPlayId?: number | null
   /** Check them: make a Rep or a quiz question from this play, for this man. */
   onCheck?: (kind: 'rep' | 'question', man: string | null) => void
+  /** The way back to this play for a Rep or quiz Check them opens. */
+  checkLinkState?: object | null
   /** The 3D viewer, when one is set up: the same play, from Motion Lab's own handoff. */
   preview3d?: { viewerUrl: string; target: PreviewTarget; load: () => Promise<ViewerPayload | DraftPayload> } | null
 }) {
@@ -223,7 +226,14 @@ export function TeachPlay({
                   Preview 3D
                 </button>
               )}
-              {onCheck && <CheckThem made={made} who={who ? role.trim() || null : null} onMake={(kind) => onCheck(kind, who)} />}
+              {onCheck && (
+                <CheckThem
+                  made={made}
+                  who={who ? role.trim() || null : null}
+                  onMake={(kind) => onCheck(kind, who)}
+                  linkState={checkLinkState}
+                />
+              )}
             </span>
           }
         />
