@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   getPlayerResults,
   getResultsIdentities,
@@ -159,7 +159,17 @@ export function ResultsCheckPage() {
     </div>
   );
 
-  if (view.name === 'results') return shell(<ResultsView results={view.results} />);
+  if (view.name === 'results')
+    return shell(
+      <>
+        <ResultsView results={view.results} />
+        {/* Done: back to his work. Player Home sends a graded quiz's "Review
+            missed" here, so this page must never be the end of the road. */}
+        <Link to="/play" className={`btn btn-primary ${styles.doneButton}`}>
+          Done
+        </Link>
+      </>,
+    );
 
   if (view.name === 'pin') {
     return shell(
