@@ -28,6 +28,7 @@ from app.models.question_exclusion import QuestionExclusion
 from app.models.grade_audit_log import GradeAuditLog
 from app.models.organization_merge import OrganizationMerge
 from app.models.motion_lab import MotionLook, MotionPlay
+from app.models.install import Install, InstallItem, InstallSection
 from app.models.rep_teach_mark import RepTeachMark
 from app.models.competition import (
     CompetitionAnswer,
@@ -73,6 +74,9 @@ __all__ = [
     "OrganizationMerge",
     "MotionPlay",
     "MotionLook",
+    "Install",
+    "InstallSection",
+    "InstallItem",
     "CompetitionSession",
     "CompetitionParticipant",
     "CompetitionAnswer",

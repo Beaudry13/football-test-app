@@ -90,7 +90,8 @@ function tapTargetsOf(question: Question): TapTarget[] | null {
 }
 
 export function Verdict({ feedback, right = [] }: { feedback: PracticeFeedback; right?: string[] }) {
-  const word = feedback.is_correct === true ? 'Correct' : feedback.is_correct === false ? 'Not quite' : 'Locked in';
+  const word =
+    feedback.is_correct === true ? 'Correct' : feedback.is_correct === false ? 'Not quite' : 'Locked in - your coach will look at it';
   const tone =
     feedback.is_correct === true ? styles.verdictRight : feedback.is_correct === false ? styles.verdictWrong : '';
   return (
@@ -148,7 +149,7 @@ export function ReviewMissed({
           {runAgainLabel}
         </button>
       )}
-      <button type="button" className={onRunAgain ? 'btn' : 'btn btn-primary'} onClick={onDone}>
+      <button type="button" className={onRunAgain ? 'btn btn-secondary' : 'btn btn-primary'} onClick={onDone}>
         Done
       </button>
     </div>

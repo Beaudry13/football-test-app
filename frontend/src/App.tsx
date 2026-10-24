@@ -23,6 +23,8 @@ import { QuizEditorPage } from './pages/quiz-editor/QuizEditorPage';
 import { RepPage } from './pages/reps/RepPage';
 import { RepsPage } from './pages/reps/RepsPage';
 import { ConceptHistoryPage } from './pages/reps/ConceptHistoryPage';
+import { InstallsPage } from './pages/installs/InstallsPage';
+import { InstallPage } from './pages/installs/InstallPage';
 import { GradeResponsesPage } from './pages/quiz-editor/GradeResponsesPage';
 import { QuizPreviewPage } from './pages/quiz-editor/QuizPreviewPage';
 import { AnnotationPage } from './pages/quiz-editor/AnnotationPage';
@@ -168,6 +170,11 @@ function App() {
               <Route path="/reps" element={<RepsPage />} />
               <Route path="/reps/concepts/:conceptId" element={<ConceptHistoryPage />} />
               <Route path="/reps/:quizId" element={<RepPage />} />
+              {/* INSTALLS: this week's football in teaching order - existing
+                  plays, quizzes, Reps and concepts by reference. Reached from
+                  Home's cue and every "Add to install"; no nav item of its own. */}
+              <Route path="/installs" element={<InstallsPage />} />
+              <Route path="/installs/:installId" element={<InstallPage />} />
               {/* Inside NotebookLayout, unlike annotation: grading is a
                   destination a coach navigates to and back from, not a mode
                   that takes over the screen. It keeps the header and the way

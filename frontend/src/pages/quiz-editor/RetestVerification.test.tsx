@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
@@ -54,6 +54,26 @@ describe('the verification card', () => {
     // No percentage anywhere - a percentage invites exactly the comparison
     // these two populations cannot support.
     expect(document.body.textContent).not.toMatch(/%/);
+  });
+
+  it('a retest not sent yet went to nobody - and says so', () => {
+    renderCard(
+      <RetestVerification
+        verification={verification({
+          sent: false,
+          concept_source: 'live_fallback',
+          correct_count: 0,
+          incorrect_count: 0,
+          not_submitted_count: 6,
+          is_complete: false,
+          still_missing: [],
+        })}
+      />,
+    );
+    expect(screen.getByText(/This retest is for the/)).toHaveTextContent('not sent yet');
+    expect(screen.queryByText(/went to/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/answered yet/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/was sent before/)).not.toBeInTheDocument();
   });
 
   it('names who is still missing it', () => {
@@ -148,8 +168,8 @@ describe('the verification card', () => {
        missing and offered no way to act on it. */
     renderCard(<RetestVerification verification={verification()} quizId={9} />);
 
-    expect(screen.getByRole('button', { name: 'Retest these 2' })).toBeInTheDocument();
-    // The coach decides. Nothing is built until they confirm.
+    expect(screen.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
+    // The coach decides. Nothing is built until they tap - and a tap only builds.
     expect(createRetest).not.toHaveBeenCalled();
   });
 
@@ -161,7 +181,7 @@ describe('the verification card', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: /Retest th(is|ese)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Retest/ })).not.toBeInTheDocument();
   });
 
   it('does not offer a round it cannot aim, when this one tested several concepts', () => {
@@ -171,7 +191,7 @@ describe('the verification card', () => {
       <RetestVerification verification={verification({ concept_ids: [1, 2] })} quizId={9} />,
     );
 
-    expect(screen.queryByRole('button', { name: /Retest th(is|ese)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Retest/ })).not.toBeInTheDocument();
     expect(screen.getByText('Still missing')).toBeInTheDocument();
   });
 
@@ -213,33 +233,43 @@ describe('the verification card', () => {
     expect(screen.queryByText(/still missed/)).not.toBeInTheDocument();
   });
 
-  it('NAMES THE CONCEPT, not the quiz, when confirming another round', async () => {
-    /* REGRESSION. The card passed parent_quiz_title, so the confirmation read
-       "build a draft on Force / Contain - Retest" - the quiz it came from
-       rather than the football idea the round is about. */
+  it('BUILDS THE ROUND ON THE CONCEPT, for exactly who still misses it - one tap, opened ready to send', async () => {
+    /* The round is about the football idea (the concept), not the quiz it
+       came from - and it goes to exactly the players still missing it. One
+       tap builds the draft and opens it on its Send tab; nothing is sent. */
+    vi.mocked(createRetest).mockResolvedValue({ id: 42 } as never);
+    let landed = '';
+    function Landed() {
+      const l = useLocation();
+      landed = `${l.pathname}${l.search}`;
+      return <p>the retest draft</p>;
+    }
     const user = userEvent.setup();
-    renderCard(
-      <RetestVerification
-        verification={verification({ parent_quiz_title: 'Install Week 2' })}
-        quizId={9}
-      />,
+    render(
+      <MemoryRouter initialEntries={['/quizzes/9']}>
+        <Routes>
+          <Route
+            path="/quizzes/9"
+            element={<RetestVerification verification={verification({ parent_quiz_title: 'Install Week 2' })} quizId={9} />}
+          />
+          <Route path="/quizzes/:id" element={<Landed />} />
+        </Routes>
+      </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Retest these 2' }));
+    await user.click(screen.getByRole('button', { name: 'Retest the 2' }));
 
-    // Scoped to the CONFIRMATION. The parent quiz title legitimately appears
-    // above, in the "Last check" line that names the round being compared -
-    // what must not happen is the confirmation naming the quiz where it means
-    // the concept.
-    const confirmation = screen.getByRole('dialog', { name: 'Create retest' });
-    expect(confirmation).toHaveTextContent('Force / Contain');
-    expect(confirmation).not.toHaveTextContent('Install Week 2');
+    expect(await screen.findByText('the retest draft')).toBeInTheDocument();
+    expect(createRetest).toHaveBeenCalledWith(9, { concept_id: 1, player_ids: [3, 4], player_names: [] });
+    expect(landed).toBe('/quizzes/42?tab=activate');
+    // No confirm step any more: the draft itself says who gets it.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('offers no round when the concept has no name to confirm with', () => {
+  it('offers no round when the concept has no name', () => {
     renderCard(<RetestVerification verification={verification({ concept_names: [] })} quizId={9} />);
 
-    expect(screen.queryByRole('button', { name: /Retest th(is|ese)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Retest/ })).not.toBeInTheDocument();
   });
 
   it('NAMES THE ROUND IT IS COMPARED AGAINST', () => {

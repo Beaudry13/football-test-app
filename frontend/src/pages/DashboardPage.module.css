@@ -101,42 +101,6 @@
   font-weight: 600;
 }
 
-.actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-/* Duplicate/Delete on a quiz card read as tinted, filled actions at rest
-   (not just a neutral outline that only colors up on hover) - per the
-   design handoff's literal card-action styling. Qualified with the `button`
-   type (not just the class alone) so this reliably beats the shared
-   .btnSm's same-specificity border/color rules regardless of which of the
-   two CSS-module stylesheets Vite happens to inject first. */
-button.actionDuplicate {
-  border: 1.5px solid var(--nb-accent);
-  background: var(--color-accent-bg);
-  color: var(--peira-accent-text);
-  font-weight: 700;
-}
-
-button.actionDuplicate:hover:not(:disabled) {
-  border-color: var(--nb-accent);
-  background: rgba(201, 162, 75, 0.22);
-}
-
-button.actionDelete {
-  border: 1.5px solid var(--nb-delete-border);
-  background: var(--nb-delete-bg-hover);
-  color: var(--nb-warning-text);
-  font-weight: 700;
-}
-
-button.actionDelete:hover:not(:disabled) {
-  border-color: var(--nb-delete-border);
-  background: rgba(224, 90, 90, 0.16);
-}
-
 .folderSelect {
   padding: 6px 10px;
   border-radius: var(--radius-sm);
@@ -172,21 +136,6 @@ button.actionDelete:hover:not(:disabled) {
   flex-wrap: wrap;
 }
 
-.folderToggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4em;
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--nb-text);
-  cursor: pointer;
-}
-
 .folderTitle {
   font-family: var(--font-heading);
   font-size: 18px;
@@ -195,64 +144,11 @@ button.actionDelete:hover:not(:disabled) {
   color: var(--nb-text);
 }
 
-.folderCollapseIcon {
-  color: var(--nb-text-muted);
-  width: 1em;
-  display: inline-block;
-}
-
 .folderCount {
   font-weight: 400;
   color: var(--nb-text-muted2);
   font-family: var(--font-body);
   font-size: 0.6em;
-}
-
-.folderActions {
-  display: flex;
-  align-items: center;
-  gap: 0.5em;
-}
-
-.emptyFolder {
-  color: var(--nb-text-muted);
-  font-size: 0.9em;
-  padding: 0.5em 0;
-}
-
-.subfolderSection {
-  padding: 0.75em 1em;
-  border: 1px dashed var(--nb-card-border);
-  border-radius: 4px;
-}
-
-.subListHeading {
-  margin: 0 0 0.5em;
-  font-family: var(--font-body);
-  font-size: 0.8em;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--nb-text-muted2);
-}
-
-.subfolderList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4em;
-  margin-bottom: 0.75em;
-}
-
-.subfolderLink {
-  color: var(--nb-text);
-  text-decoration: none;
-  font-family: var(--font-body);
-  font-size: 14px;
-}
-
-.subfolderLink:hover {
-  color: var(--peira-accent-text);
-  text-decoration: underline;
 }
 
 .newSubfolderForm {
@@ -278,9 +174,7 @@ button.actionDelete:hover:not(:disabled) {
     grid-column: 1 / -1;
   }
 
-  .actions {
-    flex-wrap: wrap;
-  }
+
 
   .newQuizForm,
   .newFolderForm,
@@ -293,14 +187,12 @@ button.actionDelete:hover:not(:disabled) {
   }
 }
 
-
 /* Nested folder sections indent by depth rather than by nesting padding, so a
    five-deep season structure stays readable instead of each level compounding
    the last and marching off the right edge. Depth 0 is unaffected. */
 .folderSection {
   margin-left: calc(var(--folder-depth, 0) * 20px);
 }
-
 
 /* Sits under the stretched link, so text selection and the link both behave. */
 .quizInfo {

@@ -20,6 +20,8 @@ import { playerLabels } from '../../utils/playerDisplayLabel';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import nb from '../../styles/notebook.module.css';
 import styles from './GradeResponsesPage.module.css';
+import { SourcePlayLink } from '../../components/football/SourcePlayLink';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 /** ONE QUESTION, EVERY ANSWER TO IT, ONE STANDARD IN THE COACH'S HEAD.
  *
@@ -53,6 +55,7 @@ export function GradeResponsesPage() {
   const id = Number(quizId);
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  useDocumentTitle(quiz ? `Grade - ${quiz.title}` : 'Grade');
   const [responses, setResponses] = useState<PlayerResponse[]>([]);
   const [dashboard, setDashboard] = useState<QuizDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +163,13 @@ export function GradeResponsesPage() {
     [current, ungradedOnly, kept],
   );
 
+  /* THE CURSOR AS SHOWN AND AS THE KEYS READ IT: the coach's - or, until the
+     effect below lands (the first render with answers) or if it is not on
+     this question, the first answer still waiting. Without the fallback the
+     first frame had no current answer, and a C pressed in it graded nothing. */
+  const firstWaiting = current ? ((current.targets.find((t) => t.isCorrect === null) ?? current.targets[0])?.answerId ?? null) : null;
+  const cursorShown = cursor !== null && current?.targets.some((t) => t.answerId === cursor) ? cursor : firstWaiting;
+
   /** A new question: the cursor on its first answer still waiting. */
   const questionId = current?.questionId;
   useEffect(() => {
@@ -237,7 +247,7 @@ export function GradeResponsesPage() {
     if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || !current || remaining === 0) return;
     const el = e.target as HTMLElement | null;
     if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
-    const at = visible.findIndex((t) => t.answerId === cursor);
+    const at = visible.findIndex((t) => t.answerId === cursorShown);
     const move = (by: number) => {
       const next = visible[Math.max(0, Math.min(visible.length - 1, (at < 0 ? 0 : at) + by))];
       if (!next) return;
@@ -288,7 +298,7 @@ export function GradeResponsesPage() {
     return (
       <div>
         <ErrorBanner message={error} />
-        <Link to={`/quizzes/${id}`} className={nb.btnSecondary}>
+        <Link to={`/quizzes/${id}?tab=results`} className={nb.btnSecondary}>
           Back to the quiz
         </Link>
       </div>
@@ -296,7 +306,7 @@ export function GradeResponsesPage() {
   }
 
   const backToResults = (
-    <Link to={`/quizzes/${id}`} className={styles.back}>
+    <Link to={`/quizzes/${id}?tab=results`} className={styles.back}>
       &larr; {quiz?.title ?? 'Back to results'}
     </Link>
   );
@@ -322,7 +332,7 @@ export function GradeResponsesPage() {
               Next: {nextQuiz.title} · {nextQuiz.count} to grade &rarr;
             </Link>
           )}
-          <Link to={`/quizzes/${id}`} className={nextQuiz ? nb.btnSecondary : nb.btnPrimary}>
+          <Link to={`/quizzes/${id}?tab=results`} className={nextQuiz ? nb.btnSecondary : nb.btnPrimary}>
             Back to results
           </Link>
         </div>
@@ -330,7 +340,17 @@ export function GradeResponsesPage() {
     );
   }
 
-  if (!current) return null;
+  // Nothing left in the queue to show (it changed under him): say so, with the way out.
+  if (!current) {
+    return (
+      <div className={styles.page}>
+        <p>Nothing to grade here right now.</p>
+        <Link to={`/quizzes/${id}?tab=results`} className={nb.btnPrimary}>
+          Back to results
+        </Link>
+      </div>
+    );
+  }
 
   const currentQuestion = quiz?.questions?.find((q) => q.id === current.questionId);
   const isDrawingQuestion = current.questionType === 'draw_response';
@@ -404,11 +424,7 @@ export function GradeResponsesPage() {
                 {role}
               </span>
             )}
-            {sourcePlay !== null && (
-              <Link to={`/motion-lab/plays/${sourcePlay}`} className={styles.contextLink}>
-                Open the play
-              </Link>
-            )}
+            <SourcePlayLink playId={sourcePlay} className={styles.contextLink} />
           </p>
         )}
         {current.expectedAnswers.length > 0 && (
@@ -474,7 +490,7 @@ export function GradeResponsesPage() {
               answerDrawing={answerDrawing}
               answerShown={answerShown}
               busy={saving.has(target.answerId)}
-              current={cursor === target.answerId}
+              current={cursorShown === target.answerId}
               onPick={() => setCursor(target.answerId)}
               onGrade={(isCorrect) => void grade(target, isCorrect)}
             />
@@ -487,7 +503,7 @@ export function GradeResponsesPage() {
             Next question &rarr;
           </button>
         ) : (
-          <Link to={`/quizzes/${id}`} className={nb.btnPrimary}>
+          <Link to={`/quizzes/${id}?tab=results`} className={nb.btnPrimary}>
             Back to results
           </Link>
         )}

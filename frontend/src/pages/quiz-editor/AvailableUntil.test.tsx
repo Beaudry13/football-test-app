@@ -63,7 +63,7 @@ suite('AvailableUntil', () => {
   suite('choosing', () => {
     it('A DEFAULT IS ALWAYS ALREADY SET', () => {
       // Activation must not require a decision. The default is the window
-      // activation always used, so a coach who does not care clicks Activate
+      // activation always used, so a coach who does not care clicks Send
       // exactly as before.
       atFixedNow(() => {
         const chosen = DEFAULT_PRESET.at();
@@ -152,7 +152,7 @@ suite('AvailableUntil', () => {
   });
 
   suite('a time that has already gone', () => {
-    it('says so before the coach presses Activate', () => {
+    it('says so before the coach presses Send', () => {
       // The server refuses it too. This is the courtesy; that is the rule.
       render(<AvailableUntil value={new Date(Date.now() - 3600_000)} onChange={vi.fn()} />);
 

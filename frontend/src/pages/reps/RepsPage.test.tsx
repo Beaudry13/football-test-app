@@ -95,3 +95,25 @@ describe('My reps | All reps', () => {
     expect(screen.queryByRole('link', { name: /Install/ })).toBeNull();
   });
 });
+
+describe('Finding one by name', () => {
+  it('a long list of reps gets a find box; the quiz picker finds an older quiz', async () => {
+    vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([
+      ...Array.from({ length: 9 }, (_, i) => quiz(10 + i, `Rep ${i}`, 'REP')),
+      ...Array.from({ length: 13 }, (_, i) => quiz(40 + i, `Week ${i} install`, 'QUIZ')),
+    ]);
+    open(false);
+    const findRep = await screen.findByRole('searchbox', { name: 'Find a rep' });
+    fireEvent.change(findRep, { target: { value: 'Rep 4' } });
+    expect(screen.getByRole('link', { name: /Rep 4/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Rep 5/ })).toBeNull();
+    fireEvent.change(findRep, { target: { value: 'nothing like this' } });
+    expect(screen.getByText('No rep by that name.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep from a quiz' }));
+    // Thirteen quizzes: the picker shows twelve, and finds the one it left out.
+    const findQuiz = screen.getByRole('searchbox', { name: 'Find a quiz' });
+    fireEvent.change(findQuiz, { target: { value: 'Week 0 install' } });
+    expect(screen.getByRole('button', { name: 'Make a rep from Week 0 install' })).toBeInTheDocument();
+  });
+});

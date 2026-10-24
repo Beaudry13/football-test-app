@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { ApiError } from '../../api/client';
 import { validateCode } from '../../api/play';
 import { itemFor, progressOf, rememberedCodes, sortWork, type WorkItem } from './workProgress';
 import styles from './MyWork.module.css';
@@ -11,7 +12,7 @@ function actionLabel(item: WorkItem): string {
 }
 
 function kindLabel(item: WorkItem): string {
-  if (item.retest) return 'Retest - your second look';
+  if (item.retest) return 'Second look';
   if (item.retry) return 'Your misses, again';
   if (item.kind === 'REP') return 'Rep';
   return item.graded ? 'Quiz' : 'Practice';
@@ -43,21 +44,28 @@ function linkFor(item: WorkItem): string {
 export function MyWork({ joinSlot }: { joinSlot: (secondary: boolean) => ReactNode }) {
   const [codes] = useState(rememberedCodes);
   const [items, setItems] = useState<WorkItem[] | null>(codes.length ? null : []);
+  /** Checks that never reached the server (offline) - not codes that closed. */
+  const [unreachable, setUnreachable] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (codes.length === 0) return;
     let cancelled = false;
+    setItems(null);
     Promise.allSettled(codes.map((code) => validateCode(code).then((joined) => ({ code, joined })))).then((results) => {
       if (cancelled) return;
       const open = results.flatMap((r) =>
         r.status === 'fulfilled' ? [itemFor(r.value.code, r.value.joined, progressOf(r.value.code))] : [],
       );
+      // A closed or unknown code answers (4xx) - that work is simply over. No
+      // answer at all is different: "all caught up" would be a guess.
+      setUnreachable(results.filter((r) => r.status === 'rejected' && !(r.reason instanceof ApiError && r.reason.status >= 400 && r.reason.status < 500)).length);
       setItems(sortWork(open.filter((i): i is WorkItem => i !== null)));
     });
     return () => {
       cancelled = true;
     };
-  }, [codes]);
+  }, [codes, attempt]);
 
   const [next, ...rest] = items ?? [];
   const names = [...new Set((items ?? []).map((i) => i.name).filter((n): n is string => !!n))];
@@ -70,8 +78,16 @@ export function MyWork({ joinSlot }: { joinSlot: (secondary: boolean) => ReactNo
     <div className={styles.home}>
       {items === null && <p className={styles.checking}>Finding your work…</p>}
       {/* NOTHING TO DO IS AN ANSWER TOO - said, not left as an empty screen. */}
-      {items !== null && items.length === 0 && codes.length > 0 && (
+      {items !== null && items.length === 0 && codes.length > 0 && unreachable === 0 && (
         <p className={styles.caughtUp}>You&rsquo;re all caught up.</p>
+      )}
+      {items !== null && items.length === 0 && unreachable > 0 && (
+        <div className={styles.caughtUp} role="alert">
+          <p>Couldn&rsquo;t check your work.</p>
+          <button type="button" className="btn btn-secondary" onClick={() => setAttempt((n) => n + 1)}>
+            Try again
+          </button>
+        </div>
       )}
       {first && <p className={styles.hello}>Hi, {first}</p>}
       {next && (

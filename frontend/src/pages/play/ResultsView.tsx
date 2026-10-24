@@ -15,11 +15,11 @@ import review from './ResultsReview.module.css';
  * question that is no longer being marked at all. */
 function StatusBadge({ answer }: { answer: PlayerResultAnswer }) {
   if (answer.is_excluded) {
-    return <span className="badge badge-neutral">Excluded from scoring</span>;
+    return <span className="badge badge-neutral">Doesn&rsquo;t count</span>;
   }
-  if (answer.is_correct === null) return <span className="badge badge-neutral">Pending review</span>;
+  if (answer.is_correct === null) return <span className="badge badge-neutral">Waiting on your coach</span>;
   if (answer.is_correct) return <span className="badge badge-success">Correct</span>;
-  return <span className="badge badge-warning">Incorrect</span>;
+  return <span className="badge badge-warning">Not quite</span>;
 }
 
 /** A missed answer that still counts - the ones worth a second look. */
@@ -112,7 +112,7 @@ function MissedCard({ answer }: { answer: PlayerResultAnswer }) {
       {!answer.drawing && (
         <p className={review.yours}>Your answer: {answer.your_answer ?? <em>No answer</em>}</p>
       )}
-      {answer.correct_answer && <p className={review.right}>Correct answer: {answer.correct_answer}</p>}
+      {answer.correct_answer && <p className={review.right}>Right answer: {answer.correct_answer}</p>}
       {/* No "Incorrect" badge: the section it sits in already says so. */}
       {answer.coach_feedback && (
         <div className={styles.feedback}>
@@ -159,15 +159,15 @@ function AnswerCard({ answer }: { answer: PlayerResultAnswer }) {
         </div>
       )}
       {!answer.is_excluded && answer.is_correct === false && answer.correct_answer && (
-        <div className={styles.answerMeta}>Correct answer: {answer.correct_answer}</div>
+        <div className={styles.answerMeta}>Right answer: {answer.correct_answer}</div>
       )}
       <StatusBadge answer={answer} />
       {answer.is_excluded && (
         // Plain, and deliberately without the coach's private reason -
         // that note is for the coach and the audit trail, not the player.
         <div className={styles.answerMeta}>
-          Your coach removed this question from scoring. It is not counted
-          as right or wrong.
+          Your coach took this question out. It doesn&rsquo;t count for or
+          against you.
         </div>
       )}
       {answer.coach_feedback && (

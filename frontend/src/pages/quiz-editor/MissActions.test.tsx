@@ -8,6 +8,8 @@ import * as conceptsApi from '../../api/concepts';
 vi.mock('../../api/roster', () => ({ addRosterMembers: vi.fn() }));
 vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
 import * as retestsApi from '../../api/retests';
+vi.mock('../../api/installs', () => ({ installsFor: vi.fn(), addToInstall: vi.fn(), createInstall: vi.fn() }));
+import * as installsApi from '../../api/installs';
 import { RetestVerification } from './RetestVerification';
 import type { RetestVerification as Verification } from '../../api/types';
 import * as repsApi from '../../api/reps';
@@ -105,7 +107,7 @@ describe('from a quiz miss', () => {
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
     // The card leads with Teach and Retest; Make a rep is one tap down.
     expect(screen.queryByRole('button', { name: 'Make a rep for the 2' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     fireEvent.click(screen.getByRole('button', { name: 'Make a rep for the 2' }));
     expect(await screen.findByText('the new rep')).toBeInTheDocument();
     expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(9, [7], 'Force / Contain - Rep');
@@ -119,8 +121,8 @@ describe('from a quiz miss', () => {
     expect(teach.getByText('The corner')).toBeInTheDocument();
     expect(teach.getByText('Corner squeezes, keeps it inside.')).toBeInTheDocument();
     expect(teach.getByText('4 chose “The safety”')).toBeInTheDocument();
-    // Make rep right from the meeting room.
-    fireEvent.click(teach.getByRole('button', { name: 'Make rep' }));
+    // Make a rep right from the meeting room.
+    fireEvent.click(teach.getByRole('button', { name: 'Make a rep' }));
     await waitFor(() => expect(repsApi.makeRepFromQuiz).toHaveBeenCalledWith(9, [7], 'Week 3 - Q3'));
     expect(rosterApi.addRosterMembers).not.toHaveBeenCalled();
   });
@@ -208,6 +210,34 @@ describe('retest one question - no concept needed - and did it stick?', () => {
     expect(screen.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/quizzes/31?tab=results');
   });
 
+  it('a retest built but not sent says so - never "sent to" players who were not given it', () => {
+    at(
+      <WeakestConcepts
+        concepts={[concept]}
+        quizId={9}
+        questions={[question]}
+        retests={[
+          {
+            quiz_id: 31,
+            title: 'Force / Contain - Retest',
+            sent: false,
+            concept_ids: [1],
+            source_question_ids: [7],
+            targeted_total: 2,
+            correct_count: 0,
+            incorrect_count: 0,
+            ungraded_count: 0,
+            not_submitted_count: 2,
+            is_complete: false,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/ready to send to 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/sent to 2/)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/quizzes/31?tab=activate');
+  });
+
   it('an untagged retest card offers Teach and Retest again for whoever still misses it', async () => {
     const v = {
       parent_quiz_id: 9,
@@ -230,10 +260,12 @@ describe('retest one question - no concept needed - and did it stick?', () => {
     } as unknown as Verification;
     at(<RetestVerification verification={v} quizId={31} questions={[{ ...question, id: 70, concept: null } as Question]} />);
     expect(screen.getByRole('button', { name: 'Teach' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retest the 1' }));
+    // One player still missing: the button says his name.
+    fireEvent.click(screen.getByRole('button', { name: 'Retest Bo' }));
     await waitFor(() =>
       expect(retestsApi.createRetest).toHaveBeenCalledWith(31, { question_ids: [70], player_ids: [42], player_names: [] }),
     );
+    expect(await screen.findByText('the retest draft')).toBeInTheDocument();
   });
 });
 
@@ -246,7 +278,7 @@ describe('a targeted rep from a concept - from what is already written', () => {
     ]);
     vi.mocked(repsApi.addDecisions).mockResolvedValue({} as never);
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} breakdown={[row]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     fireEvent.click(screen.getByRole('button', { name: 'Pick questions…' }));
     const picker = within(await screen.findByRole('group', { name: 'Questions for the rep' }));
     expect(picker.getByRole('checkbox', { name: /Who has force on toss\?/ })).toBeChecked();
@@ -262,8 +294,20 @@ describe('a targeted rep from a concept - from what is already written', () => {
   it('several missed questions on one concept: one tap makes a rep of all of them', () => {
     const second = { ...question, id: 8, question_text: 'Who spills?' } as Question;
     at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question, second]} />);
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
     expect(screen.getByRole('button', { name: 'Make a rep of all 2 for the 2' })).toBeInTheDocument();
+  });
+
+  it("a missed concept goes into this week's install from its details - by reference", async () => {
+    vi.mocked(installsApi.installsFor).mockResolvedValue([{ id: 3, title: 'Week 7 - Central', has: false }]);
+    vi.mocked(installsApi.addToInstall).mockResolvedValue({} as never);
+    at(<WeakestConcepts concepts={[concept]} quizId={9} questions={[question]} />);
+    expect(screen.queryByRole('button', { name: 'Add to install' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to install' }));
+    const panel = within(screen.getByRole('dialog', { name: 'Add to install' }));
+    fireEvent.click(await panel.findByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(installsApi.addToInstall).toHaveBeenCalledWith(3, 'concept', 1));
   });
 
   it('a miss from Motion Lab opens its play in one tap', () => {

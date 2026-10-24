@@ -91,14 +91,17 @@ def _outdated_client(kind: str, stored: int, sent: int):
 @motion_lab_bp.get("/plays")
 @jwt_required()
 def list_plays():
-    """Every play in the organization, most recently changed first."""
+    """Every play in the organization, most recently changed first - or, with
+    `?limit=N` (1-50), just the N most recent (Home's Motion Lab card shows
+    four, and has no use for every play's document)."""
     coach = require_motion_lab_coach()
-    plays = (
-        MotionPlay.query.filter_by(organization_id=coach.organization_id)
-        .order_by(MotionPlay.updated_at.desc(), MotionPlay.id.desc())
-        .all()
+    query = MotionPlay.query.filter_by(organization_id=coach.organization_id).order_by(
+        MotionPlay.updated_at.desc(), MotionPlay.id.desc()
     )
-    return jsonify([play.to_dict() for play in plays])
+    limit = request.args.get("limit", "")
+    if limit.isdigit() and 1 <= int(limit) <= 50:
+        query = query.limit(int(limit))
+    return jsonify([play.to_dict() for play in query.all()])
 
 
 @motion_lab_bp.post("/plays")

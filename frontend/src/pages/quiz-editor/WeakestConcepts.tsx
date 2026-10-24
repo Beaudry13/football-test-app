@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { TeachView } from '../../components/teach/TeachView';
-import { Link, useNavigate } from 'react-router-dom';
-import { getErrorMessage } from '../../api/client';
-import { createRetest } from '../../api/retests';
+import { Link } from 'react-router-dom';
 import type { ConceptBreakdown, Question, QuestionBreakdown, RetestSummary } from '../../api/types';
 import type { TeachSlide } from '../../components/teach/TeachView';
 import { FootballProblem } from '../../components/football/FootballProblem';
@@ -13,6 +11,9 @@ import { RetestAction } from './RetestAction';
 import { playerLabels } from '../../utils/playerDisplayLabel';
 import styles from './WeakestConcepts.module.css';
 import missStyles from './MissActions.module.css';
+import { buildQuizRetest, retestLabel } from '../../components/teach/retest';
+import { StepButton } from '../../components/ui/StepButton';
+import { useGoFromHere } from '../../navigation/backTo';
 
 /** "What should I teach next?", above everything else on Results.
  *
@@ -49,37 +50,16 @@ function teachSlides(concept: ConceptBreakdown, questions: Question[], breakdown
 }
 
 /** TEACH -> RETEST without leaving the teaching screen: the same draft
- *  "Retest these N" builds, for the same players. */
+ *  "Retest the 3" builds, for the same players. */
 function TeachRetest({ quizId, concept, className }: { quizId: number; concept: ConceptBreakdown; className?: string }) {
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState<string | null>(null);
-  const n = concept.players_missed.length;
-  if (n === 0 || concept.retestable_question_count === 0 || concept.concept_id === null) return null;
+  const go = useGoFromHere();
+  if (concept.players_missed.length === 0 || concept.retestable_question_count === 0 || concept.concept_id === null) return null;
   return (
-    <button
-      type="button"
+    <StepButton
       className={className}
-      disabled={busy}
-      title={failed ?? undefined}
-      onClick={async () => {
-        setBusy(true);
-        setFailed(null);
-        try {
-          const draft = await createRetest(quizId, {
-            concept_id: concept.concept_id as number,
-            player_ids: concept.players_missed.map((p) => p.player_id).filter((id): id is number => id !== null),
-            player_names: concept.players_missed.filter((p) => p.player_id === null).map((p) => p.player_name),
-          });
-          navigate(`/quizzes/${draft.id}?tab=activate`);
-        } catch (err) {
-          setFailed(getErrorMessage(err));
-          setBusy(false);
-        }
-      }}
-    >
-      {busy ? 'Building…' : failed ? 'Retest failed - try again' : n === 1 ? 'Retest this player' : `Retest these ${n}`}
-    </button>
+      label={retestLabel(concept.players_missed.map((p) => p.display_name ?? p.player_name))}
+      run={async () => go(await buildQuizRetest(quizId, { concept_id: concept.concept_id }, concept.players_missed))}
+    />
   );
 }
 
@@ -115,7 +95,7 @@ export function WeakestConcepts({
   );
   const taught = teachableConcepts.find((c) => c.concept_id === teaching) ?? null;
   const following = taught ? teachableConcepts[teachableConcepts.indexOf(taught) + 1] ?? null : null;
-  /** Teach it / Make a rep for the ones who missed it - the loop a Rep has. */
+  /** Teach / Make a rep for the ones who missed it - the loop a Rep has. */
   const missActions = (concept: ConceptBreakdown, label: string, show: 'all' | 'teach' | 'more' = 'all') => {
     const slides = teachSlides(concept, questions, breakdown);
     if (slides.length === 0) return null;
@@ -218,7 +198,7 @@ export function WeakestConcepts({
           one tap down; the coach is not asked to read them to know what to do.
 
           PLAYERS, AND IT SAYS SO: the count is people, in the same unit as
-          the names under "View details"; the answer-level figures stay in the
+          the names under "Who missed it"; the answer-level figures stay in the
           question-by-question evidence where the unit cannot be mistaken.
           "Most chose" names the wrong answer the misses picked most, with the
           count beside it - what they picked, never why. */}
@@ -254,7 +234,7 @@ export function WeakestConcepts({
                 may since have been stopped - saying why beats a dead button. */}
             {weakest.retestable_question_count === 0 && (
               <p className={styles.ungradedNote}>
-                Every question they missed here has been stopped, so there is nothing to retest.
+                Every question they missed here has been stopped, so there is nothing to retest - teach it instead.
               </p>
             )}
           </>
@@ -264,20 +244,14 @@ export function WeakestConcepts({
           <>
             {/* TEACH, beside Retest: the questions they missed, big, with the
                 right answer and the reason - for the meeting room. */}
-            {missActions(weakest, 'Teach it', 'teach')}
+            {missActions(weakest, 'Teach', 'teach')}
             {/* Peira assembles a draft; it does not send anything. */}
             {weakest.retestable_question_count > 0 && (
-              <RetestAction
-                quizId={quizId}
-                conceptId={weakest.concept_id}
-                conceptName={weakest.concept_name}
-                targets={weakest.players_missed}
-                retiredCount={weakest.retired_missed_question_count}
-              />
+              <RetestAction quizId={quizId} conceptId={weakest.concept_id} targets={weakest.players_missed} />
             )}
           </>
         }
-        detailsLabel="View details"
+        detailsLabel="Who missed it"
         details={
           <>
             {weakest.players_missed.length > 0 && (
@@ -319,7 +293,7 @@ export function WeakestConcepts({
               </div>
             )}
             {/* Make a rep of it, pick more questions on it, open its play. */}
-            {missActions(weakest, 'Teach it', 'more')}
+            {missActions(weakest, 'Teach', 'more')}
           </>
         }
       />

@@ -161,6 +161,12 @@
  * A caption under the title, not a banner: it is context the coach reads once
  * on arrival, not a warning. Gold on the left edge marks it as Peira
  * explaining itself, the same mark the weakness panel uses. */
+/* The retest's parent, one tap back to its Results. */
+.retestParent {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
 .retestContext {
   margin: calc(var(--space-2) * -1) 0 var(--space-4);
   padding-left: var(--space-3);

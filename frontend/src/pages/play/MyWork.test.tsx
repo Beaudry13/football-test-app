@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/play', () => ({ validateCode: vi.fn() }));
 import * as playApi from '../../api/play';
+import { ApiError } from '../../api/client';
 import type { ValidateCodeResponse } from '../../api/types';
 import { MyWork } from './MyWork';
 import { rememberPlayer } from './playerSession';
@@ -56,7 +57,7 @@ describe('Player home', () => {
     home();
     const next = within(await screen.findByLabelText('Up next'));
     expect(next.getByRole('heading', { name: 'Motion adjustment - Retest' })).toBeInTheDocument();
-    expect(next.getByText(/Retest - your second look/)).toBeInTheDocument();
+    expect(next.getByText(/Second look/)).toBeInTheDocument();
     expect(next.getByRole('link', { name: 'Start your rep' })).toHaveAttribute('href', '/play/RETEST');
     const also = within(screen.getByLabelText('Also waiting'));
     const rows = also.getAllByRole('link').map((a) => a.textContent);
@@ -149,7 +150,7 @@ describe('a quiz retest is a second look too', () => {
     home();
     const next = within(await screen.findByLabelText('Up next'));
     expect(next.getByRole('heading', { name: 'Coverage ID - Retest' })).toBeInTheDocument();
-    expect(next.getByText(/Retest - your second look/)).toBeInTheDocument();
+    expect(next.getByText(/Second look/)).toBeInTheDocument();
   });
 });
 
@@ -233,6 +234,28 @@ describe('what to learn, and when there is nothing to do', () => {
     home();
     expect(await screen.findByText('You’re all caught up.')).toBeInTheDocument();
     expect(screen.getByLabelText('Code')).toBeInTheDocument();
+  });
+
+  it('offline is not caught up: it says it could not check, with Try again', async () => {
+    localStorage.clear();
+    rememberPlayer('CLEAN1', marcus);
+    recordDone('CLEAN1', 0);
+    vi.mocked(playApi.validateCode).mockRejectedValueOnce(new ApiError('Could not reach the server.', 0));
+    home();
+    expect(await screen.findByText('Couldn’t check your work.')).toBeInTheDocument();
+    expect(screen.queryByText(/all caught up/)).toBeNull();
+    vi.mocked(playApi.validateCode).mockResolvedValue(withConcepts('Trips Jet'));
+    screen.getByRole('button', { name: 'Try again' }).click();
+    expect(await screen.findByText('You’re all caught up.')).toBeInTheDocument();
+  });
+
+  it('a code that closed is over, not a failure: still caught up', async () => {
+    localStorage.clear();
+    rememberPlayer('GONE1', marcus);
+    recordDone('GONE1', 0);
+    vi.mocked(playApi.validateCode).mockRejectedValue(new ApiError('That code has expired.', 410));
+    home();
+    expect(await screen.findByText('You’re all caught up.')).toBeInTheDocument();
   });
 
   it('a device with nothing played is just the code box - no caught-up line', () => {

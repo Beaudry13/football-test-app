@@ -34,6 +34,10 @@ export function RepsPage() {
   const isAdmin = useAuth().coach?.role === 'admin';
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [everyone, setEveryone] = useState<OrganizationQuiz[] | null>(null);
+  /* FIND ONE BY NAME - the quiz to make a Rep from, and (once the list is
+     long) a Rep: a few typed letters instead of scrolling. */
+  const [findQuiz, setFindQuiz] = useState('');
+  const [findRep, setFindRep] = useState('');
 
   useEffect(() => {
     listQuizzes()
@@ -48,9 +52,12 @@ export function RepsPage() {
       .catch((err) => setError(getErrorMessage(err)));
   }, [scope, everyone]);
 
+  const named = (needle: string) => (q: { title: string }) => !needle.trim() || q.title.toLowerCase().includes(needle.trim().toLowerCase());
   const mine = all?.filter((q) => q.kind === 'REP') ?? null;
-  const reps: (Quiz & { owner?: OrganizationQuiz['owner'] })[] | null = scope === 'all' ? everyone : mine;
+  const allReps: (Quiz & { owner?: OrganizationQuiz['owner'] })[] | null = scope === 'all' ? everyone : mine;
+  const reps = allReps?.filter(named(findRep)) ?? null;
   const quizzes = all?.filter((q) => q.kind !== 'REP' && q.question_count > 0) ?? [];
+  const pickable = quizzes.filter(named(findQuiz));
 
   const make = async (quiz: Quiz) => {
     setMaking(quiz.id);
@@ -87,11 +94,25 @@ export function RepsPage() {
       {picking && (
         <section className={styles.picker} aria-label="Make a rep from a quiz">
           <p className={styles.pickerHint}>Its tap-an-answer questions become the Rep. The quiz stays as it is.</p>
+          {quizzes.length > 12 && (
+            <input
+              className={`${nb.input} ${styles.find}`}
+              type="search"
+              value={findQuiz}
+              onChange={(e) => setFindQuiz(e.target.value)}
+              placeholder="Find a quiz…"
+              aria-label="Find a quiz"
+            />
+          )}
           {quizzes.length === 0 ? (
-            <p className={styles.pickerHint}>No quizzes with questions yet.</p>
+            <p className={styles.pickerHint}>
+              No quizzes with questions yet. <Link to="/dashboard">Write one first.</Link>
+            </p>
+          ) : pickable.length === 0 ? (
+            <p className={styles.pickerHint}>No quiz by that name.</p>
           ) : (
             <ul className={styles.pickList}>
-              {quizzes.slice(0, 12).map((quiz) => (
+              {pickable.slice(0, 12).map((quiz) => (
                 <li key={quiz.id} className={styles.pickRow}>
                   <span className={styles.title}>{quiz.title}</span>
                   <span className={styles.meta}>
@@ -104,7 +125,7 @@ export function RepsPage() {
                     onClick={() => void make(quiz)}
                     aria-label={`Make a rep from ${quiz.title}`}
                   >
-                    {making === quiz.id ? 'Making…' : 'Make rep'}
+                    {making === quiz.id ? 'Making…' : 'Make a rep'}
                   </button>
                   {rowError?.id === quiz.id && <span className={styles.rowError} role="alert">{rowError.message}</span>}
                 </li>
@@ -134,12 +155,22 @@ export function RepsPage() {
           ))}
         </div>
       )}
-      {reps === null && !error && <LoadingState />}
-      {scope === 'all' && reps?.length === 0 && <p className={styles.empty}>Nobody in your program has made a rep yet.</p>}
-      {scope === 'mine' && reps?.length === 0 && !picking && (
+      {(allReps?.length ?? 0) > 8 && (
+        <input
+          className={`${nb.input} ${styles.find}`}
+          type="search"
+          value={findRep}
+          onChange={(e) => setFindRep(e.target.value)}
+          placeholder="Find a rep…"
+          aria-label="Find a rep"
+        />
+      )}
+      {allReps === null && !error && <LoadingState />}
+      {allReps !== null && allReps.length > 0 && reps?.length === 0 && <p className={styles.empty}>No rep by that name.</p>}
+      {scope === 'all' && allReps?.length === 0 && <p className={styles.empty}>Nobody in your program has made a rep yet.</p>}
+      {scope === 'mine' && allReps?.length === 0 && !picking && (
         <p className={styles.empty}>
-          No reps yet. Tap <strong>Make a rep from a quiz</strong> - its tap-an-answer questions become decisions your
-          players run one at a time{motionLab ? ', or put a player in a Motion Lab play' : ''}.
+          No reps yet. Make one from a quiz{motionLab ? ', or from a Motion Lab play' : ''}.
         </p>
       )}
       <ul className={styles.list}>

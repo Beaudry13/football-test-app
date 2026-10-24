@@ -373,9 +373,10 @@ describe('finishing', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'All caught up' })).toBeInTheDocument();
+    // "Back to results" opens the Results tab, as it says.
     expect(screen.getByRole('link', { name: 'Back to results' })).toHaveAttribute(
       'href',
-      '/quizzes/1',
+      '/quizzes/1?tab=results',
     );
     // No statistics, no celebration.
     expect(screen.queryByText(/%/)).not.toBeInTheDocument();

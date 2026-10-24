@@ -79,17 +79,30 @@ describe('a football problem over time', () => {
     expect(teach.className).toMatch(/btnPrimary/);
   });
 
-  it('once taught, Retest leads - and sends it to the ones who missed it, from right here', async () => {
+  it('once taught, Retest leads - one tap builds it for the ones who missed it and opens it, ready to send', async () => {
     open({ ...HISTORY, latest: { ...HISTORY.latest!, taught: { at: '2026-10-16T15:00:00Z', by: 'coach1' } } });
     const next = within(await screen.findByRole('region', { name: 'Next step' }));
     expect(next.getByText(/Taught Oct 16 by coach1\. Now see if it stuck\./)).toBeInTheDocument();
-    const retest = next.getByRole('button', { name: 'Retest' });
+    // The count is what this page knows: "Retest the 2".
+    const retest = next.getByRole('button', { name: 'Retest the 2' });
     expect(retest.className).toMatch(/btnPrimary/);
     fireEvent.click(retest);
-    fireEvent.click(within(screen.getByRole('group', { name: 'Retest' })).getByRole('button', { name: 'Send it' }));
+    // No confirm step: the new Rep's own Send rep says who gets it.
+    expect(screen.queryByRole('group', { name: 'Retest' })).toBeNull();
     await waitFor(() => expect(screen.getByText("the retest's page")).toBeInTheDocument());
     expect(repsApi.createRepRetest).toHaveBeenCalledWith(4, 3);
-    expect(codesApi.activateQuiz).toHaveBeenCalledWith(9, [], 'PRACTICE');
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
+  });
+
+  it('a Retest that cannot be built says why on the button, and stays on this page', async () => {
+    vi.mocked(repsApi.createRepRetest).mockRejectedValue(new Error('Nobody left to retest'));
+    open();
+    const next = within(await screen.findByRole('region', { name: 'Next step' }));
+    fireEvent.click(next.getByRole('button', { name: 'Retest the 2' }));
+    expect(await next.findByRole('alert')).toHaveTextContent('Nobody left to retest');
+    expect(next.getByRole('button', { name: 'Retest the 2 - try again' })).toHaveAttribute('title', 'Nobody left to retest');
+    expect(screen.queryByText("the retest's page")).toBeNull();
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
   it('a retest already out is opened, not sent again', async () => {
@@ -98,11 +111,11 @@ describe('a football problem over time', () => {
     const next = within(await screen.findByRole('region', { name: 'Next step' }));
     expect(next.getByText('Retest: 1 of 1 still missing.')).toBeInTheDocument();
     expect(next.getByRole('link', { name: 'Open retest' })).toHaveAttribute('href', '/reps/9');
-    expect(next.queryByRole('button', { name: 'Retest' })).toBeNull();
+    expect(next.queryByRole('button', { name: /^Retest/ })).toBeNull();
   });
 
   it('a problem none of your reps has tested says so', async () => {
     open({ ...HISTORY, points: [], recent: [], still_missing: [], latest: null });
-    expect(await screen.findByText('None of your reps has tested this yet.')).toBeInTheDocument();
+    expect(await screen.findByText(/No rep has tested this yet/)).toBeInTheDocument();
   });
 });

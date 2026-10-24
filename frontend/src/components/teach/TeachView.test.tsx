@@ -167,3 +167,65 @@ describe('Ask first - the room check', () => {
     expect(screen.getByRole('button', { name: 'Ask first' })).toHaveAttribute('aria-pressed', 'false');
   });
 });
+
+describe('Ask first on a play - the point is the answer', () => {
+  it("holds the coach's point back with the routes, until shown", () => {
+    open({
+      slides: [
+        slide(1, {
+          prompt: 'H is the new #3 - rotate down to him.',
+          right: [],
+          why: null,
+          role: 'boundary safety',
+          pictureAsk: <Picture label="no routes" />,
+        }),
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask first' }));
+    expect(screen.queryByText('H is the new #3 - rotate down to him.')).toBeNull();
+    expect(screen.getByText(/the boundary safety/)).toBeInTheDocument();
+    expect(screen.getByTestId('picture')).toHaveTextContent('no routes');
+    fireEvent.click(screen.getByRole('button', { name: /Show the answer/ }));
+    expect(screen.getByText('H is the new #3 - rotate down to him.')).toBeInTheDocument();
+    expect(screen.getByTestId('picture')).toHaveTextContent('play 1');
+  });
+
+  it('a point with no picture to hold back still waits for Show the answer', () => {
+    open({ slides: [slide(1, { prompt: 'Eyes on the motion man.', right: [], why: null, pictureAsk: undefined })] });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask first' }));
+    expect(screen.queryByText('Eyes on the motion man.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Show the answer/ }));
+    expect(screen.getByText('Eyes on the motion man.')).toBeInTheDocument();
+  });
+});
+
+describe('In a meeting - where it is, and back an item', () => {
+  it('says where the meeting is, and goes back an item: ← before the first slide, or the Back button', () => {
+    const prev = vi.fn();
+    open({ place: 'Week 7 - West Virginia · 2 of 6', prev: { label: 'Trips Jet', onGo: prev } });
+    expect(screen.getByText('Week 7 - West Virginia · 2 of 6')).toBeInTheDocument();
+    const screenEl = screen.getByRole('dialog');
+    fireEvent.keyDown(screenEl, { key: 'ArrowRight' });
+    // On the second slide, ← is the first slide - not the item before.
+    fireEvent.keyDown(screenEl, { key: 'ArrowLeft' });
+    expect(prev).not.toHaveBeenCalled();
+    fireEvent.keyDown(screenEl, { key: 'ArrowLeft' });
+    expect(prev).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Back: Trips Jet' }));
+    expect(prev).toHaveBeenCalledTimes(2);
+  });
+
+  it('outside a meeting there is no Back', () => {
+    open();
+    expect(screen.queryByRole('button', { name: /^Back:/ })).toBeNull();
+  });
+});
+
+describe('Nothing to teach', () => {
+  it('says so - it never opens onto an empty screen - and closes', () => {
+    const { onClose } = open({ slides: [] });
+    expect(screen.getByRole('dialog', { name: 'Teach Motion adjustment' })).toHaveTextContent('Nothing to show for this yet');
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+});

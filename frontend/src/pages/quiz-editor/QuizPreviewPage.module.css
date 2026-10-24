@@ -6,11 +6,6 @@
   padding: 1.5em;
 }
 
-.wrapper {
-  display: flex;
-  justify-content: center;
-}
-
 .header {
   display: flex;
   align-items: center;

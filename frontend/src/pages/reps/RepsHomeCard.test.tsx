@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../api/reps', () => ({ getRepsSummary: vi.fn(), getConceptTrends: vi.fn().mockResolvedValue([]) }));
+vi.mock('../../api/reps', () => ({ getRepsSummary: vi.fn(), getConceptTrends: vi.fn().mockResolvedValue([]), createRepRetest: vi.fn() }));
 import * as repsApi from '../../api/reps';
 import type { RepSummary } from '../../api/reps';
 import { RepsHomeCard } from './RepsHomeCard';
@@ -25,8 +25,11 @@ const rep = (over: Partial<RepSummary>): RepSummary => ({
 
 function open() {
   render(
-    <MemoryRouter>
-      <RepsHomeCard />
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<RepsHomeCard />} />
+        <Route path="/reps/:id" element={<p>the new rep</p>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -84,10 +87,11 @@ describe('Reps on Home', () => {
     const next = within(await screen.findByLabelText('Next up'));
     expect(next.getByText(/3 of 11 safeties missed/)).toBeInTheDocument();
     expect(next.getByText('Coverage ID')).toBeInTheDocument();
-    expect(next.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/reps/7?teach=5');
+    expect(next.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/reps/7?teach=5');
   });
 
-  it('once it has been taught (by any coach), Next up says Retest', async () => {
+  it('once it has been taught (by any coach), Next up says Retest - and builds it for who missed it', async () => {
+    vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 12, player_count: 3 } as never);
     vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
       rep({
         id: 7,
@@ -97,11 +101,14 @@ describe('Reps on Home', () => {
     open();
     const next = within(await screen.findByLabelText('Next up'));
     expect(next.getByText(/missed · taught/)).toBeInTheDocument();
-    expect(next.getByRole('link', { name: 'Retest it' })).toHaveAttribute('href', '/reps/7?retest=5');
-    expect(next.queryByRole('link', { name: 'Teach it' })).toBeNull();
+    expect(next.queryByRole('link', { name: 'Teach' })).toBeNull();
+    fireEvent.click(next.getByRole('button', { name: 'Retest the 3' }));
+    expect(await screen.findByText('the new rep')).toBeInTheDocument();
+    expect(repsApi.createRepRetest).toHaveBeenCalledWith(7, 5);
   });
 
   it('after a retest: how many were retested, how many still miss it, and Retest them', async () => {
+    vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 12, player_count: 1 } as never);
     vi.mocked(repsApi.getRepsSummary).mockResolvedValue([
       rep({
         id: 4,
@@ -122,8 +129,10 @@ describe('Reps on Home', () => {
     open();
     const next = within(await screen.findByLabelText('Next up'));
     expect(next.getByText(/3 were retested, 1 still misses it/)).toBeInTheDocument();
-    expect(next.getByRole('link', { name: 'Retest 1' })).toHaveAttribute('href', '/reps/4?retest=3');
     expect(next.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/reps/4?teach=3');
+    fireEvent.click(next.getByRole('button', { name: 'Retest the 1' }));
+    expect(await screen.findByText('the new rep')).toBeInTheDocument();
+    expect(repsApi.createRepRetest).toHaveBeenCalledWith(4, 3);
   });
 
   it('with no reps yet, offers the one thing to do', async () => {

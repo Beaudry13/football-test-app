@@ -44,12 +44,12 @@ describe('Teach a play from Motion Lab', () => {
     expect(vi.mocked(image.drawPlay).mock.lastCall![2]).toMatchObject({ highlight: fs.id })
   })
 
-  it('Teach it puts the play and the coaching point on the full screen', () => {
+  it('Teach puts the play and the coaching point on the full screen', () => {
     open()
     fireEvent.change(screen.getByRole('textbox', { name: 'The coaching point' }), {
       target: { value: 'Eyes on the motion man.' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Teach it' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Teach' }))
     const screenView = within(screen.getByRole('dialog', { name: 'Teach Trips Jet' }))
     expect(screenView.getByText('Eyes on the motion man.')).toBeInTheDocument()
     expect(screenView.queryByText(/Open the play in Motion Lab/)).toBeNull()
@@ -61,7 +61,7 @@ describe('Teach a play from Motion Lab', () => {
     const editorKeys = vi.fn()
     window.addEventListener('keydown', editorKeys)
     open()
-    fireEvent.click(screen.getByRole('button', { name: 'Teach it' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Teach' }))
     const dialog = screen.getByRole('dialog', { name: 'Teach Trips Jet' })
     expect(dialog).toHaveFocus()
     fireEvent.keyDown(dialog, { key: ' ' })

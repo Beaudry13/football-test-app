@@ -198,6 +198,16 @@ class TestPlays:
         save_play(client, owner["headers"], a)
         assert [p["name"] for p in client.get("/api/motion-lab/plays", headers=teammate["headers"]).get_json()] == ["A", "B"]
 
+    def test_a_limit_lists_only_the_newest(self, client, owner):
+        """Home's Motion Lab card shows four: ?limit=N is just the N newest,
+        and a nonsense limit is the whole list, never an error."""
+        made = [create_play(client, owner["headers"], name=f"P{i}") for i in range(3)]
+        newest = [p["id"] for p in reversed(made)]
+        got = client.get("/api/motion-lab/plays?limit=2", headers=owner["headers"]).get_json()
+        assert [p["id"] for p in got] == newest[:2]
+        assert len(client.get("/api/motion-lab/plays?limit=0", headers=owner["headers"]).get_json()) == 3
+        assert len(client.get("/api/motion-lab/plays?limit=x", headers=owner["headers"]).get_json()) == 3
+
     def test_get_save_and_delete(self, client, owner):
         play = create_play(client, owner["headers"])
         document = play_document(filter="offense")

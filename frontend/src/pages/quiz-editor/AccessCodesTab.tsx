@@ -360,9 +360,9 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
     setError(null);
     try {
       await confirm({
-        title: 'Deactivate Code?',
+        title: 'Stop this code?',
         body: 'Any player still taking the Quiz will be locked out immediately, even mid-attempt.',
-        confirmLabel: 'Deactivate Code',
+        confirmLabel: 'Stop it',
         action: async () => {
           await deactivateAccessCode(quiz.id, accessCodeId);
           await load();
@@ -449,14 +449,14 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
                 the same controls, folded behind the action that uses them. */}
             <div className={styles.historyActions}>
               <button className={nb.btnSm} onClick={() => handleDeactivate(activeCode.id)}>
-                Deactivate now
+                Stop now
               </button>
               <button
                 className={styles.reactivateToggle}
                 onClick={() => setShowReactivate((open) => !open)}
                 aria-expanded={showReactivate}
               >
-                {showReactivate ? 'Cancel' : 'Reactivate with new code'}
+                {showReactivate ? 'Cancel' : 'Send again with a new code'}
               </button>
             </div>
 
@@ -604,12 +604,12 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
               </p>
             )}
             <button
-              className={nb.btnPrimary}
+              className={needPins && needPins.length > 0 ? nb.btnSecondary : nb.btnPrimary}
               onClick={handleActivate}
               disabled={isActivating || hasNoQuestions || reachesNobody}
               title={hasNoQuestions ? 'Add a question first' : reachesNobody ? 'Pick who gets it first' : undefined}
             >
-              {isActivating ? 'Activating…' : 'Activate Quiz'}
+              {isActivating ? 'Sending…' : 'Send quiz'}
             </button>
           </>
         )}
@@ -617,12 +617,12 @@ export function AccessCodesTab({ quiz }: { quiz: Quiz }) {
 
       {codes && codes.length > 0 && (
         <div className={`${nb.card} ${styles.historyCard}`}>
-          <h2 className={nb.subheading}>Activation history</h2>
+          <h2 className={nb.subheading}>Sent before</h2>
           <table className={nb.table}>
             <thead>
               <tr>
                 <th>Code</th>
-                <th>Activated</th>
+                <th>Sent</th>
                 <th>Expires</th>
                 <th>Groups</th>
                 <th>Mode</th>

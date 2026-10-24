@@ -66,7 +66,7 @@ describe('AccessCodesTab PIN gate', () => {
 
     render(<AccessCodesTab quiz={quiz} />);
     await screen.findByText('This Quiz has no active access code.');
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     const blocker = await screen.findByRole('alert');
     expect(blocker).toHaveTextContent("2 players don't have a PIN yet");
@@ -91,7 +91,7 @@ describe('AccessCodesTab PIN gate', () => {
 
     render(<AccessCodesTab quiz={quiz} />);
     await screen.findByText('This Quiz has no active access code.');
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     expect(await screen.findByText('Cannot activate a quiz with no roster and no group selected')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Generate missing PINs' })).not.toBeInTheDocument();

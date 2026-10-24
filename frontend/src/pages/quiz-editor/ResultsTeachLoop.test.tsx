@@ -9,7 +9,7 @@ import type { ConceptBreakdown, Question } from '../../api/types';
 
 /**
  * PROBLEM -> TEACH -> RETEST, without leaving the teaching screen: Teach on
- * Results says who missed it ("6 of 10 missed it", names), offers Retest these
+ * Results says who missed it ("6 of 10 missed it", names), offers Retest the
  * 6 (the same draft, opened ready to send), and Next walks to the next problem
  * - the next concept the team missed - in the same screen.
  */
@@ -82,7 +82,8 @@ beforeEach(() => {
 describe('Results: problem -> teach -> retest -> next', () => {
   it('Teach says who missed it, and Next walks to the next problem in the same screen', () => {
     open();
-    fireEvent.click(screen.getByRole('button', { name: 'Teach it' }));
+    // The top card's Teach (each row has its own Teach too).
+    fireEvent.click(within(screen.getByRole('article', { name: 'Force / Contain' })).getByRole('button', { name: 'Teach' }));
     let teach = within(screen.getByRole('dialog', { name: 'Teach Force / Contain' }));
     expect(teach.getByText('2 of 10 missed it')).toBeInTheDocument();
     expect(teach.getByText('Ty Adams, Bo Brown')).toBeInTheDocument();
@@ -104,7 +105,7 @@ describe('Results: problem -> teach -> retest -> next', () => {
 
   it('Retest from Teach: exactly who missed it, opened ready to send', async () => {
     open(2);
-    fireEvent.click(within(screen.getByRole('dialog', { name: 'Teach Run fit' })).getByRole('button', { name: 'Retest these 2' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Teach Run fit' })).getByRole('button', { name: 'Retest the 2' }));
     await waitFor(() => expect(retestsApi.createRetest).toHaveBeenCalledWith(9, { concept_id: 2, player_ids: [3, 4], player_names: [] }));
     await screen.findByText('EDITOR');
     expect(landed).toBe('/quizzes/42?tab=activate');

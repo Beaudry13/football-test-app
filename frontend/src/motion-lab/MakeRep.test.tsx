@@ -87,7 +87,7 @@ describe('Make a rep from a play', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Answer 1 is the right one' }))
     type(/Concept/, 'Motion adjustment')
     type(/Why/, 'He is the new #3.')
-    const make = screen.getByRole('button', { name: 'Make rep' })
+    const make = screen.getByRole('button', { name: 'Make a rep' })
     await waitFor(() => expect(make).toBeEnabled())
     fireEvent.click(make)
 
@@ -111,7 +111,7 @@ describe('Make a rep from a play', () => {
     })
     expect((file as File).type).toBe('image/png')
 
-    // The next decision goes to the same Rep; Open rep goes to its page.
+    // The next decision goes to the same Rep; Open the rep goes to its page.
     fireEvent.click(screen.getByRole('button', { name: 'Add another decision' }))
     expect(screen.getByRole('combobox', { name: /Put it in/ })).toHaveValue('40')
     expect(screen.getByRole('textbox', { name: /You’re the/ })).toHaveValue('Boundary safety')
@@ -127,7 +127,7 @@ describe('Make a rep from a play', () => {
     type(/Concept/, 'leverage')
     await waitFor(() => expect(within(screen.getByRole('combobox', { name: /Put it in/ })).getAllByRole('option')).toHaveLength(2))
     fireEvent.change(screen.getByRole('combobox', { name: /Put it in/ }), { target: { value: '8' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(quizzesApi.createQuiz).not.toHaveBeenCalled()
     expect(conceptsApi.createConcept).not.toHaveBeenCalled()
@@ -135,7 +135,7 @@ describe('Make a rep from a play', () => {
     expect(repId).toBe(8)
     expect(input.concept_id).toBe(2)
     expect(input.options.filter((o) => o.is_correct_answer).map((o) => o.option_text)).toEqual(['Cover 3'])
-    fireEvent.click(await screen.findByRole('button', { name: 'Open rep' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the rep' }))
     expect(path).toBe('/reps/8')
   })
 
@@ -144,7 +144,7 @@ describe('Make a rep from a play', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'Quick answers' })).getByRole('button', { name: 'Players' }))
     expect(screen.getByText('Players tap the man in the picture.')).toBeInTheDocument()
     type('The situation', 'Who gets the ball?')
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(input.tap_targets).toHaveLength(input.options.length)
@@ -162,8 +162,8 @@ describe('Make a rep from a play', () => {
     fireEvent.click(picture, { clientX: px(backer).x, clientY: px(backer).y })
     fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Your gap?' }))
     expect(screen.getByText(/PEIRA suggested where these spots are - check them/)).toBeInTheDocument()
-    // Make rep does not send suggested spots: it opens the check first.
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    // Make a rep does not send suggested spots: it opens the check first.
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     const check = within(await screen.findByRole('dialog', { name: 'What your players tap' }))
     expect(check.getByText('Check the spots before you make it.')).toBeInTheDocument()
     expect(questionsApi.createQuestion).not.toHaveBeenCalled()
@@ -216,7 +216,7 @@ describe('Make a rep from a play', () => {
     fireEvent.change(check.getByRole('textbox', { name: 'Name of spot 2' }), { target: { value: 'Cutback lane' } })
     fireEvent.click(check.getByRole('button', { name: 'Looks right' }))
     expect(screen.getByText(/Players tap the spot on the field/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect(input.options.map((o) => o.option_text)).toEqual(['Alley', 'Cutback lane'])
@@ -240,7 +240,7 @@ describe('Make a rep from a play', () => {
     type('Answer 1', 'Rotate down')
     type('Answer 2', 'Stay boundary')
     expect(screen.queryByText('Players tap the man in the picture.')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).not.toHaveProperty('tap_targets')
   })
@@ -277,7 +277,7 @@ describe('Make a rep from a play', () => {
     type('The situation', 'Your check?')
     type('Answer 1', 'Rotate down')
     type('Answer 2', 'Stay boundary')
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(conceptsApi.createConcept).not.toHaveBeenCalled()
     expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1].concept_id).toBe(2)
@@ -290,7 +290,7 @@ describe('Make a rep from a play', () => {
     type('Answer 1', 'Rotate down')
     type('Answer 2', 'Stay boundary')
     type(/Concept/, 'Motion adjustment')
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     expect(await screen.findByText(/Decision 1 added to/)).toBeInTheDocument()
     cleanup()
     vi.mocked(quizzesApi.listQuizzes).mockResolvedValue([
@@ -358,7 +358,7 @@ describe('Make a rep from a play', () => {
     expect(screen.getByRole('checkbox', { name: /Show motion/ })).toBeChecked()
     expect(screen.getByText('Players watch the motion, then decide at the snap.')).toBeInTheDocument()
     fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Who gets the ball?' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     const clip = input.presnap as { players: { id: string; motion?: unknown }[] }
@@ -377,7 +377,7 @@ describe('Make a rep from a play', () => {
     fireEvent.click(moments.getByRole('radio', { name: 'Mid-motion' }))
     expect(screen.getByText('Players watch the motion and decide halfway through it.')).toBeInTheDocument()
     fireEvent.click(within(screen.getByRole('group', { name: 'Quick questions' })).getByRole('button', { name: 'Who gets the ball?' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     const [, input] = vi.mocked(questionsApi.createQuestion).mock.calls[0]
     expect((input.presnap as { freeze?: string }).freeze).toBe('mid')
@@ -396,7 +396,7 @@ describe('Make a rep from a play', () => {
     type('The situation', 'Your check?')
     type('Answer 1', 'Rotate down')
     type('Answer 2', 'Stay')
-    fireEvent.click(screen.getByRole('button', { name: 'Make rep' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Make a rep' }))
     await waitFor(() => expect(questionsApi.createQuestion).toHaveBeenCalled())
     expect(vi.mocked(questionsApi.createQuestion).mock.calls[0][1]).not.toHaveProperty('presnap')
   })
@@ -413,10 +413,10 @@ describe('Make a rep from a play', () => {
   it('cannot be made without a situation and two answers', () => {
     open()
     type('Answer 1', 'Rotate down')
-    expect(screen.getByRole('button', { name: 'Make rep' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Make a rep' })).toBeDisabled()
     type('The situation', 'Your check?')
-    expect(screen.getByRole('button', { name: 'Make rep' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Make a rep' })).toBeDisabled()
     type('Answer 2', 'Stay')
-    expect(screen.getByRole('button', { name: 'Make rep' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Make a rep' })).toBeEnabled()
   })
 })

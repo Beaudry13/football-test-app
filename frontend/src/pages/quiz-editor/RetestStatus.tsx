@@ -10,6 +10,18 @@ import styles from './MissActions.module.css';
  */
 export function RetestStatus({ retest }: { retest: RetestSummary }) {
   const waiting = retest.not_submitted_count + retest.ungraded_count;
+  // Built but never sent (Retest builds; Send sends): say so, and open it on
+  // its Send tab - never "sent to 2" about players who were not given it.
+  if (retest.sent === false) {
+    return (
+      <span className={styles.retest}>
+        <span className={styles.retestLead}>Retest:</span> ready to send to {retest.targeted_total}{' '}
+        <Link to={`/quizzes/${retest.quiz_id}?tab=activate`} className={styles.retestLink}>
+          Open retest
+        </Link>
+      </span>
+    );
+  }
   return (
     <span className={styles.retest}>
       <span className={styles.retestLead}>Retest:</span>{' '}

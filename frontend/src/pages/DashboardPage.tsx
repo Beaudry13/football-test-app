@@ -24,6 +24,7 @@ import { useMayUseMotionLab } from '../motion-lab/motionLabAccess';
 import { RepsHomeCard } from './reps/RepsHomeCard';
 import { useRepsSummary } from './reps/useRepsSummary';
 import { NextUp } from './home/NextUp';
+import { ThisWeek } from './home/ThisWeek';
 import { readLastWork, type LastWork } from './home/lastWork';
 import { listToGrade, type ToGrade } from '../api/grading';
 import nb from '../styles/notebook.module.css';
@@ -305,16 +306,22 @@ export function DashboardPage() {
                 with now, from a Rep or the latest quiz, one tap from Teach or
                 Retest. Then what the coach was working on: Reps, plays. */}
             <NextUp reps={reps} quizzes={quizzes} />
-            {/* WHERE HE LEFT OFF - one quiet line, not a wall of recents. */}
-            {pickUp && (
-              <p className={styles.pickUp}>
-                Pick up where you left off:{' '}
-                <Link to={pickUp.kind === 'rep' ? `/reps/${pickUp.id}` : `/quizzes/${pickUp.id}`} className={styles.pickUpLink}>
-                  {pickUp.title}
-                </Link>
-                <span className={styles.pickUpKind}>{pickUp.kind === 'rep' ? ' · Rep' : ' · Quiz'}</span>
-              </p>
-            )}
+            {/* WHERE HE LEFT OFF - one quiet line, not a wall of recents: this
+                week's install when there is one, else the quiz or Rep he last
+                opened. */}
+            <ThisWeek
+              fallback={
+                pickUp && (
+                  <p className={styles.pickUp}>
+                    Pick up where you left off:{' '}
+                    <Link to={pickUp.kind === 'rep' ? `/reps/${pickUp.id}` : `/quizzes/${pickUp.id}`} className={styles.pickUpLink}>
+                      {pickUp.title}
+                    </Link>
+                    <span className={styles.pickUpKind}>{pickUp.kind === 'rep' ? ' · Rep' : ' · Quiz'}</span>
+                  </p>
+                )
+              }
+            />
             {/* Every coach; it stays away until there is a Rep, unless the
                 coach can make one from a play. */}
             <RepsHomeCard reps={reps ?? null} showNextUp={false} inviteWhenEmpty={motionLab} />
@@ -339,7 +346,17 @@ export function DashboardPage() {
           )}
         </div>
 
-        <ErrorBanner message={error} />
+        <ErrorBanner
+          message={error}
+          onRetry={
+            quizzes === null
+              ? () => {
+                  setError(null);
+                  void refresh();
+                }
+              : undefined
+          }
+        />
 
         {/* CREATION IS ONE TAP FROM THE TOP, NOT TWO PERMANENT FORMS.
             Two always-open forms held 175px between the heading and a coach's
@@ -350,7 +367,7 @@ export function DashboardPage() {
             scroll past to reach the list. */}
         {creating === null ? (
           <div className={styles.createRow}>
-            <button type="button" className={nb.btnPrimary} onClick={() => setCreating('quiz')}>
+            <button type="button" className={nb.btnSecondary} onClick={() => setCreating('quiz')}>
               <Icon name="add" size={14} /> New Quiz
             </button>
             <button
@@ -423,7 +440,7 @@ export function DashboardPage() {
         )}
 
         {quizzes === null ? (
-          <LoadingState />
+          !error && <LoadingState />
         ) : quizzes.length === 0 && !hasFolders ? (
           <EmptyState message="No Quizzes yet. Create your first one above." />
         ) : !hasFolders ? (

@@ -322,7 +322,7 @@ export function MakeRep({
         <div className="make-q-actions">
           <button onClick={another}>Add another decision</button>
           <button className="primary" onClick={() => navigate(`/reps/${made.id}`)}>
-            Open rep
+            Open the rep
           </button>
         </div>
       </div>
@@ -502,7 +502,7 @@ export function MakeRep({
       {error && <div className="make-q-error" role="alert">{error}</div>}
       <div className="make-q-actions">
         <button className="primary" disabled={busy || !ready} onClick={() => void make()}>
-          {busy ? 'Making it…' : 'Make rep'}
+          {busy ? 'Making it…' : 'Make a rep'}
         </button>
         <button onClick={onClose} disabled={busy}>
           Cancel

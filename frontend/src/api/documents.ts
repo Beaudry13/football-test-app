@@ -68,10 +68,6 @@ export function getDocumentPage(documentId: number, pageNumber: number): Promise
   return api.get<DocumentPage>(`/documents/${documentId}/pages/${pageNumber}`);
 }
 
-export function renameDocument(documentId: number, title: string): Promise<SourceDocument> {
-  return api.patch<SourceDocument>(`/documents/${documentId}`, { title });
-}
-
 export function deleteDocument(documentId: number): Promise<void> {
   return api.delete<void>(`/documents/${documentId}`);
 }

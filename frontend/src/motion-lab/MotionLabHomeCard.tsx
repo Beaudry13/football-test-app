@@ -30,7 +30,7 @@ export default function MotionLabHomeCard() {
 
   useEffect(() => {
     let cancelled = false
-    listMotionPlays()
+    listMotionPlays(HOME_PLAYS)
       .then((rows) => {
         if (cancelled) return
         const plays = [...rows]

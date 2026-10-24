@@ -44,17 +44,15 @@ export interface MotionLookRow {
   updated_at: string;
 }
 
-/** A 409 carrying this reason means "changed somewhere else since you loaded it". */
-export const REVISION_CONFLICT = 'revision_conflict';
-
 /** Browsers refuse keepalive bodies over ~64KB; stay under it. */
 const KEEPALIVE_LIMIT = 60 * 1024;
 const keepaliveFor = (body: unknown) => JSON.stringify(body).length < KEEPALIVE_LIMIT;
 
 // ---- plays -----------------------------------------------------------------
 
-export function listMotionPlays(): Promise<MotionPlayRow[]> {
-  return api.get<MotionPlayRow[]>('/motion-lab/plays');
+/** Every play, newest first - or just the `limit` most recent. */
+export function listMotionPlays(limit?: number): Promise<MotionPlayRow[]> {
+  return api.get<MotionPlayRow[]>(`/motion-lab/plays${limit ? `?limit=${limit}` : ''}`);
 }
 
 export function getMotionPlay(id: number): Promise<MotionPlayRow> {

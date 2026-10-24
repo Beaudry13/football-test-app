@@ -68,7 +68,16 @@ describe('ResultsCheckPage', () => {
     expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
     // A miss leads, under What you missed, with the correct answer.
     expect(screen.getByRole('region', { name: 'What you missed' })).toBeInTheDocument();
-    expect(screen.getByText('Correct answer: True', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Right answer: True', { exact: false })).toBeInTheDocument();
+  });
+
+  it('ends on Done, back to his work - Player Home sends Review missed here', async () => {
+    vi.spyOn(playApi, 'getPlayerResults').mockResolvedValue(playerResults);
+
+    renderAt('/results/ABC123/Jordan%20Smith');
+
+    expect(await screen.findByText('Results for Jordan Smith')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Done' })).toHaveAttribute('href', '/play');
   });
 
   it('asks for the code, then "Choose your name" from the roster, then opens results', async () => {

@@ -12,7 +12,7 @@ export function RepIntro({ quiz }: { quiz: Quiz }) {
   return (
     <section className={styles.card} aria-label="Your rep">
       {/* A Retest says so: it is the second look at something he missed. */}
-      <span className={styles.lead}>{quiz.retest_of ? 'Retest - your second look' : 'Your rep'}</span>
+      <span className={styles.lead}>{quiz.retest_of ? 'Second look' : 'Your rep'}</span>
       <span className={styles.title}>{quiz.title}</span>
       <span className={styles.meta}>
         {roles.length === 1 ? `You’re the ${roles[0]} · ` : ''}

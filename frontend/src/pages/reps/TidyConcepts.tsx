@@ -82,7 +82,7 @@ export function TidyConcepts({ onMerged }: { onMerged?: () => void }) {
                     </label>
                   ))}
                 </fieldset>
-                <button type="button" className={nb.btnPrimary} disabled={busy !== null} onClick={() => void merge(index, group)}>
+                <button type="button" className={nb.btnSm} disabled={busy !== null} onClick={() => void merge(index, group)}>
                   {busy === index ? 'Merging…' : `Merge into “${kept.name}”`}
                 </button>
               </li>

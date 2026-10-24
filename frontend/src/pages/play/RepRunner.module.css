@@ -230,6 +230,7 @@
 /* The whole run again, after "Try the misses again": there, but quiet. */
 .quietAction {
   align-self: center;
+  min-height: 44px;
   padding: 6px 10px;
   border: 0;
   background: transparent;

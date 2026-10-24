@@ -204,7 +204,7 @@ describe('ResponseRow - excluded questions', () => {
   it('says the question is excluded, naming the assignment', async () => {
     await renderExpanded(new Map([[7, [assignmentExclusion]]]));
 
-    expect(screen.getByText('Excluded from scoring')).toBeInTheDocument();
+    expect(screen.getByText('Not counted')).toBeInTheDocument();
     expect(screen.getByText(/Not counted for SECONDARY/)).toBeInTheDocument();
     expect(screen.getByText(/8A9FXP/)).toBeInTheDocument();
   });
@@ -229,7 +229,7 @@ describe('ResponseRow - excluded questions', () => {
     expect(screen.getByText('DELIVERED: after the broken one')).toBeInTheDocument();
     expect(screen.getByText('Incorrect')).toBeInTheDocument();
     // Exactly one excluded marker, on the one excluded question.
-    expect(screen.getAllByText('Excluded from scoring')).toHaveLength(1);
+    expect(screen.getAllByText('Not counted')).toHaveLength(1);
   });
 
   it('describes a quiz-wide exclusion as all assignments', async () => {
@@ -248,7 +248,7 @@ describe('ResponseRow - excluded questions', () => {
   it('shows nothing unusual when no exclusion applies - the restored state', async () => {
     await renderExpanded(new Map());
 
-    expect(screen.queryByText('Excluded from scoring')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not counted')).not.toBeInTheDocument();
     expect(screen.queryByText(/Not counted for/)).not.toBeInTheDocument();
     expect(screen.getByText('Correct')).toBeInTheDocument();
   });
@@ -355,7 +355,7 @@ describe('ResponseRow - the summary "N correct" badge', () => {
     await userEvent.click(screen.getByLabelText(/Expand answers/));
     // The stored verdict is still there as evidence, next to the marker.
     expect(screen.getByText('Correct')).toBeInTheDocument();
-    expect(screen.getByText('Excluded from scoring')).toBeInTheDocument();
+    expect(screen.getByText('Not counted')).toBeInTheDocument();
   });
 
   it('stays a raw count when no exclusion data is supplied', () => {

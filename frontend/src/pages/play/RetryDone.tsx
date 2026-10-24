@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Icon } from '../../components/ui/Icon';
 import styles from './PlayPage.module.css';
 
@@ -9,7 +10,15 @@ import styles from './PlayPage.module.css';
  *   fixed        the server found no misses left to retry
  *   unavailable  the run can no longer be retried from here
  */
-export function RetryDone({ reason, onRunFull }: { reason: 'fixed' | 'unavailable'; onRunFull: () => void }) {
+export function RetryDone({
+  reason,
+  onRunFull,
+  isRep = false,
+}: {
+  reason: 'fixed' | 'unavailable';
+  onRunFull: () => void;
+  isRep?: boolean;
+}) {
   return (
     <div className={styles.practiceComplete}>
       {reason === 'fixed' && (
@@ -17,9 +26,12 @@ export function RetryDone({ reason, onRunFull }: { reason: 'fixed' | 'unavailabl
           <Icon name="check" size={30} strokeWidth={3} />
         </div>
       )}
-      <h1>{reason === 'fixed' ? 'You fixed them all.' : 'There is nothing to try again here.'}</h1>
+      <h1>{reason === 'fixed' ? 'You fixed them all.' : "This one can't be tried again now."}</h1>
+      <Link to="/play" className="btn btn-primary">
+        Done
+      </Link>
       <button type="button" className={styles.quietAction} onClick={onRunFull}>
-        Run the full practice again
+        {isRep ? 'Run the whole rep again' : 'Start the whole quiz over'}
       </button>
     </div>
   );

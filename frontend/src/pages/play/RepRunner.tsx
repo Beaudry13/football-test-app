@@ -397,6 +397,8 @@ function Summary({
   onRetryMisses?: () => void;
 }) {
   const judged = decisions.filter((q) => typeof feedback[q.id]?.is_correct === 'boolean');
+  // Answered, but only the coach can say: a drawing.
+  const waiting = decisions.filter((q) => feedback[q.id] && feedback[q.id].is_correct === null).length;
   const right = judged.filter((q) => feedback[q.id]?.is_correct).length;
   const missed = missedOf(decisions, feedback);
   const concepts = [...new Set(missed.map((q) => q.concept?.name).filter((n): n is string => !!n))];
@@ -416,9 +418,11 @@ function Summary({
     <div className={styles.rep}>
       <div className={styles.summary}>
         <span className={styles.summaryLead}>{isRetry ? 'Your misses, again' : 'Rep done'}</span>
-        <span className={styles.score}>
-          {right} of {judged.length}
-        </span>
+        {judged.length > 0 && (
+          <span className={styles.score}>
+            {right} of {judged.length}
+          </span>
+        )}
         {average !== null && (
           <span className={styles.speed}>{(average / 1000).toFixed(1)} s per decision</span>
         )}
@@ -442,7 +446,12 @@ function Summary({
             ))}
           </div>
         )}
-        {missed.length === 0 && judged.length > 0 && <p className={styles.clean}>You knew your job on every snap.</p>}
+        {missed.length === 0 && judged.length > 0 && waiting === 0 && <p className={styles.clean}>You knew your job on every snap.</p>}
+        {waiting > 0 && (
+          <p className={styles.progressLine}>
+            Your coach will look at {waiting === 1 ? 'your drawing' : `your ${waiting} drawings`}.
+          </p>
+        )}
         {/* AGAINST LAST TIME: his run before this one, and on a Retest the original. */}
         {progress?.previous && (
           <p className={styles.progressLine}>
@@ -475,7 +484,7 @@ function Summary({
             again is still there, quietly. */}
         {missed.length > 0 && onRetryMisses ? (
           <>
-            <button type="button" className="btn" onClick={onRetryMisses}>
+            <button type="button" className="btn btn-secondary" onClick={onRetryMisses}>
               Try the misses again
             </button>
             <button type="button" className={styles.quietAction} onClick={onRunAgain}>
@@ -483,7 +492,7 @@ function Summary({
             </button>
           </>
         ) : (
-          <button type="button" className={missed.length > 0 ? 'btn' : 'btn btn-primary'} onClick={onRunAgain}>
+          <button type="button" className={missed.length > 0 ? 'btn btn-secondary' : 'btn btn-primary'} onClick={onRunAgain}>
             Run it again
           </button>
         )}

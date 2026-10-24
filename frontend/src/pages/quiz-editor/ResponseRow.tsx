@@ -215,7 +215,7 @@ function AnswerRow({
           grade no longer counts, not that it no longer exists. */}
       {isExcluded && (
         <div className={styles.answerExcludedNote}>
-          <span className={`${nb.badge} ${nb.badgeWarning}`}>Excluded from scoring</span>
+          <span className={`${nb.badge} ${nb.badgeWarning}`}>Not counted</span>
           {activeExclusions.map((ex) => (
             <span key={ex.id}>
               Not counted for{' '}

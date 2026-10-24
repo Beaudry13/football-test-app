@@ -211,11 +211,6 @@ export function getMadeFromPlay(playId: number): Promise<{ made: MadeFromPlay[];
   return api.get(`/quizzes/made-from-play/${playId}`);
 }
 
-/** The Reps already holding a decision made from this Motion Lab play, newest first. */
-export function getRepsForPlay(playId: number): Promise<{ id: number; title: string; question_count: number }[]> {
-  return api.get(`/quizzes/reps-for-play/${playId}`);
-}
-
 /** One football problem across recent Reps: first try on the first and the latest. */
 export interface ConceptTrend {
   concept_id: number;

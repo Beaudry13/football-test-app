@@ -94,7 +94,7 @@ describe('ExcludeQuestionDialog', () => {
     expect(screen.getByLabelText(/Remove it from scoring for/)).toHaveValue('');
     // ...and the coach cannot confirm until they pick one. Guessing which
     // delivery they meant is how Monday's fix rewrites Tuesday.
-    expect(screen.getByRole('button', { name: /Exclude from scoring/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Don’t count it' })).toBeDisabled();
   });
 
   it('preselects the only assignment when there is exactly one', async () => {
@@ -103,7 +103,7 @@ describe('ExcludeQuestionDialog', () => {
     await screen.findByRole('option', { name: /Defense/ });
 
     expect(screen.getByLabelText(/Remove it from scoring for/)).toHaveValue('11');
-    expect(screen.getByRole('button', { name: /Exclude from scoring/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Don’t count it' })).toBeEnabled();
   });
 
   it('sends the chosen assignment and the optional reason', async () => {
@@ -114,7 +114,7 @@ describe('ExcludeQuestionDialog', () => {
 
     await user.selectOptions(screen.getByLabelText(/Remove it from scoring for/), '12');
     await user.type(screen.getByLabelText(/Reason/), 'wrong answer key');
-    await user.click(screen.getByRole('button', { name: /Exclude from scoring/ }));
+    await user.click(screen.getByRole('button', { name: 'Don’t count it' }));
 
     await waitFor(() =>
       expect(exclusionsApi.excludeQuestion).toHaveBeenCalledWith(1, 7, {
@@ -130,7 +130,7 @@ describe('ExcludeQuestionDialog', () => {
     renderDialog();
     await screen.findByRole('option', { name: /Defense/ });
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /Exclude from scoring/ }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Don’t count it' }));
 
     await waitFor(() =>
       expect(exclusionsApi.excludeQuestion).toHaveBeenCalledWith(1, 7, {
@@ -152,7 +152,7 @@ describe('ExcludeQuestionDialog', () => {
     // every past use of the quiz.
     expect(screen.getByText(/every past and future use of this quiz/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /Exclude from scoring/ }));
+    await user.click(screen.getByRole('button', { name: 'Don’t count it' }));
     await waitFor(() =>
       expect(exclusionsApi.excludeQuestion).toHaveBeenCalledWith(1, 7, {
         access_code_id: null,
@@ -175,6 +175,6 @@ describe('ExcludeQuestionDialog', () => {
     renderDialog();
 
     expect(await screen.findByText(/never been sent out/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Exclude from scoring/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Don’t count it' })).toBeDisabled();
   });
 });

@@ -137,7 +137,7 @@ describe('PlayPage with player PINs', () => {
 
     await user.click(screen.getByLabelText('True'));
     await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ player_id: 501 }), 'issued-token'));
-    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
     await waitFor(() => expect(submit).toHaveBeenCalledWith(expect.objectContaining({ player_id: 501 }), 'issued-token'));
 
     await waitFor(() =>

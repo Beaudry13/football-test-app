@@ -36,6 +36,7 @@ import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import { MOMENT_LABEL, momentOf } from '../../motion-lab/moments';
 import { addDecisions, makeRepFromQuiz } from '../../api/reps';
 import { listQuizzes } from '../../api/quizzes';
+import { fromHere } from '../../navigation/backTo';
 
 /* Motion Lab's code (its engine and the play picture) loads only when a coach
    opens the picker - the quiz editor does not carry it otherwise. */
@@ -911,7 +912,9 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
                         from, for a coach who has Motion Lab. Changing the play
                         never changes this question - its picture is its own. */}
                     {motionLab && question.motion_play_id != null && (
-                      <MenuItem onSelect={() => navigate(`/motion-lab/plays/${question.motion_play_id}`)}>Open the play</MenuItem>
+                      <MenuItem onSelect={() => navigate(`/motion-lab/plays/${question.motion_play_id}`, { state: fromHere(location) })}>
+                        Open the play
+                      </MenuItem>
                     )}
                     {/* QUIZ -> REP, one question at a time. */}
                     {repReady(question) && (
@@ -965,7 +968,7 @@ export function QuestionsTab({ quiz, reload }: { quiz: Quiz; reload: () => Promi
              the field - and going through one function is what keeps the two
              entry points from drifting apart again. */
           <div className={styles.addRow}>
-            <button className={nb.btnPrimary} onClick={openAddForm}>
+            <button className={editingId !== null ? nb.btnSecondary : nb.btnPrimary} onClick={openAddForm}>
               + Add question
             </button>
             {motionLab && (

@@ -55,9 +55,16 @@ def rep_attempts(quiz, player_id: int | None = None, player_ids=None) -> list:
     handful of queries. Read lazily, a Rep run by 80 players cost ~600
     queries, and Home's summary of four Reps ~2,500 (measured, stabilization).
     """
+    return rep_attempts_for([quiz.id], player_id=player_id, player_ids=player_ids)
+
+
+def rep_attempts_for(quiz_ids, player_id: int | None = None, player_ids=None) -> list:
+    """rep_attempts across several Reps at once - the same rules and the same
+    loading, one read for all of them (a position room's needs read every Rep
+    the coach has). Oldest first; group by `quiz_id` per Rep."""
     answers = selectinload(PlayerAttempt.answers)
     query = PlayerAttempt.query.filter(
-        PlayerAttempt.quiz_id == quiz.id,
+        PlayerAttempt.quiz_id.in_(list(quiz_ids)),
         PlayerAttempt.mode == PRACTICE,
         # TRY THE MISSES AGAIN is learning, not a run: a retry of three missed
         # decisions, all right, is not a 3-for-3 run. Every run-level reading -

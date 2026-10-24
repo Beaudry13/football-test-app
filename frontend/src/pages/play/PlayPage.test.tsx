@@ -131,7 +131,7 @@ describe('PlayPage', () => {
     expect(await screen.findByText('Is this cover 2?')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
     await user.click(screen.getByLabelText('True'));
-    await user.click(screen.getByRole('button', { name: 'Submit Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Submit quiz' }));
 
     await waitFor(() =>
       expect(submitSpy).toHaveBeenCalledWith({

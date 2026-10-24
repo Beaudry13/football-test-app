@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getErrorMessage } from '../api/client'
 import { getMotionPlay, listMotionLooks, listMotionPlays } from '../api/motionLab'
 import { getMadeFromPlay, type MadeFromPlay } from '../api/reps'
+import { AddToInstallPanel } from '../pages/installs/AddToInstall'
+import { fromHere, readFrom } from '../navigation/backTo'
 import { useAuth } from '../auth/AuthContext'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { MotionLabEditor, type EditorHandle } from './authoring/MotionLabEditor'
@@ -47,16 +49,29 @@ export default function MotionLabEditorPage() {
   const location = useLocation()
   /** At /motion-lab: the coach's scratch play, not a saved one. */
   const scratchRoute = playId === undefined
+  /** WHERE HE CAME FROM - a quiz, a Rep, grading, Teach, an install - so the
+   *  top bar can take him back there, not just Home or Library. Read once:
+   *  this page rewrites its own URL as plays are saved and switched, and each
+   *  rewrite carries it forward (navigation/backTo). */
+  const cameFrom = useRef(readFrom(location.state))
+  const keepBack = () => (cameFrom.current ? { from: cameFrom.current } : null)
   /** The Library's "New play" (optionally from a saved formation). */
   const fresh = (location.state as { fresh?: boolean; players?: Player[]; name?: string; folderId?: number | null } | null) ?? null
   /** A replaced scratch play the coach can still get back. */
   const [undoScratch, setUndoScratch] = useState<Play | null>(null)
   /** The "Make question" panel is open. */
-  const [asking, setAsking] = useState(false)
+  const [asking, setAsking] = useState(() => new URLSearchParams(location.search).get('make') === 'question')
   /** A Rep's "Add decisions" sends the coach here with ?rep=<id>: Make rep opens, aimed at it. */
   const intoRep = Number(new URLSearchParams(location.search).get('rep')) || null
+  /** An install meeting's "Check them" sends the coach here with ?make=rep|question
+   *  (and &man=<id>): that panel opens, the man already chosen. Read once. */
+  const [makeAsked] = useState(() => {
+    const q = new URLSearchParams(location.search)
+    const make = q.get('make')
+    return { make: make === 'rep' || make === 'question' ? make : null, man: q.get('man') }
+  })
   /** The "Make rep" panel is open. One panel at a time. */
-  const [repping, setRepping] = useState(intoRep !== null)
+  const [repping, setRepping] = useState(intoRep !== null || makeAsked.make === 'rep')
   /** The "Teach a moment" panel is open: this play on the meeting-room screen. */
   const [teachingPlay, setTeachingPlay] = useState(false)
   /** The "Use this play" menu is open. */
@@ -66,16 +81,19 @@ export default function MotionLabEditorPage() {
   /** PREVIEW 3D: the play shown in the 3D viewer over the editor, or null. */
   const [preview, setPreview] = useState<PreviewTarget | null>(null)
   /** The man selected on the field when a panel was opened: its question is his. */
-  const [panelMan, setPanelMan] = useState<string | null>(null)
+  const [panelMan, setPanelMan] = useState<string | null>(makeAsked.man)
+  /** The "Add to install" panel is open: this saved play into an install. */
+  const [installing, setInstalling] = useState(false)
   /** CREATE ONCE: what this coach has already made from the play (under Use this play). */
   const [made, setMade] = useState<MadeFromPlay[] | null>(null)
   /** One panel at a time, chosen from the menu. */
-  const openPanel = (kind: 'rep' | 'question' | 'teach') => {
+  const openPanel = (kind: 'rep' | 'question' | 'teach' | 'install') => {
     setPanelMan(editor.current?.selectedId() ?? null)
     setUsing(false)
     setRepping(kind === 'rep')
     setAsking(kind === 'question')
     setTeachingPlay(kind === 'teach')
+    setInstalling(kind === 'install')
   }
   const [session, setSession] = useState<MotionLabSession | null>(null)
   const [notFound, setNotFound] = useState(false)
@@ -112,7 +130,7 @@ export default function MotionLabEditorPage() {
             setUndoScratch(started.previous)
           }
           // A refresh must not start yet another play.
-          if (fresh) navigate(location.pathname, { replace: true, state: null })
+          if (fresh) navigate(location.pathname, { replace: true, state: keepBack() })
         } else {
           clientId = loaded.clientIdOf(requested)
         }
@@ -145,10 +163,10 @@ export default function MotionLabEditorPage() {
       const serverId = current ? session.serverIdOf(current) : null
       if (serverId !== null && serverId !== urlPlayId.current) {
         urlPlayId.current = serverId
-        navigate(`/motion-lab/plays/${serverId}`, { replace: true })
+        navigate(`/motion-lab/plays/${serverId}`, { replace: true, state: keepBack() })
       } else if (current && session.isScratch(current) && urlPlayId.current !== null) {
         urlPlayId.current = null
-        navigate('/motion-lab', { replace: true })
+        navigate('/motion-lab', { replace: true, state: keepBack() })
       }
       const fresh = session.takeNotices()
       if (fresh.length) setNotices((current) => [...current, ...fresh])
@@ -359,6 +377,11 @@ export default function MotionLabEditorPage() {
                 same way Library is: a pending edit is flushed to the server on
                 the way out, and an unsaved scratch play stays on this device
                 (Home's Motion Lab card offers "Continue"). */}
+            {cameFrom.current && (
+              <button className="back-to" onClick={() => navigate(cameFrom.current!.to)} title={`Back to ${cameFrom.current.label}`}>
+                &larr; {cameFrom.current.label}
+              </button>
+            )}
             <button className="home-btn" onClick={() => navigate('/dashboard')} title="PEIRA Home">
               Home
             </button>
@@ -391,13 +414,14 @@ export default function MotionLabEditorPage() {
               its own one-panel flow, one panel at a time. */}
           <div className="ball-menu make-actions">
             <button
-              className={using || repping || asking || teachingPlay ? 'active' : ''}
-              aria-expanded={using}
+              className={using || repping || asking || teachingPlay || installing ? 'active' : ''}
+              aria-expanded={using || repping || asking || teachingPlay || installing}
               aria-haspopup="menu"
               onClick={() => {
                 setRepping(false)
                 setAsking(false)
                 setTeachingPlay(false)
+                setInstalling(false)
                 setUsing((open) => !open)
                 // Asked fresh each time: something may have been made since.
                 const serverId = !using && current && !session.isScratch(current) ? session.serverIdOf(current) : null
@@ -432,6 +456,13 @@ export default function MotionLabEditorPage() {
                 <button role="menuitem" onClick={() => openPanel('teach')}>
                   Teach a moment <span className="use-why">stop it, ring him, say the point</span>
                 </button>
+                {/* INTO THIS WEEK'S INSTALL - a saved play only: an install
+                    refers to the play, so there must be one in PEIRA. */}
+                {current && !session.isScratch(current) && session.serverIdOf(current) !== null && (
+                  <button role="menuitem" onClick={() => openPanel('install')}>
+                    Add to install <span className="use-why">this week&rsquo;s football, in order</span>
+                  </button>
+                )}
                 {/* WHAT HAVE I ALREADY MADE FROM THIS PLAY? Only when there is
                     something; each opens where it lives. */}
                 {((made && made.length > 0) || (currentPlay && readTaught(currentPlay.id))) && (
@@ -473,6 +504,9 @@ export default function MotionLabEditorPage() {
                 onClose={() => setAsking(false)}
               />
             )}
+            {installing && current && !session.isScratch(current) && session.serverIdOf(current) !== null && (
+              <AddToInstallPanel kind="play" refId={session.serverIdOf(current)!} onClose={() => setInstalling(false)} />
+            )}
             {teachingPlay && currentPlay && (
               <TeachPlay
                 play={currentPlay}
@@ -486,6 +520,8 @@ export default function MotionLabEditorPage() {
                   setRepping(kind === 'rep')
                   setAsking(kind === 'question')
                 }}
+                // A Rep or quiz already made from it opens with "← this play".
+                checkLinkState={fromHere(location)}
                 preview3d={(() => {
                   if (!VIEWER_3D_URL || !current) return null
                   const target: PreviewTarget = session.isScratch(current) ? 'draft' : (session.serverIdOf(current) ?? 'draft')

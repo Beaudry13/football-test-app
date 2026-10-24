@@ -59,7 +59,7 @@ describe('AccessCodesTab group selection', () => {
     render(<AccessCodesTab quiz={quiz} />);
 
     await screen.findByText('This Quiz has no active access code.');
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'GRADED', false, expect.any(Date)));
   });
@@ -72,7 +72,7 @@ describe('AccessCodesTab group selection', () => {
 
     await screen.findByText('This Quiz has no active access code.');
     await user.click(await screen.findByRole('checkbox', { name: /Defense/ }));
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [7], 'GRADED', false, expect.any(Date)));
   });
@@ -106,7 +106,7 @@ describe('AccessCodesTab deactivation', () => {
     const deactivateSpy = vi.spyOn(accessCodesApi, 'deactivateAccessCode').mockResolvedValue(activeCode);
     render(<AccessCodesTab quiz={quiz} />);
 
-    await user.click(await screen.findByRole('button', { name: 'Deactivate now' }));
+    await user.click(await screen.findByRole('button', { name: 'Stop now' }));
 
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('locked out');
     await cancelConfirm(user);
@@ -118,8 +118,8 @@ describe('AccessCodesTab deactivation', () => {
     const deactivateSpy = vi.spyOn(accessCodesApi, 'deactivateAccessCode').mockResolvedValue(activeCode);
     render(<AccessCodesTab quiz={quiz} />);
 
-    await user.click(await screen.findByRole('button', { name: 'Deactivate now' }));
-    await acceptConfirm(user, 'Deactivate Code');
+    await user.click(await screen.findByRole('button', { name: 'Stop now' }));
+    await acceptConfirm(user, 'Stop it');
 
     await waitFor(() => expect(deactivateSpy).toHaveBeenCalledWith(1, 3));
   });
@@ -137,14 +137,14 @@ describe('AccessCodesTab activation guard', () => {
     vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
     render(<AccessCodesTab quiz={{ ...quiz, question_count: 0 }} />);
 
-    expect(await screen.findByRole('button', { name: /Activate/ })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /Send quiz/ })).toBeDisabled();
   });
 
   it('offers activation as soon as there is a question', async () => {
     vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
     render(<AccessCodesTab quiz={{ ...quiz, question_count: 1 }} />);
 
-    expect(await screen.findByRole('button', { name: /Activate/ })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: /Send quiz/ })).toBeEnabled();
   });
 
   it('defaults to Graded, so an activation that says nothing still counts', async () => {
@@ -165,7 +165,7 @@ describe('AccessCodesTab activation guard', () => {
 
     await screen.findByText('This Quiz has no active access code.');
     await user.click(screen.getByRole('radio', { name: /Practice/ }));
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     await waitFor(() => expect(activateSpy).toHaveBeenCalledWith(1, [], 'PRACTICE', false, expect.any(Date)));
   });
@@ -243,7 +243,7 @@ describe('AccessCodesTab available-until', () => {
 
     await screen.findByText('This Quiz has no active access code.');
     await user.click(screen.getByRole('button', { name: 'Tomorrow morning' }));
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     const [, , , , expiresAt] = activate.mock.calls[0];
     expect(expiresAt).toBeInstanceOf(Date);
@@ -259,7 +259,7 @@ describe('AccessCodesTab available-until', () => {
     render(<AccessCodesTab quiz={quiz} />);
 
     await screen.findByText('This Quiz has no active access code.');
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     expect(activate).toHaveBeenCalledTimes(1);
     const [, , , , expiresAt] = activate.mock.calls[0];
@@ -347,19 +347,19 @@ describe('AccessCodesTab active-card focus', () => {
 
     await screen.findByText(/Active until/);
 
-    // Twice - the hero display and the activation history row below it.
+    // Twice - the hero display and the Sent before row below it.
     expect(screen.getAllByText(activeCode.code).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Copy link|Share Peira/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show QR code' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Deactivate now' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop now' })).toBeInTheDocument();
   });
 
-  it('reveals those settings under Reactivate, with the consequence stated', async () => {
+  it('reveals those settings under Send again with a new code, with the consequence stated', async () => {
     const user = userEvent.setup();
     render(<AccessCodesTab quiz={quiz} />);
     await screen.findByText(/Active until/);
 
-    await user.click(screen.getByRole('button', { name: 'Reactivate with new code' }));
+    await user.click(screen.getByRole('button', { name: 'Send again with a new code' }));
 
     expect(screen.getByText('How should this count?')).toBeInTheDocument();
     // The destructive consequence is stated BEFORE the controls - finding it
@@ -373,7 +373,7 @@ describe('AccessCodesTab active-card focus', () => {
     render(<AccessCodesTab quiz={quiz} />);
     await screen.findByText(/Active until/);
 
-    await user.click(screen.getByRole('button', { name: 'Reactivate with new code' }));
+    await user.click(screen.getByRole('button', { name: 'Send again with a new code' }));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(screen.queryByText('How should this count?')).not.toBeInTheDocument();
@@ -386,7 +386,7 @@ describe('AccessCodesTab active-card focus', () => {
     render(<AccessCodesTab quiz={quiz} />);
     await screen.findByText(/Active until/);
 
-    await user.click(screen.getByRole('button', { name: 'Reactivate with new code' }));
+    await user.click(screen.getByRole('button', { name: 'Send again with a new code' }));
     await user.click(screen.getByRole('button', { name: 'Create new code' }));
 
     expect(activate).toHaveBeenCalledTimes(1);

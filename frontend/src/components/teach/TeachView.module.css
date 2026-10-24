@@ -34,6 +34,37 @@
   text-overflow: ellipsis;
   min-width: 0;
 }
+/* Back an item in a meeting - the ← key, for a finger. */
+/* Nothing to teach: said, plainly, in the middle of the screen. */
+.nothing {
+  margin: auto;
+  max-width: 40ch;
+  padding: 24px;
+  text-align: center;
+  font-size: clamp(16px, 1.3vw, 26px);
+  color: #c9ccd1;
+}
+.prev {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #3a3e44;
+  border-radius: 8px;
+  background: transparent;
+  color: #c9ccd1;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+/* Where this is in a meeting: "Week 7 - Central · 2 of 6". */
+.place {
+  flex: none;
+  font-size: clamp(12px, 0.85vw, 18px);
+  font-weight: 600;
+  color: #9aa0a6;
+  white-space: nowrap;
+}
 .steps {
   display: flex;
   gap: 6px;
@@ -62,6 +93,8 @@
 }
 .action button,
 .action a {
+  flex: none;
+  white-space: nowrap;
   font: inherit;
   font-weight: 700;
   font-size: 15px;
@@ -76,11 +109,23 @@
   align-items: center;
   text-decoration: none;
 }
+/* ONE GOLD ACTION. A second action beside it (Results' "Make a rep" after
+   "Retest the 3") is outlined, like Next - gold means "probably this". */
+.action > :is(button, a) ~ :is(button, a) {
+  border: 1px solid #d9a441;
+  background: transparent;
+  color: #d9a441;
+}
 .action button:disabled {
   opacity: 0.6;
   cursor: default;
 }
 .next {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 32vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font: inherit;
   font-weight: 700;
   font-size: 15px;
@@ -94,6 +139,8 @@
   white-space: nowrap;
 }
 .tool {
+  flex: none;
+  white-space: nowrap;
   font: inherit;
   font-size: 14px;
   font-weight: 700;
@@ -242,6 +289,17 @@
   }
   .bar {
     flex-wrap: wrap;
+  }
+  /* The name beside Back, where it is on its own line, Next in full. */
+  .title {
+    flex: 1 1 0;
+    white-space: normal;
+  }
+  .place {
+    flex-basis: 100%;
+  }
+  .next {
+    max-width: none;
   }
 }
 /* ASK FIRST: the one thing to press when the room has answered. */

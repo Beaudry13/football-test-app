@@ -5,10 +5,6 @@ export function listResponses(quizId: number): Promise<PlayerResponse[]> {
   return api.get<PlayerResponse[]>(`/quizzes/${quizId}/responses`);
 }
 
-export function getResponse(quizId: number, responseId: number): Promise<PlayerResponse> {
-  return api.get<PlayerResponse>(`/quizzes/${quizId}/responses/${responseId}`);
-}
-
 /** Coach-triggered manual reset: deletes the attempt outright so the
  * player can start fresh next time they enter their name. Not reversible -
  * any grading/feedback already on it is gone, not archived. */

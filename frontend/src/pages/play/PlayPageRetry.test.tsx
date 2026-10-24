@@ -146,14 +146,14 @@ describe('nothing left to retry: never a different task', () => {
     // Asked once, for the misses - no full run started behind his back.
     expect(start).toHaveBeenCalledTimes(1);
     expect(start).toHaveBeenCalledWith(expect.objectContaining({ retry_of_attempt_id: 900 }));
-    await user.click(screen.getByRole('button', { name: 'Run the full practice again' }));
+    await user.click(screen.getByRole('button', { name: 'Start the whole quiz over' }));
     await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
     expect(start.mock.calls[1][0]).not.toHaveProperty('retry_of_attempt_id');
   });
 
   it('a run that can no longer be retried says so, too', async () => {
     const { start } = await askForTheMisses('retry_not_available');
-    expect(await screen.findByRole('heading', { name: 'There is nothing to try again here.' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: "This one can't be tried again now." })).toBeInTheDocument();
     expect(start).toHaveBeenCalledTimes(1);
   });
 });

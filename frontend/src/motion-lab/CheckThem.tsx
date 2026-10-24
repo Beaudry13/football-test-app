@@ -14,11 +14,14 @@ export function CheckThem({
   made,
   who,
   onMake,
+  linkState = null,
 }: {
   made: MadeFromPlay[]
   /** The man being taught ("Boundary safety"), when there is one. */
   who: string | null
   onMake: (kind: 'rep' | 'question') => void
+  /** The way back here for the Rep or quiz it opens (navigation/backTo). */
+  linkState?: object | null
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -30,9 +33,15 @@ export function CheckThem({
         <span className={styles.menu} role="menu" aria-label="Check them">
           {made.length > 0 && (
             <>
-              <span className={styles.head}>Already made from this play</span>
+              <span className={styles.head}>Made from this play</span>
               {made.slice(0, 3).map((m) => (
-                <Link key={m.id} role="menuitem" className={styles.item} to={m.kind === 'REP' ? `/reps/${m.id}` : `/quizzes/${m.id}`}>
+                <Link
+                  key={m.id}
+                  role="menuitem"
+                  className={styles.item}
+                  to={m.kind === 'REP' ? `/reps/${m.id}` : `/quizzes/${m.id}`}
+                  state={linkState}
+                >
                   <span className={styles.kind}>{m.kind === 'REP' ? 'Rep' : 'Quiz'}</span> {m.title}
                 </Link>
               ))}

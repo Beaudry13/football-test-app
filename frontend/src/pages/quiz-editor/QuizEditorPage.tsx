@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { getQuiz, updateQuiz } from '../../api/quizzes';
 import { getErrorMessage } from '../../api/client';
 import type { Quiz } from '../../api/types';
@@ -13,11 +13,16 @@ import styles from './QuizEditorPage.module.css';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { Icon } from '../../components/ui/Icon';
 import { useRememberWork } from '../home/lastWork';
+import { AddToInstall } from '../installs/AddToInstall';
+import { keepFrom, readFrom } from '../../navigation/backTo';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 
 const TABS = [
   { key: 'questions', label: 'Questions' },
   { key: 'roster', label: 'Roster' },
-  { key: 'activate', label: 'Activate' },
+  // SEND, not "Activate": a coach sends work to players (the Rep page says
+  // "Send rep" too). The key stays `activate` - links already point at it.
+  { key: 'activate', label: 'Send' },
   { key: 'results', label: 'Results' },
 ] as const;
 
@@ -26,7 +31,10 @@ type TabKey = (typeof TABS)[number]['key'];
 export function QuizEditorPage() {
   const { quizId } = useParams<{ quizId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  // Its name in the browser tab - and in Motion Lab's way back (navigation/backTo).
+  useDocumentTitle(quiz?.title ?? null);
   const [error, setError] = useState<string | null>(null);
 
   const activeTab = (searchParams.get('tab') as TabKey) ?? 'questions';
@@ -111,15 +119,16 @@ export function QuizEditorPage() {
 
   return (
     <div>
-      {quiz.kind === 'REP' ? (
-        <Link to={`/reps/${quiz.id}`} className={styles.backLink}>
-          <Icon name="back" size={14} /> Back to the rep
-        </Link>
-      ) : (
-        <Link to="/dashboard" className={styles.backLink}>
-          <Icon name="back" size={14} /> All Quizzes
-        </Link>
-      )}
+      {(() => {
+        const back =
+          readFrom(location.state) ??
+          (quiz.kind === 'REP' ? { to: `/reps/${quiz.id}`, label: 'Back to the rep' } : { to: '/dashboard', label: 'All Quizzes' });
+        return (
+          <Link to={back.to} className={styles.backLink}>
+            <Icon name="back" size={14} /> {back.label}
+          </Link>
+        );
+      })()}
 
       <ErrorBanner message={error} />
 
@@ -147,7 +156,10 @@ export function QuizEditorPage() {
           One line, three facts, and nothing on an ordinary quiz. */}
       {quiz.retest_of && (
         <p className={styles.retestContext}>
-          Retest of <strong>{quiz.retest_of.title}</strong>
+          Retest of{' '}
+          <Link to={`/quizzes/${quiz.retest_of.id}?tab=results`} className={styles.retestParent}>
+            <strong>{quiz.retest_of.title}</strong>
+          </Link>
           {quiz.retest_of.concept_name && (
             <> &middot; {quiz.retest_of.concept_name}</>
           )}
@@ -193,6 +205,8 @@ export function QuizEditorPage() {
             >
               Start Competition
             </Link>
+            {/* Into this week's install - the quiz itself, by reference. */}
+            <AddToInstall kind="quiz" refId={quiz.id} className={nb.btnSm} />
           </>
         )}
       </div>
@@ -234,7 +248,7 @@ export function QuizEditorPage() {
           <button
             key={tab.key}
             className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
-            onClick={() => setSearchParams({ tab: tab.key })}
+            onClick={() => setSearchParams({ tab: tab.key }, { replace: true, state: keepFrom(location.state) })}
           >
             {tab.label}
           </button>

@@ -47,11 +47,11 @@ describe('ResultsView', () => {
   it('shows a neutral excluded state instead of a verdict', () => {
     render(<ResultsView results={results({ is_excluded: true, is_correct: null, correct_answer: null })} />);
 
-    expect(screen.getByText('Excluded from scoring')).toBeInTheDocument();
+    expect(screen.getByText('Doesn’t count')).toBeInTheDocument();
     expect(screen.queryByText('Correct')).not.toBeInTheDocument();
     expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
     // And NOT confused with an answer still awaiting a coach.
-    expect(screen.queryByText('Pending review')).not.toBeInTheDocument();
+    expect(screen.queryByText('Waiting on your coach')).not.toBeInTheDocument();
   });
 
   it('still shows the player their own answer', () => {
@@ -64,7 +64,7 @@ describe('ResultsView', () => {
   it('explains what happened in plain language', () => {
     render(<ResultsView results={results({ is_excluded: true, is_correct: null, correct_answer: null })} />);
 
-    expect(screen.getByText(/coach removed this question from scoring/i)).toBeInTheDocument();
+    expect(screen.getByText(/coach took this question out/i)).toBeInTheDocument();
   });
 
   it('does not show the correct answer for an excluded question', () => {
@@ -72,7 +72,7 @@ describe('ResultsView', () => {
     // themselves, which is the confusion exclusion exists to remove.
     render(<ResultsView results={results({ is_excluded: true, is_correct: null, correct_answer: null })} />);
 
-    expect(screen.queryByText(/Correct answer:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Right answer:/)).not.toBeInTheDocument();
   });
 
   it('shows an ordinary miss under What you missed, with the correct answer, and no redundant badge', () => {
@@ -81,8 +81,8 @@ describe('ResultsView', () => {
     const missed = within(screen.getByRole('region', { name: 'What you missed' }));
     expect(missed.getByText('Is this cover 2?')).toBeInTheDocument();
     expect(screen.queryByText('Incorrect')).not.toBeInTheDocument();
-    expect(screen.getByText(/Correct answer:/)).toHaveTextContent('True');
-    expect(screen.queryByText('Excluded from scoring')).not.toBeInTheDocument();
+    expect(screen.getByText(/Right answer:/)).toHaveTextContent('True');
+    expect(screen.queryByText('Doesn’t count')).not.toBeInTheDocument();
   });
 
   it('still shows coach feedback on an excluded question', () => {
@@ -165,7 +165,7 @@ describe('a Draw Response answer', () => {
     );
 
     expect(screen.getByTestId('drawing-viewer')).toBeInTheDocument();
-    expect(screen.getByText('Excluded from scoring')).toBeInTheDocument();
+    expect(screen.getByText('Doesn’t count')).toBeInTheDocument();
   });
 
   it('degrades to the text line when there is no drawing', () => {
@@ -274,7 +274,7 @@ describe('ResultsView - what you missed', () => {
     expect(missed.getByRole('img', { name: 'The play for: Who gets the ball?' })).toBeInTheDocument();
     expect(missed.getByText('Boundary safety')).toBeInTheDocument();
     expect(missed.getByText('Your answer: Z')).toBeInTheDocument();
-    expect(missed.getByText('Correct answer: X')).toBeInTheDocument();
+    expect(missed.getByText('Right answer: X')).toBeInTheDocument();
     expect(missed.getByText('Eyes on the QB.')).toBeInTheDocument();
     // The miss is not repeated below; the rest follows it.
     const rest = within(screen.getByRole('region', { name: 'The rest' }));

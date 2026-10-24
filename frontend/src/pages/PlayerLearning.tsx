@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { getErrorMessage } from '../api/client';
 import { addRosterMembers, getPlayerLearning, type LearningEvent, type PlayerLearning as Learning } from '../api/players';
 import { makeRepFromQuiz } from '../api/reps';
 import nb from '../styles/notebook.module.css';
 import styles from './PlayerLearning.module.css';
+import { useGoFromHere } from '../navigation/backTo';
 
 /** "Missed" / "Got it" / "Retest correct" - one sitting, in a coach's words. */
 function said(event: LearningEvent) {
@@ -20,7 +21,7 @@ function said(event: LearningEvent) {
  * hides the panel rather than costing the profile.
  */
 export function PlayerLearning({ playerId, firstName }: { playerId: number; firstName: string }) {
-  const navigate = useNavigate();
+  const go = useGoFromHere();
   const [learning, setLearning] = useState<Learning | null>(null);
   const [making, setMaking] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export function PlayerLearning({ playerId, firstName }: { playerId: number; firs
     try {
       const rep = await makeRepFromQuiz(last.quiz_id, last.question_ids, `${name} - ${firstName}`);
       await addRosterMembers(rep.id, [playerId]);
-      navigate(`/reps/${rep.id}`);
+      go(`/reps/${rep.id}`);
     } catch (err) {
       setError(getErrorMessage(err));
       setMaking(null);

@@ -25,6 +25,7 @@ def register_blueprints(app: Flask) -> None:
     from app.routes.competition import competition_bp
     from app.routes.motion_lab import motion_lab_bp
     from app.routes.reps import rep_play_bp, reps_bp
+    from app.routes.installs import installs_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(quizzes_bp, url_prefix="/api/quizzes")
@@ -58,3 +59,5 @@ def register_blueprints(app: Flask) -> None:
     # Motion Lab plays and looks. Every route passes require_motion_lab_coach
     # (platform owner only during the P2 pilot) - see routes/motion_lab.py.
     app.register_blueprint(motion_lab_bp, url_prefix="/api/motion-lab")
+    # Installs: a coach's working set of existing football - see routes/installs.py.
+    app.register_blueprint(installs_bp, url_prefix="/api/installs")

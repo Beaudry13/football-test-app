@@ -27,7 +27,7 @@ export function FootballProblem({
   fixed = false,
   actions,
   details,
-  detailsLabel = 'View players',
+  detailsLabel = 'Who missed it',
   open: openProp,
   onToggle,
   headingLevel = 2,

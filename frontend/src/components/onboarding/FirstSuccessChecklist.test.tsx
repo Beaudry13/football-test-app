@@ -23,8 +23,8 @@ const TITLES: Record<string, string> = {
   build_roster: 'Build your roster',
   create_group: 'Create your first group',
   add_players_to_group: 'Add players to a group',
-  activate_quiz: 'Activate your quiz',
-  assign_to_group: 'Assign your quiz to a group',
+  activate_quiz: 'Send your quiz',
+  assign_to_group: 'Send your quiz to a group',
 };
 
 /** Mirrors a real GET /api/onboarding response. `completeIds` decides which

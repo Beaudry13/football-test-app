@@ -99,7 +99,7 @@ function ExclusionNote({
       {stillExcluded !== null && stillExcluded.length > 0 && (
         <span className={styles.stillExcluded}>
           Still excluded by another rule covering{' '}
-          {stillExcluded.some((e) => e.scope === 'quiz') ? 'all assignments' : 'another assignment'}.
+          {stillExcluded.some((e) => e.scope === 'quiz') ? 'every send' : 'another send'}.
         </span>
       )}
     </div>
@@ -229,7 +229,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
   /** Questions already shown with their own actions in "Where they tapped". */
   const hasTapCard = (questionId: number) => teamTaps.some(({ row }) => row.question_id === questionId);
   const [exportOpen, setExportOpen] = useState(false);
-  /** Home's Next up "Teach it": ?teach=<concept id> opens that concept's Teach. */
+  /** Home's Next up "Teach": ?teach=<concept id> opens that concept's Teach. */
   const [params] = useSearchParams();
   const teachAsk = Number(params.get('teach')) || null;
   const ungradedTotal = (dashboard?.question_breakdown ?? [])
@@ -238,7 +238,13 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
 
   return (
     <div>
-      <ErrorBanner message={error} />
+      <ErrorBanner
+        message={error}
+        onRetry={() => {
+          setError(null);
+          void load();
+        }}
+      />
 
       {dashboard && (
         <>
@@ -470,7 +476,7 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
                       <td>{q.ungraded_count}</td>
                       <td className={styles.breakdownAction}>
                         {q.is_excluded ? (
-                          <span className={`${nb.badge} ${nb.badgeWarning}`}>Excluded</span>
+                          <span className={`${nb.badge} ${nb.badgeWarning}`}>Not counted</span>
                         ) : (
                           <button
                             type="button"
@@ -568,9 +574,16 @@ export function ResultsTab({ quiz }: { quiz: Quiz }) {
           rather than three competing panels. */}
       <h2 className={`${styles.evidenceHeading} ${styles.responsesHeading}`}>Player responses</h2>
       {responses === null ? (
-        <LoadingState />
+        !error && <LoadingState />
       ) : responses.length === 0 ? (
-        <EmptyState message="No responses yet. Share the access code to start collecting them." />
+        <EmptyState
+          message="No answers in yet."
+          action={
+            <Link to={`/quizzes/${quiz.id}?tab=activate`} className={nb.btnSecondary}>
+              See who gets it
+            </Link>
+          }
+        />
       ) : (
         <div className={styles.responseList}>
           {/* Labels are worked out over the WHOLE list, because a collision

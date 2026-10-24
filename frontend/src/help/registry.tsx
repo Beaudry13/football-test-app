@@ -70,7 +70,7 @@ export const HELP_ENTRIES: HelpEntry[] = [
           <li>Build your roster, by hand or by uploading your team.</li>
           <li>Create a group for a position or unit.</li>
           <li>Add players from your roster into that group.</li>
-          <li>Activate the quiz. This creates the code players use to join.</li>
+          <li>Send the quiz. This creates the code players use to join.</li>
           <li>Assign the quiz to a group, so only those players can take it.</li>
         </ol>
         <p className={styles.body}>

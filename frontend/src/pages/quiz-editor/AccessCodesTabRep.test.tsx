@@ -6,7 +6,7 @@ import * as accessCodesApi from '../../api/accessCodes';
 import * as groupsApi from '../../api/groups';
 import type { AccessCode, Quiz } from '../../api/types';
 
-/** A SITUATIONAL REP in the Activate tab: no Graded/Practice choice - it is always immediate feedback. */
+/** A SITUATIONAL REP in the Send tab: no Graded/Practice choice - it is always immediate feedback. */
 
 const rep = {
   id: 1,
@@ -30,14 +30,14 @@ beforeEach(() => {
   vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
 });
 
-describe('Activating a Rep', () => {
+describe('Sending a Rep', () => {
   it('says it goes out for immediate feedback, offers no choice, and sends it as practice', async () => {
     const user = userEvent.setup();
     const activate = vi.spyOn(accessCodesApi, 'activateQuiz').mockResolvedValue({ id: 3, code: 'ABC234' } as AccessCode);
     render(<AccessCodesTab quiz={rep} />);
     expect(await screen.findByText(/A Rep always goes out for immediate feedback/)).toBeInTheDocument();
     expect(screen.queryByRole('radio')).toBeNull();
-    await user.click(screen.getByRole('button', { name: /Activate/ }));
+    await user.click(screen.getByRole('button', { name: /Send quiz/ }));
     await waitFor(() => expect(activate).toHaveBeenCalledWith(1, [], 'PRACTICE', false, expect.any(Date)));
   });
 });

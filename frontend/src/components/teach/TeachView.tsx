@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Link } from 'react-router-dom';
-import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
 import styles from './TeachView.module.css';
+import { SourcePlayLink } from '../football/SourcePlayLink';
 
 /** One thing to put on the screen in the meeting room. */
 export interface TeachSlide {
@@ -70,6 +69,8 @@ export function TeachView({
   action,
   room,
   next,
+  prev,
+  place,
 }: {
   title: string;
   slides: TeachSlide[];
@@ -81,6 +82,10 @@ export function TeachView({
   room?: TeachRoom | null;
   /** The next thing to teach ("Run fit · 3 missed") - without leaving Teach. */
   next?: { label: string; onGo: () => void } | null;
+  /** The thing taught before this one: ← before the first slide goes back to it. */
+  prev?: { label: string; onGo: () => void } | null;
+  /** Where this is in a meeting ("Week 7 - Central · 2 of 6"). */
+  place?: string;
 }) {
   const clamp = (i: number) => Math.min(Math.max(0, i), Math.max(0, slides.length - 1));
   const [at, setAt] = useState(clamp(start));
@@ -90,8 +95,6 @@ export function TeachView({
   /** Ask first: the answer held back on each slide until it is shown. */
   const [asking, setAsking] = useState(false);
   const [shownKey, setShownKey] = useState<string | number | null>(null);
-  // The play link only for coaches who can open Motion Lab.
-  const motionLab = useMayUseMotionLab();
   /* A NEW THING TO TEACH (Next, or new slides from the caller) starts at its
      own first slide. */
   const slideKeys = slides.map((s) => s.key).join('|');
@@ -99,7 +102,10 @@ export function TeachView({
     setAt(clamp(start));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideKeys, start]);
-  const slide = slides[at];
+  // Clamped: for the one render between new slides arriving and the reset
+  // above, `at` can still point past them (slide 2 of the last item, an item
+  // with one) - never show "nothing" for that frame.
+  const slide = slides[clamp(at)];
 
   const screenRef = useRef<HTMLDivElement>(null);
   /* THE SCREEN HAS THE KEYS while it is up: focus moves to it, and a key
@@ -123,9 +129,30 @@ export function TeachView({
     else next?.onGo();
   };
 
-  if (!slide) return null;
+  if (!slide) {
+    return createPortal(
+      <div className={styles.teach} role="dialog" aria-modal="true" aria-label={`Teach ${title}`}>
+        <div className={styles.bar}>
+          <span className={styles.title}>{title}</span>
+          {place && <span className={styles.place}>{place}</span>}
+          <span className={styles.spacer} />
+          <button type="button" className={styles.close} onClick={onClose} aria-label="Close" title="Close (Esc)">
+            ×
+          </button>
+        </div>
+        <p className={styles.nothing}>
+          Nothing to show for this yet. Teach needs a picture, a play or your reason on the question.
+        </p>
+      </div>,
+      document.body,
+    );
+  }
   const holding = asking && shownKey !== slide.key;
-  const hasAnswer = slide.right.length > 0 || !!slide.why || !!slide.pictureAsk;
+  /* A slide with no question - a play taught from Motion Lab - carries the
+     coach's point as its words: that point IS the answer, so Ask first holds
+     it back with the routes. */
+  const pointOnly = slide.right.length === 0 && !slide.why && !!slide.prompt;
+  const hasAnswer = slide.right.length > 0 || !!slide.why || !!slide.pictureAsk || pointOnly;
   const picture = holding && slide.pictureAsk ? slide.pictureAsk : slide.picture;
   const askOrShow = () => {
     if (!asking) {
@@ -152,7 +179,10 @@ export function TeachView({
         if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
         if (e.key === 'Escape') onClose();
         else if (e.key === 'ArrowRight') forward();
-        else if (e.key === 'ArrowLeft') setAt(clamp(at - 1));
+        else if (e.key === 'ArrowLeft') {
+          if (at > 0) setAt(at - 1);
+          else prev?.onGo();
+        }
         else if (e.key === ' ' && target.tagName !== 'BUTTON') setReplay((n) => n + 1);
         else if (e.key === 'n' || e.key === 'N') setNotes((on) => !on);
         else if (e.key === 'f' || e.key === 'F') fullScreen();
@@ -163,7 +193,14 @@ export function TeachView({
       }}
     >
       <div className={styles.bar}>
+        {/* Back an item - the ← key's twin, for a finger. */}
+        {prev && (
+          <button type="button" className={styles.prev} onClick={prev.onGo} aria-label={`Back: ${prev.label}`} title={`Back: ${prev.label} (← before the first slide)`}>
+            <span aria-hidden="true">‹</span>
+          </button>
+        )}
         <span className={styles.title}>{title}</span>
+        {place && <span className={styles.place}>{place}</span>}
         {slides.length > 1 && (
           <span className={styles.steps} aria-label="Slides">
             {slides.map((s, i) => (
@@ -243,7 +280,7 @@ export function TeachView({
             )}
             {slide.concept && slide.concept !== title && <span className={styles.concept}>{slide.concept}</span>}
             {slide.role && <span className={styles.role}>You&rsquo;re the {slide.role}</span>}
-            <p className={styles.prompt}>{slide.prompt}</p>
+            {!(holding && pointOnly) && <p className={styles.prompt}>{slide.prompt}</p>}
             {holding && hasAnswer && (
               <button type="button" className={styles.reveal} onClick={() => setShownKey(slide.key)}>
                 Show the answer <span className={styles.revealKey}>A</span>
@@ -260,11 +297,7 @@ export function TeachView({
                 {slide.wrong.count} chose “{slide.wrong.text}”
               </p>
             )}
-            {motionLab && slide.motionPlayId !== null && (
-              <Link to={`/motion-lab/plays/${slide.motionPlayId}`} className={styles.play}>
-                Open the play in Motion Lab
-              </Link>
-            )}
+            <SourcePlayLink playId={slide.motionPlayId} className={styles.play} />
           </div>
         )}
       </div>

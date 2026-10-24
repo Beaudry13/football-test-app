@@ -1,5 +1,5 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { activateQuiz } from '../../api/accessCodes';
 import { deleteQuestion, reorderQuestions, updateQuestion, uploadQuestionImage } from '../../api/questions';
 import { duplicateQuiz, updateQuiz } from '../../api/quizzes';
@@ -16,7 +16,6 @@ import { audiencesFrom, chosenPlayerIds, familyOf, groupPlayerIds, pluralFor, su
 import { PositionChips } from './PositionChips';
 import { taughtLine } from './taught';
 import {
-  createRepRetest,
   getRepResults,
   markRepTaught,
   type RepConcept,
@@ -26,13 +25,13 @@ import {
 } from '../../api/reps';
 import type { Group, Player } from '../../api/types';
 import { ErrorBanner } from '../../components/ErrorBanner';
-import { TeachView, type TeachSlide } from '../../components/teach/TeachView';
+import { TeachView } from '../../components/teach/TeachView';
 import { FootballProblem } from '../../components/football/FootballProblem';
 import { LoadingState } from '../../components/ui/LoadingState';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useRememberWork } from '../home/lastWork';
+import { problemSlides } from './repTeach';
 import { useMayUseMotionLab } from '../../motion-lab/motionLabAccess';
-import { PlayPicture } from '../../components/football/PlayPicture';
 import { spreadTargets, usableTargets, type TapTarget } from '../../components/football/tapTargets';
 import { TapCheck } from '../../components/football/TapCheck';
 import { MarkerEditor } from '../../components/football/MarkerEditor';
@@ -50,6 +49,11 @@ const ChooseMan = lazy(() => import('../../motion-lab/ChooseMan'));
 import { playLink } from '../quiz-editor/playUrl';
 import nb from '../../styles/notebook.module.css';
 import styles from './RepPage.module.css';
+import { AddToInstall } from '../installs/AddToInstall';
+import { buildRepRetest, retestLabel } from '../../components/teach/retest';
+import { StepButton } from '../../components/ui/StepButton';
+import { SourcePlayLink } from '../../components/football/SourcePlayLink';
+import { keepFrom, useBackTo, useGoFromHere } from '../../navigation/backTo';
 
 
 /** A decision's tap targets when usable (one per choice, a picture to tap). */
@@ -82,10 +86,13 @@ export function RepPage() {
   const { quizId } = useParams<{ quizId: string }>();
   const id = Number(quizId);
   const navigate = useNavigate();
+  const location = useLocation();
+  const back = useBackTo({ to: '/reps', label: 'Reps' });
+  const go = useGoFromHere();
   const [results, setResults] = useState<RepResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [teaching, setTeaching] = useState<RepConcept | null>(null);
-  /** ?teach=<concept id | general>: arrive straight in Teach (Home's "Teach it"). */
+  /** ?teach=<concept id | general>: arrive straight in Teach (Home's "Teach"). */
   const [params, setParams] = useSearchParams();
   /* TEACH, REMEMBERED ON THE SERVER: opening Teach marks the problem taught on
      this Rep, so its next step is Retest - on every device, for every coach
@@ -93,6 +100,8 @@ export function RepPage() {
   const teach = (problem: RepConcept) => {
     setTeaching(problem);
     if (problem.taught) return;
+    // Nothing on the screen is nothing taught: Teach says so; the mark waits.
+    if (problemSlides(problem, results?.decisions ?? []).slides.length === 0) return;
     markRepTaught(id, problem.concept?.id ?? null)
       .then(({ concept_key, taught }) =>
         setResults((r) =>
@@ -103,15 +112,9 @@ export function RepPage() {
       )
       .catch(() => undefined);
   };
-  /** Retest = a new Rep of this concept for exactly the players who missed it, sent, opened. */
-  const retest = async (problem: RepConcept) => {
-    const made = await createRepRetest(id, problem.concept?.id ?? null);
-    try {
-      await activateQuiz(made.id, [], 'PRACTICE');
-    } finally {
-      navigate(`/reps/${made.id}`);
-    }
-  };
+  /** Retest = a new Rep of this concept for exactly the players who missed
+   *  it, opened ready to send - Send rep there, where it says who gets it. */
+  const retest = async (problem: RepConcept) => go(await buildRepRetest(id, problem.concept?.id ?? null));
   useDocumentTitle(results ? `${results.title} - Rep` : 'Rep');
   // Home's "Pick up where you left off".
   useRememberWork(results ? { kind: 'rep', id, title: results.title } : null);
@@ -155,20 +158,10 @@ export function RepPage() {
     if (!results || !teachAsk) return;
     const asked = results.concepts.find((c) => conceptKey(c) === teachAsk && c.missed > 0);
     if (asked) teach(asked);
-    setParams({}, { replace: true });
+    setParams({}, { replace: true, state: keepFrom(location.state) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results, teachAsk]);
 
-  /* Home's "Retest K" lands here: that problem's card, its confirm already
-     up ("Send it back to the K who missed it?"). Still the coach's tap to send. */
-  const [retestAsk, setRetestAsk] = useState<string | null>(null);
-  const retestParam = params.get('retest');
-  useEffect(() => {
-    if (!results || !retestParam) return;
-    setRetestAsk(retestParam);
-    setParams({}, { replace: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [results, retestParam]);
 
   const problems = results?.concepts.filter((c) => c.missed > 0) ?? [];
   const solid = results?.concepts.filter((c) => c.missed === 0 && c.responded > 0) ?? [];
@@ -181,8 +174,8 @@ export function RepPage() {
   return (
     <div>
       <div>
-        <Link to="/reps" className={styles.back}>
-          ← Reps
+        <Link to={back.to} className={styles.back}>
+          ← {back.label}
         </Link>
         <ErrorBanner message={error} />
         {!results && !error && <LoadingState />}
@@ -196,9 +189,12 @@ export function RepPage() {
                 {results.decisions.length} {results.decisions.length === 1 ? 'decision' : 'decisions'}
               </span>
               {!variationOf && (
-                <button type="button" className={styles.variationOpen} disabled={varying} onClick={() => void makeVariation()}>
-                  {varying ? 'Copying…' : 'Make a variation'}
-                </button>
+                <span className={styles.headActions}>
+                  <button type="button" className={styles.variationOpen} disabled={varying} onClick={() => void makeVariation()}>
+                    {varying ? 'Copying…' : 'Make a variation'}
+                  </button>
+                  <AddToInstall kind="quiz" refId={id} className={styles.variationOpen} />
+                </span>
               )}
             </header>
 
@@ -209,7 +205,7 @@ export function RepPage() {
                 quizId={id}
                 fromId={variationOf}
                 onRenamed={load}
-                onDone={() => setParams({}, { replace: true })}
+                onDone={() => setParams({}, { replace: true, state: keepFrom(location.state) })}
                 canOpenPlay={motionLab}
               />
             )}
@@ -229,8 +225,9 @@ export function RepPage() {
                 {problems.length === 0 && (
                   <p className={styles.allClear}>Nobody missed a decision. They know this job.</p>
                 )}
-                {problems.map((problem) => (
+                {problems.map((problem, i) => (
                   <ProblemCard
+                    lead={i === 0}
                     key={problem.concept?.id ?? 'general'}
                     problem={problem}
                     who={who}
@@ -238,7 +235,6 @@ export function RepPage() {
                     taught={problem.taught ?? null}
                     onTeach={() => teach(problem)}
                     onRetest={() => retest(problem)}
-                    asked={retestAsk === conceptKey(problem)}
                   />
                 ))}
                 {solid.length > 0 && (
@@ -341,7 +337,8 @@ function SendPanel({ results, onSent, folded = false }: { results: RepResults; o
           <input className={styles.link} readOnly value={link} aria-label="Rep link" onFocus={(e) => e.target.select()} />
           <button
             type="button"
-            className={nb.btnPrimary}
+            // Before anyone runs it, sharing is the next step; after, the results are.
+            className={done > 0 ? nb.btnSecondary : nb.btnPrimary}
             onClick={() => {
               void navigator.clipboard?.writeText(link).then(() => setCopied(true));
             }}
@@ -420,7 +417,7 @@ function ProblemCard({
   taught,
   onTeach,
   onRetest,
-  asked = false,
+  lead = true,
 }: {
   problem: RepConcept;
   who: string;
@@ -429,22 +426,14 @@ function ProblemCard({
   taught: RepTaught | null;
   onTeach: () => void;
   onRetest: () => Promise<void>;
-  /** Arrived from Home's "Retest K": the confirm opens, the card comes into view. */
-  asked?: boolean;
+  /** The worst problem - the one whose next step is gold. The rest are quieter. */
+  lead?: boolean;
 }) {
+  const gold = (isNext: boolean) => (lead && isNext ? nb.btnPrimary : nb.btnSecondary);
   const again = problem.retest ?? null;
   const fixed = !!again && again.responded > 0 && again.missed === 0;
   const toGo = again ? again.invited - again.ran : 0;
   const [viewing, setViewing] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!asked || problem.retest) return;
-    setConfirming(true);
-    cardRef.current?.scrollIntoView?.({ block: 'center' });
-  }, [asked, problem.retest]);
   const shown = problem.players_missed.slice(0, 8);
   const more = problem.players_missed.length - shown.length;
   const numberOf = (questionId: number) => decisions.find((d) => d.question_id === questionId)?.number;
@@ -473,23 +462,20 @@ function ProblemCard({
       <button type="button" className={nb.btnSecondary} onClick={onTeach}>
         Teach
       </button>
-      <Link to={`/reps/${again.id}`} className={`${nb.btnPrimary} ${styles.linkButton}`}>
+      <Link to={`/reps/${again.id}`} className={`${gold(true)} ${styles.linkButton}`}>
         Open retest
       </Link>
     </>
   ) : (
     <>
-      <button type="button" className={taught ? nb.btnSecondary : nb.btnPrimary} onClick={onTeach}>
+      <button type="button" className={gold(!taught)} onClick={onTeach}>
         Teach
       </button>
-      <button
-        type="button"
-        className={taught ? nb.btnPrimary : nb.btnSecondary}
-        onClick={() => setConfirming(true)}
-        disabled={busy}
-      >
-        Retest
-      </button>
+      <StepButton
+        className={gold(!!taught)}
+        label={retestLabel(problem.players_missed.map((p) => p.display_name))}
+        run={onRetest}
+      />
     </>
   );
   /* ONE TAP DOWN: who missed it, where they tapped, what each one chose. */
@@ -548,7 +534,7 @@ function ProblemCard({
     </>
   );
   return (
-    <div ref={cardRef}>
+    <div>
       <FootballProblem
         name={
           /* The problem's history: is it getting better, who still misses it. */
@@ -572,35 +558,6 @@ function ProblemCard({
         open={viewing}
         onToggle={setViewing}
       >
-        {confirming && (
-          <div className={styles.confirm} role="group" aria-label="Retest">
-            <span>
-              Send {problem.name} back to the {problem.players_missed.length}{' '}
-              {problem.players_missed.length === 1 ? 'player' : 'players'} who missed it?
-            </span>
-            <button
-              type="button"
-              className={nb.btnPrimary}
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                setError(null);
-                try {
-                  await onRetest();
-                } catch (err) {
-                  setError(getErrorMessage(err));
-                  setBusy(false);
-                }
-              }}
-            >
-              {busy ? 'Sending…' : 'Send retest'}
-            </button>
-            <button type="button" className={nb.btnSm} onClick={() => setConfirming(false)} disabled={busy}>
-              Cancel
-            </button>
-          </div>
-        )}
-        <ErrorBanner message={error} />
       </FootballProblem>
     </div>
   );
@@ -622,69 +579,23 @@ function Teach({
   /** The Rep's next football problem, taught in the same screen. */
   next?: { label: string; onGo: () => void } | null;
 }) {
-  const [sending, setSending] = useState(false);
   const n = problem.players_missed.length;
-  const inProblem = decisions.filter((d) => problem.question_ids.includes(d.question_id));
-  const worst = [...inProblem].sort((a, b) => b.missed - a.missed)[0];
-  const slides: TeachSlide[] = inProblem.map((d) => {
-    const wrong = d.choices.filter((c) => !c.is_correct && c.count > 0).sort((a, b) => b.count - a.count)[0];
-    return {
-      key: d.question_id,
-      imageUrl: d.image ? resolveMediaUrl(d.image.image_url) : null,
-      role: d.subject_role,
-      prompt: d.question_text,
-      right: d.correct_text,
-      why: d.answer_explanation,
-      wrong: wrong ? { text: wrong.text, count: wrong.count } : null,
-      motionPlayId: d.motion_play_id ?? problem.motion_play_id,
-      // The play moving to the decision moment, exactly as the players saw
-      // it - and, when they tapped, the right spot lit.
-      // Ask first: the play without the right spot lit.
-      pictureAsk: targetsOf(d) ? <PlayPicture image={d.image} presnap={d.presnap} marker={d.subject_marker} motionKey={d.question_id} /> : undefined,
-      picture: d.presnap || targetsOf(d) || d.subject_marker ? (
-        <PlayPicture
-          image={d.image}
-          presnap={d.presnap}
-          // HIS JOB: the coach's ring on a photo (a moving play rings him itself).
-          marker={d.subject_marker}
-          targets={targetsOf(d)}
-          options={choicesOf(d)}
-          chosen={d.choices.filter((c) => c.is_correct).map((c) => c.option_id)}
-          tone="right"
-          disabled
-          motionKey={d.question_id}
-        />
-      ) : undefined,
-    };
-  });
+  const { slides, start } = problemSlides(problem, decisions);
   return (
     <TeachView
       title={problem.name}
       slides={slides}
-      start={Math.max(0, inProblem.indexOf(worst))}
+      start={start}
       onClose={onClose}
-      // WHO MISSED IT, on the screen the coach is teaching from.
-      room={{ missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name) }}
+      // WHO MISSED IT, on the screen the coach is teaching from - the same line an install's meeting shows.
+      room={{ missed: problem.missed, of: problem.responded, names: problem.players_missed.map((p) => p.display_name), verb: `missed ${problem.name}` }}
       next={next}
       action={
         problem.retest ? (
           /* Retested already: the retest itself is the next thing to see. */
           <Link to={`/reps/${problem.retest.id}`}>Open retest</Link>
         ) : onRetest && n > 0 ? (
-          <button
-            type="button"
-            disabled={sending}
-            onClick={async () => {
-              setSending(true);
-              try {
-                await onRetest();
-              } catch {
-                setSending(false);
-              }
-            }}
-          >
-            {sending ? 'Sending…' : `Retest the ${n} who missed`}
-          </button>
+          <StepButton label={retestLabel(problem.players_missed.map((p) => p.display_name))} run={onRetest} />
         ) : undefined
       }
     />
@@ -1511,9 +1422,7 @@ function Decisions({ results, quizId, onChanged }: { results: RepResults; quizId
                   {motionLab && d.motion_play_id !== null && (
                     <>
                       {d.median_ms !== null && ' · '}
-                      <Link to={`/motion-lab/plays/${d.motion_play_id}`} className={styles.edit}>
-                        Open the play
-                      </Link>
+                      <SourcePlayLink playId={d.motion_play_id} className={styles.edit} />
                     </>
                   )}
                 </span>

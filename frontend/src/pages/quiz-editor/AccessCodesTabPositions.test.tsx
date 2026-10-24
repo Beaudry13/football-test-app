@@ -46,7 +46,7 @@ beforeEach(() => {
   vi.spyOn(accessCodesApi, 'listAccessCodes').mockResolvedValue([]);
 });
 
-describe('Activate - send to positions', () => {
+describe('Send - to positions', () => {
   it('puts the safeties on the quiz roster and activates for that roster', async () => {
     const user = userEvent.setup();
     vi.spyOn(rosterApi, 'getRoster').mockResolvedValue(roster([]));
@@ -57,7 +57,7 @@ describe('Activate - send to positions', () => {
     const chips = within(await screen.findByRole('group', { name: 'Positions' }));
     await user.click(chips.getByRole('button', { name: /Safeties/ }));
     expect(screen.getByRole('status')).toHaveTextContent('Goes to 3 players.');
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     await waitFor(() => expect(activate).toHaveBeenCalledWith(1, [], 'GRADED', false, expect.any(Date)));
     expect(add).toHaveBeenCalledWith(1, [11, 12, 13]);
@@ -86,7 +86,7 @@ describe('Activate - send to positions', () => {
     await user.click(chips.getByRole('button', { name: /Corners/ }));
     await user.click(screen.getByRole('checkbox', { name: /Linebackers/ }));
     expect(screen.getByText('Add saved group(s) too (optional)')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     await waitFor(() => expect(activate).toHaveBeenCalledWith(1, [], 'GRADED', false, expect.any(Date)));
     expect(add).toHaveBeenCalledWith(1, [21, 22, 31]);
@@ -101,7 +101,7 @@ describe('Activate - send to positions', () => {
 
     await screen.findByRole('group', { name: 'Positions' });
     await user.click(screen.getByRole('checkbox', { name: /Linebackers/ }));
-    await user.click(screen.getByRole('button', { name: 'Activate Quiz' }));
+    await user.click(screen.getByRole('button', { name: 'Send quiz' }));
 
     await waitFor(() => expect(activate).toHaveBeenCalledWith(1, [7], 'GRADED', false, expect.any(Date)));
     expect(add).not.toHaveBeenCalled();

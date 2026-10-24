@@ -87,6 +87,9 @@ ORG_OWNED_TABLES = (
     # move together.
     "motion_plays",
     "motion_looks",
+    # Installs organize the coach's own football (its plays, quizzes and
+    # concepts, all moved above); they move with him, references intact.
+    "installs",
 )
 
 #: Counted for the preview but NOT re-pointed - unused invitations to a

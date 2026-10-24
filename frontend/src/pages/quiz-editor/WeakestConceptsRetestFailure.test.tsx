@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -34,11 +34,12 @@ const c: ConceptBreakdown = {
  * state the truth plainly.
  *
  * What it protects: a coach whose retest is refused stays on Results, is told
- * why, and is not handed a half-made quiz.
+ * why - on the button itself ("- try again", the reason as its title and in an
+ * alert) - and is not handed a half-made quiz.
  */
 describe('when Peira cannot build the retest', () => {
   it('shows why, and leaves the coach on Results with no draft created', async () => {
-    vi.mocked(createRetest).mockImplementation(async () => { throw new Error('nope'); });
+    vi.mocked(createRetest).mockImplementation(async () => { throw new Error('Those questions were stopped'); });
     const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={['/a']}>
@@ -48,9 +49,14 @@ describe('when Peira cannot build the retest', () => {
         </Routes>
       </MemoryRouter>,
     );
-    await user.click(screen.getByRole('button', { name: 'Retest this player' }));
-    await user.click(screen.getByRole('button', { name: 'Create retest' }));
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // One player missed it: the button says his name.
+    await user.click(screen.getByRole('button', { name: 'Retest A' }));
+    // The reason, said - not a button that just resets.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Those questions were stopped');
+    const again = screen.getByRole('button', { name: 'Retest A - try again' });
+    expect(again).toHaveAttribute('title', 'Those questions were stopped');
+    expect(again).toBeEnabled();
+    expect(createRetest).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('EDITOR')).not.toBeInTheDocument();
   });
 });

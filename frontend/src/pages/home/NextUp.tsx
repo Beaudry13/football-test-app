@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import { getQuizDashboard } from '../../api/grading';
 import type { RepSummary } from '../../api/reps';
 import type { ConceptBreakdown, Quiz } from '../../api/types';
+import { buildRepRetest, retestLabel } from '../../components/teach/retest';
+import { StepButton } from '../../components/ui/StepButton';
 import nb from '../../styles/notebook.module.css';
 import { pluralFor } from '../reps/audiences';
 import styles from './NextUp.module.css';
+import { useGoFromHere } from '../../navigation/backTo';
 
 /** A quiz's football problem worth leading Home with. */
 interface QuizProblem {
@@ -42,6 +45,7 @@ export function NextUp({
   /** The coach's quizzes, for the quiz fallback; null = none to consider. */
   quizzes: Quiz[] | null;
 }) {
+  const go = useGoFromHere('Home');
   const fresh = reps?.find((r) => r.open_problem) ?? null;
   const lingering = fresh ? null : (reps?.find((r) => r.signal?.kind === 'retest_missing') ?? null);
   const fromQuiz = !fresh && !lingering && reps !== undefined ? latestScored(quizzes ?? []) : null;
@@ -84,14 +88,17 @@ export function NextUp({
           {p.taught ? ' · taught' : ''}
         </span>
         <span className={styles.actions}>
-          {/* Taught already (by anyone): the next step is Retest, on the Rep page. */}
+          {/* Taught already (by anyone): the next step is Retest - built for
+              exactly who missed it and opened, ready to send. */}
           {p.taught ? (
-            <Link to={`/reps/${fresh.id}?retest=${p.concept_id ?? 'general'}`} className={nb.btnPrimary}>
-              Retest it
-            </Link>
+            <StepButton
+              className={nb.btnPrimary}
+              label={retestLabel(p.missed)}
+              run={async () => go(await buildRepRetest(fresh.id, p.concept_id))}
+            />
           ) : (
             <Link to={`/reps/${fresh.id}?teach=${p.concept_id ?? 'general'}`} className={nb.btnPrimary}>
-              Teach it
+              Teach
             </Link>
           )}
         </span>
@@ -114,9 +121,11 @@ export function NextUp({
           <Link to={`/reps/${lingering.id}?teach=${key}`} className={nb.btnSecondary}>
             Teach
           </Link>
-          <Link to={`/reps/${lingering.id}?retest=${key}`} className={nb.btnPrimary}>
-            Retest {s.missed}
-          </Link>
+          <StepButton
+            className={nb.btnPrimary}
+            label={retestLabel(s.missed)}
+            run={async () => go(await buildRepRetest(lingering.id, s.concept_id ?? null))}
+          />
         </span>
       </section>
     );
@@ -133,7 +142,7 @@ export function NextUp({
         </span>
         <span className={styles.actions}>
           <Link to={`/quizzes/${quiz.id}?tab=results&teach=${concept.concept_id}`} className={nb.btnPrimary}>
-            Teach it
+            Teach
           </Link>
         </span>
       </section>

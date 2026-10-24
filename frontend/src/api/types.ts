@@ -302,6 +302,8 @@ export interface Question {
   subject_role?: string | null;
   /** The Motion Lab play the decision was made from. Coach payload only. */
   motion_play_id?: number | null;
+  /** Coach-side provenance: the question this one was copied from (a retest, a Rep made from a quiz). */
+  copied_from_question_id?: number | null;
   /** TAP THE MAN: one spot per option (option order), as fractions of the picture. */
   tap_targets?: { x: number; y: number; zone?: boolean }[] | null;
   /** THE PRE-SNAP MOMENT (motion-lab/presnap.ts PresnapClip): played, then frozen at the snap. */
@@ -475,15 +477,6 @@ export interface ImportPreviewResponse {
   valid_count: number;
   invalid_count: number;
   rows: ImportPreviewRow[];
-}
-
-export interface ImportConfirmRow {
-  first_name: string;
-  last_name: string;
-  jersey_number?: string | null;
-  position?: string | null;
-  action: 'create' | 'update' | 'skip';
-  existing_player_id?: number | null;
 }
 
 export interface ImportConfirmResponse {
@@ -687,6 +680,8 @@ export interface QuestionBreakdown {
 export interface RetestVerification {
   parent_quiz_id: number;
   parent_quiz_title: string;
+  /** Whether this retest has been sent. Retest builds and Send sends. */
+  sent?: boolean;
   /** "snapshot" = what these players were actually delivered. "live_fallback"
    *  = the delivery predates concept tagging, so the question's current tag
    *  stood in. Never presented to a coach as recorded history. */
@@ -759,6 +754,9 @@ export interface QuizDashboard {
 export interface RetestSummary {
   quiz_id: number;
   title: string;
+  /** Whether it has ever been sent. Retest builds and Send sends, so a retest
+   *  can be waiting, unsent, for the coach to press Send. */
+  sent?: boolean;
   concept_ids: number[];
   source_question_ids: number[];
   targeted_total: number;

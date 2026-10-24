@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import * as authModule from '../auth/AuthContext'
 import { resetMotionLabSessions, toDocument } from './storage/apiPlayRepository'
@@ -168,8 +168,8 @@ describe('2D | 3D from Teach', () => {
     await openAt('/motion-lab')
     fireEvent.click(screen.getByRole('button', { name: /Use this play/ }))
     fireEvent.click(screen.getByRole('menuitem', { name: /Teach a moment/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Teach it' }))
-    fireEvent.click(screen.getByRole('button', { name: '3D' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Teach' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Teach New play' })).getByRole('button', { name: 'Preview 3D' }))
     expect(screen.queryByRole('dialog', { name: 'Teach New play' })).toBeNull()
     expect(new URL(frame()!.src).searchParams.get('play')).toBe('draft')
     fireEvent.click(screen.getByRole('button', { name: '← Back to Teach' }))

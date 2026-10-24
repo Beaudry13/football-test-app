@@ -42,12 +42,6 @@ export function listInvites(): Promise<OrganizationInvite[]> {
   return api.get<OrganizationInvite[]>('/organizations/invites');
 }
 
-/** The response is the only place the invite code appears - show it to the
- * admin immediately, since it can't be read back later. */
-export function createInvite(): Promise<OrganizationInvite> {
-  return api.post<OrganizationInvite>('/organizations/invites');
-}
-
 export function revokeInvite(inviteId: number): Promise<void> {
   return api.delete<void>(`/organizations/invites/${inviteId}`);
 }

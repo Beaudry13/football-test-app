@@ -38,8 +38,8 @@ function renderPanel(missed: ConceptMissingPlayer[]) {
       <WeakestConcepts quizId={9} concepts={[concept(missed)]} />
     </MemoryRouter>,
   );
-  // Who missed it is one tap down, under "View details".
-  fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+  // Who missed it is one tap down, under the "Who missed it" toggle.
+  fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
 }
 
 let consoleError: ReturnType<typeof vi.spyOn>;

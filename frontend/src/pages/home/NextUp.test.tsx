@@ -1,9 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/grading', () => ({ getQuizDashboard: vi.fn() }));
+vi.mock('../../api/reps', async (importOriginal) => ({ ...(await importOriginal<object>()), createRepRetest: vi.fn() }));
+vi.mock('../../api/accessCodes', () => ({ activateQuiz: vi.fn() }));
 import * as gradingApi from '../../api/grading';
+import * as repsApi from '../../api/reps';
+import * as codesApi from '../../api/accessCodes';
 import type { RepSummary } from '../../api/reps';
 import type { ConceptBreakdown, Quiz, QuizDashboard } from '../../api/types';
 import { NextUp } from './NextUp';
@@ -48,6 +52,26 @@ const concept = (over: Partial<ConceptBreakdown> = {}): ConceptBreakdown =>
 const dashboard = (over: Partial<QuizDashboard> = {}): QuizDashboard =>
   ({ concept_breakdown: [concept()], verification: null, retests: [], ...over }) as QuizDashboard;
 
+/** Where a Retest opened: the new Rep, ready to send. */
+let landed = '';
+function Landed() {
+  const l = useLocation();
+  landed = `${l.pathname}${l.search}`;
+  return <p>the new rep</p>;
+}
+/** Next up on Home, with somewhere for a Retest to land. */
+function showHome(reps: RepSummary[]) {
+  landed = '';
+  return render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<NextUp reps={reps} quizzes={null} />} />
+        <Route path="/reps/:id" element={<Landed />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 function show(reps: RepSummary[] | null | undefined, quizzes: Quiz[] | null = null) {
   return render(
     <MemoryRouter>
@@ -56,17 +80,35 @@ function show(reps: RepSummary[] | null | undefined, quizzes: Quiz[] | null = nu
   );
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(repsApi.createRepRetest).mockResolvedValue({ id: 12, player_count: 3 } as never);
+});
 
 describe('Next up on Home', () => {
   it('leads with a Rep problem nobody has retested yet - one tap from Teach', () => {
     show([rep({ id: 7, open_problem: { name: 'Coverage ID', concept_id: 5, missed: 3, responded: 11 } })]);
     expect(screen.getByText(/3 of 11 safeties missed/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/reps/7?teach=5');
+    expect(screen.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/reps/7?teach=5');
+    // Not taught yet: Teach is the step, not Retest.
+    expect(screen.queryByRole('button', { name: /^Retest/ })).toBeNull();
   });
 
-  it('after a retest that still misses: Teach, or Retest the ones still missing', () => {
-    show([
+  it('once taught: Retest the N builds the retest for exactly who missed it and opens the new Rep - nothing sent', async () => {
+    showHome([
+      rep({ id: 7, open_problem: { name: 'Coverage ID', concept_id: 5, missed: 3, responded: 11, taught: { at: '2026-10-16T15:00:00Z', by: 'coach1' } } }),
+    ]);
+    expect(screen.queryByRole('link', { name: 'Teach' })).toBeNull();
+    // A button that builds it here - not a link to a confirm on the Rep page.
+    fireEvent.click(screen.getByRole('button', { name: 'Retest the 3' }));
+    expect(await screen.findByText('the new rep')).toBeInTheDocument();
+    expect(repsApi.createRepRetest).toHaveBeenCalledWith(7, 5);
+    expect(landed).toBe('/reps/12');
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
+  });
+
+  it('after a retest that still misses: Teach, or Retest the ones still missing - built from this retest and opened', async () => {
+    showHome([
       rep({
         id: 4,
         is_retest: true,
@@ -74,7 +116,13 @@ describe('Next up on Home', () => {
       }),
     ]);
     expect(screen.getByText(/3 were retested, 1 still misses it/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Retest 1' })).toHaveAttribute('href', '/reps/4?retest=3');
+    expect(screen.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/reps/4?teach=3');
+    // Only the count is known here: "Retest the 1".
+    fireEvent.click(screen.getByRole('button', { name: 'Retest the 1' }));
+    expect(await screen.findByText('the new rep')).toBeInTheDocument();
+    expect(repsApi.createRepRetest).toHaveBeenCalledWith(4, 3);
+    expect(landed).toBe('/reps/12');
+    expect(codesApi.activateQuiz).not.toHaveBeenCalled();
   });
 
   it("with no Rep problem, the latest quiz's weakest concept leads - Teach opens on its Results", async () => {
@@ -84,7 +132,7 @@ describe('Next up on Home', () => {
     expect(gradingApi.getQuizDashboard).toHaveBeenCalledWith(7);
     expect(screen.getByText(/4 of 11 missed it/)).toBeInTheDocument();
     expect(screen.getByText('in Week 6 coverage')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Teach it' })).toHaveAttribute('href', '/quizzes/7?tab=results&teach=3');
+    expect(screen.getByRole('link', { name: 'Teach' })).toHaveAttribute('href', '/quizzes/7?tab=results&teach=3');
   });
 
   it('says nothing of a quiz concept already being retested, or too thin to trust', async () => {

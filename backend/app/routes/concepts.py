@@ -5,7 +5,7 @@ a coach adds one without leaving the question they are writing. Renaming,
 merging and archiving are real needs but they are Phase B's, and guessing at
 them now would be building a taxonomy manager nobody has asked for yet.
 """
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required
 from marshmallow import Schema, fields, validate
 from sqlalchemy import func
@@ -158,6 +158,8 @@ def concept_questions(concept_id: int):
     concept = db.session.get(Concept, concept_id)
     if concept is None or concept.organization_id != coach.organization_id:
         raise ApiError("That concept does not exist", status_code=404)
+    if request.args.get("detail") == "teach":
+        return jsonify(_concept_football_to_teach(coach, concept_id))
     rows = (
         Question.query.join(Quiz, Quiz.id == Question.quiz_id)
         .filter(
@@ -184,6 +186,63 @@ def concept_questions(concept_id: int):
             for q in rows
         ]
     )
+
+
+def _concept_football_to_teach(coach, concept_id: int) -> dict:
+    """THE CONCEPT'S FOOTBALL, READY TO TEACH, IN ONE READ - Position Teach
+    (a room's misses) and an install's concept item asked for each source
+    quiz whole, one after another, to keep two to eight slides.
+
+    `?quiz_ids=1,2` narrows it to those quizzes (still own-only); without it,
+    his newest. Each question serialized exactly as the coach's quiz payload
+    serializes it (`to_dict(include_correct_answers=True)` and the masked
+    picture, services/page_masking) - no second field list to drift - plus
+    each quiz's retest parent, so a retest's copy is taught once, by source.
+    Stopped questions are left out, as everywhere Teach reads.
+    """
+    from sqlalchemy.orm import contains_eager, selectinload
+
+    from app.models import Question, Quiz
+    from app.services.page_masking import attach_masked_media
+    from app.services.signed_media import AUDIENCE_COACH
+
+    wanted: list[int] = []
+    for part in (request.args.get("quiz_ids") or "").split(","):
+        if part.strip().isdigit():
+            wanted.append(int(part))
+    query = (
+        Question.query.join(Quiz, Quiz.id == Question.quiz_id)
+        .filter(
+            Question.concept_id == concept_id,
+            Question.retired_at.is_(None),
+            Quiz.organization_id == coach.organization_id,
+            Quiz.coach_id == coach.id,
+        )
+        .options(
+            contains_eager(Question.quiz),
+            selectinload(Question.options),
+            selectinload(Question.image),
+            selectinload(Question.clip),
+            selectinload(Question.regions),
+        )
+    )
+    if wanted:
+        query = query.filter(Question.quiz_id.in_(wanted[:20]))
+    rows = query.order_by(Quiz.updated_at.desc(), Quiz.id.desc(), Question.position).limit(60).all()
+    quizzes: dict[int, dict] = {}
+    for q in rows:
+        quizzes.setdefault(
+            q.quiz_id,
+            {
+                "id": q.quiz.id,
+                "title": q.quiz.title,
+                "kind": q.quiz.kind,
+                "retest_of": {"id": q.quiz.retest_of_quiz_id} if q.quiz.retest_of_quiz_id else None,
+            },
+        )
+    payload = {"questions": [q.to_dict(include_correct_answers=True) for q in rows]}
+    attach_masked_media(payload, audience=AUDIENCE_COACH)
+    return {"quizzes": list(quizzes.values()), "questions": payload["questions"]}
 
 
 @concepts_bp.get("/concepts/duplicates")

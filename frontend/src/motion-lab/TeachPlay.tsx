@@ -58,6 +58,7 @@ export function TeachPlay({
   selectedMan = null,
   motionPlayId = null,
   onCheck,
+  checkLinkState = null,
   preview3d = null,
 }: {
   play: Play
@@ -68,6 +69,8 @@ export function TeachPlay({
   motionPlayId?: number | null
   /** Check them: make a Rep or a quiz question from this play, for this man. */
   onCheck?: (kind: 'rep' | 'question', man: string | null) => void
+  /** The way back to this play for a Rep or quiz Check them opens. */
+  checkLinkState?: object | null
   /** The 3D viewer, when one is set up: the same play, from Motion Lab's own handoff. */
   preview3d?: { viewerUrl: string; target: PreviewTarget; load: () => Promise<ViewerPayload | DraftPayload> } | null
 }) {
@@ -79,6 +82,8 @@ export function TeachPlay({
   const [role, setRole] = useState(start.role)
   const [motion, setMotion] = useState(() => hasMotion(play))
   const [routes, setRoutes] = useState(false)
+  /** Whether anyone has a route to show - else the box says so, not nothing. */
+  const hasRoutes = play.players.some((p) => p.path.length > 1)
   const [moment, setMoment] = useState<DecisionMoment>('snap')
   const [notes, setNotes] = useState(() => readNotes(play.id))
   const notesTyped = useRef(false)
@@ -178,7 +183,8 @@ export function TeachPlay({
             <input type="checkbox" checked={motion} onChange={(e) => setMotion(e.target.checked)} /> Show motion
           </label>
           <label className="make-q-check">
-            <input type="checkbox" checked={routes} onChange={(e) => setRoutes(e.target.checked)} /> Show routes
+            <input type="checkbox" checked={routes} disabled={!hasRoutes} onChange={(e) => setRoutes(e.target.checked)} />{' '}
+            {hasRoutes ? 'Show routes' : 'No routes drawn yet'}
           </label>
         </div>
         <MomentPicker moments={motion ? moments : []} value={moment} onChange={setMoment} clip={clip} />
@@ -204,7 +210,7 @@ export function TeachPlay({
         <div className="make-q-actions">
           <button onClick={onClose}>Cancel</button>
           <button className="primary" onClick={teach}>
-            Teach it
+            Teach
           </button>
         </div>
       </div>
@@ -217,10 +223,17 @@ export function TeachPlay({
             <span className={checkStyles.wrap}>
               {preview3d && (
                 <button type="button" className={checkStyles.view3d} onClick={() => setShow3d(true)} title="The same play in 3D">
-                  3D
+                  Preview 3D
                 </button>
               )}
-              {onCheck && <CheckThem made={made} who={who ? role.trim() || null : null} onMake={(kind) => onCheck(kind, who)} />}
+              {onCheck && (
+                <CheckThem
+                  made={made}
+                  who={who ? role.trim() || null : null}
+                  onMake={(kind) => onCheck(kind, who)}
+                  linkState={checkLinkState}
+                />
+              )}
             </span>
           }
         />

@@ -8,7 +8,7 @@ import { WeakestConcepts } from './WeakestConcepts';
 import type { ConceptBreakdown, Question } from '../../api/types';
 
 /**
- * RESULTS -> TEACH. Beside Retest, "Teach it" puts the concept's questions on
+ * RESULTS -> TEACH. Beside Retest, "Teach" puts the concept's questions on
  * the screen for the meeting room: the picture, the coach's right answer, the
  * reason, and what the misses chose.
  */
@@ -61,14 +61,14 @@ describe('Teach, on Results', () => {
   it('shows the concept\'s question with the right answer, the reason and what the misses chose', async () => {
     vi.spyOn(authModule, 'useAuth').mockReturnValue({ coach: { id: 1, is_platform_owner: true } } as never);
     open([question]);
-    await userEvent.click(screen.getByRole('button', { name: 'Teach it' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Teach' }));
     const teach = within(screen.getByRole('dialog', { name: 'Teach Force / Contain' }));
     expect(teach.getByText('Who has force on toss?')).toBeInTheDocument();
     expect(teach.getByText('The corner')).toBeInTheDocument();
     expect(teach.getByText('Corner squeezes, keeps it inside.')).toBeInTheDocument();
     expect(teach.getByText('4 chose “Spill”')).toBeInTheDocument();
     expect(teach.getByRole('img', { name: 'The play' })).toHaveAttribute('src', expect.stringContaining('/uploads/toss.png'));
-    expect(teach.getByRole('link', { name: 'Open the play in Motion Lab' })).toHaveAttribute('href', '/motion-lab/plays/14');
+    expect(teach.getByRole('link', { name: 'Open the play' })).toHaveAttribute('href', '/motion-lab/plays/14');
   });
 
   it("arrives straight in Teach from Home's Next up (?teach=<concept>)", () => {
@@ -95,14 +95,14 @@ describe('Teach, on Results', () => {
         </Routes>
       </MemoryRouter>,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Teach it' }));
-    await userEvent.click(within(screen.getByRole('dialog', { name: 'Teach Force / Contain' })).getByRole('button', { name: 'Retest these 2' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Teach' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Teach Force / Contain' })).getByRole('button', { name: 'Retest the 2' }));
     expect(await screen.findByText('the retest draft')).toBeInTheDocument();
     expect(created).toHaveBeenCalledWith(9, { concept_id: 1, player_ids: [4], player_names: ['Walk On'] });
   });
 
   it('is not offered when the questions are not to hand', () => {
     open([]);
-    expect(screen.queryByRole('button', { name: 'Teach it' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Teach' })).toBeNull();
   });
 });

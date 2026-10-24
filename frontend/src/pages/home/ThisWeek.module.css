@@ -1,0 +1,17 @@
+/* One quiet line, the same voice as "pick up where you left off". */
+.thisWeek {
+  margin: 0 0 var(--space-4);
+  font-size: var(--peira-text-control);
+  color: var(--nb-text-muted);
+}
+.title {
+  color: var(--nb-text);
+  font-weight: 600;
+}
+.contents {
+  color: var(--nb-text-faint);
+}
+.teach {
+  color: var(--peira-accent-text);
+  font-weight: 700;
+}

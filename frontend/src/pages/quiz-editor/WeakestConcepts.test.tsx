@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../api/retests', () => ({ createRetest: vi.fn() }));
@@ -31,15 +31,24 @@ const concept = (over: Partial<ConceptBreakdown> = {}): ConceptBreakdown => ({
 
 
 /** The panel navigates on success, so every case needs a Router around it. */
-/** Who missed it lives one tap down, under "View details". */
-const openDetails = () => fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+/** Who missed it lives one tap down, under the "Who missed it" toggle. */
+const openDetails = () => fireEvent.click(screen.getByRole('button', { name: 'Who missed it' }));
+
+/** Where a retest opened: the draft, on its Send tab. */
+let landed = '';
+function Editor() {
+  const l = useLocation();
+  landed = `${l.pathname}${l.search}`;
+  return <div>EDITOR</div>;
+}
 
 function renderPanel(ui: React.ReactElement) {
+  landed = '';
   return render(
     <MemoryRouter initialEntries={['/quizzes/9']}>
       <Routes>
         <Route path="/quizzes/9" element={ui} />
-        <Route path="/quizzes/:id" element={<div>EDITOR</div>} />
+        <Route path="/quizzes/:id" element={<Editor />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -224,7 +233,7 @@ describe('the "Teach next" panel', () => {
   });
 });
 
-describe('Retest these players', () => {
+describe('Retest the players who missed it', () => {
   const missed = [
     { player_id: 3, player_name: 'Jalen Reed', display_name: 'Jalen Reed', position_at_attempt: 'CB' },
     { player_id: null, player_name: 'Legacy Kid', display_name: 'Legacy Kid', position_at_attempt: null },
@@ -235,19 +244,27 @@ describe('Retest these players', () => {
   it('names how many players it will retest', () => {
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ players_missed: missed })]} />);
 
-    expect(screen.getByRole('button', { name: 'Retest these 2' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retest the 2' })).toBeInTheDocument();
   });
 
-  it('CONFIRMS before building, and says nothing is sent', async () => {
+  it('names the player when only one missed it', () => {
+    renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ players_missed: missed.slice(0, 1) })]} />);
+
+    expect(screen.getByRole('button', { name: 'Retest Jalen' })).toBeInTheDocument();
+  });
+
+  it('ONE TAP BUILDS IT - no confirm - and opens it on its Send tab; nothing is sent', async () => {
+    vi.mocked(createRetest).mockResolvedValue({ id: 42 } as never);
     const user = userEvent.setup();
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ players_missed: missed })]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Retest these 2' }));
+    await user.click(screen.getByRole('button', { name: 'Retest the 2' }));
 
-    expect(screen.getByRole('dialog', { name: 'Create retest' })).toBeInTheDocument();
-    expect(screen.getByText(/Nothing is sent/)).toBeInTheDocument();
-    // Confirming is not building.
-    expect(createRetest).not.toHaveBeenCalled();
+    // No confirm step: the tap builds a draft, and the draft says who gets it.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await screen.findByText('EDITOR')).toBeInTheDocument();
+    expect(createRetest).toHaveBeenCalledTimes(1);
+    expect(landed).toBe('/quizzes/42?tab=activate');
   });
 
   it('sends canonical ids AND legacy names, so nobody is quietly dropped', async () => {
@@ -255,8 +272,7 @@ describe('Retest these players', () => {
     const user = userEvent.setup();
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ players_missed: missed })]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Retest these 2' }));
-    await user.click(screen.getByRole('button', { name: 'Create retest' }));
+    await user.click(screen.getByRole('button', { name: 'Retest the 2' }));
 
     await waitFor(() =>
       expect(createRetest).toHaveBeenCalledWith(9, {
@@ -272,8 +288,7 @@ describe('Retest these players', () => {
     const user = userEvent.setup();
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ players_missed: missed })]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Retest these 2' }));
-    await user.click(screen.getByRole('button', { name: 'Create retest' }));
+    await user.click(screen.getByRole('button', { name: 'Retest the 2' }));
 
     expect(await screen.findByText('EDITOR')).toBeInTheDocument();
   });
@@ -283,15 +298,23 @@ describe('Retest these players', () => {
      state made the runner report the rejection as an unhandled error before
      the assertion ran. Alone, it passes - see that file's header. */
 
-  it('can be backed out of', async () => {
+  it('builds nothing until the coach taps, and one draft per tap - a second tap while building builds no second', async () => {
+    let finish: (v: unknown) => void = () => undefined;
+    vi.mocked(createRetest).mockReturnValue(new Promise((resolve) => (finish = resolve)) as never);
     const user = userEvent.setup();
     renderPanel(<WeakestConcepts quizId={9} concepts={[concept({ players_missed: missed })]} />);
 
-    await user.click(screen.getByRole('button', { name: 'Retest these 2' }));
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // Showing the offer builds nothing.
     expect(createRetest).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Retest the 2' }));
+    const building = screen.getByRole('button', { name: 'Building…' });
+    expect(building).toBeDisabled();
+    await user.click(building);
+    expect(createRetest).toHaveBeenCalledTimes(1);
+
+    finish({ id: 42 });
+    expect(await screen.findByText('EDITOR')).toBeInTheDocument();
   });
 
   it('DOES NOT OFFER A RETEST IT CANNOT BUILD', () => {
@@ -305,13 +328,17 @@ describe('Retest these players', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: /Retest th(is|ese)/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Retest/ })).not.toBeInTheDocument();
     expect(screen.getByText(/nothing to retest/i)).toBeInTheDocument();
   });
 
-  it('says what a retest will LEAVE OUT, before the coach commits', async () => {
-    /* The server has always reported the questions it skipped; the client
-       simply never rendered them, so a coach got a quietly shorter retest. */
+  it('SOME questions stopped: Retest is still offered and builds on the concept - the stopped ones are left out by the server', async () => {
+    /* The confirm that said "1 stopped question isn't included" is gone -
+       nothing is sent on this tap, and the draft itself shows what it holds.
+       What must hold here: a partly-stopped concept is not treated as
+       un-retestable, and the build still targets the concept for exactly
+       who missed it. */
+    vi.mocked(createRetest).mockResolvedValue({ id: 42 } as never);
     const user = userEvent.setup();
     renderPanel(
       <WeakestConcepts
@@ -328,51 +355,12 @@ describe('Retest these players', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /Retest th(is|ese)/ }));
+    expect(screen.queryByText(/nothing to retest/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retest A' }));
 
-    expect(screen.getByText(/1 stopped question isn't included/)).toBeInTheDocument();
-  });
-
-  it('pluralises the stopped-question note', async () => {
-    const user = userEvent.setup();
-    renderPanel(
-      <WeakestConcepts
-        quizId={9}
-        concepts={[
-          concept({
-            retired_missed_question_count: 2,
-            players_missed: [
-              { player_id: 3, player_name: 'A', display_name: 'A', position_at_attempt: null },
-            ],
-          }),
-        ]}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: /Retest th(is|ese)/ }));
-
-    expect(screen.getByText(/2 stopped questions aren't included/)).toBeInTheDocument();
-  });
-
-  it('says nothing about stopped questions when none were left out', async () => {
-    const user = userEvent.setup();
-    renderPanel(
-      <WeakestConcepts
-        quizId={9}
-        concepts={[
-          concept({
-            retired_missed_question_count: 0,
-            players_missed: [
-              { player_id: 3, player_name: 'A', display_name: 'A', position_at_attempt: null },
-            ],
-          }),
-        ]}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: /Retest th(is|ese)/ }));
-
-    expect(screen.queryByText(/stopped question/)).not.toBeInTheDocument();
+    expect(await screen.findByText('EDITOR')).toBeInTheDocument();
+    expect(createRetest).toHaveBeenCalledWith(9, { concept_id: 1, player_ids: [3], player_names: [] });
+    expect(landed).toBe('/quizzes/42?tab=activate');
   });
 
   it('states the RUNNER-UP rows in players too', () => {
@@ -464,7 +452,7 @@ describe('a long list of missed players', () => {
     // a smaller retest than the coach asked for.
     renderPanel(<WeakestConcepts quizId={9} concepts={[bigConcept()]} />);
 
-    expect(screen.getByRole('button', { name: 'Retest these 14' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retest the 14' })).toBeInTheDocument();
   });
 
   it('TRUNCATION NEVER CHANGES TARGETING - the request carries all 14', async () => {
@@ -474,8 +462,7 @@ describe('a long list of missed players', () => {
 
     // Only eight are on screen at this point.
     expect(screen.queryByText('Player 9')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Retest these 14' }));
-    await user.click(screen.getByRole('button', { name: 'Create retest' }));
+    await user.click(screen.getByRole('button', { name: 'Retest the 14' }));
 
     await waitFor(() => expect(createRetest).toHaveBeenCalled());
     const [, body] = vi.mocked(createRetest).mock.calls[0];

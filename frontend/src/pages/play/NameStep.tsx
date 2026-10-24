@@ -130,14 +130,16 @@ export function NameStep({
               </button>
             ))}
           </div>
-          <button
-            className="btn btn-primary"
-            disabled={!selected || isSubmitting}
-            style={{ width: '100%' }}
-            onClick={() => selected && void choose(toRememberedPlayer(selected), false)}
-          >
-            {isSubmitting ? 'Loading…' : 'Continue'}
-          </button>
+          <div className={styles.stickyAction}>
+            <button
+              className="btn btn-primary"
+              disabled={!selected || isSubmitting}
+              style={{ width: '100%' }}
+              onClick={() => selected && void choose(toRememberedPlayer(selected), false)}
+            >
+              {isSubmitting ? 'Loading…' : 'Continue'}
+            </button>
+          </div>
         </>
       )}
     </div>

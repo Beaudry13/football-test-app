@@ -1066,6 +1066,40 @@ class TestTheQuestionsAlreadyWrittenAboutAConcept:
         _, _, stranger = register_coach(username="coach2", email="coach2@example.com", organization="Rams")
         assert client.get(f"/api/concepts/{concept['id']}/questions", headers=stranger).status_code == 404
 
+    def test_ready_to_teach_in_one_read_only_the_quizzes_asked_for(self, client, register_coach, invite_teammate):
+        """?detail=teach: the coach's own questions on the concept, serialized as
+        his quiz payload serializes them (right answers and all), narrowed to
+        the quizzes asked for, with each quiz's retest parent - Position Teach's
+        single read instead of one whole quiz per source."""
+        coach, _, headers = register_coach()
+        concept = _concept(client, headers, "Motion adjustment")
+        week3 = client.post("/api/quizzes", json={"title": "Week 3"}, headers=headers).get_json()
+        week4 = client.post("/api/quizzes", json={"title": "Week 4"}, headers=headers).get_json()
+        rep = _rep(client, headers)
+        on3 = _decision(client, headers, week3["id"], "Your check?", ["Rotate", "Stay"], concept=concept)
+        _decision(client, headers, week4["id"], "Not asked for", ["A", "B"], concept=concept)
+        on_rep = _decision(client, headers, rep["id"], "Who has #3?", ["Me", "Corner"], concept=concept)
+        stopped = _decision(client, headers, week3["id"], "Stopped one", ["A", "B"], concept=concept)
+        client.post(f"/api/quizzes/{week3['id']}/questions/{stopped['id']}/retire", headers=headers)
+        _, _, teammate = invite_teammate(headers)
+        theirs = client.post("/api/quizzes", json={"title": "Theirs"}, headers=teammate).get_json()
+        their_q = _decision(client, teammate, theirs["id"], "Their check?", ["A", "B"], concept=concept)
+
+        got = client.get(
+            f"/api/concepts/{concept['id']}/questions?detail=teach&quiz_ids={week3['id']},{rep['id']},{theirs['id']}",
+            headers=headers,
+        )
+        assert got.status_code == 200, got.get_json()
+        body = got.get_json()
+        ids = sorted(q["id"] for q in body["questions"])
+        assert ids == sorted([on3["id"], on_rep["id"]])  # not week 4, not stopped, not a teammate's
+        assert their_q["id"] not in ids
+        first = next(q for q in body["questions"] if q["id"] == on3["id"])
+        # The coach payload's own shape: options with the right answer marked.
+        assert [o["is_correct_answer"] for o in first["options"]] == [True, False]
+        assert sorted(q["id"] for q in body["quizzes"]) == sorted([week3["id"], rep["id"]])
+        assert all("retest_of" in q for q in body["quizzes"])
+
 
 class TestWhatAPlayerKnows:
     """One player, by the concepts the coach tagged: HAS, WORK ON, and how each
@@ -1220,3 +1254,29 @@ class TestWhatIsOutForOnePlayer:
             db.session.get(AccessCode, code["id"]).is_active = False
             db.session.commit()
         assert self._open(app, ids["Bo Brown"]) == []
+
+
+class TestCopiesKnowTheirSource:
+    """A retest copy says, coach-side, which question it was copied from - so
+    Teach recognises the same football whatever its wording - and a player's
+    payload never carries it."""
+
+    def test_a_retest_copy_names_its_source_to_the_coach_only(self, client, register_coach, app):
+        coach, _, headers = register_coach()
+        rep, first, second, ids, code, _ = _built(client, headers, app, coach)
+        _play(client, code, "Ty Adams", ids["Ty Adams"], {first["id"]: _option(first, "Stay boundary"), second["id"]: _option(second, "Inside")})
+        retest = client.post(
+            f"/api/quizzes/{rep['id']}/rep-retest", json={"concept_id": first["concept"]["id"]}, headers=headers
+        ).get_json()
+        copied = client.get(f"/api/quizzes/{retest['id']}", headers=headers).get_json()["questions"][0]
+        assert copied["copied_from_question_id"] == first["id"]
+        original = client.get(f"/api/quizzes/{rep['id']}", headers=headers).get_json()["questions"][0]
+        assert original["copied_from_question_id"] is None
+        sent = _send(client, headers, retest["id"])
+        started = client.post(
+            "/api/play/start", json={"access_code_id": sent["id"], "player_name": "Ty Adams", "player_id": ids["Ty Adams"]}
+        ).get_json()
+        delivered = started["questions"]
+        assert delivered
+        assert all("copied_from_question_id" not in q for q in delivered)
+

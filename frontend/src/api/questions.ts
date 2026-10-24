@@ -180,10 +180,6 @@ export function saveAnnotations(
   });
 }
 
-export function deleteQuestionImage(quizId: number, questionId: number): Promise<void> {
-  return api.delete<void>(`/quizzes/${quizId}/questions/${questionId}/image`);
-}
-
 /** Creates a Fill in the Blank question from a rectangle drawn on a playbook
  *  page. `region` is in normalised 0-1 page coordinates. */
 export function createRegionQuestion(

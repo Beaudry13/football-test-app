@@ -35,6 +35,8 @@ export function RetestVerification({
 }) {
   if (!verification) return null;
   const v = verification;
+  // Built, not sent yet (Retest builds; Send sends): it has gone to nobody.
+  const unsent = v.sent === false;
   /* TEACH what is still missing - this round's questions, in the meeting-room
      view; an untagged round retests its own copies again, no concept needed. */
   const asked = questions.filter((q) =>
@@ -76,7 +78,12 @@ export function RetestVerification({
               arithmetic error, when in fact the coach chose six. Saying "6 of
               those 14" accounts for the other eight instead of leaving them
               hanging. */}
-          {v.targeted_total < v.parent_missed_total ? (
+          {unsent ? (
+            <>
+              This retest is for the <strong>{v.targeted_total}</strong>{' '}
+              player{v.targeted_total === 1 ? '' : 's'} who missed it &mdash; not sent yet.
+            </>
+          ) : v.targeted_total < v.parent_missed_total ? (
             <>
               This retest went to <strong>{v.targeted_total}</strong> of those{' '}
               <strong>{v.parent_missed_total}</strong>.
@@ -119,7 +126,7 @@ export function RetestVerification({
               something to say. */}
         </ul>
 
-        {!v.is_complete && (
+        {!v.is_complete && !unsent && (
           /* NO IMPROVEMENT STATEMENT WHILE THE EVIDENCE IS INCOMPLETE. A
              number that moves once grading finishes was never a finding, and
              saying so now would be a claim the data cannot yet support.
@@ -150,7 +157,7 @@ export function RetestVerification({
           </p>
         )}
 
-        {v.concept_source === 'live_fallback' && (
+        {v.concept_source === 'live_fallback' && !unsent && (
           /* The delivery predates concept tagging, so the question's current
              tag stood in. Said out loud rather than passed off as history. */
           <p className={styles.caveat}>
@@ -197,12 +204,7 @@ export function RetestVerification({
             {quizId !== undefined &&
               v.concept_ids.length === 1 &&
               v.concept_names.length === 1 && (
-                <RetestAction
-                  quizId={quizId}
-                  conceptId={v.concept_ids[0]}
-                  conceptName={v.concept_names[0]}
-                  targets={v.still_missing}
-                />
+                <RetestAction quizId={quizId} conceptId={v.concept_ids[0]} targets={v.still_missing} />
               )}
           </div>
         )}
